@@ -1,0 +1,34 @@
+{{- if eq .Values.gateway.mode "existing" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-existing-gateway-preflight
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 45
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: preflight
+          image: {{ .Values.app.image | quote }}
+          imagePullPolicy: {{ .Values.app.pullPolicy }}
+          command: ["python", "/app/gateway_preflight.py"]
+          env:
+            - name: GATEWAY_URL
+              value: {{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}
+            - name: EXPECTED_GATEWAY_VERSION
+              value: {{ required "gateway.expectedVersion is required in existing mode" .Values.gateway.expectedVersion | quote }}
+            - name: GATEWAY_PREFLIGHT_MODEL
+              value: {{ .Values.gateway.preflightModel | quote }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+{{- end }}

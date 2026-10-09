@@ -1,0 +1,28 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "Certainly! You can create a Python function that adds two integers and return the result as a simple return code (0 for success). Here's how you can implement this:\n\n```python\ndef add_two_integers(a, b):\n    \"\"\"\n    Adds two integers and returns the result as a return code.\n\n    Parameters:\n    a (int): The first integer.\n    b (int): The second integer.\n\n    Returns:\n    int: The sum of the two i",
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b"
+        }
+      }
+    }
+  ]
+}

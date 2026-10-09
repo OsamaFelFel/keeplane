@@ -1,0 +1,31 @@
+app:
+  image: keeplane-preview:kind-local
+  pullPolicy: Never
+  service:
+    type: NodePort
+    nodePort: 30080
+
+gateway:
+  mode: managed
+  install: true
+
+agentgateway-standalone:
+  database:
+    postgres:
+      url: postgresql://keeplane:local-test-only@postgres:5432/keeplane
+  config:
+    gateways:
+      default:
+        port: 4000
+    ui:
+      gateways: default
+    llm:
+      models:
+        - name: local-fixture
+          provider:
+            custom:
+              formats:
+                - type: completions
+          params:
+            model: mock-local
+            baseUrl: http://model:18080/v1

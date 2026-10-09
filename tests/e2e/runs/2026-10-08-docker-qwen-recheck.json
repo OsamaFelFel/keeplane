@@ -1,0 +1,28 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "Here's a Python function that adds two integers without returning any value:\n\n```python\ndef add(a, b):\n    return a + b\n\n# Example usage:\nresult = add(5, 3)\nprint(result)  # Output: 8\n```\n\nThis function, `add`, takes two parameters, `a` and `b`, and returns the sum of them.",
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b"
+        }
+      }
+    }
+  ]
+}

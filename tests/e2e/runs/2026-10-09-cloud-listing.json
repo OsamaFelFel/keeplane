@@ -1,0 +1,57 @@
+{
+  "suite": "Spec 004 native cloud model listing with local mock",
+  "time_utc": "2026-10-09T00:14:09.515552+00:00",
+  "cases": [
+    {
+      "id": "CLOUD-01",
+      "verdict": "pass",
+      "observed": {
+        "gateway_put_http": 200,
+        "list_http": 200,
+        "openai": {
+          "provider": "OpenAI",
+          "kind": "cloud",
+          "approved": false,
+          "key_choice": null
+        },
+        "anthropic": {
+          "provider": "Anthropic",
+          "kind": "cloud",
+          "approved": false,
+          "key_choice": null
+        }
+      }
+    },
+    {
+      "id": "CLOUD-02",
+      "verdict": "pass",
+      "observed": {
+        "openai_http": 403,
+        "anthropic_http": 403
+      }
+    },
+    {
+      "id": "CLOUD-03",
+      "verdict": "pass",
+      "observed": {
+        "setup_http": 200,
+        "list_http": 200,
+        "approved": true,
+        "key_choice": "none",
+        "ask_http": 200,
+        "answer": "mock answer"
+      }
+    },
+    {
+      "id": "CLOUD-04",
+      "verdict": "pass",
+      "observed": {
+        "approval_delete_http": 200,
+        "openai_delete_http": 200,
+        "anthropic_delete_http": 200
+      }
+    }
+  ],
+  "passed": 4,
+  "failed": 0
+}

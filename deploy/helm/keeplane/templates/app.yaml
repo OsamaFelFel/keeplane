@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-app
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-app
+    spec:
+      containers:
+        - name: app
+          image: {{ .Values.app.image | quote }}
+          imagePullPolicy: {{ .Values.app.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GATEWAY_URL
+              value: {{ if eq .Values.gateway.mode "managed" }}{{ if not .Values.gateway.install }}{{ fail "gateway.install must be true in managed mode" }}{{ end }}{{ printf "http://%s:4000" .Release.Name | quote }}{{ else if eq .Values.gateway.mode "existing" }}{{ if .Values.gateway.install }}{{ fail "gateway.install must be false in existing mode" }}{{ end }}{{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}{{ else }}{{ fail "gateway.mode must be managed or existing" }}{{ end }}
+            - name: PREVIEW_RUNNER_URLS
+              value: {{ .Values.app.runnerUrls | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health/app
+              port: 3000
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-app
+spec:
+  type: {{ .Values.app.service.type }}
+  selector:
+    app: {{ .Release.Name }}-app
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      {{- if eq .Values.app.service.type "NodePort" }}
+      nodePort: {{ required "app.service.nodePort is required for NodePort" .Values.app.service.nodePort }}
+      {{- end }}

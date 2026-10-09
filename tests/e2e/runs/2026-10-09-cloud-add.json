@@ -1,0 +1,104 @@
+{
+  "suite": "Protected Docker cloud model registration",
+  "time_utc": "2026-10-09T03:23:06.256537+00:00",
+  "gateway": "agentgateway local trial",
+  "provider_endpoint": "local authenticated mock",
+  "cases": [
+    {
+      "id": "CADD-01",
+      "verdict": "pass",
+      "observed": {
+        "anonymous_status": 401,
+        "gateway_entry": false
+      }
+    },
+    {
+      "id": "CADD-02",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 200,
+        "ask_status": 200,
+        "listed_provider": "OpenAI",
+        "listed_key_choice": "shared"
+      }
+    },
+    {
+      "id": "CADD-03",
+      "verdict": "pass",
+      "observed": {
+        "resource_status": 200,
+        "key_absent_from_api": true,
+        "file_reference_only": true,
+        "key_file_metadata": {
+          "uid": 65532,
+          "mode": "0o600"
+        },
+        "new_key_files": 1
+      }
+    },
+    {
+      "id": "CADD-04",
+      "verdict": "pass",
+      "observed": {
+        "duplicate_status": 409,
+        "duplicate_gateway_entry": false,
+        "extra_key_files": 0
+      }
+    },
+    {
+      "id": "CADD-05",
+      "verdict": "pass",
+      "observed": {
+        "wrong_key_status": 503,
+        "gateway_entry": false,
+        "listed": false,
+        "extra_key_files": 0
+      }
+    },
+    {
+      "id": "CADD-06",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 200,
+        "ask_status": 200,
+        "listed_provider": "Anthropic"
+      }
+    },
+    {
+      "id": "CADD-07",
+      "verdict": "pass",
+      "observed": {
+        "edit_status": 200,
+        "key_choice": "shared",
+        "classes": [
+          "Internal"
+        ],
+        "ask_status": 200
+      }
+    },
+    {
+      "id": "CADD-08",
+      "verdict": "pass",
+      "observed": {
+        "invalid_class_status": 400,
+        "gateway_entry": false,
+        "new_key_files": 2
+      }
+    },
+    {
+      "id": "CADD-09",
+      "verdict": "pass",
+      "observed": {
+        "remove_statuses": [
+          200,
+          200
+        ],
+        "gateway_entries_remaining": 0,
+        "key_files_after_cleanup": 0
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 9,
+  "failed": 0
+}

@@ -1,0 +1,88 @@
+#!/bin/sh
+# Start the disposable Kubernetes integration trial. Every Kubernetes command
+# uses this project's isolated kubeconfig, never the workstation default.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+KUBECONFIG_PATH=${KEEPLANE_KUBECONFIG:-/private/tmp/keeplane-kind-kubeconfig}
+HELM_BIN=${KEEPLANE_HELM_BIN:-helm}
+PYTHON_IMAGE=python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+POSTGRES_IMAGE=postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+GATEWAY_IMAGE=cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+QWEN_MODEL=models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf
+QWEN_SHA256=1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32
+
+cd "$ROOT"
+if [ ! -f "$QWEN_MODEL" ]; then
+  printf 'Missing %s; download it using docs/guide/local-preview.md first.\n' "$QWEN_MODEL" >&2
+  exit 1
+fi
+ACTUAL_QWEN_SHA256=$(shasum -a 256 "$QWEN_MODEL" | cut -d ' ' -f 1)
+if [ "$ACTUAL_QWEN_SHA256" != "$QWEN_SHA256" ]; then
+  printf 'Qwen model checksum does not match the pinned file.\n' >&2
+  exit 1
+fi
+docker pull "$PYTHON_IMAGE"
+docker pull "$POSTGRES_IMAGE"
+docker pull "$GATEWAY_IMAGE"
+docker build -f components/control-plane/Dockerfile -t keeplane-preview:kind-local .
+
+if kind get clusters | rg -xq keeplane; then
+  kind export kubeconfig --name keeplane --kubeconfig "$KUBECONFIG_PATH"
+else
+  kind create cluster --name keeplane --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 \
+    --config deploy/local/kind.yaml --kubeconfig "$KUBECONFIG_PATH" --wait 120s
+fi
+kind load docker-image "$PYTHON_IMAGE" "$POSTGRES_IMAGE" "$GATEWAY_IMAGE" \
+  keeplane-preview:kind-local --name keeplane
+docker exec keeplane-control-plane mkdir -p /models
+docker cp "$QWEN_MODEL" "keeplane-control-plane:/models/$(basename "$QWEN_MODEL")"
+
+kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane-existing --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace supplied-gateway --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap model-fixture \
+  --from-file=mock_model.py=tests/fixtures/mock_model.py --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/model-fixture.yaml
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/qwen-runner.yaml
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/postgres-fixture.yaml
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway create configmap model-fixture \
+  --from-file=mock_model.py=tests/fixtures/mock_model.py --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway apply -f deploy/local/model-fixture.yaml
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway apply -f deploy/local/postgres-fixture.yaml
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart deployment/model
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout restart deployment/model
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/model --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/qwen --timeout=300s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/postgres --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout status deployment/model --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout status deployment/postgres --timeout=120s
+
+"$HELM_BIN" upgrade --install keeplane deploy/helm/keeplane \
+  --kubeconfig "$KUBECONFIG_PATH" --namespace keeplane \
+  -f deploy/local/values.yaml --wait --timeout 180s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart deployment/keeplane-app
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/keeplane-app --timeout=120s
+
+"$HELM_BIN" upgrade --install supplied-gateway \
+  deploy/helm/keeplane/charts/agentgateway-standalone-v1.6.0.tgz \
+  --kubeconfig "$KUBECONFIG_PATH" --namespace supplied-gateway \
+  -f deploy/local/supplied-gateway-values.yaml --wait --timeout 180s
+
+"$HELM_BIN" upgrade --install keeplane-existing deploy/helm/keeplane \
+  --kubeconfig "$KUBECONFIG_PATH" --namespace keeplane-existing \
+  --set gateway.mode=existing --set gateway.install=false \
+  --set gateway.url=http://supplied-gateway.supplied-gateway.svc.cluster.local:4000 \
+  --set gateway.preflightModel=customer-fixture \
+  --set app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080 \
+  --set app.image=keeplane-preview:kind-local --set app.pullPolicy=Never \
+  --wait --timeout 180s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing rollout restart deployment/keeplane-existing-app
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing rollout status deployment/keeplane-existing-app --timeout=120s
+
+printf 'Keeplane local Kubernetes trial: http://127.0.0.1:13000\n'

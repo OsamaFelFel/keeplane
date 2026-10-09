@@ -1,0 +1,21 @@
+# Local preview only. Gateway management stays on the private Compose network.
+config:
+  storage:
+    mode: hybrid
+  database:
+    url: sqlite:///data/agentgateway.db
+gateways:
+  default:
+    port: 4000
+ui:
+  gateways: default
+llm:
+  models:
+    - name: local-fixture
+      provider:
+        custom:
+          formats:
+            - type: completions
+      params:
+        model: mock-local
+        baseUrl: http://model:18080/v1

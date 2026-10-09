@@ -1,0 +1,43 @@
+{
+  "suite": "guarded endpoint trial",
+  "results": [
+    {
+      "case": "LOCAL-12",
+      "verdict": "pass",
+      "observed": {
+        "without_key": 401,
+        "wrong_key": 401
+      }
+    },
+    {
+      "case": "LOCAL-13",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "existing": true,
+        "model_kind": "endpoint-trial",
+        "management_status": 200,
+        "gateway_has_trial_key": true,
+        "ui_catalog_hides_key": true
+      }
+    },
+    {
+      "case": "LOCAL-14",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "model": "guarded-qwen",
+        "has_generated_text": true
+      }
+    },
+    {
+      "case": "LOCAL-15",
+      "verdict": "pass",
+      "observed": {
+        "repeat_status": 200,
+        "repeat_existing": true,
+        "conflict_status": 409
+      }
+    }
+  ]
+}

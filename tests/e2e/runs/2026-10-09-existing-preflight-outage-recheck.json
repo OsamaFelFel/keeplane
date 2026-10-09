@@ -1,0 +1,39 @@
+{
+  "started_utc": "2026-10-09T03:06:46.414301+00:00",
+  "git_head": "b9ab6a21b38b11af3f8414e16c4cc353ac14fa43",
+  "branch": "fix/effective-class-approvals",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "0b79e64e66897f37aed2dcc62ce62d75c10f9934dcfa547c8a9f67c4b1d0b5ec",
+  "selected_suites": [
+    "kind-gateway-down"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "kind-gateway-down",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_gateway_down.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 18.5,
+      "cases": [
+        {
+          "id": "K8S-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    }
+  ],
+  "finished_utc": "2026-10-09T03:07:05.058842+00:00",
+  "suites_passed": 1,
+  "suites_total": 1,
+  "cases_reported": 2
+}

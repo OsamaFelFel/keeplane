@@ -1,0 +1,28 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "```python\ndef add(a, b):\n    \"\"\"\n    Adds two integers and returns a code-only result.\n    \n    Parameters:\n    a (int): The first integer.\n    b (int): The second integer.\n    \n    Returns:\n    int: A code-only result of the addition.\n    \n    Example:\n    >>> add(3, 5)\n    8\n    \"\"\"\n    return a + b\n```",
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b"
+        }
+      }
+    }
+  ]
+}

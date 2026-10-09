@@ -1,0 +1,811 @@
+{
+  "time_utc": "2026-10-09T00:50:44.607413+00:00",
+  "results": [
+    {
+      "suite": "catalog-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_catalog.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.2,
+      "cases": [
+        {
+          "id": "catalog-store",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "data-class-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.1,
+      "cases": [
+        {
+          "id": "data-class-store",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "audit-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.2,
+      "cases": [
+        {
+          "id": "audit-store",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "management-retry",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_management_retry.py"
+      ],
+      "environment": {
+        "PYTHONPATH": "components/control-plane"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.3,
+      "cases": [
+        {
+          "id": "MGMT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MGMT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MGMT-03",
+          "verdict": "pass"
+        }
+      ],
+      "initial_failure": {
+        "exit_code": 1,
+        "reason": "The first host invocation lacked the control-plane module path."
+      }
+    },
+    {
+      "suite": "stack-lock",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_stack_lock.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.6,
+      "cases": [
+        {
+          "id": "LOCK-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-04",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "docker-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.0,
+      "cases": [
+        {
+          "id": "LOCAL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-11",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "kind-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.0,
+      "cases": [
+        {
+          "id": "LOCAL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-11",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "docker-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 4.5,
+      "cases": [
+        {
+          "id": "LOCAL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-09",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "kind-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 2.4,
+      "cases": [
+        {
+          "id": "LOCAL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-09",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "guarded-endpoint",
+      "command": [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "app",
+        "python",
+        "-"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.8,
+      "cases": [
+        {
+          "id": "LOCAL-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-13",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-14",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-15",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "docker-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.3,
+      "cases": [
+        {
+          "id": "LOCAL-23",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21-ADD",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-22",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "kind-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.3,
+      "cases": [
+        {
+          "id": "LOCAL-23",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21-ADD",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-22",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "kind-failover",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_kind.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.4,
+      "cases": [
+        {
+          "id": "K8S-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-06",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "accounts",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_accounts.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.9,
+      "cases": [
+        {
+          "id": "ACCT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-11",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-13",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-12",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "data-classes",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.4,
+      "cases": [
+        {
+          "id": "CLASS-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-07",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 5.8,
+      "cases": [
+        {
+          "id": "MODEL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-09",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "model-edit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_edit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.5,
+      "cases": [
+        {
+          "id": "EDIT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-05",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "model-replacement",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_replacement.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 2.4,
+      "cases": [
+        {
+          "id": "REPLACE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-05",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.4,
+      "cases": [
+        {
+          "id": "AUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-07",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "model-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_add.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 4.4,
+      "cases": [
+        {
+          "id": "ADD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-08",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "cloud-listing",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_listing.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.3,
+      "cases": [
+        {
+          "id": "CLOUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-04",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "model-removal",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_removal.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.2,
+      "cases": [
+        {
+          "id": "REMOVE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-07",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "docker-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--docker"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 15.1,
+      "cases": [
+        {
+          "id": "LOCAL-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-20",
+          "verdict": "pass"
+        }
+      ]
+    },
+    {
+      "suite": "kind-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--kind"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 17.9,
+      "cases": [
+        {
+          "id": "LOCAL-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-20",
+          "verdict": "pass"
+        }
+      ]
+    }
+  ],
+  "suites_passed": 24,
+  "suites_total": 24,
+  "cases_reported": 120,
+  "corrected_invocations": [
+    {
+      "suite": "management-retry",
+      "environment": {
+        "PYTHONPATH": "components/control-plane"
+      },
+      "exit_code": 0,
+      "cases_passed": 3
+    }
+  ]
+}

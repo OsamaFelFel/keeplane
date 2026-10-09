@@ -1,0 +1,28 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "Here's a Python function that adds two integers and returns a return code:\n\n```python\ndef add_two_integers(x, y):\n    return x + y\n```\n\nIn this function, `x` and `y` are the two integers to be added. The function returns the sum of these two integers. The `return` statement is used to exit the function and return the result. This is a simple example of a function that performs a basic arithmetic o",
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Keeplane</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/sign-in.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span>Keeplane</span></div></header>
+  <main class="sign-in-page">
+    <h1>Sign in</h1>
+    <p>Use the account your Keeplane admin created.</p>
+    <form id="sign-in-form">
+      <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+      <p id="sign-in-error" role="alert" hidden></p>
+      <button class="primary" type="submit">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

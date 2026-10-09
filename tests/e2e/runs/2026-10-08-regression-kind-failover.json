@@ -1,0 +1,133 @@
+{
+  "suite": "Keeplane local Kubernetes",
+  "results": [
+    {
+      "case": "K8S-01",
+      "verdict": "pass",
+      "observed": {
+        "ready_replicas": 2
+      }
+    },
+    {
+      "case": "K8S-02",
+      "verdict": "pass",
+      "observed": [
+        {
+          "pod": "keeplane-69d67696f-qvzq7",
+          "models": [
+            "ui-qwen-verified",
+            "local-fixture",
+            "ui-qwen-smoke",
+            "second-local",
+            "local-qwen",
+            "tesr"
+          ]
+        },
+        {
+          "pod": "keeplane-69d67696f-xkdd7",
+          "models": [
+            "ui-qwen-verified",
+            "local-fixture",
+            "ui-qwen-smoke",
+            "second-local",
+            "local-qwen",
+            "tesr"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "K8S-03",
+      "verdict": "pass",
+      "observed": {
+        "removed_pod": "keeplane-69d67696f-qvzq7",
+        "calls": [
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          }
+        ]
+      }
+    },
+    {
+      "case": "K8S-04",
+      "verdict": "pass",
+      "observed": {
+        "ready_replicas": 2
+      }
+    },
+    {
+      "case": "K8S-05",
+      "verdict": "pass",
+      "observed": {
+        "resources": [
+          [
+            "Deployment",
+            "keeplane-existing-app"
+          ],
+          [
+            "Service",
+            "keeplane-existing-app"
+          ]
+        ],
+        "answer": "mock answer"
+      }
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Models and routing · Keeplane</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true">
+        <polygon points="10,54 16,54 25.08,12 22.49,12" fill="#FFFFFF"/>
+        <polygon points="48,54 54,54 41.51,12 38.92,12" fill="#FFFFFF"/>
+        <polygon points="29.5,54 34.5,54 34.2,45 29.8,45" fill="#F2B705"/>
+        <polygon points="30.01,39 33.99,39 33.76,32 30.24,32" fill="#F2B705"/>
+        <polygon points="30.41,27 33.59,27 33.42,22 30.58,22" fill="#F2B705"/>
+        <polygon points="30.73,17.5 33.27,17.5 33.15,14 30.85,14" fill="#F2B705"/>
+      </svg>
+      <span>Keeplane</span>
+    </div>
+    <span class="preview">Local preview</span>
+    <span class="account-header" data-identity-only hidden><span id="signed-in-user"></span><a href="/sign-out">Sign out</a></span>
+  </header>
+  <div class="layout">
+    <nav aria-label="Main"><a href="/users" data-identity-only hidden>Users</a><a class="selected" href="/" aria-current="page">Models and routing</a><a href="/data-classes" data-identity-only hidden>Data classes</a><a href="/audit" data-identity-only hidden>Audit</a><a href="/editions" data-identity-only hidden>Editions</a></nav>
+    <main>
+      <h1>Models and routing</h1>
+      <p class="intro">Register the models you use. Keeplane routes each task to a fitting model.</p>
+      <div id="gateway-warning" class="gateway-warning" role="alert" hidden>
+        <div><strong>The model gateway isn't answering</strong><p>Developers' tasks can't reach any model, and models can't be added or changed, until it answers again.</p></div>
+        <button id="try-again" type="button">Try again</button>
+      </div>
+      <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+      <section class="card" aria-labelledby="models-title">
+        <h2 id="models-title">Models</h2>
+        <div class="section-head">
+          <p>Every model you add is registered in the gateway.</p>
+          <button id="show-add" type="button">Add model</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Reached</th><th scope="col">Key</th><th scope="col">Approved for</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="models"><tr><td colspan="6">Loading models…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="footnote">This local preview tests model registration and transport. The protected account preview also supports model approval, data classes and Audit settings records. Project routing and the coding CLI are not enabled yet.</p>
+    </main>
+  </div>
+
+  <dialog id="add-dialog" aria-labelledby="dialog-title">
+    <h2 id="dialog-title">Add model</h2>
+    <p>Choose a provider and a model Keeplane can reach.</p>
+    <form id="add-form">
+      <div class="field"><label for="model-source">Provider</label><select id="model-source" name="source"><option value="runner">Local runner</option><option value="openai" data-identity-only hidden>OpenAI</option><option value="anthropic" data-identity-only hidden>Anthropic</option></select><p class="field-detail">Keeplane checks the model through the configured gateway.</p></div>
+      <div id="runner-fields">
+        <div class="field"><label for="runner-address">Runner address</label><div class="address-row"><input id="runner-address" name="address" type="url" required placeholder="http://qwen:8080"><button id="find-models" type="button">Find models</button></div><p class="field-detail">Where the runner serves models on your network.</p></div>
+        <div class="field"><label for="served-model">Model</label><select id="served-model" name="model" required disabled><option value="">Find models first</option></select><p class="field-detail">The models this runner serves.</p><p id="runner-context" class="field-detail" hidden></p></div>
+      </div>
+      <div id="cloud-fields" hidden>
+        <p class="trial-note">Local trial: OpenAI and Anthropic selections use an authenticated test endpoint in their API formats. No live provider is called.</p>
+        <div class="field"><label for="cloud-model">Model</label><input id="cloud-model" name="cloud-model" maxlength="100" placeholder="Enter the provider model ID"><p class="field-detail">Enter the exact model ID from the provider.</p></div>
+        <fieldset class="key-choice"><legend>Provider key</legend>
+          <label><input type="radio" name="key_choice" value="shared" checked> One shared key for the organization</label>
+          <label><input type="radio" name="key_choice" value="personal" disabled> Each developer adds their own key <span class="field-detail">(not enabled in this preview)</span></label>
+          <label><input type="radio" name="key_choice" value="none"> No key needed</label>
+        </fieldset>
+        <div class="field" id="shared-key-field"><label for="shared-key">Shared key</label><input id="shared-key" type="password" autocomplete="new-password" placeholder="Enter the provider key"><p class="field-detail">Keys are never shown again.</p></div>
+      </div>
+      <p id="served-error" class="field-error" role="alert" hidden></p>
+      <fieldset id="add-class-choices" class="key-choice" hidden><legend>Approved for</legend>
+        <p class="field-detail">Projects with no data class can use any model Keeplane has set up.</p>
+      </fieldset>
+      <p class="field-detail">Keeplane checks that the model answers before adding it.</p>
+      <p id="dialog-error" role="alert" hidden></p>
+      <div class="actions dialog-actions"><button type="button" id="cancel-add">Cancel</button><button type="submit" class="primary" disabled>Add model</button></div>
+    </form>
+  </dialog>
+  <dialog id="setup-dialog" aria-labelledby="setup-title">
+    <h2 id="setup-title">Set up model</h2>
+    <p id="setup-description">A model added outside Keeplane gets no work until you set its key and the classes it is approved for.</p>
+    <form id="setup-form">
+      <p id="setup-model-name" class="model-id"></p>
+      <fieldset class="key-choice"><legend>Provider key</legend><p id="setup-key-choice">No key needed</p></fieldset>
+      <div class="field" id="replace-key-field" hidden><label for="replace-shared-key">Replace shared key</label><input id="replace-shared-key" type="password" autocomplete="new-password"><p class="field-detail">Leave it empty to keep the current key.</p></div>
+      <fieldset id="setup-class-choices" class="key-choice"><legend>Approved for</legend>
+        <p class="field-detail">Projects with no data class can use any model that Keeplane has set up.</p>
+      </fieldset>
+      <p id="setup-error" role="alert" hidden></p>
+      <div class="actions dialog-actions"><button id="remove-setup" type="button" hidden>Remove Keeplane setup</button><button id="cancel-setup" type="button">Cancel</button><button type="submit" class="primary">Save</button></div>
+    </form>
+  </dialog>
+  <dialog id="remove-setup-dialog" aria-labelledby="remove-setup-title">
+    <h2 id="remove-setup-title">Remove Keeplane setup?</h2>
+    <p id="remove-setup-description">Keeplane stops sending work to <strong id="remove-setup-name"></strong>. The model stays in the gateway.</p>
+    <p id="remove-setup-error" role="alert" hidden></p>
+    <div class="actions dialog-actions"><button id="cancel-remove-setup" type="button">Cancel</button><button id="confirm-remove-setup" class="primary" type="button">Remove setup</button></div>
+  </dialog>
+</body>
+</html>

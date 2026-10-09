@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Editions · Keeplane</title><link rel="stylesheet" href="/style.css">
+  <script src="/editions.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><polygon points="10,54 16,54 25.08,12 22.49,12" fill="#fff"/><polygon points="48,54 54,54 41.51,12 38.92,12" fill="#fff"/><polygon points="29.5,54 34.5,54 34.2,45 29.8,45" fill="#F2B705"/><polygon points="30.01,39 33.99,39 33.76,32 30.24,32" fill="#F2B705"/><polygon points="30.41,27 33.59,27 33.42,22 30.58,22" fill="#F2B705"/><polygon points="30.73,17.5 33.27,17.5 33.15,14 30.85,14" fill="#F2B705"/></svg><span>Keeplane</span></div>
+    <span class="account-header"><span id="signed-in-user"></span><a href="/sign-out">Sign out</a></span>
+  </header>
+  <div class="layout">
+    <nav aria-label="Main"><a href="/users">Users</a><a href="/">Models and routing</a><a href="/data-classes">Data classes</a><a href="/audit">Audit</a><a class="selected" href="/editions" aria-current="page">Editions</a></nav>
+    <main>
+      <h1>Editions</h1>
+      <p class="intro">You are using Keeplane Open Source. It works fully on its own.</p>
+      <p id="editions-notice" class="notice" role="status" hidden></p>
+      <section class="card edition-card" aria-labelledby="open-source-title">
+        <h2 id="open-source-title">Open Source includes</h2>
+        <ul>
+          <li>Projects, onboarded with init in Keeplane's CLI</li>
+          <li>Workflows and agents</li>
+          <li>Models and routing, with developers' own keys</li>
+          <li>Data classes and personal-data detection</li>
+          <li>The audit add-on</li>
+          <li>Sign-in with username and password or single sign-on</li>
+          <li>Keeplane's CLI for developers</li>
+        </ul>
+      </section>
+      <section class="card edition-card" aria-labelledby="enterprise-title">
+        <h2 id="enterprise-title">Enterprise adds</h2>
+        <ul>
+          <li>Organization-wide rules</li>
+          <li>Teams and access control, with groups mapped from your provider</li>
+          <li>Governance across all teams</li>
+          <li>An outcome report across teams</li>
+        </ul>
+        <p class="edition-placeholder">How to get Enterprise</p>
+      </section>
+      <section class="card edition-card" aria-labelledby="notes-title">
+        <h2 id="notes-title">Notes in the web UI</h2>
+        <div class="edition-switch"><input type="checkbox" role="switch" id="ent-notes"><label for="ent-notes">Show a note where a feature is part of Enterprise</label></div>
+        <p class="edition-switch-detail">One plain line, shown once, where you reach something only Enterprise does.</p>
+      </section>
+      <p class="edition-promise">No feature moves from Open Source to Enterprise. The Open Source license stays Apache 2.0.</p>
+    </main>
+  </div>
+</body>
+</html>

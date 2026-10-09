@@ -1,0 +1,98 @@
+{
+  "suite": "Spec 004 local model removal Docker trial",
+  "time_utc": "2026-10-09T00:54:19.331229+00:00",
+  "cases": [
+    {
+      "id": "REMOVE-01",
+      "verdict": "pass",
+      "observed": {
+        "add_http": 200,
+        "list_http": 200,
+        "owned": true,
+        "ask_http": 200
+      }
+    },
+    {
+      "id": "REMOVE-02",
+      "verdict": "pass",
+      "observed": {
+        "delete_http": 403,
+        "still_approved": true,
+        "gateway_resource_present": true
+      }
+    },
+    {
+      "id": "REMOVE-03",
+      "verdict": "pass",
+      "observed": {
+        "delete_http": 200,
+        "gateway_model_preserved": false,
+        "gateway_resource_present": false,
+        "approved_after": null,
+        "ask_http": 403
+      }
+    },
+    {
+      "id": "REMOVE-04",
+      "verdict": "pass",
+      "observed": {
+        "gateway_create_http": 200,
+        "setup_http": 200,
+        "owned": false,
+        "delete_http": 200,
+        "gateway_preserved": true,
+        "ask_http": 403
+      }
+    },
+    {
+      "id": "REMOVE-05",
+      "verdict": "pass",
+      "observed": {
+        "add_http": 200,
+        "update_http": 200,
+        "delete_http": 409,
+        "reason": "The model changed in the gateway. Keeplane will not remove a changed definition.",
+        "gateway_preserved": true,
+        "ask_http": 403
+      }
+    },
+    {
+      "id": "REMOVE-06",
+      "verdict": "pass",
+      "observed": {
+        "setup_http": 200,
+        "owned_after_setup": false,
+        "remove_http": 200,
+        "gateway_preserved": true
+      }
+    },
+    {
+      "id": "REMOVE-07",
+      "verdict": "pass",
+      "observed": {
+        "page_http": 200,
+        "script_http": 200,
+        "dialog_present": true
+      }
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "keeplane-remove-10202b75c4",
+      "setup_http": 404,
+      "gateway_http": 404
+    },
+    {
+      "name": "outside-remove-10202b75c4",
+      "setup_http": 404,
+      "gateway_http": 200
+    },
+    {
+      "name": "keeplane-changed-10202b75c4",
+      "setup_http": 404,
+      "gateway_http": 200
+    }
+  ],
+  "passed": 7,
+  "failed": 0
+}

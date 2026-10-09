@@ -1,0 +1,48 @@
+{
+  "suite": "Keeplane local stack lock",
+  "lock": "deploy/local/stack.lock.json",
+  "results": [
+    {
+      "case": "LOCK-01",
+      "verdict": "pass",
+      "observed": {
+        "model_sha256": "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32",
+        "kind_node_image": "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
+      }
+    },
+    {
+      "case": "LOCK-02",
+      "verdict": "pass",
+      "observed": {
+        "gateway": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+        "qwen": "ghcr.io/ggml-org/llama.cpp@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b",
+        "app": "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a"
+      }
+    },
+    {
+      "case": "LOCK-03",
+      "verdict": "pass",
+      "observed": {
+        "images": {
+          "managed_gateway": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+          "supplied_gateway": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+          "qwen": "ghcr.io/ggml-org/llama.cpp@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b",
+          "postgres": "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
+        },
+        "charts": {
+          "keeplane/keeplane": "keeplane-0.1.0",
+          "keeplane-existing/keeplane-existing": "keeplane-0.1.0",
+          "supplied-gateway/supplied-gateway": "agentgateway-standalone-v1.6.0"
+        }
+      }
+    },
+    {
+      "case": "LOCK-04",
+      "verdict": "pass",
+      "observed": {
+        "docker": "1.6.0",
+        "kind": "1.6.0"
+      }
+    }
+  ]
+}

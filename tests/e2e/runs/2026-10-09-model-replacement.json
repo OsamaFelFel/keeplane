@@ -1,0 +1,62 @@
+{
+  "suite": "Live gateway model replacement Docker trial",
+  "time_utc": "2026-10-08T23:28:04.399823+00:00",
+  "gateway_version": "1.6.0",
+  "cases": [
+    {
+      "id": "REPLACE-01",
+      "verdict": "pass",
+      "observed": {
+        "create_status": 200,
+        "listed_status": 200,
+        "listed_outside": true,
+        "gateway_resource_id": "keeplane-replace-5c162fcdcb"
+      }
+    },
+    {
+      "id": "REPLACE-02",
+      "verdict": "pass",
+      "observed": {
+        "approval_status": 200,
+        "ask_status": 200,
+        "answer": "mock answer"
+      }
+    },
+    {
+      "id": "REPLACE-03",
+      "verdict": "pass",
+      "observed": {
+        "update_status": 200,
+        "gateway_revision": 2,
+        "listed_but_unapproved": true,
+        "ask_status": 403,
+        "reason": "This model changed in the gateway and must be set up again",
+        "effective_class_association": false,
+        "stale_class_association_status": 400
+      }
+    },
+    {
+      "id": "REPLACE-04",
+      "verdict": "pass",
+      "observed": {
+        "restore_status": 200,
+        "gateway_revision": 3,
+        "ask_status": 403,
+        "effective_class_association": false
+      }
+    },
+    {
+      "id": "REPLACE-05",
+      "verdict": "pass",
+      "observed": {
+        "reapproval_status": 200,
+        "ask_status": 200,
+        "answer": "mock answer",
+        "effective_class_association": true
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 5,
+  "failed": 0
+}

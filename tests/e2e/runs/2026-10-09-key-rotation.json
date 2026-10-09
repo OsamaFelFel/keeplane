@@ -1,0 +1,69 @@
+{
+  "suite": "Protected Docker shared-key replacement",
+  "time_utc": "2026-10-09T03:42:24.488948+00:00",
+  "gateway": "agentgateway local trial",
+  "provider_endpoint": "local authenticated mock",
+  "cases": [
+    {
+      "id": "ROT-01",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 200,
+        "invalid_status": 400,
+        "gateway_unchanged": true,
+        "extra_key_files": 0
+      }
+    },
+    {
+      "id": "ROT-02",
+      "verdict": "pass",
+      "observed": {
+        "wrong_key_status": 503,
+        "gateway_unchanged": true,
+        "classes": [
+          "Public"
+        ],
+        "old_answer_status": 200,
+        "extra_key_files": 0
+      }
+    },
+    {
+      "id": "ROT-03",
+      "verdict": "pass",
+      "observed": {
+        "empty_key_status": 200,
+        "gateway_unchanged": true,
+        "classes": [
+          "Internal"
+        ],
+        "answer_status": 200
+      }
+    },
+    {
+      "id": "ROT-04",
+      "verdict": "pass",
+      "observed": {
+        "replace_status": 200,
+        "classes": [
+          "Confidential"
+        ],
+        "new_answer_status": 200,
+        "old_file_removed": true,
+        "new_key_files": 1
+      }
+    },
+    {
+      "id": "ROT-05",
+      "verdict": "pass",
+      "observed": {
+        "remove_status": 200,
+        "gateway_entry": false,
+        "listed": false,
+        "extra_key_files": 0
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 5,
+  "failed": 0
+}

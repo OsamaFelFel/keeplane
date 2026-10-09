@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model
+  template:
+    metadata:
+      labels:
+        app: model
+    spec:
+      containers:
+        - name: model
+          image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/fixture/mock_model.py", "--port", "18080"]
+          volumeMounts:
+            - name: fixture
+              mountPath: /fixture
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 18080
+            periodSeconds: 5
+      volumes:
+        - name: fixture
+          configMap:
+            name: model-fixture
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model
+spec:
+  selector:
+    app: model
+  ports:
+    - name: http
+      port: 18080
+      targetPort: 18080

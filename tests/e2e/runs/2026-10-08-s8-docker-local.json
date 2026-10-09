@@ -1,0 +1,100 @@
+{
+  "suite": "Keeplane local model slice",
+  "results": [
+    {
+      "case": "LOCAL-01",
+      "verdict": "pass",
+      "observed": {
+        "page_status": 200,
+        "health": {
+          "gateway": "ready"
+        },
+        "local_font_status": 200
+      }
+    },
+    {
+      "case": "LOCAL-02",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "models": [
+          "qwen2.5-coder:0.5b",
+          "local-fixture",
+          "guarded-qwen",
+          "second-local",
+          "local-qwen",
+          "ui-guarded",
+          "ui-local"
+        ]
+      }
+    },
+    {
+      "case": "LOCAL-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "model": "local-fixture",
+        "answer": "mock answer"
+      }
+    },
+    {
+      "case": "LOCAL-04",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "register_result": {
+          "name": "second-local",
+          "existing": true
+        },
+        "listed": [
+          "qwen2.5-coder:0.5b",
+          "local-fixture",
+          "guarded-qwen",
+          "second-local",
+          "local-qwen",
+          "ui-guarded",
+          "ui-local"
+        ],
+        "ask_status": 200
+      }
+    },
+    {
+      "case": "LOCAL-05",
+      "verdict": "pass",
+      "observed": {
+        "status": 404,
+        "error": {
+          "message": "Model not found",
+          "type": "invalid_request_error",
+          "code": "model_not_found"
+        }
+      }
+    },
+    {
+      "case": "LOCAL-08",
+      "verdict": "pass",
+      "observed": {
+        "gateway": {
+          "name": "agentgateway",
+          "version": "1.6.0"
+        },
+        "fixture": {
+          "id": "second-local",
+          "provider": "Test fixture",
+          "kind": "fixture",
+          "upstream_model": "mock-local"
+        }
+      }
+    },
+    {
+      "case": "LOCAL-11",
+      "verdict": "pass",
+      "observed": {
+        "repeat_status": 200,
+        "conflict_status": 409,
+        "conflict": "A model with this name is already registered",
+        "answer_after_conflict": "mock answer"
+      }
+    }
+  ]
+}

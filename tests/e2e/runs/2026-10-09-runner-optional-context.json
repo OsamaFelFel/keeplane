@@ -1,0 +1,11 @@
+{
+  "case": "LOCAL-25",
+  "verdict": "pass",
+  "observed": {
+    "status": 200,
+    "models": [
+      "plain-runner"
+    ],
+    "runtime": {}
+  }
+}

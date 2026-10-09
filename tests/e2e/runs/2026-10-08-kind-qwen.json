@@ -1,0 +1,28 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "Certainly! Below is a Python function that takes two integers and returns only the sum of the two integers.\n\n```python\ndef add_two_integers(a, b):\n    return a + b\n\n# Example usage:\nresult = add_two_integers(3, 5)\nprint(result)  # Output: 8\n```\n\nThis function simply takes two parameters `a` and `b`, adds them together, and returns the result.",
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b"
+        }
+      }
+    }
+  ]
+}

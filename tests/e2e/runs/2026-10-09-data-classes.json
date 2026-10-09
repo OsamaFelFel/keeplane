@@ -1,0 +1,81 @@
+{
+  "suite": "Spec 005 starter data-class Docker trial",
+  "time_utc": "2026-10-08T23:27:47.855035+00:00",
+  "cases": [
+    {
+      "id": "CLASS-01",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "starter_names": [
+          "Public",
+          "Internal",
+          "Confidential"
+        ],
+        "page_status": 200
+      }
+    },
+    {
+      "id": "CLASS-02",
+      "verdict": "pass",
+      "observed": {
+        "setup_status": 200,
+        "add_status": 201,
+        "class_has_model": true,
+        "model_has_class": true
+      }
+    },
+    {
+      "id": "CLASS-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 409
+      }
+    },
+    {
+      "id": "CLASS-04",
+      "verdict": "pass",
+      "observed": {
+        "status": 400
+      }
+    },
+    {
+      "id": "CLASS-05",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "renamed_in_classes": true,
+        "renamed_on_model": true
+      }
+    },
+    {
+      "id": "CLASS-06",
+      "verdict": "pass",
+      "observed": {
+        "persisted_class": true,
+        "persisted_model_approval": true
+      }
+    },
+    {
+      "id": "CLASS-08",
+      "verdict": "pass",
+      "observed": {
+        "status": 403
+      }
+    },
+    {
+      "id": "CLASS-07",
+      "verdict": "pass",
+      "observed": {
+        "remove_status": 200,
+        "class_absent": true,
+        "remaining_approval": [
+          "Public"
+        ]
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 8,
+  "failed": 0
+}

@@ -1,0 +1,160 @@
+{
+  "suite": "Spec 003 local account trial",
+  "time_utc": "2026-10-09T08:38:35.542753+00:00",
+  "identity": "Keeplane local SQLite trial",
+  "cases": [
+    {
+      "id": "ACCT-01",
+      "verdict": "pass",
+      "observed": {
+        "api_status": 401,
+        "sign_in_page": "http://127.0.0.1:3001/sign-in"
+      }
+    },
+    {
+      "id": "ACCT-14",
+      "verdict": "pass",
+      "observed": {
+        "forwarded_identity_without_session_status": 401
+      }
+    },
+    {
+      "id": "ACCT-15",
+      "verdict": "pass",
+      "observed": {
+        "wrong_password_status": 401,
+        "api_status": 401
+      }
+    },
+    {
+      "id": "ACCT-02",
+      "verdict": "pass",
+      "observed": {
+        "login_status": 200,
+        "users_page_status": 200,
+        "model_api_status": 200
+      }
+    },
+    {
+      "id": "ACCT-11",
+      "verdict": "pass",
+      "observed": {
+        "self_registration_control": false
+      }
+    },
+    {
+      "id": "ACCT-03",
+      "verdict": "pass",
+      "observed": {
+        "api_after_signout": 401,
+        "sign_in_form_after_signout": true
+      }
+    },
+    {
+      "id": "ACCT-04",
+      "verdict": "pass",
+      "observed": {
+        "list_status": 200,
+        "roles": {
+          "acctffaac7-admin": "admin",
+          "acctffaac7-developer": "developer"
+        }
+      }
+    },
+    {
+      "id": "ACCT-05",
+      "verdict": "pass",
+      "observed": {
+        "login_status": 403,
+        "denied_at_session": true
+      }
+    },
+    {
+      "id": "ACCT-06",
+      "verdict": "pass",
+      "observed": {
+        "login_status": 200,
+        "page": "http://127.0.0.1:3001/"
+      }
+    },
+    {
+      "id": "ACCT-07",
+      "verdict": "pass",
+      "observed": {
+        "pages": [
+          {
+            "status": 200,
+            "count": 20,
+            "has_more": true
+          },
+          {
+            "status": 200,
+            "count": 7,
+            "has_more": false
+          }
+        ],
+        "unique_names": 27,
+        "focused_count": 1
+      }
+    },
+    {
+      "id": "ACCT-08",
+      "verdict": "pass",
+      "observed": {
+        "search_status": 200,
+        "detail_status": 200,
+        "team_page_status": 200,
+        "members_before": 0
+      }
+    },
+    {
+      "id": "ACCT-13",
+      "verdict": "pass",
+      "observed": {
+        "pages": [
+          {
+            "status": 200,
+            "count": 20,
+            "has_more": true
+          },
+          {
+            "status": 200,
+            "count": 2,
+            "has_more": false
+          }
+        ],
+        "unique_names": 22,
+        "focused_count": 1
+      }
+    },
+    {
+      "id": "ACCT-09",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 200,
+        "search_status": 200,
+        "members_after": [
+          "acctffaac7-developer"
+        ]
+      }
+    },
+    {
+      "id": "ACCT-10",
+      "verdict": "pass",
+      "observed": {
+        "mutation_status": 403
+      }
+    },
+    {
+      "id": "ACCT-12",
+      "verdict": "pass",
+      "observed": {
+        "protected_model_status": 200,
+        "original_preview_status": 200
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 15,
+  "failed": 0
+}

@@ -1,0 +1,11 @@
+apiVersion: v2
+name: keeplane
+description: Pre-release Kubernetes integration chart for Keeplane
+type: application
+version: 0.1.0
+appVersion: "0.1.0-preview"
+dependencies:
+  - name: agentgateway-standalone
+    version: v1.6.0
+    repository: oci://cr.agentgateway.dev/charts
+    condition: gateway.install

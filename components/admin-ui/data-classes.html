@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data classes · Keeplane</title><link rel="stylesheet" href="/style.css">
+  <script src="/data-classes.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><polygon points="10,54 16,54 25.08,12 22.49,12" fill="#fff"/><polygon points="48,54 54,54 41.51,12 38.92,12" fill="#fff"/><polygon points="29.5,54 34.5,54 34.2,45 29.8,45" fill="#F2B705"/><polygon points="30.01,39 33.99,39 33.76,32 30.24,32" fill="#F2B705"/><polygon points="30.41,27 33.59,27 33.42,22 30.58,22" fill="#F2B705"/><polygon points="30.73,17.5 33.27,17.5 33.15,14 30.85,14" fill="#F2B705"/></svg><span>Keeplane</span></div>
+    <span class="account-header"><span id="signed-in-user"></span><a href="/sign-out">Sign out</a></span>
+  </header>
+  <div class="layout">
+    <nav aria-label="Main"><a href="/users">Users</a><a href="/">Models and routing</a><a class="selected" href="/data-classes" aria-current="page">Data classes</a><a href="/audit">Audit</a><a href="/editions">Editions</a></nav>
+    <main>
+      <div class="page-heading"><div><h1>Data classes</h1><p class="intro">Organize which models are approved for each kind of project work.</p></div><button id="show-add" class="primary" type="button">Add class</button></div>
+      <p id="notice" class="notice" role="status" hidden></p>
+      <div class="table-wrap"><table><thead><tr><th scope="col">Class</th><th scope="col">Approved models</th><th scope="col">Projects</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="classes"><tr><td colspan="4">Loading classes…</td></tr></tbody></table></div>
+    </main>
+  </div>
+  <dialog id="class-dialog" aria-labelledby="class-dialog-title">
+    <h2 id="class-dialog-title">Add class</h2>
+    <form id="class-form">
+      <div class="field"><label for="class-name">Name</label><input id="class-name" name="name" type="text" minlength="2" maxlength="80" required></div>
+      <fieldset id="approved-model-choices" class="key-choice"><legend>Approved models</legend></fieldset>
+      <p id="dialog-error" role="alert" hidden></p>
+      <div class="actions dialog-actions"><button id="remove-class" type="button" hidden>Remove class</button><button id="cancel-class" type="button">Cancel</button><button id="save-class" class="primary" type="submit">Add class</button></div>
+    </form>
+  </dialog>
+  <dialog id="remove-dialog" aria-labelledby="remove-title">
+    <h2 id="remove-title">Remove class?</h2>
+    <p id="remove-explanation"></p>
+    <p id="remove-error" role="alert" hidden></p>
+    <div class="actions dialog-actions"><button id="cancel-remove" type="button">Cancel</button><button id="confirm-remove" class="primary" type="button">Remove class</button></div>
+  </dialog>
+</body>
+</html>

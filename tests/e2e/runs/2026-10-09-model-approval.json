@@ -1,0 +1,96 @@
+{
+  "suite": "Spec 004 outside-model approval Docker trial",
+  "time_utc": "2026-10-08T23:27:38.286667+00:00",
+  "cases": [
+    {
+      "id": "MODEL-01",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "outside": true,
+        "setup_dialog": true
+      }
+    },
+    {
+      "id": "MODEL-02",
+      "verdict": "pass",
+      "observed": {
+        "status": 403,
+        "error": "This model has not been set up for Keeplane"
+      }
+    },
+    {
+      "id": "MODEL-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 403
+      }
+    },
+    {
+      "id": "MODEL-10",
+      "verdict": "pass",
+      "observed": {
+        "registration_without_action_status": 403
+      }
+    },
+    {
+      "id": "MODEL-04",
+      "verdict": "pass",
+      "observed": {
+        "wrong_key_status": 400,
+        "wrong_class_status": 400,
+        "still_outside": true
+      }
+    },
+    {
+      "id": "MODEL-05",
+      "verdict": "pass",
+      "observed": {
+        "setup_status": 200,
+        "listed_approval": true,
+        "classes": [
+          "Public",
+          "Internal"
+        ]
+      }
+    },
+    {
+      "id": "MODEL-06",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "answer": "mock answer"
+      }
+    },
+    {
+      "id": "MODEL-07",
+      "verdict": "pass",
+      "observed": {
+        "persisted_approval": true,
+        "answer_status": 200
+      }
+    },
+    {
+      "id": "MODEL-08",
+      "verdict": "pass",
+      "observed": {
+        "removed_status": 200,
+        "still_in_gateway": true,
+        "outside_again": true,
+        "ask_status": 403
+      }
+    },
+    {
+      "id": "MODEL-09",
+      "verdict": "pass",
+      "observed": {
+        "setup_status": 200,
+        "persisted_approval": true,
+        "answer_status": 200
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 10,
+  "failed": 0
+}

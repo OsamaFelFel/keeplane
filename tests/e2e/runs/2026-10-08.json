@@ -1,0 +1,64 @@
+{
+  "suite": "Keeplane local model slice",
+  "results": [
+    {
+      "case": "LOCAL-01",
+      "verdict": "pass",
+      "observed": {
+        "page_status": 200,
+        "health": {
+          "gateway": "ready"
+        },
+        "local_font_status": 200
+      }
+    },
+    {
+      "case": "LOCAL-02",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "models": [
+          "local-fixture",
+          "second-local",
+          "local-qwen",
+          "ui-local"
+        ]
+      }
+    },
+    {
+      "case": "LOCAL-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "model": "local-fixture",
+        "answer": "mock answer"
+      }
+    },
+    {
+      "case": "LOCAL-04",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "listed": [
+          "local-fixture",
+          "second-local",
+          "local-qwen",
+          "ui-local"
+        ],
+        "ask_status": 200
+      }
+    },
+    {
+      "case": "LOCAL-05",
+      "verdict": "pass",
+      "observed": {
+        "status": 404,
+        "error": {
+          "message": "Model not found",
+          "type": "invalid_request_error",
+          "code": "model_not_found"
+        }
+      }
+    }
+  ]
+}

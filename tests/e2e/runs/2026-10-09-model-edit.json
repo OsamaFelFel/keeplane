@@ -1,0 +1,60 @@
+{
+  "suite": "Spec 004 local model edit Docker trial",
+  "time_utc": "2026-10-08T23:28:09.442584+00:00",
+  "cases": [
+    {
+      "id": "EDIT-01",
+      "verdict": "pass",
+      "observed": {
+        "page_status": 200,
+        "setup_status": 200,
+        "approved_classes": [
+          "Public"
+        ]
+      }
+    },
+    {
+      "id": "EDIT-02",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "approved_classes": [
+          "Internal"
+        ]
+      }
+    },
+    {
+      "id": "EDIT-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 400,
+        "approved_classes": [
+          "Internal"
+        ]
+      }
+    },
+    {
+      "id": "EDIT-04",
+      "verdict": "pass",
+      "observed": {
+        "status": 403,
+        "approved_classes": [
+          "Internal"
+        ]
+      }
+    },
+    {
+      "id": "EDIT-05",
+      "verdict": "pass",
+      "observed": {
+        "remove_status": 200,
+        "gateway_model_preserved": true,
+        "outside_again": true,
+        "ask_status": 403
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 5,
+  "failed": 0
+}

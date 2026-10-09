@@ -1,0 +1,58 @@
+{
+  "suite": "Live gateway model replacement Docker trial",
+  "time_utc": "2026-10-08T22:59:54.072297+00:00",
+  "gateway_version": "1.6.0",
+  "cases": [
+    {
+      "id": "REPLACE-01",
+      "verdict": "pass",
+      "observed": {
+        "create_status": 200,
+        "listed_status": 200,
+        "listed_outside": true,
+        "gateway_resource_id": "keeplane-replace-3149cac4a5"
+      }
+    },
+    {
+      "id": "REPLACE-02",
+      "verdict": "pass",
+      "observed": {
+        "approval_status": 200,
+        "ask_status": 200,
+        "answer": "mock answer"
+      }
+    },
+    {
+      "id": "REPLACE-03",
+      "verdict": "pass",
+      "observed": {
+        "update_status": 200,
+        "gateway_revision": 2,
+        "listed_but_unapproved": true,
+        "ask_status": 403,
+        "reason": "This model changed in the gateway and must be set up again"
+      }
+    },
+    {
+      "id": "REPLACE-04",
+      "verdict": "fail",
+      "observed": {
+        "restore_status": 200,
+        "gateway_revision": 3,
+        "ask_status": 200
+      }
+    },
+    {
+      "id": "REPLACE-05",
+      "verdict": "pass",
+      "observed": {
+        "reapproval_status": 200,
+        "ask_status": 200,
+        "answer": "mock answer"
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 4,
+  "failed": 1
+}

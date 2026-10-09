@@ -1,0 +1,32 @@
+# Separate, customer-supplied gateway stand-in for the existing-gateway trial.
+# This upstream chart is installed independently of Keeplane in its own namespace.
+mode: database
+replicaCount: 1
+image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+database:
+  postgres:
+    url: postgresql://keeplane:local-test-only@postgres:5432/keeplane
+gateway:
+  service:
+    type: ClusterIP
+    ports:
+      - name: http
+        port: 4000
+        targetPort: 4000
+        protocol: TCP
+config:
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    models:
+      - name: customer-fixture
+        provider:
+          custom:
+            formats:
+              - type: completions
+        params:
+          model: mock-local
+          baseUrl: http://model:18080/v1

@@ -1,0 +1,30 @@
+{
+  "suite": "Keeplane gateway management read retry",
+  "results": [
+    {
+      "case": "MGMT-01",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "read_attempts": 2
+      }
+    },
+    {
+      "case": "MGMT-02",
+      "verdict": "pass",
+      "observed": {
+        "status": 500,
+        "read_attempts": 3
+      }
+    },
+    {
+      "case": "MGMT-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "read_attempts": 2,
+        "timeout_seconds": 10
+      }
+    }
+  ]
+}

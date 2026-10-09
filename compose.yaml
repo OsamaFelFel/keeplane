@@ -1,0 +1,108 @@
+name: keeplane-local
+
+# Protected local product preview. Production packaging remains open.
+services:
+  volume-init:
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    user: "0"
+    command: ["chown", "65532:65532", "/data"]
+    volumes:
+      - gateway-data:/data
+
+  model:
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    command: ["python", "/mock_model.py", "--port", "18080"]
+    volumes:
+      - ./tests/fixtures/mock_model.py:/mock_model.py:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18080/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  gateway:
+    image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+    command: ["-f", "/config.yaml"]
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+      model:
+        condition: service_healthy
+    volumes:
+      - ./integrations/gateway/local.yaml:/config.yaml:ro
+      - gateway-data:/data
+      - provider-keys:/provider-keys:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  qwen:
+    profiles: ["qwen"]
+    image: ghcr.io/ggml-org/llama.cpp@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b
+    command: ["-m", "/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf", "--alias", "qwen2.5-coder:0.5b", "--host", "0.0.0.0", "--port", "8080", "--ctx-size", "4096", "-n", "256"]
+    volumes:
+      - ./models:/models:ro
+    restart: unless-stopped
+
+  guarded-provider:
+    # Disposable test endpoint: a real Qwen answer behind a fixed trial key.
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    command: ["python", "/guarded_provider.py"]
+    environment:
+      PREVIEW_PROVIDER_KEY: keeplane-disposable-trial-key
+    volumes:
+      - ./tests/fixtures/guarded_provider.py:/guarded_provider.py:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18081/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  cloud-provider:
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    command: ["python", "/cloud_provider.py"]
+    environment:
+      TRIAL_KEY_FILE: /run/secrets/cloud-provider-key
+    volumes:
+      - ./tests/fixtures/cloud_provider.py:/cloud_provider.py:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/cloud-provider-key:/run/secrets/cloud-provider-key:ro
+    restart: unless-stopped
+
+  app:
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    command: ["python", "/app/server.py"]
+    environment:
+      GATEWAY_URL: http://gateway:4000
+      PREVIEW_PROVIDER_KEY: keeplane-disposable-trial-key
+      PREVIEW_RUNNER_URLS: http://qwen:8080,http://host.docker.internal:14424
+      ACCOUNT_DB: /state/accounts.sqlite3
+      FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
+      PUBLIC_ORIGIN: http://127.0.0.1:3000
+      MODEL_APPROVAL_DB: /state/model-approvals.sqlite3
+      GATEWAY_FILE_CONFIG: /gateway-config/local.yaml
+      PROVIDER_KEY_DIR: /provider-keys
+      PREVIEW_OPENAI_BASE_URL: http://cloud-provider:18082/v1
+      PREVIEW_ANTHROPIC_BASE_URL: http://cloud-provider:18082/v1
+    depends_on:
+      - gateway
+    volumes:
+      - ./components/control-plane:/app:ro
+      - ./components/admin-ui:/ui:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/first-admin-password:/run/secrets/first-admin-password:ro
+      - ./integrations/gateway/local.yaml:/gateway-config/local.yaml:ro
+      - account-data:/state
+      - provider-keys:/provider-keys
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - 127.0.0.1:3000:3000
+    restart: unless-stopped
+
+volumes:
+  gateway-data:
+  provider-keys:
+  account-data:
+    external: true
+    name: keeplane-accounts-trial_model-approvals

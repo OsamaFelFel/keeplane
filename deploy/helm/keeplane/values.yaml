@@ -1,0 +1,39 @@
+app:
+  image: keeplane-preview:local
+  pullPolicy: IfNotPresent
+  runnerUrls: "http://qwen:8080"
+  service:
+    type: ClusterIP
+    nodePort: null
+
+gateway:
+  # managed installs the upstream chart; existing connects to a supplied URL.
+  mode: managed
+  install: true
+  url: ""
+  expectedVersion: "1.6.0"
+  preflightModel: ""
+
+agentgateway-standalone:
+  mode: database
+  replicaCount: 2
+  image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+  gateway:
+    service:
+      type: ClusterIP
+      ports:
+        - name: http
+          port: 4000
+          targetPort: 4000
+          protocol: TCP
+  database:
+    postgres:
+      url: ""
+  config:
+    gateways:
+      default:
+        port: 4000
+    ui:
+      gateways: default
+    llm:
+      models: []

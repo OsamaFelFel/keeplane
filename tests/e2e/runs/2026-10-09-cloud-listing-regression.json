@@ -1,0 +1,262 @@
+{
+  "time_utc": "2026-10-09T00:14:38.887828+00:00",
+  "results": [
+    {
+      "suite": "catalog-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_catalog.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.1
+    },
+    {
+      "suite": "data-class-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.1
+    },
+    {
+      "suite": "audit-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.2
+    },
+    {
+      "suite": "management-retry",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_management_retry.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.3
+    },
+    {
+      "suite": "stack-lock",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_stack_lock.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.6
+    },
+    {
+      "suite": "docker-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.0
+    },
+    {
+      "suite": "kind-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 11.3
+    },
+    {
+      "suite": "docker-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 3.9
+    },
+    {
+      "suite": "kind-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 2.3
+    },
+    {
+      "suite": "guarded-endpoint",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_guarded_endpoint.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2
+    },
+    {
+      "suite": "docker-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.4
+    },
+    {
+      "suite": "kind-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.6
+    },
+    {
+      "suite": "kind-failover",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_kind.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.7
+    },
+    {
+      "suite": "accounts",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_accounts.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 4.2
+    },
+    {
+      "suite": "data-classes",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.6
+    },
+    {
+      "suite": "model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.9
+    },
+    {
+      "suite": "model-edit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_edit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.5
+    },
+    {
+      "suite": "model-replacement",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_replacement.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 2.5
+    },
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.4
+    },
+    {
+      "suite": "model-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_add.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.7
+    },
+    {
+      "suite": "cloud-listing",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_listing.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.3
+    },
+    {
+      "suite": "docker-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--docker"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 15.0
+    },
+    {
+      "suite": "kind-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--kind"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 14.3
+    }
+  ],
+  "corrected_invocations": [
+    {
+      "suite": "guarded-endpoint",
+      "command": "docker compose exec -T app python - < tests/e2e/test_guarded_endpoint.py",
+      "exit_code": 0,
+      "cases_passed": 4,
+      "note": "The first host invocation lacked PREVIEW_PROVIDER_KEY; the documented in-container invocation passed."
+    }
+  ],
+  "final_suites_passed": 23,
+  "final_suites_total": 23,
+  "final_cases_passed": 115,
+  "final_cases_total": 115
+}

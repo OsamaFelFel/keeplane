@@ -1,0 +1,33 @@
+{
+  "suite": "Keeplane gateway-down UI availability",
+  "results": [
+    {
+      "case": "K8S-08",
+      "verdict": "pass",
+      "observed": {
+        "ready_replicas": 1,
+        "service_endpoints": 1
+      }
+    },
+    {
+      "case": "K8S-09",
+      "verdict": "pass",
+      "observed": {
+        "/": {
+          "status": 200,
+          "warning_present": true,
+          "try_again_present": true
+        },
+        "/health/app": {
+          "status": 200
+        },
+        "/health": {
+          "status": 503
+        },
+        "/api/models": {
+          "status": 503
+        }
+      }
+    }
+  ]
+}

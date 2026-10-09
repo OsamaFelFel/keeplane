@@ -1,0 +1,27 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "Certainly! Below is a Python function that takes two integers as arguments and returns their sum. The function returns `None` if either of the arguments is not a number.\n\n```python\ndef add_two_numbers(a, b):\n    # Check if both inputs are numbers\n    if isinstance(a, (int, float)) and isinstance(b, (int, float)):\n        return a + b\n    else:\n        # Return None if either input is not a number\n"
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b"
+        }
+      }
+    }
+  ]
+}

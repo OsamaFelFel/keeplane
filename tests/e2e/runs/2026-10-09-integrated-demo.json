@@ -1,0 +1,79 @@
+{
+  "suite": "Protected Docker admin to Qwen journey",
+  "time_utc": "2026-10-09T10:52:30.486900+00:00",
+  "cases": [
+    {
+      "id": "DEMO-01",
+      "verdict": "pass",
+      "observed": {
+        "anonymous_api_status": 401,
+        "sign_in_url": "http://127.0.0.1:3000/sign-in",
+        "login_status": 200
+      }
+    },
+    {
+      "id": "DEMO-02",
+      "verdict": "pass",
+      "observed": {
+        "model_dialog_present": true,
+        "approval_choices_present": true
+      }
+    },
+    {
+      "id": "DEMO-03",
+      "verdict": "pass",
+      "observed": {
+        "class_status": 200,
+        "classes": [
+          "Confidential",
+          "Internal",
+          "Public"
+        ],
+        "runner_status": 200,
+        "models": [
+          "qwen2.5-coder:0.5b"
+        ]
+      }
+    },
+    {
+      "id": "DEMO-04",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "existing": null,
+        "setup_status": null,
+        "model": {
+          "id": "demo-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b",
+          "approved": true,
+          "key_choice": "none",
+          "approved_classes": [
+            "Public",
+            "Internal"
+          ],
+          "owned_by_keeplane": true
+        }
+      }
+    },
+    {
+      "id": "DEMO-05",
+      "verdict": "pass",
+      "observed": {
+        "ask_status": 200,
+        "model": "demo-qwen",
+        "answer_excerpt": "READY"
+      }
+    },
+    {
+      "id": "DEMO-06",
+      "verdict": "pass",
+      "observed": {
+        "model_api_after_signout": 401
+      }
+    }
+  ],
+  "passed": 6,
+  "failed": 0
+}

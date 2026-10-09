@@ -1,0 +1,40 @@
+{
+  "suite": "Qwen3 4B local runner in protected Docker preview",
+  "time_utc": "2026-10-09T07:35:08.238561+00:00",
+  "cases": [
+    {
+      "id": "Q3-01",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "model_found": true,
+        "active_context_tokens": 12288,
+        "error": null
+      }
+    },
+    {
+      "id": "Q3-02",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 200,
+        "list_status": 200,
+        "approved": true,
+        "classes": [
+          "Public"
+        ],
+        "error": null
+      }
+    },
+    {
+      "id": "Q3-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "answer_excerpt": "OK.",
+        "error": null
+      }
+    }
+  ],
+  "passed": 3,
+  "failed": 0
+}

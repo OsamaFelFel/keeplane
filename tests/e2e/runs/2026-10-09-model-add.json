@@ -1,0 +1,95 @@
+{
+  "suite": "Spec 004 local model registration with approval",
+  "time_utc": "2026-10-09T00:08:18.388323+00:00",
+  "cases": [
+    {
+      "id": "ADD-01",
+      "verdict": "pass",
+      "observed": {
+        "page_http": 200,
+        "classes_http": 200,
+        "add_class_choices_present": true
+      }
+    },
+    {
+      "id": "ADD-02",
+      "verdict": "pass",
+      "observed": {
+        "missing_http": 400,
+        "invalid_http": 400,
+        "gateway_http": 200,
+        "missing_error": "Choose one or more valid data classes",
+        "invalid_error": "Choose one or more valid data classes"
+      }
+    },
+    {
+      "id": "ADD-03",
+      "verdict": "pass",
+      "observed": {
+        "add_http": 200,
+        "list_http": 200,
+        "approved": true,
+        "classes": [
+          "Public",
+          "Internal"
+        ]
+      }
+    },
+    {
+      "id": "ADD-04",
+      "verdict": "pass",
+      "observed": {
+        "ask_http": 200,
+        "answer": "mock answer",
+        "approved_classes": [
+          "Internal",
+          "Public"
+        ]
+      }
+    },
+    {
+      "id": "ADD-05",
+      "verdict": "pass",
+      "observed": {
+        "repeat_http": 200,
+        "existing": true,
+        "preserved_classes": [
+          "Public",
+          "Internal"
+        ]
+      }
+    },
+    {
+      "id": "ADD-06",
+      "verdict": "pass",
+      "observed": {
+        "add_http": 200,
+        "ask_http": 200,
+        "answer_excerpt": "OK.",
+        "approved": true
+      }
+    },
+    {
+      "id": "ADD-07",
+      "verdict": "pass",
+      "observed": {
+        "add_http": 503,
+        "error": "The model did not answer through the gateway. Registration was removed.",
+        "gateway_http": 200,
+        "list_http": 200
+      }
+    },
+    {
+      "id": "ADD-08",
+      "verdict": "pass",
+      "observed": {
+        "approval_delete_http": 200,
+        "gateway_delete_http": 200,
+        "runner_approval_delete_http": 200,
+        "runner_gateway_delete_http": 200
+      }
+    }
+  ],
+  "passed": 8,
+  "failed": 0
+}
