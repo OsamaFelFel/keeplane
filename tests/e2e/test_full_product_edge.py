@@ -11,6 +11,8 @@ import sys
 import tempfile
 import time
 import uuid
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +55,40 @@ def ready_gateway_pods():
                 for condition in pod["status"].get("conditions", []))]
 
 
+def gateway_snapshot(pod):
+    """Read one replica directly; record model IDs only, never gateway keys."""
+    local_port = port()
+    forwarded = subprocess.Popen(
+        ("kubectl", "--kubeconfig", KUBECONFIG, "-n", NAMESPACE,
+         "port-forward", "pod/" + pod, f"{local_port}:4000", "--address=127.0.0.1"),
+        cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        def read(path, key_name):
+            token = (KEYS / ("gateway-" + key_name)).read_text().strip()
+            request = Request(f"http://127.0.0.1:{local_port}" + path,
+                              headers={"Authorization": "Bearer " + token})
+            with urlopen(request, timeout=5) as response:
+                return json.load(response)
+
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                models = read("/v1/models", "runtime-key")
+                resources = read("/api/config/resources/llm.model", "admin-key")
+                return {"runtime": sorted(item["id"] for item in models.get("data", [])),
+                        "management": sorted(item["id"] for item in resources.get("resources", []))}
+            except (OSError, URLError, ValueError):
+                if forwarded.poll() is not None or time.monotonic() >= deadline:
+                    raise RuntimeError("Could not read one gateway replica")
+                time.sleep(0.2)
+    finally:
+        forwarded.terminate()
+        try:
+            forwarded.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            forwarded.kill()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -75,10 +111,15 @@ def main():
         login = temporary / "login.json"
         ask = temporary / "ask.json"
         setup = temporary / "setup.json"
+        registration = temporary / "registration.json"
+        removed_ask = temporary / "removed-ask.json"
         login.write_text(json.dumps({"username": "first-admin", "password": PASSWORD.read_text().strip()}))
         login.chmod(0o600)
         ask.write_text(json.dumps({"model": "local-fixture", "prompt": "fixture"}))
         setup.write_text(json.dumps({"key_choice": "none", "approved_classes": ["Public"]}))
+        registration.write_text(json.dumps({"name": "convergence-fixture", "model": "mock-local",
+                                            "source": "fixture", "approved_classes": ["Public"]}))
+        removed_ask.write_text(json.dumps({"model": "convergence-fixture", "prompt": "fixture"}))
         run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
             "-keyout", str(key), "-out", str(cert), "-days", "1",
             "-subj", "/CN=" + HOST, "-addext", "subjectAltName=DNS:" + HOST,
@@ -203,6 +244,47 @@ def main():
                         "expected_answer": after_answer == "mock answer"})
             else:
                 record(rows, "FULL-08", False, {"reason": "two gateway replicas were not ready"})
+            ready_before_registration = len(ready_gateway_pods())
+            registered = run(*base, "-b", str(cookie), "-X", "POST",
+                             "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
+                             "-H", "Origin: " + url, "--data-binary", "@" + str(registration),
+                             "-o", "/dev/null", "-w", "%{http_code}", url + "/api/models", check=False)
+            record(rows, "FULL-09", registered.stdout == "200",
+                   {"registration_status": registered.stdout,
+                    "ready_gateway_replicas": ready_before_registration})
+            deadline = time.monotonic() + 90
+            while len(ready_gateway_pods()) != 2 and time.monotonic() < deadline:
+                time.sleep(1)
+            replicas = ready_gateway_pods()
+            before = {pod: gateway_snapshot(pod) for pod in replicas}
+            present_on_both = len(replicas) == 2 and all(
+                "convergence-fixture" in snapshot["runtime"] and
+                "convergence-fixture" in snapshot["management"] for snapshot in before.values())
+            record(rows, "FULL-10", present_on_both,
+                   {"ready_gateway_replicas": len(replicas),
+                    "runtime_and_management_readback": present_on_both})
+            removed = run(*base, "-b", str(cookie), "-X", "DELETE",
+                          "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
+                          "-H", "Origin: " + url, "--data-binary", "{}",
+                          "-o", "/dev/null", "-w", "%{http_code}",
+                          url + "/api/models/convergence-fixture/setup", check=False)
+            deadline = time.monotonic() + 15
+            while True:
+                after = {pod: gateway_snapshot(pod) for pod in replicas}
+                absent_on_both = len(replicas) == 2 and all(
+                    "convergence-fixture" not in snapshot["runtime"] and
+                    "convergence-fixture" not in snapshot["management"] for snapshot in after.values())
+                if absent_on_both or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.5)
+            denied = run(*base, "-b", str(cookie), "-X", "POST",
+                         "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
+                         "-H", "Origin: " + url, "--data-binary", "@" + str(removed_ask),
+                         "-o", "/dev/null", "-w", "%{http_code}", url + "/api/ask", check=False)
+            record(rows, "FULL-11", removed.stdout == "200" and absent_on_both and
+                   denied.stdout == "403",
+                   {"removal_status": removed.stdout, "runtime_and_management_absent": absent_on_both,
+                    "ask_after_removal_status": denied.stdout})
         except Exception as error:
             record(rows, "FULL-TRIAL", False,
                    {"error": type(error).__name__, "detail": str(error)[:350]})
@@ -221,7 +303,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
-    return int(len(rows) != 8 or any(row["verdict"] == "fail" for row in rows))
+    return int(len(rows) != 11 or any(row["verdict"] == "fail" for row in rows))
 
 
 if __name__ == "__main__":
