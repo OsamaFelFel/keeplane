@@ -597,7 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/app/")
                 self.end_headers()
                 return
-            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/", "/app/data-classes", "/app/audit") \
+            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
                     and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
@@ -680,7 +680,7 @@ class Handler(BaseHTTPRequestHandler):
             name = {"/editions": "editions.html", "/editions.js": "editions.js"}[path]
             content_type = "text/javascript" if name.endswith(".js") else "text/html"
             self.reply(200, (UI / name).read_bytes(), content_type + "; charset=utf-8")
-        elif path in ("/app", "/app/", "/app/data-classes", "/app/audit"):
+        elif path in ("/app", "/app/", "/app/data-classes", "/app/audit", "/app/models"):
             index = UI / "web/dist/index.html"
             self.reply(200, index.read_bytes(), "text/html; charset=utf-8") if index.is_file() else \
                 self.reply(503, {"error": "Admin UI build is unavailable"})

@@ -11,6 +11,7 @@ import { DeveloperPage } from '@/app/DeveloperPage'
 import { UsersPage } from '@/features/users/UsersPage'
 import { DataClassesPage } from '@/features/data-classes/DataClassesPage'
 import { AuditPage } from '@/features/audit/AuditPage'
+import { ModelsPage } from '@/features/models/ModelsPage'
 
 function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [busy, setBusy] = useState(false)
@@ -49,5 +50,5 @@ export default function App() {
   if (identity === null) return <SignIn onSignedIn={refresh} />
   if (identity.role === 'developer') return <DeveloperPage identity={identity} />
   const page = window.location.pathname
-  return <Shell identity={identity}>{page === '/app/data-classes' ? <DataClassesPage /> : page === '/app/audit' ? <AuditPage /> : <UsersPage />}</Shell>
+  return <Shell identity={identity}>{page === '/app/data-classes' ? <DataClassesPage /> : page === '/app/audit' ? <AuditPage /> : page === '/app/models' ? <ModelsPage /> : <UsersPage />}</Shell>
 }

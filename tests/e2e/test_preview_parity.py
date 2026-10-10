@@ -41,10 +41,9 @@ def surface(base):
         "first-admin", (RUNTIME / "first-admin-password").read_text().strip())
     routes = {}
     for name, path in (("users", "/users"), ("data_classes", "/data-classes"),
-                       ("audit", "/audit"), ("models", "/")):
+                       ("audit", "/audit"), ("models", "/app/models")):
         status, _, page = browser.page(path)
-        routes[name] = status == 200 and (
-            'id="root"' in page if name != "models" else "Models and routing" in page)
+        routes[name] = status == 200 and 'id="root"' in page
     apis = {}
     for name, path, key in (("identity", "/api/identity", "role"),
                             ("users", "/api/users", "users"),

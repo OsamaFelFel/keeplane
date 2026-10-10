@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "./features/models";
 @import "tw-animate-css";
 @import "./styles/component-variants.css";
 @import "./styles/theme.css";

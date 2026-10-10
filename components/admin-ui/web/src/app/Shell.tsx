@@ -11,7 +11,7 @@ const links = [
   { label: 'Users', href: '/app/' },
   { label: 'Workflows', href: null },
   { label: 'Agents', href: null },
-  { label: 'Models and routing', href: '/' },
+  { label: 'Models and routing', href: '/app/models' },
   { label: 'Data classes', href: '/app/data-classes' },
   { label: 'Audit', href: '/app/audit' },
   { label: 'Single sign-on', href: null },
