@@ -447,7 +447,8 @@ class Handler(BaseHTTPRequestHandler):
         if self._signed_in_user and self._signed_in_user["role"] == "admin":
             return True
         if path.startswith("/api/"):
-            self.reply(401, {"error": "Sign in to Keeplane"})
+            self.reply(403 if self._signed_in_user else 401,
+                       {"error": "Admin access required" if self._signed_in_user else "Sign in to Keeplane"})
         else:
             self.send_response(302)
             self.send_header("Location", "/sign-in")
@@ -512,6 +513,11 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(route.query)
         path = route.path
         if IDENTITY:
+            if path == "/api/auth-options":
+                return self.reply(200, {"sso_connected": False})
+            if path == "/api/identity":
+                signed_in = IDENTITY.session(self.session_token())
+                return self.reply(200, signed_in) if signed_in else self.reply(401, {"error": "Sign in to Keeplane"})
             if path == "/sign-in":
                 return self.reply(200, (UI / "sign-in.html").read_bytes(), "text/html; charset=utf-8")
             if path == "/sign-out":
@@ -522,11 +528,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 return
-            if path not in ("/health/app", "/style.css", "/sign-in.js") and not path.startswith("/fonts/") \
+            if path == "/" and (IDENTITY.session(self.session_token()) or {}).get("role") == "developer":
+                self.send_response(302)
+                self.send_header("Location", "/app/")
+                self.end_headers()
+                return
+            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/") \
+                    and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
-        if IDENTITY and path == "/api/identity":
-            return self.identity_result(lambda: (200, {"username": self.actor()[1]}))
+        if IDENTITY and path.startswith("/api/user-operations/"):
+            operation_id = path.removeprefix("/api/user-operations/")
+            return self.identity_result(lambda: (200, IDENTITY.user_operation(
+                operation_id, self.actor()[0])))
         if DATA_CLASSES and path == "/api/data-classes":
             status, result, effective = effective_approval_ids()
             return self.reply(status, {"classes": DATA_CLASSES.list(effective)} if status == 200 else result)
@@ -581,14 +595,30 @@ class Handler(BaseHTTPRequestHandler):
                                     "owned_by_keeplane": approval["owned_by_keeplane"] if approval else False})
                 models.append(details)
             self.reply(200, {"models": models})
-        elif IDENTITY and path in ("/users", "/accounts.js", "/data-classes", "/data-classes.js",
+        elif IDENTITY and path == "/users":
+            self.send_response(302)
+            self.send_header("Location", "/app/")
+            self.end_headers()
+        elif IDENTITY and path in ("/data-classes", "/data-classes.js",
                                     "/audit", "/audit.js", "/editions", "/editions.js"):
-            name = {"/users": "users.html", "/accounts.js": "accounts.js",
-                    "/data-classes": "data-classes.html", "/data-classes.js": "data-classes.js",
+            name = {"/data-classes": "data-classes.html", "/data-classes.js": "data-classes.js",
                     "/audit": "audit.html", "/audit.js": "audit.js",
                     "/editions": "editions.html", "/editions.js": "editions.js"}[path]
             content_type = "text/javascript" if name.endswith(".js") else "text/html"
             self.reply(200, (UI / name).read_bytes(), content_type + "; charset=utf-8")
+        elif path in ("/app", "/app/"):
+            index = UI / "web/dist/index.html"
+            self.reply(200, index.read_bytes(), "text/html; charset=utf-8") if index.is_file() else \
+                self.reply(503, {"error": "Admin UI build is unavailable"})
+        elif path.startswith("/app/assets/"):
+            name = path.removeprefix("/app/assets/")
+            asset = UI / "web/dist/assets" / name
+            if not name or "/" in name or ".." in name or not asset.is_file():
+                return self.reply(404, {"error": "Not found"})
+            media_type = "text/css" if name.endswith(".css") else \
+                "text/javascript" if name.endswith(".js") else \
+                "image/svg+xml" if name.endswith(".svg") else "application/octet-stream"
+            self.reply(200, asset.read_bytes(), media_type)
         elif self.path in ("/", "/style.css", "/app.js", "/sign-in.js"):
             name = "index.html" if self.path == "/" else self.path[1:]
             content_type = {"index.html": "text/html", "style.css": "text/css",
@@ -689,7 +719,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
         if IDENTITY and self.path == "/api/users":
             if self.identity_action_allowed():
-                return self.identity_result(lambda: (201, IDENTITY.create_user(body)))
+                return self.identity_result(lambda: (201, IDENTITY.create_user(body, self.actor()[0])))
             return
         if DATA_CLASSES and self.path == "/api/data-classes":
             if self.identity_action_allowed():
@@ -837,6 +867,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         if IDENTITY and not self.require_admin(urlsplit(self.path).path):
             return
+        if IDENTITY:
+            segments = urlsplit(self.path).path.strip("/").split("/")
+            if len(segments) == 4 and segments[:2] == ["api", "users"] and segments[3] == "role":
+                if not self.identity_action_allowed():
+                    return
+                body = self.incoming()
+                if body is None:
+                    return
+                return self.identity_result(lambda: (200, IDENTITY.change_role(segments[2], body.get("role"))))
         if IDENTITY and urlsplit(self.path).path == "/api/edition-note":
             if not self.identity_action_allowed():
                 return

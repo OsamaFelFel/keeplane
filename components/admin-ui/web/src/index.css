@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles/component-variants.css";
+@import "./styles/theme.css";
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { font-family: "IBM Plex Sans", system-ui, sans-serif; color: var(--foreground); }
+  body { margin: 0; min-width: 320px; background: var(--background); }
+  button, input { font: inherit; }
+  a { color: var(--foreground); }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+.keeplane-shell { min-height: 100svh; }
+.keeplane-topbar { height: 56px; background: var(--foreground); color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; }
+.keeplane-brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; white-space: nowrap; }
+.keeplane-topbar a { color: #fff; text-decoration: underline; }
+.keeplane-content { width: 100%; max-width: 1048px; padding: 32px 40px; }
+.keeplane-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.keeplane-page-heading h1 { font-size: 28px; line-height: 36px; font-weight: 600; margin: 0; }
+.keeplane-page-heading p { font-size: 16px; line-height: 24px; color: var(--muted-foreground); margin: 8px 0 0; }
+.keeplane-table-frame { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.keeplane-table-frame table { min-width: 640px; }
+.keeplane-table-frame th { padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+.keeplane-table-frame td { padding: 14px 16px; font-size: 15px; line-height: 22px; vertical-align: top; white-space: normal; }
+.keeplane-table-frame tr:last-child td { border-bottom: 0; }
+.keeplane-field-label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+.keeplane-dialog { max-height: calc(100svh - 32px); overflow-y: auto; }
+@media (max-width: 767px) {
+  .keeplane-topbar { padding: 0 16px; }
+  .keeplane-content { padding: 24px 16px; }
+  .keeplane-page-heading { flex-direction: column; align-items: flex-start; gap: 16px; }
+}

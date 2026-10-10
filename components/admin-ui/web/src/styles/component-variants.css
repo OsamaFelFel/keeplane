@@ -1,0 +1,24 @@
+/* Variants used by the generated shadcn/ui components. Source: shadcn 4.21.4 (MIT). */
+@custom-variant data-open {
+  &:where([data-state="open"], [data-open]:not([data-open="false"])) { @slot; }
+}
+@custom-variant data-closed {
+  &:where([data-state="closed"], [data-closed]:not([data-closed="false"])) { @slot; }
+}
+@custom-variant data-checked {
+  &:where([data-state="checked"], [data-checked]:not([data-checked="false"])) { @slot; }
+}
+@custom-variant data-active {
+  &:where([data-state="active"], [data-active]:not([data-active="false"])) { @slot; }
+}
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) { @slot; }
+}
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) { @slot; }
+}
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

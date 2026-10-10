@@ -1,6 +1,7 @@
 # Run Keeplane locally
 
-From the Open Source repository root, with Docker running:
+From the Open Source repository root, with Docker running and Node.js 22 or
+newer installed:
 
 ```sh
 python3 deploy/local/up.py
@@ -12,6 +13,12 @@ runner. It downloads and verifies the pinned Qwen file if needed. Repeating the
 command keeps existing accounts, approvals, provider keys, and gateway models.
 The runner is small enough for a CPU demo; its output is not a quality target
 for the product.
+
+The script builds the React admin UI from its committed npm lockfile before
+starting Docker. Open the [Users screen](http://127.0.0.1:3000/users) to
+try the React, shadcn/ui and Tailwind implementation. The other working admin
+screens still use the earlier UI; links to unfinished screens are disabled in
+the React navigation.
 
 The first admin is `first-admin`. Read the generated password on your own
 machine with `cat /private/tmp/keeplane-accounts-trial/first-admin-password`.

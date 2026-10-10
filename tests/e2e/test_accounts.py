@@ -4,6 +4,7 @@ import http.cookiejar
 import json
 import secrets
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError
@@ -13,7 +14,7 @@ from reporting import report_path
 
 BASE = "http://127.0.0.1:3000"
 RUNTIME = Path("/private/tmp/keeplane-accounts-trial")
-REPORT = report_path("2026-10-09-edition-boundary-accounts.json")
+REPORT = report_path("2026-10-10-users-react.json")
 
 
 class Browser:
@@ -83,9 +84,9 @@ def main():
                'id="sign-in-form"' in sign_page,
                {"self_registration_control": "Create an account" in sign_page})
         status, _, _ = admin.fetch("/api/models")
-        users_status, _, users_page = admin.page("/users")
+        users_status, users_url, users_page = admin.page("/users")
         record("ACCT-02", code == 200 and url == BASE + "/" and status == 200 and
-               users_status == 200 and "Create user" in users_page,
+               users_status == 200 and users_url == BASE + "/app/" and 'id="root"' in users_page,
                {"login_status": code, "users_page_status": users_status,
                 "model_api_status": status})
 
@@ -132,12 +133,60 @@ def main():
 
         developer = Browser()
         code, url, _, _, _ = developer.login(created["developer"]["username"], passwords["developer"])
-        record("ACCT-05", code == 403 and url == BASE + "/api/session",
-               {"login_status": code, "denied_at_session": url == BASE + "/api/session"})
+        identity_status, developer_identity, _ = developer.fetch("/api/identity")
+        denied_users = developer.fetch("/api/users")[0]
+        denied_models = developer.fetch("/api/models")[0]
+        record("ACCT-05", code == 200 and url == BASE + "/app/" and
+               identity_status == 200 and developer_identity.get("role") == "developer" and
+               denied_users == 403 and denied_models == 403,
+               {"login_status": code, "page": url, "identity_role": developer_identity.get("role"),
+                "users_status": denied_users, "models_status": denied_models})
         another_admin = Browser()
         code, url, _, _, _ = another_admin.login(created["admin"]["username"], passwords["admin"])
         record("ACCT-06", code == 200 and url == BASE + "/",
                {"login_status": code, "page": url})
+
+        status, first_admin_page, _ = admin.fetch("/api/users?search=first-admin")
+        first_admin_rows = first_admin_page.get("users", [])
+        record("ACCT-16", status == 200 and len(first_admin_rows) == 1 and
+               first_admin_rows[0].get("sign_in") == "break-glass" and
+               first_admin_rows[0].get("managed") is True,
+               {"status": status, "row_count": len(first_admin_rows),
+                "sign_in": first_admin_rows[0].get("sign_in") if first_admin_rows else None})
+        first_admin_id = first_admin_rows[0]["id"] if first_admin_rows else "missing"
+        guard_status, _, _ = admin.fetch(f"/api/users/{first_admin_id}/role",
+                                        {"role": "developer"}, method="PUT")
+        record("ACCT-17", guard_status == 403, {"role_change_status": guard_status})
+
+        operation_id = str(uuid.uuid4())
+        operation_body = {"username": "retry" + secrets.token_hex(5), "password": secrets.token_urlsafe(20),
+                          "role": "developer", "operation_id": operation_id}
+        first_status, first_user, _ = admin.fetch("/api/users", operation_body, method="POST")
+        again_status, again_user, _ = admin.fetch("/api/users", operation_body, method="POST")
+        checked_status, checked, _ = admin.fetch(f"/api/user-operations/{operation_id}")
+        if first_status == 201:
+            users.append(first_user["id"])
+        record("ACCT-18", first_status == 201 and again_status == 201 and
+               first_user.get("id") == again_user.get("id") and checked_status == 200 and
+               checked.get("status") == "created" and checked.get("user", {}).get("id") == first_user.get("id"),
+               {"first_status": first_status, "repeat_status": again_status,
+                "same_user": first_user.get("id") == again_user.get("id"),
+                "check_status": checked.get("status")})
+        conflicting = dict(operation_body, username=prefix + "-different")
+        conflict_status, _, _ = admin.fetch("/api/users", conflicting, method="POST")
+        record("ACCT-19", conflict_status == 409, {"conflict_status": conflict_status})
+
+        promote_status, promoted, _ = admin.fetch(f"/api/users/{created['developer']['id']}/role",
+                                                   {"role": "admin"}, method="PUT")
+        promoted_access = developer.fetch("/api/users")[0]
+        demote_status, demoted, _ = admin.fetch(f"/api/users/{created['developer']['id']}/role",
+                                                {"role": "developer"}, method="PUT")
+        revoked_access = developer.fetch("/api/users")[0]
+        record("ACCT-20", promote_status == 200 and promoted.get("role") == "admin" and
+               promoted_access == 200 and demote_status == 200 and demoted.get("role") == "developer" and
+               revoked_access == 401,
+               {"promote_status": promote_status, "access_as_admin": promoted_access,
+                "demote_status": demote_status, "access_after_demote": revoked_access})
 
         for number in range(25):
             status, user, _ = admin.fetch("/api/users", {

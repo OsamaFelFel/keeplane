@@ -1,0 +1,38 @@
+/* Keeplane theme for shadcn/ui. Every value comes from tokens.json. (D165) */
+:root {
+  --radius: 10px; /* radius-sm 6px, radius-md 8px, radius-lg 10px */
+  --background: #f4f5f6; /* ground */
+  --foreground: #1e252b; /* ink */
+  --card: #ffffff; /* surface */
+  --card-foreground: #1e252b;
+  --popover: #ffffff;
+  --popover-foreground: #1e252b;
+  --primary: #f2b705; /* lane */
+  --primary-foreground: #1e252b;
+  --secondary: #ffffff;
+  --secondary-foreground: #1e252b;
+  --muted: #f4f5f6;
+  --muted-foreground: #56616b; /* ink-muted */
+  --accent: #f4f5f6; /* hover fill */
+  --accent-foreground: #1e252b;
+  --destructive: #1e252b; /* no error colour: errors are words and an icon */
+  --border: #d3d8dd; /* line */
+  --input: #7a858f; /* control-border */
+  --ring: #1e252b; /* focus ring */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1e252b;
+  --sidebar-primary: #f2b705;
+  --sidebar-primary-foreground: #1e252b;
+  --sidebar-accent: #fff3c4; /* lane-soft: where you are */
+  --sidebar-accent-foreground: #1e252b;
+  --sidebar-border: #d3d8dd;
+  --sidebar-ring: #1e252b;
+  --enterprise: #7a4f00; /* Enterprise badge text and edge */
+}
+
+/* Add these lines to the @theme inline block shadcn/ui created; keep its other lines. */
+@theme inline {
+  --color-enterprise: var(--enterprise);
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}

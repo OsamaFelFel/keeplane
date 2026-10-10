@@ -14,6 +14,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 REPO = Path(__file__).resolve().parents[2]
 RUNTIME = Path("/private/tmp/keeplane-accounts-trial")
+ADMIN_UI = REPO / "components/admin-ui/web"
 MODEL = REPO / "models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
 EXPECTED_MODEL_SHA256 = "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32"
 MODEL_URL = ("https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/"
@@ -56,6 +57,13 @@ def prepare():
     save_private(RUNTIME / ".env", f"KEEPLANE_RUNTIME_DIR={RUNTIME}\n")
 
 
+def build_admin_ui():
+    """Build the React screen from the committed lockfile before starting Docker."""
+    if not (ADMIN_UI / "node_modules").is_dir():
+        subprocess.run(["npm", "ci"], cwd=ADMIN_UI, check=True)
+    subprocess.run(["npm", "run", "build"], cwd=ADMIN_UI, check=True)
+
+
 def wait_preview():
     for _ in range(60):
         try:
@@ -96,6 +104,7 @@ def retire_old_preview():
 
 def main():
     prepare()
+    build_admin_ui()
     retire_old_preview()
     subprocess.run(["docker", "volume", "create", "keeplane-accounts-trial_model-approvals"],
                    check=True, cwd=REPO, capture_output=True, text=True)
