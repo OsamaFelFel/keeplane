@@ -51,11 +51,13 @@ def main():
                    and bool(managed_app) and "automountServiceAccountToken: false" in managed_app
                    and "type: RuntimeDefault" in managed_app
                    and "secretName: \"keeplane-gateway-keys\"" in managed_app
+                   and "name: GATEWAY_MODE\n              value: \"managed\"" in managed_app
                    and bool(named(managed.stdout, "Deployment", "keeplane")),
                    {"lint_exit": lint.returncode, "render_exit": managed.returncode,
                     "app_present": bool(managed_app)}),
               case("PKG-02", existing.returncode == 0 and bool(existing_app) and bool(preflight)
                    and "secretName: \"keeplane-gateway-keys\"" in existing_app
+                   and "name: GATEWAY_MODE\n              value: \"existing\"" in existing_app
                    and "secretName: \"keeplane-gateway-keys\"" in preflight
                    and "automountServiceAccountToken: false" in preflight
                    and not named(existing.stdout, "Deployment", "keeplane-existing"),

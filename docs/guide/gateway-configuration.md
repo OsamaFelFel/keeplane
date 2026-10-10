@@ -87,8 +87,10 @@ python3 tests/e2e/test_existing_gateway_browser.py \
 
 Shared cloud-provider keys are not proven in this mode: the supplied gateway
 runs in a different namespace and cannot read Keeplane's private provider-key
-PVC. The release gateway contract needs a supported secret-delivery mechanism
-for customer-run gateways before this mode handles shared or personal keys.
+PVC. The local app rejects shared-key registration before saving the key or
+changing the gateway, with an explicit error. The release gateway contract
+needs a supported secret-delivery mechanism for customer-run gateways before
+this mode handles shared or personal keys.
 
 ## Release configuration plan
 

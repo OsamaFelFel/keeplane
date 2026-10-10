@@ -24,6 +24,7 @@ from provider_keys import (save as save_provider_key, remove as remove_provider_
 
 
 GATEWAY = os.environ.get("GATEWAY_URL", "http://gateway:4000")
+GATEWAY_MODE = os.environ.get("GATEWAY_MODE", "managed")
 GATEWAY_RUNTIME_KEY_FILE = os.environ.get("GATEWAY_RUNTIME_KEY_FILE", "")
 GATEWAY_ADMIN_KEY_FILE = os.environ.get("GATEWAY_ADMIN_KEY_FILE", "")
 UI = Path("/ui")
@@ -339,6 +340,8 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(503, {"error": "Account service is unavailable"})
 
     def replace_shared_key(self, model_id, resource, previous, classes, replacement):
+        if GATEWAY_MODE == "existing":
+            return self.reply(422, {"error": "Shared provider keys need a supported delivery path to the customer-run gateway"})
         if not previous["owned_by_keeplane"] or resource.get("provider") not in ("openAI", "anthropic"):
             return self.reply(400, {"error": "This trial can replace keys only for cloud models Keeplane added"})
         old_path = provider_key_file(resource)
@@ -418,6 +421,8 @@ class Handler(BaseHTTPRequestHandler):
         if key_choice not in ("shared", "none"):
             return self.reply(400, {"error": "Choose a supported provider key option"})
         if key_choice == "shared":
+            if GATEWAY_MODE == "existing":
+                return self.reply(422, {"error": "Shared provider keys need a supported delivery path to the customer-run gateway"})
             shared_key = body.get("shared_key")
             if not isinstance(shared_key, str) or not 12 <= len(shared_key) <= 512 or \
                     "\n" in shared_key or "\r" in shared_key:

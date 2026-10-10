@@ -6,8 +6,9 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import uuid
 
-from kind_port_forward import BASE, existing_app
+from kind_port_forward import BASE, KUBECONFIG, existing_app
 from reporting import report_path
 from test_accounts import Browser, RUNTIME
 
@@ -19,6 +20,15 @@ REPORT = report_path("2026-10-10-protected-existing-live.json")
 def case(identifier, passed, observed):
     return {"case": identifier, "verdict": "pass" if passed else "fail",
             "observed": observed}
+
+
+def provider_key_files():
+    names = subprocess.check_output(
+        ["kubectl", "--kubeconfig", KUBECONFIG, "-n", "keeplane-existing",
+         "exec", "deployment/keeplane-existing-app", "--", "python", "-c",
+         "import json,pathlib;print(json.dumps(sorted(p.name for p in pathlib.Path('/provider-keys').glob('key-*'))))"],
+        text=True, timeout=30)
+    return json.loads(names)
 
 
 def main():
@@ -69,6 +79,27 @@ def main():
                          (approved or {}).get("answer") == "mock answer" and outside_status == 403,
                          {"approved_status": approved_status, "approved_answer":
                           (approved or {}).get("answer"), "outside_status": outside_status}))
+
+        before_files = provider_key_files()
+        before_models = sorted(model_rows)
+        proposed = "unsupported-shared-" + uuid.uuid4().hex[:10]
+        rejected_status, rejected, _ = admin.fetch("/api/models", {
+            "name": proposed, "model": "mock-cloud", "source": "openai",
+            "key_choice": "shared", "shared_key": "disposable-fixture-key",
+            "approved_classes": []}, method="POST")
+        after_status, after, _ = admin.fetch("/api/models")
+        after_models = sorted(item["id"] for item in (after or {}).get("models", []))
+        after_files = provider_key_files()
+        still_answers, _, _ = admin.fetch("/api/ask", {
+            "model": "customer-managed", "prompt": "fixture"}, method="POST")
+        rows.append(case("EXIST-04", rejected_status == 422 and
+                         "delivery path" in (rejected or {}).get("error", "") and
+                         after_status == 200 and proposed not in after_models and
+                         before_models == after_models and before_files == after_files and
+                         still_answers == 200,
+                         {"rejected_status": rejected_status, "gateway_catalog_unchanged":
+                          before_models == after_models, "key_files_unchanged":
+                          before_files == after_files, "existing_answer_status": still_answers}))
 
     report = {"suite": "Protected existing-gateway local trial", "cases": rows,
               "passed": sum(row["verdict"] == "pass" for row in rows),

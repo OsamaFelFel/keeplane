@@ -66,7 +66,7 @@ SUITES = (
     Suite("kind-gateway-down", py("gateway_down"), "K8S-08 K8S-09", timeout=240),
     Suite("kind-existing-preflight", py("existing_gateway_preflight"), "K8S-10 K8S-11 K8S-12 K8S-13", timeout=240),
     Suite("kind-existing-protected", py("existing_gateway_live"),
-          "EXIST-01 EXIST-02 EXIST-03", report="2026-10-10-protected-existing-live.json"),
+          "EXIST-01 EXIST-02 EXIST-03 EXIST-04", report="2026-10-10-protected-existing-live.json"),
     Suite("accounts", py("accounts"),
           "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20 ACCT-23",
           report="2026-10-10-users-react.json"),
