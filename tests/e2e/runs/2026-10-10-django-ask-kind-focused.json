@@ -1,0 +1,150 @@
+{
+  "started_utc": "2026-10-10T09:52:40.843519+00:00",
+  "git_head": "fbaa30d36287720bb4b71caee172aecb1c217a3c",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "kind-existing-protected",
+    "kind-model-approval",
+    "kind-integrated-demo"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "kind-existing-protected",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_existing_gateway_live.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 34.8,
+      "cases": [
+        {
+          "id": "EXIST-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-04",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "kind-model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 15.6,
+      "cases": [
+        {
+          "id": "MODEL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 10,
+      "passed": true
+    },
+    {
+      "suite": "kind-integrated-demo",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_integrated_demo.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.3,
+      "cases": [
+        {
+          "id": "DEMO-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": [
+    false,
+    false
+  ],
+  "finished_utc": "2026-10-10T09:53:32.750138+00:00",
+  "suites_passed": 3,
+  "suites_total": 3,
+  "cases_reported": 20
+}

@@ -13,6 +13,7 @@ from data_classes import DataClassError, DataClassStore
 from gateway_adapter import AgentgatewayModelAdapter
 from local_identity import IdentityError, LocalIdentity
 from model_catalog import ModelCatalog
+from model_chat import ask_model
 from model_listing import list_models
 from model_management import ModelManagement
 from model_removal import remove_model_setup
@@ -178,6 +179,21 @@ def runner_models(request):
         return failure(400, "Enter a runner address")
     status, body = local_runner(request.data.get("address"), RUNNER_URLS)
     return Response(body, status=status)
+
+
+@api_view(["POST"])
+def ask(request):
+    _, denied = admin(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a model request")
+    try:
+        status, body = ask_model(request.data, CATALOG, MODEL_GATEWAY,
+                                 os.environ.get("GATEWAY_FILE_CONFIG"))
+        return Response(body, status=status)
+    except sqlite3.Error:
+        return failure(503, "Keeplane settings storage is unavailable")
 
 
 @api_view(["GET", "POST"])

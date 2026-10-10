@@ -9,6 +9,7 @@ urlpatterns = [
     path("api/models", views.models),
     path("api/models/<str:model_id>/setup", views.model_setup),
     path("api/runners/models", views.runner_models),
+    path("api/ask", views.ask),
     path("api/data-classes", views.data_classes),
     path("api/data-classes/mode", views.data_class_mode),
     path("api/data-classes/<str:class_id>", views.data_class_detail),

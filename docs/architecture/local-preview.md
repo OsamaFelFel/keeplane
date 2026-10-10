@@ -14,8 +14,8 @@ flowchart LR
   Django -->|registration, listing and verification; separate runtime and admin keys| Gateway[agentgateway]
   Django -->|model approvals| Settings[(Local settings store)]
   Django -->|Data Classes and Audit| Settings
-  App -->|Ask approval check| Settings
-  App -->|Ask via runtime key| Gateway
+  Django -->|Ask approval check| Settings
+  Django -->|Ask via runtime key| Gateway
   Gateway --> Fixture[Local test model]
   Gateway --> Qwen[Local Qwen runner]
   Gateway -->|shared key file| Cloud[Authenticated cloud-format fixture]
@@ -56,7 +56,7 @@ turns them on, creating starter definitions once. Turning them off leaves
 definitions and approvals stored but removes class controls from the admin UI.
 Model setup remains a separate record, including when a model has no class
 approval. This trial has no project-class enforcement yet.
-React's account, Data Classes, Audit, and protected Models management requests
+Protected account, Data Classes, Audit, Ask, and Models management requests
 now pass through an internal Django and DRF HTTP layer. Model management
 includes runner discovery, Add, Set up, shared-key rotation, listing, and
 removal. The model use case joins gateway
@@ -65,9 +65,11 @@ with separate runtime and management credentials;
 gateway transport and its model registry remain in agentgateway. The existing
 local account use cases still own the SQLite trial store. Model removal keeps
 customer-added gateway definitions and removes owned definitions only after
-checking their revision. The earlier Python server still serves the UI, proxies
-these routes to Django on loopback, and handles the preview Ask request. Its
-model write, Data Classes, and Audit handlers have been removed.
+checking their revision. Ask checks Keeplane approval and the current gateway
+definition before passing the request through the gateway. The earlier Python
+server still serves the UI, exposes health, and proxies protected routes to
+Django on loopback. Its model write, Ask, Data Classes, and Audit handlers have
+been removed.
 The internal Django listener binds to container loopback; only Keeplane
 port 3000 (Docker) or 13000 (kind) is published. If the account listener fails,
 the public account and model management routes return 503 rather than using an

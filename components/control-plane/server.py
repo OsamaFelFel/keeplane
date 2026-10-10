@@ -16,7 +16,6 @@ from urllib.request import Request, urlopen
 
 from local_identity import IdentityError, LocalIdentity
 from audit import AuditStore
-from model_catalog import ModelCatalog, fingerprint
 from runner_adapter import local_runner as inspect_local_runner
 
 
@@ -33,8 +32,6 @@ AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
     if os.environ.get("ACCOUNT_DB") and os.environ.get("MODEL_APPROVAL_DB") else None
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
     if os.environ.get("ACCOUNT_DB") else None
-CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else None
-GATEWAY_FILE_CONFIG = os.environ.get("GATEWAY_FILE_CONFIG")
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 PUBLIC_ORIGIN_ALIASES = {origin.strip() for origin in
                          os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if origin.strip()}
@@ -49,7 +46,7 @@ def account_api_path(path):
 
 
 def django_model_path(path):
-    return path in {"/api/models", "/api/runners/models"} or \
+    return path in {"/api/models", "/api/runners/models", "/api/ask"} or \
         (path.startswith("/api/models/") and path.endswith("/setup"))
 
 
@@ -57,10 +54,6 @@ def settings_api_path(path):
     return path == "/api/data-classes" or path.startswith("/api/data-classes/") or \
         path in {"/api/audit/options", "/api/audit/records"} or \
         path.startswith("/api/audit/options/")
-
-
-def model_fingerprint(model_id, resources):
-    return fingerprint(model_id, resources, GATEWAY_FILE_CONFIG)
 
 
 def local_runner(address, model=None):
@@ -347,41 +340,6 @@ class Handler(BaseHTTPRequestHandler):
             if self.identity_action_allowed():
                 return self.identity_result(lambda: (201, IDENTITY.create_user(body, self.actor()[0])))
             return
-        if self.path == "/api/ask":
-            model = body.get("model")
-            prompt = body.get("prompt")
-            if not isinstance(model, str) or not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 8000:
-                return self.reply(400, {"error": "Choose a model and enter a prompt (up to 8000 characters)"})
-            if CATALOG:
-                approval = CATALOG.get(model)
-                if approval is None:
-                    return self.reply(403, {"error": "This model has not been set up for Keeplane"})
-                resource_status, resource_result = gateway_model_resources()
-                if resource_status != 200:
-                    return self.reply(resource_status, resource_result)
-                if approval["gateway_fingerprint"] != model_fingerprint(model, resource_result.get("resources", [])):
-                    return self.reply(403, {"error": "This model changed in the gateway and must be set up again"})
-            # This preview-only request has a fixed bound so a local runner
-            # cannot spend the entire gateway timeout generating a smoke answer.
-            request_body = {"model": model, "messages": [{"role": "user", "content": prompt}],
-                            "max_tokens": 64}
-            status, result = gateway("/v1/chat/completions", request_body,
-                                     connection_retries=3)
-            # A second gateway replica can briefly report model_not_found while
-            # it applies a registration. That response has not reached a model.
-            if status == 404 and isinstance(result.get("error"), dict) \
-                    and result["error"].get("code") == "model_not_found":
-                for delay in (0.1, 0.2, 0.4):
-                    time.sleep(delay)
-                    status, result = gateway("/v1/chat/completions", request_body,
-                                             connection_retries=3)
-                    if status != 404 or not isinstance(result.get("error"), dict) \
-                            or result["error"].get("code") != "model_not_found":
-                        break
-            if status != 200:
-                return self.reply(status, result)
-            choice = result.get("choices", [{}])[0]
-            return self.reply(200, {"model": model, "answer": choice.get("message", {}).get("content", "")})
         self.reply(404, {"error": "Not found"})
 
     def do_PUT(self):
