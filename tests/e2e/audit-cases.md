@@ -14,7 +14,7 @@ use a temporary data class and clean it up; the test turns recording off again.
 | AUD-06 | Turn settings recording off, then change a class. | The change succeeds and no new settings record is stored. |
 | AUD-07 | Reload Audit after the control plane restarts. | Options and prior records persist; paging still returns at most 25 per page. |
 | AUD-08 | Attempt to change a switch without the admin action header. | The request is refused and the switch is unchanged. |
-| AUD-09 | Sign in as a temporary developer and try Audit. | The proxy denies the sign-in for the admin-only preview; an unauthenticated Audit request is refused. |
+| AUD-09 | Sign in as a temporary developer and request Audit records. | The developer page opens, the protected Audit API returns 403, and an anonymous request returns 401. |
 
 The held-back-request and model-answer switches can be set independently. Their
 event producers await the detection and developer-task flows. This run does not

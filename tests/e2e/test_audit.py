@@ -16,7 +16,7 @@ from reporting import report_path
 
 
 REPO = Path(__file__).resolve().parents[2]
-REPORT = report_path("2026-10-09-audit.json")
+REPORT = report_path("2026-10-10-audit-developer.json")
 
 
 def main():
@@ -142,10 +142,13 @@ def main():
             developer_id = created["id"]
         developer = Browser()
         developer_status, developer_url, _, _, _ = developer.login(developer_name, developer_password)
+        developer_api_status, _, _ = developer.fetch("/api/audit/records")
         anonymous_status, _, _ = Browser().fetch("/api/audit/records")
-        record("AUD-09", create_status == 201 and developer_status == 403 and
-               "/api/session" in developer_url and anonymous_status == 401,
+        record("AUD-09", create_status == 201 and developer_status == 200 and
+               developer_url == BASE + "/app/" and developer_api_status == 403 and
+               anonymous_status == 401,
                {"create_status": create_status, "developer_login_status": developer_status,
+                "developer_api_status": developer_api_status,
                 "anonymous_api_status": anonymous_status})
 
         subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),

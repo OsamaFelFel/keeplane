@@ -76,7 +76,7 @@ SUITES = (
           report="2026-10-09-model-replacement.json"),
     Suite("audit", py("audit"),
           "AUD-01 AUD-02 AUD-05 AUD-03 AUD-04 AUD-06 AUD-08 AUD-09 AUD-07",
-          report="2026-10-09-audit.json"),
+          report="2026-10-10-audit-developer.json"),
     Suite("model-add", py("model_add"), "ADD-01 ADD-02 ADD-03 ADD-04 ADD-05 ADD-06 ADD-07 ADD-08",
           report="2026-10-09-model-add.json"),
     Suite("cloud-listing", py("cloud_listing"), "CLOUD-01 CLOUD-02 CLOUD-03 CLOUD-04",
