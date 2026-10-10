@@ -25,6 +25,7 @@ def main():
     names = (owned_name, outside_name, changed_name)
     cases = []
     cleanup = []
+    original_settings_audit = None
 
     def record(identifier, passed, observed):
         cases.append({"id": identifier, "verdict": "pass" if passed else "fail",
@@ -45,6 +46,15 @@ def main():
         return status, resource
 
     try:
+        audit_options_status, audit_options, _ = browser.fetch("/api/audit/options")
+        if audit_options_status != 200:
+            raise RuntimeError(f"Audit options returned HTTP {audit_options_status}")
+        original_settings_audit = audit_options["options"]["settings"]
+        if not original_settings_audit:
+            enabled_status, _, _ = browser.fetch("/api/audit/options/settings",
+                                                  {"enabled": True}, method="PUT")
+            if enabled_status != 200:
+                raise RuntimeError(f"Could not enable settings Audit: HTTP {enabled_status}")
         add_status, _, _ = browser.fetch("/api/models", {
             "name": owned_name, "model": "mock-local", "source": "fixture",
             "approved_classes": ["Public"]}, method="POST")
@@ -83,6 +93,16 @@ def main():
                 "gateway_resource_present": resource_exists(owned_name),
                 "approved_after": after.get("approved") if after else None,
                 "ask_http": ask_status})
+
+        audit_status, audit_records, _ = browser.fetch(
+            f"/api/audit/records?kind=settings&search={owned_name}")
+        audit_rows = audit_records.get("records", []) if isinstance(audit_records, dict) else []
+        removal_record = next((item for item in audit_rows
+                               if "Removed model" in item["what"] and "from the gateway" in item["what"]), None)
+        record("REMOVE-08", audit_status == 200 and removal_record is not None and
+               removal_record["who"] == "first-admin",
+               {"audit_http": audit_status, "recorded": removal_record is not None,
+                "actor": removal_record["who"] if removal_record else None})
 
         outside_status, _ = register_outside(outside_name)
         setup_status, _, _ = browser.fetch(f"/api/models/{outside_name}/setup", {
@@ -157,6 +177,10 @@ def main():
                                 "gateway_http": resource_status})
             except Exception as error:
                 cleanup.append({"name": name, "error": type(error).__name__})
+        if original_settings_audit is False:
+            restored_status, _, _ = browser.fetch("/api/audit/options/settings",
+                                                  {"enabled": False}, method="PUT")
+            cleanup.append({"audit_settings_restored": restored_status == 200})
         report = {"suite": "Spec 004 local model removal Docker trial",
                   "time_utc": datetime.now(timezone.utc).isoformat(),
                   "cases": cases, "cleanup": cleanup,
@@ -166,7 +190,8 @@ def main():
         print(f"{report['passed']} passed, {report['failed']} failed; {REPORT}")
         for case in cases:
             print(case["id"], case["verdict"], case["observed"])
-        if report["failed"] or any(item.get("error") for item in cleanup):
+        if report["failed"] or any(item.get("error") or item.get("audit_settings_restored") is False
+                                   for item in cleanup):
             sys.exit(1)
 
 

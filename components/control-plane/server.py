@@ -958,11 +958,13 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(404, {"error": "Not found"})
 
     def do_DELETE(self):
-        if DJANGO_ACCOUNT_API and account_api_path(urlsplit(self.path).path):
+        path = urlsplit(self.path).path
+        segments = path.strip("/").split("/")
+        model_setup_path = len(segments) == 4 and segments[:2] == ["api", "models"] and segments[3] == "setup"
+        if DJANGO_ACCOUNT_API and (account_api_path(path) or model_setup_path):
             return self.forward_account_api()
-        if IDENTITY and not self.require_admin(urlsplit(self.path).path):
+        if IDENTITY and not self.require_admin(path):
             return
-        segments = urlsplit(self.path).path.strip("/").split("/")
         if IDENTITY and len(segments) == 3 and segments[:2] == ["api", "users"]:
             if not self.identity_action_allowed():
                 return

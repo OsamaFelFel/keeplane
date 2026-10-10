@@ -1,0 +1,68 @@
+{
+  "started_utc": "2026-10-10T08:59:55.318438+00:00",
+  "git_head": "5f25e4144f95481100cc25bc9abeb60b7edd9417",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "model-removal"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "model-removal",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_removal.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 9.4,
+      "cases": [
+        {
+          "id": "REMOVE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 8,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": [
+    false,
+    false
+  ],
+  "finished_utc": "2026-10-10T09:00:04.890058+00:00",
+  "suites_passed": 1,
+  "suites_total": 1,
+  "cases_reported": 8
+}

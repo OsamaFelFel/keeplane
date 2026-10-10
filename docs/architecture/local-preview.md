@@ -55,12 +55,15 @@ turns them on, creating starter definitions once. Turning them off leaves
 definitions and approvals stored but removes class controls from the admin UI.
 Model setup remains a separate record, including when a model has no class
 approval. This trial has no project-class enforcement yet.
-React's account requests and protected Models listing now pass through an
+React's account requests, protected Models listing and model removal now pass through an
 internal Django and DRF HTTP layer. Model listing joins gateway readback to
-Keeplane's small approval catalog through a read-only agentgateway adapter;
+Keeplane's small approval catalog through an agentgateway adapter with
+separate runtime and management credentials;
 gateway transport and its model registry remain in agentgateway. The existing
-local account use cases still own the SQLite trial store. Model registration,
-setup, Data Classes and Audit HTTP routes remain in the earlier Python server.
+local account use cases still own the SQLite trial store. Model removal keeps
+customer-added gateway definitions and removes owned definitions only after
+checking their revision. Model registration, setup, Data Classes and Audit HTTP
+routes remain in the earlier Python server.
 The internal Django listener binds to container loopback; only Keeplane
 port 3000 (Docker) or 13000 (kind) is published. If the account listener fails,
 the public account route returns 503 rather than falling back to the old route.

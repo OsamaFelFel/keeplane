@@ -1,0 +1,10 @@
+test_ml_01_approved_and_outside_without_secrets (__main__.ModelListingTests) ... ok
+test_ml_02_changed_revision_revokes_approval (__main__.ModelListingTests) ... ok
+test_ml_03_gateway_failures_do_not_return_partial_lists (__main__.ModelListingTests) ... ok
+test_ml_04_runtime_and_admin_keys_are_separate (__main__.ModelListingTests) ... ok
+test_ml_05_allowed_runner_classification (__main__.ModelListingTests) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.267s
+
+OK

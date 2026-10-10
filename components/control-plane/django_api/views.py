@@ -8,17 +8,18 @@ from django.http import HttpResponseRedirect
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from audit import AuditStore
-from gateway_read_adapter import AgentgatewayModelReader
+from audit import AuditError, AuditStore
+from gateway_adapter import AgentgatewayModelAdapter
 from local_identity import IdentityError, LocalIdentity
 from model_catalog import ModelCatalog
 from model_listing import list_models
+from model_removal import remove_model_setup
 
 
 AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"])
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT)
-CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"])
-MODEL_GATEWAY = AgentgatewayModelReader(
+CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT)
+MODEL_GATEWAY = AgentgatewayModelAdapter(
     os.environ.get("GATEWAY_URL", "http://gateway:4000"),
     os.environ.get("GATEWAY_RUNTIME_KEY_FILE", ""),
     os.environ.get("GATEWAY_ADMIN_KEY_FILE", ""))
@@ -101,6 +102,25 @@ def models(request):
         status, listing = list_models(MODEL_GATEWAY.models, MODEL_GATEWAY.resources,
                                       CATALOG, os.environ.get("GATEWAY_FILE_CONFIG"), RUNNER_URLS)
         return Response(listing, status=status)
+    except sqlite3.Error:
+        return failure(503, "Keeplane settings storage is unavailable")
+
+
+@api_view(["DELETE"])
+def model_setup(request, model_id):
+    user, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    try:
+        status, result = remove_model_setup(
+            model_id, (user["id"], user["username"]), CATALOG, MODEL_GATEWAY,
+            os.environ.get("GATEWAY_FILE_CONFIG"), os.environ.get("PROVIDER_KEY_DIR", ""))
+        return Response(result, status=status)
+    except (IdentityError, AuditError) as error:
+        return failure(error.status, error.message)
     except sqlite3.Error:
         return failure(503, "Keeplane settings storage is unavailable")
 

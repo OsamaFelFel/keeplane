@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "components/control-plane"))
 
-from gateway_read_adapter import AgentgatewayModelReader
+from gateway_adapter import AgentgatewayModelAdapter
 from model_catalog import fingerprint
 from model_listing import list_models
 
@@ -89,8 +89,8 @@ class ModelListingTests(unittest.TestCase):
             admin = Path(directory) / "admin"
             runtime.write_text("runtime-fixture")
             admin.write_text("admin-fixture")
-            with patch("gateway_read_adapter.urlopen", read):
-                reader = AgentgatewayModelReader("http://127.0.0.1", runtime, admin)
+            with patch("gateway_adapter.urlopen", read):
+                reader = AgentgatewayModelAdapter("http://127.0.0.1", runtime, admin)
                 self.assertEqual(reader.models()[0], 200)
                 self.assertEqual(reader.resources()[0], 200)
         self.assertEqual(seen, [
