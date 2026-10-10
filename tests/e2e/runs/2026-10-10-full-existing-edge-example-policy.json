@@ -1,0 +1,16 @@
+{
+  "suite": "customer-run gateway behind TLS and enforcing Calico",
+  "context": "kind-keeplane-netpol",
+  "namespaces_removed": true,
+  "results": [
+    {
+      "case": "EXEDGE-TRIAL",
+      "verdict": "fail",
+      "observed": {
+        "error": "ValueError",
+        "detail": "Invalid placeholder in string: line 2, col 15"
+      }
+    }
+  ],
+  "production_release_approved": false
+}

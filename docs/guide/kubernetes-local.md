@@ -104,6 +104,14 @@ separately installed gateway while Calico blocked an unrelated pod. Its customer
 policy also passed when applied before installation preflight; the preflight
 Job now has a stable label for that rule. Production namespace permissions must
 prevent untrusted pods from adopting the allowed labels.
+For a customer-run gateway, use the
+[customer-owned ingress policy example](../../deploy/examples/customer-gateway-ingress-policy.yaml):
+replace its four `${...}` values with the gateway and Keeplane namespaces and
+Helm release names, then apply it in the gateway namespace **before** installing
+Keeplane. Its two admitted pod labels match the app and preflight Job from the
+Keeplane chart. Keep pod creation and relabeling in the Keeplane namespace
+restricted to trusted operators. The example covers only gateway ingress on
+port 4000; it does not set egress or protect other customer services.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.

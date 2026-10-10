@@ -1,6 +1,6 @@
 # Customer-run gateway behind TLS and Calico
 
-**Edition:** Open Source. Run `python3 tests/e2e/test_full_existing_edge.py --output tests/e2e/runs/<new-result>.json` from the repository root against the separate `kind-keeplane-netpol` cluster. The verifier installs the upstream gateway in one disposable namespace and Keeplane's existing-gateway chart in another. It removes both namespaces and the local port-forward. The regular Docker and kind previews are not changed.
+**Edition:** Open Source. Run `python3 tests/e2e/test_full_existing_edge.py --output tests/e2e/runs/<new-result>.json` from the repository root against the separate `kind-keeplane-netpol` cluster. The verifier installs the upstream gateway in one disposable namespace and Keeplane's existing-gateway chart in another. It renders the [customer-owned policy example](../../deploy/examples/customer-gateway-ingress-policy.yaml) with those namespace and release names, then applies it before Keeplane installation. It removes both namespaces and the local port-forward. The regular Docker and kind previews are not changed.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
