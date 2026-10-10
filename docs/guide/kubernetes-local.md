@@ -96,6 +96,13 @@ passed HTTPS sign-in, identity and model listing through the actual app and
 blocked an unrelated pod from calling its managed gateway. These options are
 still off in this everyday kindnet preview. Customer controller behavior,
 certificate renewal and the project-bound runtime route still need release tests.
+The [two-replica repeat](../../tests/e2e/runs/2026-10-10-full-product-two-replica.md)
+also passed a fixture model answer after one managed gateway pod was removed.
+The [customer-run gateway trial](../../tests/e2e/runs/2026-10-10-full-existing-edge.md)
+passed HTTPS sign-in, Keeplane model registration and an answer through a
+separately installed gateway while Calico blocked an unrelated pod. Its customer
+policy was applied after installation preflight, so install-time access still
+needs a release rule.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
