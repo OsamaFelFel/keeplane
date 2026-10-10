@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from audit import AuditError, AuditStore
-from data_classes import DataClassStore
+from data_classes import DataClassError, DataClassStore
 from gateway_adapter import AgentgatewayModelAdapter
 from local_identity import IdentityError, LocalIdentity
 from model_catalog import ModelCatalog
@@ -55,6 +55,23 @@ def result(action):
         return failure(error.status, error.message)
     except sqlite3.Error:
         return failure(503, "Account storage is unavailable")
+
+
+def settings_result(action):
+    try:
+        return action()
+    except (DataClassError, AuditError) as error:
+        return failure(error.status, error.message)
+    except sqlite3.Error:
+        return failure(503, "Keeplane settings storage is unavailable")
+
+
+def effective_model_ids():
+    status, listing = list_models(MODEL_GATEWAY.models, MODEL_GATEWAY.resources,
+                                  CATALOG, os.environ.get("GATEWAY_FILE_CONFIG"), RUNNER_URLS)
+    if status != 200:
+        return status, listing, None
+    return 200, {}, {item["id"] for item in listing["models"] if item.get("approved")}
 
 
 def actor(request):
@@ -161,6 +178,108 @@ def runner_models(request):
         return failure(400, "Enter a runner address")
     status, body = local_runner(request.data.get("address"), RUNNER_URLS)
     return Response(body, status=status)
+
+
+@api_view(["GET", "POST"])
+def data_classes(request):
+    user, denied = admin(request)
+    if denied:
+        return denied
+    if request.method == "GET":
+        def show():
+            if not DATA_CLASSES.enabled():
+                return Response({"enabled": False, "classes": []})
+            status, body, effective = effective_model_ids()
+            return Response({"enabled": True, "classes": DATA_CLASSES.list(effective)}
+                            if status == 200 else body, status=status)
+        return settings_result(show)
+    denied = action_error(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a data class request")
+    def add():
+        effective = set()
+        if request.data.get("approved_model_ids"):
+            status, body, effective = effective_model_ids()
+            if status != 200:
+                return Response(body, status=status)
+        return Response(DATA_CLASSES.add(request.data, effective,
+                                         (user["id"], user["username"])), status=201)
+    return settings_result(add)
+
+
+@api_view(["PUT"])
+def data_class_mode(request):
+    user, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a data class request")
+    return settings_result(lambda: Response(DATA_CLASSES.set_enabled(
+        request.data.get("enabled"), (user["id"], user["username"]))))
+
+
+@api_view(["PUT", "DELETE"])
+def data_class_detail(request, class_id):
+    user, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    signed_actor = (user["id"], user["username"])
+    if request.method == "DELETE":
+        return settings_result(lambda: Response(DATA_CLASSES.remove(class_id, signed_actor)))
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a data class request")
+    def edit():
+        effective = set()
+        if request.data.get("approved_model_ids"):
+            status, body, effective = effective_model_ids()
+            if status != 200:
+                return Response(body, status=status)
+        return Response(DATA_CLASSES.edit(class_id, request.data, effective, signed_actor))
+    return settings_result(edit)
+
+
+@api_view(["GET"])
+def audit_options(request):
+    _, denied = admin(request)
+    if denied:
+        return denied
+    return settings_result(lambda: Response({"options": AUDIT.options()}))
+
+
+@api_view(["PUT"])
+def audit_option(request, kind):
+    _, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter an Audit option request")
+    return settings_result(lambda: Response({"options": AUDIT.set_option(
+        kind, request.data.get("enabled"))}))
+
+
+@api_view(["GET"])
+def audit_records(request):
+    _, denied = admin(request)
+    if denied:
+        return denied
+    try:
+        page = int(request.query_params.get("page", "1"))
+    except ValueError:
+        return failure(400, "Page must be a number")
+    return settings_result(lambda: Response(AUDIT.records(
+        request.query_params.get("kind", "all"),
+        request.query_params.get("search", ""), page)))
 
 
 @api_view(["GET", "POST"])

@@ -15,8 +15,7 @@ from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
 from local_identity import IdentityError, LocalIdentity
-from audit import AuditError, AuditStore
-from data_classes import DataClassError, DataClassStore
+from audit import AuditStore
 from model_catalog import ModelCatalog, fingerprint
 from runner_adapter import local_runner as inspect_local_runner
 
@@ -35,7 +34,6 @@ AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
     if os.environ.get("ACCOUNT_DB") else None
 CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else None
-DATA_CLASSES = DataClassStore(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else None
 GATEWAY_FILE_CONFIG = os.environ.get("GATEWAY_FILE_CONFIG")
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 PUBLIC_ORIGIN_ALIASES = {origin.strip() for origin in
@@ -53,6 +51,12 @@ def account_api_path(path):
 def django_model_path(path):
     return path in {"/api/models", "/api/runners/models"} or \
         (path.startswith("/api/models/") and path.endswith("/setup"))
+
+
+def settings_api_path(path):
+    return path == "/api/data-classes" or path.startswith("/api/data-classes/") or \
+        path in {"/api/audit/options", "/api/audit/records"} or \
+        path.startswith("/api/audit/options/")
 
 
 def model_fingerprint(model_id, resources):
@@ -106,23 +110,6 @@ def gateway_model_resources():
         if status < 500 or attempt == 2:
             return status, result
         time.sleep(0.25)
-
-
-def effective_approval_ids():
-    status, listing = gateway("/v1/models", timeout=10)
-    if status != 200:
-        return status, listing, None
-    status, resources = gateway_model_resources()
-    if status != 200:
-        return status, resources, None
-    raw_resources = resources.get("resources", [])
-    active = set()
-    for item in listing.get("data", []):
-        model_id = item.get("id")
-        approval = CATALOG.get(model_id) if model_id else None
-        if approval and approval["gateway_fingerprint"] == model_fingerprint(model_id, raw_resources):
-            active.add(model_id)
-    return 200, {}, active
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -209,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             status, result = action()
             self.reply(status, result)
-        except (IdentityError, DataClassError, AuditError) as error:
+        except IdentityError as error:
             self.reply(error.status, {"error": error.message})
         except sqlite3.Error:
             self.reply(503, {"error": "Keeplane settings storage is unavailable"})
@@ -242,7 +229,7 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         query = parse_qs(route.query)
         path = route.path
-        if path == "/api/models" or (DJANGO_ACCOUNT_API and account_api_path(path)):
+        if path == "/api/models" or settings_api_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
             return self.forward_account_api()
         if IDENTITY:
             if path == "/api/auth-options":
@@ -273,23 +260,6 @@ class Handler(BaseHTTPRequestHandler):
             operation_id = path.removeprefix("/api/user-operations/")
             return self.identity_result(lambda: (200, IDENTITY.user_operation(
                 operation_id, self.actor()[0])))
-        if DATA_CLASSES and path == "/api/data-classes":
-            try:
-                if not DATA_CLASSES.enabled():
-                    return self.reply(200, {"enabled": False, "classes": []})
-                status, result, effective = effective_approval_ids()
-                return self.reply(status, {"enabled": True, "classes": DATA_CLASSES.list(effective)} if status == 200 else result)
-            except sqlite3.Error:
-                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
-        if AUDIT and path == "/api/audit/options":
-            return self.identity_result(lambda: (200, {"options": AUDIT.options()}))
-        if AUDIT and path == "/api/audit/records":
-            try:
-                page = int(query.get("page", ["1"])[0])
-                return self.identity_result(lambda: (200, AUDIT.records(
-                    query.get("kind", ["all"])[0], query.get("search", [""])[0], page)))
-            except ValueError:
-                return self.reply(400, {"error": "Page must be a number"})
         if IDENTITY and path == "/api/users":
             return self.identity_result(lambda: (200, IDENTITY.users(query)))
         if IDENTITY and path == "/api/edition-note":
@@ -349,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
-        if django_model_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
+        if django_model_path(path) or settings_api_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
             return self.forward_account_api()
         if IDENTITY and path == "/api/session":
             if not self.trusted_origin():
@@ -376,15 +346,6 @@ class Handler(BaseHTTPRequestHandler):
         if IDENTITY and self.path == "/api/users":
             if self.identity_action_allowed():
                 return self.identity_result(lambda: (201, IDENTITY.create_user(body, self.actor()[0])))
-            return
-        if DATA_CLASSES and self.path == "/api/data-classes":
-            if self.identity_action_allowed():
-                effective = set()
-                if body.get("approved_model_ids"):
-                    status, result, effective = effective_approval_ids()
-                    if status != 200:
-                        return self.reply(status, result)
-                return self.identity_result(lambda: (201, DATA_CLASSES.add(body, effective, self.actor())))
             return
         if self.path == "/api/ask":
             model = body.get("model")
@@ -424,7 +385,7 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(404, {"error": "Not found"})
 
     def do_PUT(self):
-        if DJANGO_ACCOUNT_API and account_api_path(urlsplit(self.path).path):
+        if settings_api_path(urlsplit(self.path).path) or (DJANGO_ACCOUNT_API and account_api_path(urlsplit(self.path).path)):
             return self.forward_account_api()
         if IDENTITY and not self.require_admin(urlsplit(self.path).path):
             return
@@ -445,44 +406,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             return self.identity_result(lambda: (200, IDENTITY.set_edition_note(
                 self.actor()[0], body.get("enabled"))))
-        if IDENTITY:
-            segments = urlsplit(self.path).path.strip("/").split("/")
-            if DATA_CLASSES and segments == ["api", "data-classes", "mode"]:
-                if not self.identity_action_allowed():
-                    return
-                body = self.incoming()
-                if body is None:
-                    return
-                return self.identity_result(lambda: (200, DATA_CLASSES.set_enabled(
-                    body.get("enabled"), self.actor())))
-            if AUDIT and len(segments) == 4 and segments[:3] == ["api", "audit", "options"]:
-                if not self.identity_action_allowed():
-                    return
-                body = self.incoming()
-                if body is None:
-                    return
-                return self.identity_result(lambda: (200, {"options": AUDIT.set_option(
-                    segments[3], body.get("enabled"))}))
-            if DATA_CLASSES and len(segments) == 3 and segments[:2] == ["api", "data-classes"]:
-                if not self.identity_action_allowed():
-                    return
-                body = self.incoming()
-                if body is None:
-                    return
-                effective = set()
-                if body.get("approved_model_ids"):
-                    status, result, effective = effective_approval_ids()
-                    if status != 200:
-                        return self.reply(status, result)
-                return self.identity_result(lambda: (200, DATA_CLASSES.edit(
-                    segments[2], body, effective, self.actor())))
         self.reply(404, {"error": "Not found"})
 
     def do_DELETE(self):
         path = urlsplit(self.path).path
         segments = path.strip("/").split("/")
         model_setup_path = len(segments) == 4 and segments[:2] == ["api", "models"] and segments[3] == "setup"
-        if model_setup_path or (DJANGO_ACCOUNT_API and account_api_path(path)):
+        if model_setup_path or settings_api_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
             return self.forward_account_api()
         if IDENTITY and not self.require_admin(path):
             return
@@ -490,10 +420,6 @@ class Handler(BaseHTTPRequestHandler):
             if not self.identity_action_allowed():
                 return
             return self.identity_result(lambda: (200, IDENTITY.delete_user(segments[2])))
-        if DATA_CLASSES and len(segments) == 3 and segments[:2] == ["api", "data-classes"]:
-            if not self.identity_action_allowed():
-                return
-            return self.identity_result(lambda: (200, DATA_CLASSES.remove(segments[2], self.actor())))
         self.reply(404, {"error": "Not found"})
 
 

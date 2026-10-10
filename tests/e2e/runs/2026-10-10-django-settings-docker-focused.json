@@ -1,0 +1,158 @@
+{
+  "started_utc": "2026-10-10T09:39:28.067763+00:00",
+  "git_head": "1fe442e95551f2197bc1bbf8b97542f8ef4ad5a9",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "data-classes",
+    "audit",
+    "break-glass-audit"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "data-classes",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.0,
+      "cases": [
+        {
+          "id": "CLASS-00",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 11,
+      "passed": true
+    },
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.7,
+      "cases": [
+        {
+          "id": "AUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.7,
+      "cases": [
+        {
+          "id": "BG-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": [
+    false,
+    false
+  ],
+  "finished_utc": "2026-10-10T09:39:42.612885+00:00",
+  "suites_passed": 3,
+  "suites_total": 3,
+  "cases_reported": 23
+}
