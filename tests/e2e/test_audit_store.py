@@ -19,6 +19,7 @@ class AuditStoreChecks(unittest.TestCase):
         self.audit = AuditStore(path)
         self.models = ModelCatalog(path, self.audit)
         self.classes = DataClassStore(path, self.audit)
+        self.classes.set_enabled(True)
         self.actor = ("subject-1", "first-admin")
 
     def tearDown(self):
@@ -52,6 +53,16 @@ class AuditStoreChecks(unittest.TestCase):
         self.assertTrue(all(row["when"].endswith("+00:00") for row in found["records"]))
         self.assertEqual(self.audit.records(kind="settings")["total"], 4)
         self.assertEqual(self.audit.records(kind="model_answers")["total"], 0)
+
+    def test_data_class_mode_changes_are_recorded_without_noops(self):
+        self.audit.set_option("settings", True)
+        self.classes.set_enabled(True, self.actor)
+        self.assertEqual(self.audit.records(kind="settings")["total"], 0)
+        self.classes.set_enabled(False, self.actor)
+        self.classes.set_enabled(True, self.actor)
+        records = self.audit.records(kind="settings")["records"]
+        self.assertEqual([item["what"] for item in records],
+                         ["Turned data classes on", "Turned data classes off"])
 
     def test_literal_search_and_paging(self):
         self.audit.set_option("settings", True)

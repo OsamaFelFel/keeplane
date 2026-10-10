@@ -66,7 +66,7 @@ SUITES = (
           "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20",
           report="2026-10-10-users-react.json"),
     Suite("data-classes", py("data_classes"),
-          "CLASS-01 CLASS-02 CLASS-03 CLASS-04 CLASS-05 CLASS-06 CLASS-08 CLASS-07",
+          "CLASS-00 CLASS-10 CLASS-01 CLASS-09 CLASS-02 CLASS-03 CLASS-04 CLASS-05 CLASS-06 CLASS-08 CLASS-07",
           report="2026-10-09-data-classes.json"),
     Suite("model-approval", py("model_approval"),
           "MODEL-01 MODEL-02 MODEL-03 MODEL-10 MODEL-04 MODEL-05 MODEL-06 MODEL-07 MODEL-08 MODEL-09",
@@ -121,6 +121,15 @@ def preflight():
     with urlopen("http://127.0.0.1:13000/health", timeout=10) as response:
         if response.status != 200 or json.load(response).get("gateway") != "ready":
             raise RuntimeError("Isolated kind preview or gateway is not healthy")
+    mode_status, settings, _ = browser.fetch("/api/data-classes")
+    if mode_status != 200:
+        raise RuntimeError("Could not read the Data Classes mode")
+    initial_mode = settings["enabled"]
+    if not initial_mode:
+        changed, _, _ = browser.fetch("/api/data-classes/mode", {"enabled": True}, method="PUT")
+        if changed != 200:
+            raise RuntimeError("Could not enable classes for the older class-dependent suites")
+    return browser, initial_mode
 
 
 def case_rows(suite, stdout, report_dir, exit_code):
@@ -189,8 +198,7 @@ def main():
     if output.exists():
         parser.error("Output exists; choose a new evidence filename")
     selected = [suite for suite in SUITES if not args.suite or suite.name in args.suite]
-    if any(suite.needs_stack for suite in selected):
-        preflight()
+    mode_browser, initial_mode = preflight() if any(suite.needs_stack for suite in selected) else (None, None)
     output.parent.mkdir(parents=True, exist_ok=True)
     result = {"started_utc": datetime.now(timezone.utc).isoformat(),
               "git_head": git("rev-parse", "HEAD"), "branch": git("branch", "--show-current"),
@@ -198,14 +206,21 @@ def main():
               "stack_lock_sha256": hashlib.sha256((ROOT / "deploy/local/stack.lock.json").read_bytes()).hexdigest(),
               "selected_suites": [suite.name for suite in selected],
               "completed": False, "results": []}
-    with tempfile.TemporaryDirectory(prefix="keeplane-regression-") as temp:
-        report_dir = Path(temp)
-        for suite in selected:
-            item = run_suite(suite, report_dir)
-            result["results"].append(item)
-            output.write_text(json.dumps(result, indent=2) + "\n")
-            print(suite.name + ": " + ("PASS" if item["passed"] else "FAIL") +
-                  " (%d cases, %.1fs)" % (len(item["cases"]), item["duration_seconds"]), flush=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="keeplane-regression-") as temp:
+            report_dir = Path(temp)
+            for suite in selected:
+                item = run_suite(suite, report_dir)
+                result["results"].append(item)
+                output.write_text(json.dumps(result, indent=2) + "\n")
+                print(suite.name + ": " + ("PASS" if item["passed"] else "FAIL") +
+                      " (%d cases, %.1fs)" % (len(item["cases"]), item["duration_seconds"]), flush=True)
+    finally:
+        if mode_browser is not None:
+            restored, _, _ = mode_browser.fetch("/api/data-classes/mode",
+                                                {"enabled": initial_mode}, method="PUT")
+            result["data_classes_mode_restored"] = restored == 200
+            result["data_classes_initial_mode"] = initial_mode
     result["completed"] = True
     result["finished_utc"] = datetime.now(timezone.utc).isoformat()
     result["suites_passed"] = sum(item["passed"] for item in result["results"])
@@ -214,7 +229,8 @@ def main():
     output.write_text(json.dumps(result, indent=2) + "\n")
     print("%d/%d suites passed; %d case records; %s" %
           (result["suites_passed"], result["suites_total"], result["cases_reported"], output))
-    return int(result["suites_passed"] != result["suites_total"])
+    return int(result["suites_passed"] != result["suites_total"] or
+               result.get("data_classes_mode_restored") is False)
 
 
 if __name__ == "__main__":

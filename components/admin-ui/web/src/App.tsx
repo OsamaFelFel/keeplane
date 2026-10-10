@@ -9,6 +9,7 @@ import { api, type Identity } from '@/app/api'
 import { Shell } from '@/app/Shell'
 import { DeveloperPage } from '@/app/DeveloperPage'
 import { UsersPage } from '@/features/users/UsersPage'
+import { DataClassesPage } from '@/features/data-classes/DataClassesPage'
 
 function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [busy, setBusy] = useState(false)
@@ -46,5 +47,5 @@ export default function App() {
   if (identity === undefined) return <main className="p-8" role="status">Loading Keeplane…</main>
   if (identity === null) return <SignIn onSignedIn={refresh} />
   if (identity.role === 'developer') return <DeveloperPage identity={identity} />
-  return <Shell identity={identity}><UsersPage /></Shell>
+  return <Shell identity={identity}>{window.location.pathname === '/app/data-classes' ? <DataClassesPage /> : <UsersPage />}</Shell>
 }

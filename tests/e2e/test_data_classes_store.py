@@ -25,6 +25,10 @@ def main():
         path = Path(directory) / "catalog.sqlite3"
         models = ModelCatalog(path)
         classes = DataClassStore(path)
+        assert classes.enabled() is False
+        assert classes.list() == []
+        classes.set_enabled(True)
+        assert [item["name"] for item in classes.list()] == ["Public", "Internal", "Confidential"]
         models.approve("fixture", ["Public"], "tested-definition")
         created = classes.add({"name": "Private", "approved_model_ids": ["fixture"]})
         assert set(models.get("fixture")["approved_classes"]) == {"Public", "Private"}
@@ -40,11 +44,18 @@ def main():
         classes.remove(created["id"])
         assert models.get("fixture")["approved_classes"] == ["Public"]
         classes.edit("public", {"name": "Public", "approved_model_ids": []})
-        assert models.get("fixture") is None
+        assert models.get("fixture")["approved_classes"] == []
+        classes.set_enabled(False)
+        assert not classes.enabled()
+        assert models.get("fixture")["approved_classes"] == []
+        models.approve("added-while-off", [], "tested-second-definition")
+        classes.set_enabled(True)
+        assert models.get("fixture")["approved_classes"] == []
+        assert models.get("added-while-off")["approved_classes"] == []
         classes.remove("internal")
         classes.remove("confidential")
         expect_conflict(lambda: classes.remove("public"))
-    print("PASS: project use blocks removal; rename preserves links; last approval and class stay safe")
+    print("PASS: classes start off, opt in seeds starters, and model setup survives lost class approvals")
 
 
 if __name__ == "__main__":

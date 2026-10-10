@@ -32,7 +32,7 @@ def main():
         assert file_first != fingerprint("local-fixture", [], config)
         assert fingerprint("local-fixture", [], Path(directory) / "missing.yaml") is None
         catalog = ModelCatalog(Path(directory) / "catalog.sqlite3")
-        DataClassStore(Path(directory) / "catalog.sqlite3")
+        DataClassStore(Path(directory) / "catalog.sqlite3").set_enabled(True)
         catalog.approve("shared-name", ["Public"], first)
         stored = catalog.get("shared-name")
         assert stored["gateway_fingerprint"] == first

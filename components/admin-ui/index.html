@@ -42,7 +42,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Reached</th><th scope="col">Key</th><th scope="col">Approved for</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Reached</th><th scope="col">Key</th><th scope="col" id="approved-for-heading">Approved for</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
             <tbody id="models"><tr><td colspan="6">Loading models…</td></tr></tbody>
           </table>
         </div>
@@ -82,7 +82,7 @@
   </dialog>
   <dialog id="setup-dialog" aria-labelledby="setup-title">
     <h2 id="setup-title">Set up model</h2>
-    <p id="setup-description">A model added outside Keeplane gets no work until you set its key and the classes it is approved for.</p>
+    <p id="setup-description">A model added outside Keeplane gets no work until you set it up.</p>
     <form id="setup-form">
       <p id="setup-model-name" class="model-id"></p>
       <fieldset class="key-choice"><legend>Provider key</legend><p id="setup-key-choice">No key needed</p></fieldset>

@@ -10,8 +10,8 @@ the gateway. The Records table shows the signed-in username, time and change.
 Search and **Show** narrow the list; Previous and Next page through 25 rows.
 Turning recording off stops new records. Older records remain visible.
 
-The current settings producer covers Keeplane model setup/removal and data-class
-add/edit/removal. Complexity-level picks and model registration are not yet
+The current settings producer covers Keeplane model setup/removal, data-class
+mode changes, and class add/edit/removal. Complexity-level picks and model registration are not yet
 implemented as Keeplane settings flows. The held-back-request and model-answer
 switches persist independently, but their event producers await detection and
 developer-task flows. Do not use those switches as evidence that those flows

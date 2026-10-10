@@ -61,7 +61,7 @@ runner address controls before accepting arbitrary network addresses.
 The `K8S-05` and `K8S-06` cases check registration, a model call and separation
 from the managed gateway's catalog. An existing model that the customer added
 outside Keeplane must remain untouched and receive no Keeplane work until an
-admin approves its key choice and data classes. The protected Docker preview
+admin sets up its key choice and, if data classes are on, its class approvals. The protected Docker preview
 now enforces that approval and preserves an outside model's gateway
 registration when its Keeplane setup is removed. The app-only kind preview has
 not yet been wired to the protected account service, so this policy has not

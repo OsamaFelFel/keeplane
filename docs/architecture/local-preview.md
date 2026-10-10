@@ -10,6 +10,7 @@ flowchart LR
   App --> Editions[Editions and one-time note preference]
   App -->|first-admin session| Accounts[(Local account and session store)]
   App -->|same transaction, mandatory sign-in record| Audit[(Local Audit store)]
+  App -->|model setup and optional data-class mode| Settings[(Local settings store)]
   App -->|management API| Gateway[agentgateway]
   App -->|inference API| Gateway
   Gateway --> Fixture[Local test model]
@@ -38,6 +39,11 @@ refuses the sign-in. The app
 uses the gateway through the internal Docker network. Existing gateway and
 account volumes are reused when the stack starts again. A fresh account store
 has no Team tables or Team API.
+Data classes start off in a fresh settings store. The React Data Classes page
+turns them on, creating starter definitions once. Turning them off leaves
+definitions and approvals stored but removes class controls from the admin UI.
+Model setup remains a separate record, including when a model has no class
+approval. This trial has no project-class enforcement yet.
 The Docker trial does not install Keycloak or an SSO proxy. The kind integration
 chart has not yet been given production Open Source identity. Optional OpenID
 Connect sign-in is later Open Source work behind the Keeplane account contract.

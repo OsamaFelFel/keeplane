@@ -534,7 +534,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/app/")
                 self.end_headers()
                 return
-            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/") \
+            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/", "/app/data-classes") \
                     and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
@@ -543,8 +543,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.identity_result(lambda: (200, IDENTITY.user_operation(
                 operation_id, self.actor()[0])))
         if DATA_CLASSES and path == "/api/data-classes":
-            status, result, effective = effective_approval_ids()
-            return self.reply(status, {"classes": DATA_CLASSES.list(effective)} if status == 200 else result)
+            try:
+                if not DATA_CLASSES.enabled():
+                    return self.reply(200, {"enabled": False, "classes": []})
+                status, result, effective = effective_approval_ids()
+                return self.reply(status, {"enabled": True, "classes": DATA_CLASSES.list(effective)} if status == 200 else result)
+            except sqlite3.Error:
+                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
         if AUDIT and path == "/api/audit/options":
             return self.identity_result(lambda: (200, {"options": AUDIT.options()}))
         if AUDIT and path == "/api/audit/records":
@@ -600,14 +605,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(302)
             self.send_header("Location", "/app/")
             self.end_headers()
-        elif IDENTITY and path in ("/data-classes", "/data-classes.js",
-                                    "/audit", "/audit.js", "/editions", "/editions.js"):
-            name = {"/data-classes": "data-classes.html", "/data-classes.js": "data-classes.js",
-                    "/audit": "audit.html", "/audit.js": "audit.js",
+        elif IDENTITY and path == "/data-classes":
+            self.send_response(302)
+            self.send_header("Location", "/app/data-classes")
+            self.end_headers()
+        elif IDENTITY and path in ("/audit", "/audit.js", "/editions", "/editions.js"):
+            name = {"/audit": "audit.html", "/audit.js": "audit.js",
                     "/editions": "editions.html", "/editions.js": "editions.js"}[path]
             content_type = "text/javascript" if name.endswith(".js") else "text/html"
             self.reply(200, (UI / name).read_bytes(), content_type + "; charset=utf-8")
-        elif path in ("/app", "/app/"):
+        elif path in ("/app", "/app/", "/app/data-classes"):
             index = UI / "web/dist/index.html"
             self.reply(200, index.read_bytes(), "text/html; charset=utf-8") if index.is_file() else \
                 self.reply(503, {"error": "Admin UI build is unavailable"})
@@ -668,15 +675,21 @@ class Handler(BaseHTTPRequestHandler):
                      "\n" in replacement or "\r" in replacement)):
                 return self.reply(400, {"error": "Enter a valid replacement shared key"})
             try:
-                classes = body.get("approved_classes")
+                classes_on = DATA_CLASSES.enabled()
+                # Editing a key while classes are off must not erase approvals
+                # that will apply if the admin turns the mode on again.
+                classes = body.get("approved_classes", []) if classes_on else \
+                    (previous["approved_classes"] if previous else [])
                 # Validate before making a model call or changing storage.
                 known_classes = {item["name"] for item in DATA_CLASSES.list()}
-                if not isinstance(classes, list) or not classes or \
+                if not isinstance(classes, list) or \
                         any(not isinstance(item, str) or item not in known_classes for item in classes) or \
                         len(classes) != len(set(classes)):
-                    raise ValueError("Choose one or more valid data classes")
+                    raise ValueError("Choose valid data classes")
             except ValueError as error:
                 return self.reply(400, {"error": str(error)})
+            except sqlite3.Error:
+                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
             status, listing = gateway("/v1/models", timeout=10)
             if status != 200:
                 return self.reply(status, listing)
@@ -744,18 +757,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(400, {"error": "Model name must use letters, numbers, dots, dashes, underscores or colons"})
             if not isinstance(model, str) or not model or len(model) > 100:
                 return self.reply(400, {"error": "Enter an upstream model ID"})
-            classes = body.get("approved_classes") if CATALOG else None
-            if CATALOG and classes is None:
-                return self.reply(400, {"error": "Choose one or more valid data classes"})
-            if classes is not None:
-                try:
+            try:
+                classes = (body.get("approved_classes", []) if DATA_CLASSES.enabled() else []) if CATALOG else None
+                if classes is not None:
                     known_classes = {item["name"] for item in DATA_CLASSES.list()}
-                except sqlite3.Error:
-                    return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
-                if not isinstance(classes, list) or not classes or \
+            except sqlite3.Error:
+                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
+            if classes is not None:
+                if not isinstance(classes, list) or \
                         any(not isinstance(item, str) or item not in known_classes for item in classes) or \
                         len(classes) != len(set(classes)):
-                    return self.reply(400, {"error": "Choose one or more valid data classes"})
+                    return self.reply(400, {"error": "Choose valid data classes"})
             if source in CLOUD_BASE_URLS:
                 return self.add_cloud_model(body, name, model, classes)
             sources = {"fixture": "http://model:18080/v1", "qwen": "http://qwen:8080/v1",
@@ -890,6 +902,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.actor()[0], body.get("enabled"))))
         if IDENTITY:
             segments = urlsplit(self.path).path.strip("/").split("/")
+            if DATA_CLASSES and segments == ["api", "data-classes", "mode"]:
+                if not self.identity_action_allowed():
+                    return
+                body = self.incoming()
+                if body is None:
+                    return
+                return self.identity_result(lambda: (200, DATA_CLASSES.set_enabled(
+                    body.get("enabled"), self.actor())))
             if AUDIT and len(segments) == 4 and segments[:3] == ["api", "audit", "options"]:
                 if not self.identity_action_allowed():
                     return

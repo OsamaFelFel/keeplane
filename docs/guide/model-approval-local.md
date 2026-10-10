@@ -3,7 +3,8 @@
 Start the [protected account preview](accounts-local.md), then open
 [Models and routing](http://127.0.0.1:3000/). A model already present in the
 gateway appears as **Added outside Keeplane** with **Not set · gets no work**.
-Choose **Set up**, select its approved data classes, and save. Keeplane checks
+Choose **Set up** and save. If data classes are on, you can select its approved
+classes; when they are off, there is no class field. Keeplane checks
 that the model answers before it records approval. The local trial supports
 no-key models and Keeplane-managed shared keys for cloud-format models against
 a local authenticated fixture. Developer-owned keys remain future work.
@@ -15,7 +16,7 @@ and marks them unapproved until Keeplane setup. The
 to verify that outside models receive no work before setup and that a no-key
 OpenAI trial can answer after approval. They do not test a real cloud account.
 An approved outside model has **Edit** in the Models table. Editing its
-approved classes checks that it still answers before saving. **Remove
+approved classes while the mode is on checks that it still answers before saving. **Remove
 Keeplane setup** stops work through the protected Keeplane API but leaves the
 model registered in the customer gateway. The confirmation dialog states this
 effect.

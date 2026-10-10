@@ -64,6 +64,7 @@
 .keeplane-topbar { height: 56px; background: var(--foreground); color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; }
 .keeplane-brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; white-space: nowrap; }
 .keeplane-topbar a { color: #fff; text-decoration: underline; }
+.keeplane-sidebar[data-slot="sidebar-container"] { top: 56px; bottom: auto; height: calc(100svh - 56px); }
 .keeplane-content { width: 100%; max-width: 1048px; padding: 32px 40px; }
 .keeplane-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .keeplane-page-heading h1 { font-size: 28px; line-height: 36px; font-weight: 600; margin: 0; }

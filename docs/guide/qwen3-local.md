@@ -31,7 +31,7 @@ Start the [Docker preview](local-preview.md) and, for admin approval, the
 [protected preview](accounts-local.md). On **Models and routing**, choose
 **Add model** → **Local runner**, enter
 `http://host.docker.internal:14424`, and choose **Find models**. Select
-`qwen3-4b-instruct`, choose its approved data classes, then add it. The
+`qwen3-4b-instruct`, optionally choose approved data classes if the mode is on, then add it. The
 gateway checks an answer before Keeplane saves the model. The host address
 is explicitly allowed only in this local preview. Stop the native runner
 with Ctrl-C when finished.

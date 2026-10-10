@@ -32,10 +32,11 @@ class DataClassStore:
                 project_id TEXT PRIMARY KEY,
                 class_id TEXT NOT NULL
             )""")
-            if not connection.execute("SELECT 1 FROM data_classes LIMIT 1").fetchone():
-                connection.executemany(
-                    "INSERT INTO data_classes (id, name, position) VALUES (?, ?, ?)",
-                    [(identifier, name, position) for position, (identifier, name) in enumerate(STARTERS)])
+            connection.execute("""CREATE TABLE IF NOT EXISTS data_class_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))
+            )""")
+            connection.execute("INSERT OR IGNORE INTO data_class_settings (id, enabled) VALUES (1, 0)")
 
     def _connect(self):
         connection = sqlite3.connect(self.path, timeout=10)
@@ -46,9 +47,37 @@ class DataClassStore:
         return connection.execute(
             "SELECT id, name FROM data_classes ORDER BY position, name").fetchall()
 
+    def enabled(self):
+        with self._connect() as connection:
+            return bool(connection.execute(
+                "SELECT enabled FROM data_class_settings WHERE id = 1").fetchone()[0])
+
+    def set_enabled(self, enabled, actor=None):
+        if type(enabled) is not bool:
+            raise DataClassError(400, "Choose whether to use data classes")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            before = bool(connection.execute(
+                "SELECT enabled FROM data_class_settings WHERE id = 1").fetchone()[0])
+            if enabled and not self._rows(connection):
+                connection.executemany(
+                    "INSERT INTO data_classes (id, name, position) VALUES (?, ?, ?)",
+                    [(identifier, name, position) for position, (identifier, name) in enumerate(STARTERS)])
+            if enabled != before:
+                connection.execute("UPDATE data_class_settings SET enabled = ? WHERE id = 1", (int(enabled),))
+                if self.audit and actor:
+                    self.audit.record_in_transaction(connection, "settings", *actor,
+                        "Turned data classes " + ("on" if enabled else "off"))
+        return {"enabled": enabled}
+
     def _approvals(self, connection):
         return [(model_id, json.loads(classes)) for model_id, classes in
                 connection.execute("SELECT model_id, approved_classes FROM approved_models").fetchall()]
+
+    def _require_enabled(self, connection):
+        if not connection.execute(
+                "SELECT enabled FROM data_class_settings WHERE id = 1").fetchone()[0]:
+            raise DataClassError(409, "Turn on data classes first")
 
     def list(self, effective_model_ids=None):
         with self._connect() as connection:
@@ -85,15 +114,13 @@ class DataClassStore:
             revised = [item for item in classes if item != old_name]
             if model_id in chosen:
                 revised.append(new_name)
-            if revised:
-                connection.execute("UPDATE approved_models SET approved_classes = ? WHERE model_id = ?",
-                                   (json.dumps(revised), model_id))
-            else:
-                connection.execute("DELETE FROM approved_models WHERE model_id = ?", (model_id,))
+            connection.execute("UPDATE approved_models SET approved_classes = ? WHERE model_id = ?",
+                               (json.dumps(revised), model_id))
 
     def add(self, body, effective_model_ids=None, actor=None):
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._require_enabled(connection)
             name = self._validate(connection, body.get("name"), body.get("approved_model_ids"),
                                   effective_model_ids=effective_model_ids)
             identifier = uuid.uuid4().hex
@@ -110,6 +137,7 @@ class DataClassStore:
     def edit(self, identifier, body, effective_model_ids=None, actor=None):
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._require_enabled(connection)
             row = connection.execute("SELECT name FROM data_classes WHERE id = ?", (identifier,)).fetchone()
             if row is None:
                 raise DataClassError(404, "Class not found")
@@ -130,6 +158,7 @@ class DataClassStore:
     def remove(self, identifier, actor=None):
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._require_enabled(connection)
             row = connection.execute("SELECT name FROM data_classes WHERE id = ?", (identifier,)).fetchone()
             if row is None:
                 raise DataClassError(404, "Class not found")
@@ -141,11 +170,8 @@ class DataClassStore:
             for model_id, classes in self._approvals(connection):
                 if row[0] in classes:
                     revised = [item for item in classes if item != row[0]]
-                    if revised:
-                        connection.execute("UPDATE approved_models SET approved_classes = ? WHERE model_id = ?",
-                                           (json.dumps(revised), model_id))
-                    else:
-                        connection.execute("DELETE FROM approved_models WHERE model_id = ?", (model_id,))
+                    connection.execute("UPDATE approved_models SET approved_classes = ? WHERE model_id = ?",
+                                       (json.dumps(revised), model_id))
             connection.execute("DELETE FROM data_classes WHERE id = ?", (identifier,))
             if self.audit and actor:
                 self.audit.record_in_transaction(connection, "settings", *actor,

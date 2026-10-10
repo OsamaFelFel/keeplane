@@ -15,7 +15,7 @@ python3 deploy/local/up.py
 Open [Keeplane locally](http://127.0.0.1:3000) and sign in as `first-admin`.
 The startup command prints the location of its private password file and keeps
 existing local data. Follow the [five-minute walkthrough](docs/guide/local-preview.md)
-to add a real Qwen model, approve data classes, send a request, and sign out.
+to add a real Qwen model, optionally approve data classes, send a request, and sign out.
 The [integrated E2E](tests/e2e/integrated-demo-cases.md) verifies that journey.
 
 For the optional Qwen3 4B host runner, see its
@@ -34,8 +34,8 @@ The same protected preview has a [model approval trial](docs/guide/model-approva
 gateway models get no Keeplane work until an admin sets them up.
 The [Add model guide](docs/guide/model-add-local.md) covers the protected
 OpenAI and Anthropic format trial through a local authenticated mock.
-The [data-class trial](docs/guide/data-classes-local.md) lets admins change
-starter classes and their approved models in that protected preview.
+The [data-class trial](docs/guide/data-classes-local.md) starts off on a new
+installation; admins can opt in, then change starter classes and approvals.
 
 ## What this preview covers
 

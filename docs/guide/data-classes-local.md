@@ -1,12 +1,15 @@
 # Try data classes in the protected local preview
 
 Start the [account preview](accounts-local.md), sign in at
-[Data classes](http://127.0.0.1:3000/data-classes), and open **Add class**. A new
-installation starts with Public, Internal and Confidential. You can add a
+[Data classes](http://127.0.0.1:3000/app/data-classes). A new installation starts
+with data classes off. Turn on **Use data classes** to create the starter
+Public, Internal and Confidential classes. You can add a
 class, rename it, and choose from models already set up in Keeplane. **Edit**
 also changes the model list. Removing a class asks for confirmation because
-its model approvals will change; if it was a model's only approved class, that
-model needs setup again. A class assigned to a project cannot be removed.
+its model approvals will change; if it was a model's only approved class, the
+model stays set up with no class approval. A class assigned to a project cannot
+be removed. Turning classes off hides the class fields in Models and routing
+and retains the definitions and approvals for later use.
 
 The local preview stores classes and model approvals in the same persistent
 Docker volume. Restarting the protected app keeps both. The Models and routing
@@ -23,7 +26,7 @@ python3 tests/e2e/test_data_classes.py
 python3 tests/e2e/test_data_classes_store.py
 ```
 
-The live suite records [HTTP evidence](../../tests/e2e/runs/2026-10-09-data-classes.json).
+The latest live suite records [HTTP evidence](../../tests/e2e/runs/2026-10-10-optional-data-classes-full-final.json).
 It creates and removes one trial class and one trial approval. It requires the
 `local-fixture` model to be present and unapproved before it starts, so it
 will refuse to overwrite your own approval. The isolated database suite checks

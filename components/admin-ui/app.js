@@ -15,7 +15,7 @@ const servedError = document.querySelector('#served-error');
 const saveButton = addForm.querySelector('[type=submit]');
 const addClassChoices = document.querySelector('#add-class-choices');
 let classesReady = false;
-let classSelectionRequired = false;
+let classesEnabled = false;
 let addDialogRequest = 0;
 let runnerRuntime = {};
 
@@ -37,8 +37,7 @@ function updateAddSave() {
     /^[A-Za-z0-9_.:-]+$/.test(cloudModel.value.trim()) : servedModel.value;
   const validKey = !cloud || addForm.elements.key_choice.value !== 'shared' ||
     sharedKey.value.length >= 12;
-  saveButton.disabled = !classesReady || !validModel || !validKey ||
-    (classSelectionRequired && !addClassChoices.querySelector('input:checked'));
+  saveButton.disabled = !classesReady || !validModel || !validKey;
 }
 
 function updateSource() {
@@ -85,7 +84,13 @@ function tableMessage(message) {
 async function refresh(preferredModel) {
   tableMessage('Loading models…');
   try {
-    const catalog = await request('/api/models');
+    const [catalog, classSettings] = await Promise.all([request('/api/models'),
+      request('/api/data-classes').catch((error) => {
+        if (error.status === 404) return {enabled: false, classes: []};
+        throw error;
+      })]);
+    classesEnabled = classSettings.enabled;
+    document.querySelector('#approved-for-heading').hidden = !classesEnabled;
     warning.hidden = true;
     addButton.disabled = false;
     modelsBody.replaceChildren();
@@ -111,6 +116,7 @@ async function refresh(preferredModel) {
         model.approved ? ({shared: 'Shared', personal: "Each developer's own", none: 'No key needed'}[model.key_choice] || 'Unknown') :
         model.kind === 'unknown' ? 'Unknown' : 'None';
       const approval = row.insertCell();
+      approval.hidden = !classesEnabled;
       approval.textContent = model.approved === false ? 'Not set · gets no work' :
         model.approved ? model.approved_classes.join(', ') : 'Not configured';
       if (!model.approved) approval.className = 'unconfigured';
@@ -137,7 +143,6 @@ addButton.addEventListener('click', async () => {
   dialogError.hidden = true;
   servedError.hidden = true;
   classesReady = false;
-  classSelectionRequired = false;
   addClassChoices.hidden = true;
   addClassChoices.querySelectorAll('label').forEach((label) => label.remove());
   updateAddSave();
@@ -145,8 +150,8 @@ addButton.addEventListener('click', async () => {
   try {
     const result = await request('/api/data-classes');
     if (requestId !== addDialogRequest || !dialog.open) return;
-    classSelectionRequired = true;
-    addClassChoices.hidden = false;
+    classesEnabled = result.enabled;
+    addClassChoices.hidden = !result.enabled;
     for (const dataClass of result.classes) {
       const label = document.createElement('label');
       const input = document.createElement('input');
@@ -184,8 +189,8 @@ async function openSetup(model) {
   setupModel = model;
   document.querySelector('#setup-title').textContent = model.approved ? `Edit ${model.id}` : 'Set up model';
   document.querySelector('#setup-description').textContent = model.approved ?
-    `${model.provider} · ${model.kind === 'cloud' ? 'Cloud' : 'Local'}. Change ${model.key_choice === 'shared' ? 'the shared key or ' : ''}the approved data classes. Keeplane checks that it still answers before saving.` :
-    'A model added outside Keeplane gets no work until you set its key and the classes it is approved for.';
+    `${model.provider} · ${model.kind === 'cloud' ? 'Cloud' : 'Local'}. Keeplane checks that it still answers before saving.` :
+    'A model added outside Keeplane gets no work until you set its key.';
   const setupName = document.querySelector('#setup-model-name');
   setupName.hidden = model.approved;
   setupName.textContent = model.approved ? '' : model.id;
@@ -200,11 +205,13 @@ async function openSetup(model) {
     model.key_choice === 'shared' && model.owned_by_keeplane && model.kind === 'cloud');
   setupDialog.showModal();
   const choices = document.querySelector('#setup-class-choices');
+  choices.hidden = !classesEnabled;
   const save = setupForm.querySelector('[type=submit]');
   save.disabled = true;
   choices.querySelectorAll('label').forEach((label) => label.remove());
   try {
     const result = await request('/api/data-classes');
+    choices.hidden = !result.enabled;
     for (const dataClass of result.classes) {
       const label = document.createElement('label');
       const input = document.createElement('input');
@@ -350,7 +357,7 @@ addForm.addEventListener('submit', async (event) => {
       body: JSON.stringify({name: model, model, source, ...(source === 'runner' ? {address} :
         {key_choice: addForm.elements.key_choice.value,
           ...(addForm.elements.key_choice.value === 'shared' ? {shared_key: sharedKey.value} : {})}),
-        ...(classSelectionRequired ? {approved_classes: approvedClasses} : {})}),
+        ...(classesEnabled ? {approved_classes: approvedClasses} : {})}),
     });
     if (result.existing) {
       servedError.textContent = `${model} from ${modelSource.selectedOptions[0].textContent} is already added.`;
