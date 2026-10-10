@@ -1,0 +1,13 @@
+# Disposable test. The URL contains a placeholder, not a database credential.
+config:
+  storage:
+    mode: hybrid
+  database:
+    url: postgresql://keeplane:${TRIAL_DB_PASSWORD}@db:5432/keeplane
+gateways:
+  default:
+    port: 4000
+ui:
+  gateways: default
+llm:
+  models: []

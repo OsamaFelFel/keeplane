@@ -1,0 +1,29 @@
+# Disposable upstream-chart install with a Secret-supplied database password.
+mode: database
+replicaCount: 1
+image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+database:
+  postgres:
+    url: postgresql://keeplane:${TRIAL_DB_PASSWORD}@db:5432/keeplane
+extraEnv:
+  - name: TRIAL_DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: gateway-db-credentials
+        key: password
+gateway:
+  service:
+    type: ClusterIP
+    ports:
+      - name: http
+        port: 4000
+        targetPort: 4000
+        protocol: TCP
+config:
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    models: []

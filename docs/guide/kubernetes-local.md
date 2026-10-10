@@ -62,6 +62,10 @@ instead of removing the admin UI from the Service. The isolated
 
 The checked-in chart dependency and lock file pin the upstream chart to
 `v1.6.0`. The gateway and fixture container images are also pinned by digest.
+The pinned gateway's PostgreSQL password can be supplied through a Kubernetes
+Secret without putting it in its rendered ConfigMap; see the
+[tested Secret pattern](gateway-database-secret.md). The disposable local values
+still use a test password and must not be reused as release values.
 Keeplane's chart validates the gateway mode and protected local key Secret,
 supports private app image-pull credentials and resource requests, and keeps
 Kubernetes service-account tokens out of the app and preflight pods. The
