@@ -11,6 +11,8 @@ the release policy contract. It does not select a release gateway.
 | GW-PROBE-03 | Call the fixture model directly from the sibling workload, then compare the fixture's call counter before and after. | The gateway refuses the call; the upstream counter stays unchanged. |
 | GW-PROBE-04 | Repeat the direct call with an invalid bearer and forged user, role, project and class headers. | Forged client fields do not authorize a call or reach the upstream. |
 | GW-PROBE-05 | Try the corresponding public Keeplane model list, management and chat routes without a session. | The public edge refuses all three. |
+| GW-PROBE-06 | From the sibling workload, repeat the call as a stream, with a tool, through OpenAI Responses and through Anthropic Messages. | Every supported route refuses the missing credential before upstream dispatch. |
+| GW-PROBE-07 | Read the key-management and gateway-runtime APIs without a key. | Neither internal API returns configuration to the sibling workload. |
 
 Run `python3 tests/e2e/test_gateway_bypass_probe.py --output <new JSON path>`
 from the repository root. The script checks the isolated `kind-keeplane`

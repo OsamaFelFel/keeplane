@@ -84,7 +84,9 @@ def main():
         }
         trial_passes = (
             all(sibling[field] in (401, 403) for field in
-                ("model_list_status", "management_read_status", "direct_chat_status", "forged_chat_status"))
+                ("model_list_status", "management_read_status", "key_management_read_status",
+                 "runtime_info_status", "direct_chat_status", "forged_chat_status",
+                 "stream_status", "tools_status", "responses_status", "messages_status"))
             and sibling["upstream_calls_added"] == 0
             and observations["runtime_key_model_list"] == 200
             and observations["runtime_key_chat"] == 200

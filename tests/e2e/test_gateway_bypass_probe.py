@@ -105,8 +105,12 @@ def main():
         row["tested_probe_passes"] = (
             row["model_list_status"] in (401, 403) and
             row["management_read_status"] in (401, 403, 404) and
+            row["key_management_read_status"] in (401, 403, 404) and
+            row["runtime_info_status"] in (401, 403, 404) and
             row["direct_chat_status"] in (401, 403) and
             row["forged_chat_status"] in (401, 403) and
+            all(row[field] in (401, 403) for field in
+                ("stream_status", "tools_status", "responses_status", "messages_status")) and
             row["upstream_calls_added"] == 0)
     for name in ("public_docker", "public_kind"):
         if name not in observations:

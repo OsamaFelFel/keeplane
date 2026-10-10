@@ -4,7 +4,7 @@ These are local gateway policy checks against the pinned image. Keys are fresh o
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
-| GW-KEY-01 | From a sibling container with no key, list models, read management, call the model, then repeat the call with an invalid bearer and forged identity headers. | All return 401 or 403; the fixture call count does not increase. |
+| GW-KEY-01 | From a sibling container with no key, list models, read management and runtime information, call the model, then repeat through streaming, tools, Responses and Messages with no key and through chat with an invalid bearer and forged identity headers. | All return 401 or 403; the fixture call count does not increase. |
 | GW-KEY-02 | Use only the runtime key to list and call the model, then read management. | Runtime works; management refuses this key. |
 | GW-KEY-03 | Use only the admin key to read management, then call the model. | Management works; model traffic refuses this key. |
 
