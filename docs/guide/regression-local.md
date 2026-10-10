@@ -26,3 +26,11 @@ older versioned evidence alone. Review the new JSON and commit it with the
 component change when it is meaningful evidence. The local tests include
 fixed-answer mocks and a real Qwen runner; they do not test external model
 subscriptions or certify a release gateway.
+
+For a React UI change, also run `npm run build`, `npm run lint` and
+`npm run test:unit` from `components/admin-ui/web/`, then `npm test` from
+`tests/browser/` while the Docker preview is running. The browser suite's
+[plain-English cases](../../tests/browser/users-cases.md) and checked-in
+1280px and 320px screenshots cover visual and keyboard behavior that HTTP
+tests cannot see. Install its headless browser with
+`npx playwright install chromium --only-shell` on a new workstation.

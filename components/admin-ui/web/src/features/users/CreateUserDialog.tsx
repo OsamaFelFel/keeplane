@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -18,8 +18,9 @@ const schema = z.object({
 })
 type Fields = z.infer<typeof schema>
 
-export function CreateUserDialog({ open, onOpenChange, onCreated }: {
+export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef }: {
   open: boolean; onOpenChange: (value: boolean) => void; onCreated: (user: User) => void
+  returnFocusRef: RefObject<HTMLButtonElement | null>
 }) {
   const [phase, setPhase] = useState<'form' | 'saving' | 'no-answer'>('form')
   const [error, setError] = useState('')
@@ -69,7 +70,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated }: {
   }
 
   return <Dialog open={open} onOpenChange={close}>
-    <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}>
+    <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}
+      onCloseAutoFocus={event => { event.preventDefault(); returnFocusRef.current?.focus() }}>
       <DialogHeader><DialogTitle className="text-[22px] font-semibold">Create user</DialogTitle></DialogHeader>
       <form onSubmit={form.handleSubmit(save)} className="grid gap-5">
         <div>

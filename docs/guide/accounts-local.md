@@ -10,6 +10,6 @@ The [Editions page](http://127.0.0.1:3000/editions) lists the Release 1 Open Sou
 
 Team screens and API routes are absent from Open Source.
 
-The [plain-English cases](../../tests/e2e/accounts-cases.md) cover accounts, role changes, create retries, route denial and Editions. The [full regression](regression-local.md) includes them. The React screen follows the supplied theme and Users canvas; compare its narrow and wide layouts in a browser as well as running HTTP cases.
+The [plain-English API cases](../../tests/e2e/accounts-cases.md) cover accounts, role changes, create retries, route denial and Editions. The [full regression](regression-local.md) includes them. The [browser cases](../../tests/browser/users-cases.md) check the real first-admin sign-in, desktop and 320px layouts, keyboard focus, local assets, role changes and the no-answer flow. Run them from `tests/browser/` with `npm ci`, `npx playwright install chromium --only-shell`, and `npm test`. The [UI unit case](../../tests/unit/ui/cases.md) checks validation without writing an account.
 
 The Docker preview is not a production identity system. The release identity component, backup, replica behavior and secure session deployment remain to be selected and tested.

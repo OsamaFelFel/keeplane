@@ -23,6 +23,7 @@ export function UsersPage() {
   const [creating, setCreating] = useState(false)
   const [changing, setChanging] = useState<User | null>(null)
   const noteRequested = useRef(false)
+  const createTrigger = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(1) }, 250)
@@ -66,7 +67,7 @@ export function UsersPage() {
   return <>
     <div className="keeplane-page-heading">
       <div><h1>Users</h1><p>The admin creates username and password accounts. People who sign in with single sign-on get a developer account the first time.</p></div>
-      <Button className="shrink-0" onClick={() => setCreating(true)}>Create user</Button>
+      <Button ref={createTrigger} className="shrink-0" onClick={() => setCreating(true)}>Create user</Button>
     </div>
     {editionNote && <p className="mt-6 rounded-[8px] border border-border bg-card p-4 text-[15px]">Teams and group access control are available in Enterprise. <a className="underline" href="/editions">See Editions</a>.</p>}
     {notice && <p className="mt-6 text-[15px]" role="status">{notice}</p>}
@@ -82,7 +83,7 @@ export function UsersPage() {
       <span>{total ? `Showing ${start}–${end} of ${total} users` : 'No results'}</span>
       <div className="flex gap-3"><Button variant="outline" disabled={page === 1 || busy} onClick={() => setPage(value => value - 1)}>Previous</Button><Button variant="outline" disabled={!hasMore || busy} onClick={() => setPage(value => value + 1)}>Next</Button></div>
     </div>
-    <CreateUserDialog open={creating} onOpenChange={setCreating} onCreated={created} />
+    <CreateUserDialog open={creating} onOpenChange={setCreating} onCreated={created} returnFocusRef={createTrigger} />
     <ChangeRoleDialog user={changing} onOpenChange={open => { if (!open) setChanging(null) }} onChanged={changed} />
   </>
 }
