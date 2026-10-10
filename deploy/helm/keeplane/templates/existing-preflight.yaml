@@ -8,7 +8,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 45
+  activeDeadlineSeconds: 90
   template:
     spec:
       restartPolicy: Never

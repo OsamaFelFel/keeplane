@@ -26,6 +26,17 @@ def fetch(path, body=None):
         return 0, None
 
 
+def fetch_read(path):
+    """Retry one unavailable read; never retry a model call or an auth refusal."""
+    for attempt in range(2):
+        status, result = fetch(path)
+        if status not in (0, 429) and status < 500:
+            return status, result
+        if attempt == 0:
+            time.sleep(1)
+    return status, result
+
+
 def check():
     if not URL.startswith(("http://", "https://")) or not EXPECTED_VERSION:
         return False, "Set a gateway URL and expected version"
@@ -40,10 +51,10 @@ def check():
     version = runtime.get("build", {}).get("version") if isinstance(runtime.get("build"), dict) else None
     if version != EXPECTED_VERSION:
         return False, "Gateway version differs from the pinned integration version"
-    status, listing = fetch("/v1/models")
+    status, listing = fetch_read("/v1/models")
     if status != 200 or not isinstance(listing, dict) or not isinstance(listing.get("data"), list):
         return False, "Gateway model-list API is unavailable"
-    status, resources = fetch("/api/config/resources/llm.model")
+    status, resources = fetch_read("/api/config/resources/llm.model")
     if status != 200 or not isinstance(resources, dict) or not isinstance(resources.get("resources"), list):
         return False, "Gateway model-management read API is unavailable"
     if MODEL:

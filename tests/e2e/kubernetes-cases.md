@@ -3,6 +3,9 @@
 Run `test_local.py` against port 13000 first. It registers `second-local`, which
 the replica tests use. Then run `test_kind.py`. The latter deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
+K8S-10–13 exercise the live existing-gateway install hook in kind. K8S-14–16
+use simulated gateway replies to cover retry and refusal paths without changing
+the supplied gateway.
 
 | ID | What to do | Expected result |
 | --- | --- | --- |
@@ -18,6 +21,9 @@ pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
 | K8S-11 | Run the existing-gateway check with a deliberately wrong expected version. | It fails before any gateway change. |
 | K8S-12 | Run the check with a model absent from the supplied gateway. | It fails before any gateway change. |
 | K8S-13 | Try a fresh existing-gateway install in a temporary namespace with the wrong expected gateway version. | Helm refuses the install before creating a Keeplane app Deployment. |
+| K8S-14 | Make each model-list and management read fail once, then return a valid answer. | The read-only preflight retries each once and accepts the compatible gateway without changing its configuration. |
+| K8S-15 | Keep the model-management read unavailable after the retry. | Preflight refuses the install; it does not infer compatibility from the model list alone. |
+| K8S-16 | Refuse the model-management read with HTTP 401. | Preflight refuses immediately and does not retry an authorization failure. |
 | K8S-09 | Through that temporary Service, request the admin page, app readiness, dependency health and model list. | The page and app readiness answer 200, while dependency health and the model list report 503. The page contains the gateway-unavailable notice and Try again control. |
 | K8S-UI-01 | Open the temporary gateway-down app in a browser after the page loads. | The gateway warning and Try again are visible, Add model is disabled, and the table says Models unavailable. |
 | MGMT-01 | Replay the observed gateway management read returning HTTP 500 once, then HTTP 200. | Keeplane retries only the read and returns the successful model list. |

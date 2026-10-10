@@ -41,6 +41,8 @@ SUITES = (
     Suite("audit-store", py("audit_store"), "audit-store", needs_stack=False),
     Suite("management-retry", py("management_retry"), "MGMT-01 MGMT-02 MGMT-03",
           environment=(("PYTHONPATH", "components/control-plane"),), needs_stack=False),
+    Suite("existing-preflight-read-retry", py("gateway_preflight_read_retry"), "K8S-14 K8S-15 K8S-16",
+          environment=(("PYTHONPATH", "components/control-plane"),), needs_stack=False),
     Suite("local-identity", py("local_identity"), "ACCT-21 ACCT-22", needs_stack=False),
     Suite("break-glass-store", py("break_glass_audit_store"),
           "BG-01 BG-02 BG-03 BG-04 BG-05 BG-06", needs_stack=False),
