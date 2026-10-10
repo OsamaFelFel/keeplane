@@ -47,7 +47,7 @@ SUITES = (
     Suite("local-identity", py("local_identity"), "ACCT-21 ACCT-22", needs_stack=False),
     Suite("break-glass-store", py("break_glass_audit_store"),
           "BG-01 BG-02 BG-03 BG-04 BG-05 BG-06", needs_stack=False),
-    Suite("stack-lock", py("stack_lock"), "LOCK-01 LOCK-02 LOCK-03 LOCK-04"),
+    Suite("stack-lock", py("stack_lock"), "LOCK-01 LOCK-02 LOCK-03 LOCK-04 LOCK-05"),
     Suite("docker-local", py("local"), "LOCAL-01 LOCAL-02 LOCAL-03 LOCAL-04 LOCAL-05 LOCAL-08 LOCAL-11",
           environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:3000"),)),
     Suite("kind-local", py("local"), "LOCAL-01 LOCAL-02 LOCAL-03 LOCAL-04 LOCAL-05 LOCAL-08 LOCAL-11",

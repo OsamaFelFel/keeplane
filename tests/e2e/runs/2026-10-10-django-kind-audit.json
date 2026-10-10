@@ -1,0 +1,98 @@
+{
+  "suite": "Spec 006 Audit protected Docker preview",
+  "time_utc": "2026-10-10T03:42:02.116466+00:00",
+  "cases": [
+    {
+      "id": "AUD-01",
+      "verdict": "pass",
+      "observed": {
+        "page_status": 200,
+        "actor": "first-admin",
+        "original_options": {
+          "settings": false,
+          "held_requests": false,
+          "model_answers": false
+        },
+        "existing_records": 47
+      }
+    },
+    {
+      "id": "AUD-02",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 201,
+        "actor": "first-admin",
+        "records_added": 1
+      }
+    },
+    {
+      "id": "AUD-05",
+      "verdict": "pass",
+      "observed": {
+        "no_op_status": 200,
+        "invalid_status": 409,
+        "new_records": 1
+      }
+    },
+    {
+      "id": "AUD-03",
+      "verdict": "pass",
+      "observed": {
+        "edit_status": 200,
+        "remove_status": 200,
+        "descriptions": [
+          "Removed data class audit-trial-f32a353d-changed",
+          "Changed data class audit-trial-f32a353d to audit-trial-f32a353d-changed; approved models: none",
+          "Added data class audit-trial-f32a353d; approved models: none"
+        ]
+      }
+    },
+    {
+      "id": "AUD-04",
+      "verdict": "pass",
+      "observed": {
+        "settings_matches": 3,
+        "held_matches": 0,
+        "nonmatching_search": 0
+      }
+    },
+    {
+      "id": "AUD-06",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 201,
+        "new_records_while_off": 0
+      }
+    },
+    {
+      "id": "AUD-08",
+      "verdict": "pass",
+      "observed": {
+        "denied_status": 403,
+        "settings_still_off": true
+      }
+    },
+    {
+      "id": "AUD-09",
+      "verdict": "pass",
+      "observed": {
+        "create_status": 201,
+        "developer_login_status": 200,
+        "developer_api_status": 403,
+        "anonymous_api_status": 401
+      }
+    },
+    {
+      "id": "AUD-07",
+      "verdict": "pass",
+      "observed": {
+        "settings_after_restart": false,
+        "records_after_restart": 50,
+        "page_rows": 25
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 9,
+  "failed": 0
+}

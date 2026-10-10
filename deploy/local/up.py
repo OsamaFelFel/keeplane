@@ -109,7 +109,7 @@ def main():
     subprocess.run(["docker", "volume", "create", "keeplane-accounts-trial_model-approvals"],
                    check=True, cwd=REPO, capture_output=True, text=True)
     subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                    "--profile", "qwen", "up", "-d", "--wait"], check=True, cwd=REPO)
+                    "--profile", "qwen", "up", "-d", "--build", "--wait"], check=True, cwd=REPO)
     wait_preview()
     print("Keeplane: http://127.0.0.1:3000")
     print("First admin username: first-admin")

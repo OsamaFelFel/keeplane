@@ -41,6 +41,8 @@ spec:
               value: {{ .Values.app.localTrial.publicOriginAliases | quote }}
             - name: PROVIDER_KEY_DIR
               value: /provider-keys
+            - name: DJANGO_ACCOUNT_API
+              value: "1"
             {{- if eq .Values.gateway.mode "managed" }}
             - name: GATEWAY_FILE_CONFIG
               value: /gateway-config/config.yaml

@@ -55,3 +55,4 @@ with the running installations.
 | LOCK-02 | Inspect the Docker app, Qwen and gateway containers. | Their actual image references match the lock. |
 | LOCK-03 | Inspect the managed and supplied Kubernetes gateway Deployments, Qwen, PostgreSQL and the three Helm releases. | Their image and chart references match the lock. |
 | LOCK-04 | Ask both Keeplane installations for the running gateway version. | Both report the locked agentgateway version. |
+| LOCK-05 | Inspect Django, DRF and their direct Python dependencies in the running Docker and kind apps, then compare with the local requirements file. | Exact locked versions are installed in both and their package metadata names a permitted BSD license. |

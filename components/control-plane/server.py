@@ -1,6 +1,7 @@
 """Small Keeplane local preview: UI, model registration, and gateway calls."""
 
 import json
+import http.client
 import os
 import sqlite3
 import time
@@ -8,6 +9,8 @@ import uuid
 from http.cookies import SimpleCookie
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import ThreadingMixIn
+from threading import Thread
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, unquote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
@@ -45,8 +48,16 @@ PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 PUBLIC_ORIGIN_ALIASES = {origin.strip() for origin in
                          os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if origin.strip()}
 PROVIDER_KEY_DIR = os.environ.get("PROVIDER_KEY_DIR", "")
+DJANGO_ACCOUNT_API = os.environ.get("DJANGO_ACCOUNT_API") == "1"
+DJANGO_ACCOUNT_PORT = 8765
 CLOUD_BASE_URLS = {"openai": os.environ.get("PREVIEW_OPENAI_BASE_URL", ""),
                    "anthropic": os.environ.get("PREVIEW_ANTHROPIC_BASE_URL", "")}
+
+
+def account_api_path(path):
+    return path in {"/api/auth-options", "/api/session", "/api/identity", "/api/users",
+                    "/api/edition-note", "/api/edition-note/consume", "/sign-out"} or \
+        path.startswith(("/api/users/", "/api/user-operations/"))
 
 
 def model_fingerprint(model_id, resources):
@@ -288,6 +299,34 @@ def confirm_cloud_model(model_id, expected_resource, retry_refused=False):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def forward_account_api(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > MAX_BODY:
+                return self.reply(413, {"error": "Request is too large"})
+            body = self.rfile.read(length) if length else None
+            headers = {name: self.headers[name] for name in
+                       ("Cookie", "Content-Type", "Origin", "X-Keeplane-Action", "Accept")
+                       if name in self.headers}
+            route = urlsplit(self.path)
+            target = route.path + ("?" + route.query if route.query else "")
+            connection = http.client.HTTPConnection("127.0.0.1", DJANGO_ACCOUNT_PORT, timeout=15)
+            try:
+                connection.request(self.command, target, body=body, headers=headers)
+                upstream = connection.getresponse()
+                content = upstream.read()
+                self.send_response(upstream.status)
+                for name, value in upstream.getheaders():
+                    if name.lower() not in {"server", "date", "connection", "transfer-encoding", "content-length"}:
+                        self.send_header(name, value)
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            finally:
+                connection.close()
+        except (OSError, http.client.HTTPException):
+            self.reply(503, {"error": "Account service is unavailable"})
+
     def replace_shared_key(self, model_id, resource, previous, classes, replacement):
         if not previous["owned_by_keeplane"] or resource.get("provider") not in ("openAI", "anthropic"):
             return self.reply(400, {"error": "This trial can replace keys only for cloud models Keeplane added"})
@@ -519,6 +558,8 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         query = parse_qs(route.query)
         path = route.path
+        if DJANGO_ACCOUNT_API and account_api_path(path):
+            return self.forward_account_api()
         if IDENTITY:
             if path == "/api/auth-options":
                 return self.reply(200, {"sso_connected": False})
@@ -649,6 +690,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
+        if DJANGO_ACCOUNT_API and account_api_path(path):
+            return self.forward_account_api()
         if IDENTITY and path == "/api/session":
             if not self.trusted_origin():
                 return self.reply(403, {"error": "Sign in from Keeplane's page"})
@@ -892,6 +935,8 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(404, {"error": "Not found"})
 
     def do_PUT(self):
+        if DJANGO_ACCOUNT_API and account_api_path(urlsplit(self.path).path):
+            return self.forward_account_api()
         if IDENTITY and not self.require_admin(urlsplit(self.path).path):
             return
         if IDENTITY:
@@ -945,6 +990,8 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(404, {"error": "Not found"})
 
     def do_DELETE(self):
+        if DJANGO_ACCOUNT_API and account_api_path(urlsplit(self.path).path):
+            return self.forward_account_api()
         if IDENTITY and not self.require_admin(urlsplit(self.path).path):
             return
         segments = urlsplit(self.path).path.strip("/").split("/")
@@ -994,4 +1041,17 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if DJANGO_ACCOUNT_API:
+        from django.core.wsgi import get_wsgi_application
+        from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
+
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_api.settings")
+
+        class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+            daemon_threads = True
+
+        account_server = make_server("127.0.0.1", DJANGO_ACCOUNT_PORT,
+                                     get_wsgi_application(), server_class=ThreadingWSGIServer,
+                                     handler_class=WSGIRequestHandler)
+        Thread(target=account_server.serve_forever, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 3000), Handler).serve_forever()
