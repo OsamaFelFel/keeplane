@@ -96,6 +96,34 @@ def main():
                        {"managed_render_exit": policy.returncode,
                         "policy_present": bool(policy_manifest),
                         "existing_policy_exit": invalid_existing_policy.returncode}))
+    edge_args = ("--set", "ingress.enabled=true", "--set", "ingress.className=nginx",
+                 "--set", "ingress.host=keeplane.example.test",
+                 "--set", "ingress.tlsSecretName=keeplane-tls")
+    managed_edge = run("template", "keeplane", CHART, "-f", "deploy/local/values.yaml",
+                       "--set", "app.service.type=ClusterIP", *edge_args)
+    existing_edge = run("template", "keeplane-existing", CHART, *existing_args, *edge_args)
+    managed_ingress = named(managed_edge.stdout, "Ingress", "keeplane-app")
+    existing_ingress = named(existing_edge.stdout, "Ingress", "keeplane-existing-app")
+    edge_app = named(managed_edge.stdout, "Deployment", "keeplane-app")
+    missing_tls = run("template", "invalid", CHART, "-f", "deploy/local/values.yaml",
+                      "--set", "app.service.type=ClusterIP", *edge_args[:-2])
+    public_nodeport = run("template", "invalid", CHART, "-f", "deploy/local/values.yaml",
+                          *edge_args)
+    checks.append(case("PKG-06", managed_edge.returncode == 0
+                       and existing_edge.returncode == 0
+                       and all("ingressClassName: \"nginx\"" in manifest
+                               and "host: \"keeplane.example.test\"" in manifest
+                               and "secretName: \"keeplane-tls\"" in manifest
+                               for manifest in (managed_ingress, existing_ingress))
+                       and "name: keeplane-app\n" in managed_ingress
+                       and "name: keeplane-existing-app\n" in existing_ingress
+                       and "name: keeplane\n" not in managed_ingress
+                       and "value: \"https://keeplane.example.test\"" in edge_app
+                       and missing_tls.returncode != 0 and public_nodeport.returncode != 0,
+                       {"managed_render_exit": managed_edge.returncode,
+                        "existing_render_exit": existing_edge.returncode,
+                        "missing_tls_exit": missing_tls.returncode,
+                        "public_nodeport_exit": public_nodeport.returncode}))
     report = {"suite": "Keeplane local Helm packaging", "results": checks,
               "release_package_approved": False}
     if args.output:

@@ -52,7 +52,7 @@ spec:
             - name: FIRST_ADMIN_PASSWORD_FILE
               value: /run/keeplane-secrets/first-admin-password
             - name: PUBLIC_ORIGIN
-              value: {{ required "app.localTrial.publicOrigin is required" .Values.app.localTrial.publicOrigin | quote }}
+              value: {{ if .Values.ingress.enabled }}{{ printf "https://%s" (required "ingress.host is required when ingress is enabled" .Values.ingress.host) | quote }}{{ else }}{{ required "app.localTrial.publicOrigin is required" .Values.app.localTrial.publicOrigin | quote }}{{ end }}
             - name: PUBLIC_ORIGIN_ALIASES
               value: {{ .Values.app.localTrial.publicOriginAliases | quote }}
             - name: PROVIDER_KEY_DIR

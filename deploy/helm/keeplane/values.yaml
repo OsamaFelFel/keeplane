@@ -28,6 +28,14 @@ networkPolicy:
   # preview does not; keep disabled in that preview.
   gatewayIngressEnabled: false
 
+ingress:
+  # Publishes only the Keeplane app Service; the gateway stays internal.
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecretName: ""
+  annotations: {}
+
 agentgateway-standalone:
   mode: database
   replicaCount: 2

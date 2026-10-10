@@ -45,6 +45,16 @@
       "properties": {
         "gatewayIngressEnabled": {"type": "boolean"}
       }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "className": {"type": "string"},
+        "host": {"type": "string"},
+        "tlsSecretName": {"type": "string"},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
     }
   }
 }
