@@ -45,6 +45,10 @@ for kind in ("runtime", "admin"):
     hash_path = root / f"gateway-{kind}-key-hash"
     hash_path.write_text("sha256:" + digest + "\n")
     hash_path.chmod(0o600)
+cloud_key = root / "cloud-provider-key"
+if not cloud_key.exists():
+    cloud_key.write_text(secrets.token_urlsafe(32) + "\n")
+    cloud_key.chmod(0o600)
 PY
 if [ ! -d components/admin-ui/web/node_modules ]; then
   (cd components/admin-ui/web && npm ci)
@@ -87,7 +91,14 @@ done
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap model-fixture \
   --from-file=mock_model.py=tests/fixtures/mock_model.py --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap cloud-provider-fixture \
+  --from-file=cloud_provider.py=tests/fixtures/cloud_provider.py --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create secret generic cloud-provider-key \
+  --from-file=key="$RUNTIME_DIR/cloud-provider-key" --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/model-fixture.yaml
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/cloud-provider-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/qwen-runner.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/postgres-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway create configmap model-fixture \
@@ -96,8 +107,10 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway create configmap mod
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway apply -f deploy/local/model-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway apply -f deploy/local/postgres-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart deployment/model
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart deployment/cloud-provider
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout restart deployment/model
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/model --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/cloud-provider --timeout=120s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/qwen --timeout=300s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/postgres --timeout=120s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout status deployment/model --timeout=120s

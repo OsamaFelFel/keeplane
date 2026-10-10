@@ -57,6 +57,14 @@ spec:
               value: {{ .Values.app.localTrial.publicOriginAliases | quote }}
             - name: PROVIDER_KEY_DIR
               value: /provider-keys
+            {{- if .Values.app.localTrial.openAIBaseUrl }}
+            - name: PREVIEW_OPENAI_BASE_URL
+              value: {{ .Values.app.localTrial.openAIBaseUrl | quote }}
+            {{- end }}
+            {{- if .Values.app.localTrial.anthropicBaseUrl }}
+            - name: PREVIEW_ANTHROPIC_BASE_URL
+              value: {{ .Values.app.localTrial.anthropicBaseUrl | quote }}
+            {{- end }}
             - name: DJANGO_ACCOUNT_API
               value: "1"
             {{- if eq .Values.gateway.mode "managed" }}

@@ -112,7 +112,12 @@ def main():
 
         dynamic = wait_model(DYNAMIC_MODEL)
         if dynamic["approved"]:
-            raise RuntimeError("The dynamic gateway model must be unapproved before this test")
+            reset_status, _, _ = browser.fetch(f"/api/models/{DYNAMIC_MODEL}/setup", {}, method="DELETE")
+            if reset_status != 200:
+                raise RuntimeError("Could not reset the failover test model approval")
+            dynamic = wait_model(DYNAMIC_MODEL)
+            if dynamic["approved"]:
+                raise RuntimeError("The dynamic gateway model stayed approved after reset")
         dynamic_path = f"/api/models/{DYNAMIC_MODEL}/setup"
         setup_status, _, _ = browser.fetch(dynamic_path, payload, method="POST")
         if setup_status == 200:

@@ -61,7 +61,7 @@ starts with a valid install, then simulates an outage and confirms the app UI
 stays available. The [versioned run](../../tests/e2e/runs/2026-10-09-existing-preflight.md)
 includes the final full regression and the corrected rollout test.
 The trial's `app.runnerUrls` setting allows the Add model form to reach a
-specified local runner while the preview has no admin sign-in; it is separate
+specified local runner; it is separate
 from `gateway.url`. A release installation needs authenticated admins and
 runner address controls before accepting arbitrary network addresses.
 The `K8S-05` and `K8S-06` cases check registration, a model call and separation
@@ -69,9 +69,10 @@ from the managed gateway's catalog. An existing model that the customer added
 outside Keeplane must remain untouched and receive no Keeplane work until an
 admin sets up its key choice and, if data classes are on, its class approvals. The protected Docker preview
 now enforces that approval and preserves an outside model's gateway
-registration when its Keeplane setup is removed. The app-only kind preview has
-not yet been wired to the protected account service, so this policy has not
-been tested end to end in existing-gateway mode.
+registration when its Keeplane setup is removed. The managed kind preview now
+exercises the same protected account and model flow; the separate app-only
+existing-gateway fixture remains unprotected, so this policy has not been
+tested end to end in existing-gateway mode.
 
 ## Release configuration plan
 

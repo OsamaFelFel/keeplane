@@ -26,9 +26,11 @@ export function UsersPage() {
   const createTrigger = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(1) }, 250)
+    const nextSearch = searchInput.trim()
+    if (nextSearch === search) return
+    const timer = window.setTimeout(() => { setSearch(nextSearch); setPage(1) }, 250)
     return () => window.clearTimeout(timer)
-  }, [searchInput])
+  }, [searchInput, search])
   useEffect(() => {
     let cancelled = false
     setBusy(true); setError('')

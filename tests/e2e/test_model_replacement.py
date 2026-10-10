@@ -1,6 +1,7 @@
 """Live gateway definition-replacement regression on the protected Docker preview."""
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -16,12 +17,12 @@ REPO = Path(__file__).resolve().parents[2]
 REPORT = report_path("2026-10-09-model-replacement.json")
 RESOURCE_PATH = "/api/config/resources/llm.model"
 GATEWAY_SCRIPT = """
-import json, pathlib, sys, urllib.error, urllib.request
+import json, os, pathlib, sys, urllib.error, urllib.request
 method, path, payload = sys.argv[1:]
 data = None if payload == '-' else payload.encode()
-request = urllib.request.Request('http://gateway:4000' + path, data=data, method=method)
+request = urllib.request.Request(os.environ['GATEWAY_URL'] + path, data=data, method=method)
 key_type = 'admin' if path.startswith('/api/') else 'runtime'
-key = pathlib.Path('/run/secrets/gateway-' + key_type + '-key').read_text().strip()
+key = pathlib.Path(os.environ['GATEWAY_' + key_type.upper() + '_KEY_FILE']).read_text().strip()
 request.add_header('Authorization', 'Bearer ' + key)
 if data is not None:
     request.add_header('Content-Type', 'application/json')
@@ -38,12 +39,28 @@ print(json.dumps({'status': status, 'body': body}))
 """
 
 
+def app_exec(*args):
+    base = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:3000")
+    if base.rstrip("/") == "http://127.0.0.1:3000":
+        command = ["docker", "compose", "--env-file",
+                   "/private/tmp/keeplane-accounts-trial/.env", "exec", "-T", "app"]
+    elif base.rstrip("/") == "http://127.0.0.1:13000":
+        kubeconfig = os.environ.get("KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig")
+        prefix = ["kubectl", "--kubeconfig", kubeconfig]
+        context = subprocess.check_output(prefix + ["config", "current-context"], text=True).strip()
+        if context != "kind-keeplane":
+            raise RuntimeError("Refusing gateway test outside kind-keeplane")
+        command = prefix + ["-n", "keeplane", "exec", "deployment/keeplane-app", "--"]
+    else:
+        raise RuntimeError("Refusing gateway test against an unknown preview")
+    process = subprocess.run(command + list(args), check=True, cwd=REPO,
+                             capture_output=True, text=True, timeout=30)
+    return process.stdout
+
+
 def gateway_call(method, path, body=None):
-    command = ["docker", "compose", "exec", "-T", "app", "python", "-c",
-               GATEWAY_SCRIPT, method, path, "-" if body is None else json.dumps(body)]
-    process = subprocess.run(command, check=True, cwd=REPO, capture_output=True,
-                             text=True, timeout=30)
-    result = json.loads(process.stdout)
+    result = json.loads(app_exec("python", "-c", GATEWAY_SCRIPT,
+                                method, path, "-" if body is None else json.dumps(body)))
     return result["status"], result["body"]
 
 

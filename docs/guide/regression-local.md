@@ -28,8 +28,9 @@ fixed-answer mocks and a real Qwen runner; they do not test external model
 subscriptions or certify a release gateway.
 
 For a React UI change, also run `npm run build`, `npm run lint` and
-`npm run test:unit` from `components/admin-ui/web/`, then `npm test` from
-`tests/browser/` while the Docker preview is running. The browser suite's
+`npm run test:unit` from `components/admin-ui/web/`, then run `npm test` from
+`tests/browser/` for Docker and `KEEPLANE_BASE_URL=http://127.0.0.1:13000 npm test`
+for kind while both previews are running. The browser suite's
 [plain-English cases](../../tests/browser/users-cases.md) and checked-in
 1280px and 320px screenshots cover visual and keyboard behavior that HTTP
 tests cannot see. Install its headless browser with

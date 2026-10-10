@@ -110,6 +110,24 @@ def main():
 
     removed = ready[0]["metadata"]["name"]
     kubectl("-n", "keeplane", "delete", "pod", removed, "--wait=false")
+    # Calls already aimed at a terminating pod may reset. Wait until the
+    # Service no longer offers it as a ready endpoint before checking new calls.
+    endpoint_deadline = time.monotonic() + 30
+    while True:
+        slices = json.loads(kubectl("-n", "keeplane", "get", "endpointslice", "-l",
+                                    "kubernetes.io/service-name=keeplane", "-o", "json"))["items"]
+        endpoints = [endpoint for item in slices for endpoint in item.get("endpoints", [])]
+        removed_ready = any(endpoint.get("targetRef", {}).get("name") == removed and
+                            endpoint.get("conditions", {}).get("ready") is True
+                            for endpoint in endpoints)
+        survivor_ready = any(endpoint.get("targetRef", {}).get("name") != removed and
+                             endpoint.get("conditions", {}).get("ready") is True
+                             for endpoint in endpoints)
+        if not removed_ready and survivor_ready:
+            break
+        if time.monotonic() >= endpoint_deadline:
+            raise RuntimeError("Gateway Service did not remove the stopped pod")
+        time.sleep(0.2)
     responses = []
     for _ in range(10):
         try:
@@ -120,7 +138,9 @@ def main():
             responses.append({"error": str(error)})
         time.sleep(0.2)
     check("K8S-03", all(r.get("status") == 200 and r.get("answer") == "mock answer"
-                        for r in responses), {"removed_pod": removed, "calls": responses})
+                        for r in responses), {"removed_pod": removed,
+                                             "service_removed_stopped_endpoint": True,
+                                             "calls": responses})
 
     subprocess.check_call(["kubectl", "--kubeconfig", KUBECONFIG, "-n", "keeplane",
                            "rollout", "status", "deployment/keeplane", "--timeout=120s"],

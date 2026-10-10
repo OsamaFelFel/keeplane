@@ -9,7 +9,10 @@ and Docker previews keep separate accounts and model approvals; sign-in uses
 the same local password file. The kind setup keeps its account and approval
 files in two local PersistentVolumeClaims, and mounts a private Secret for the
 first-admin password. It also creates private gateway runtime and management
-keys in Secrets for the managed and supplied gateway trials. Re-running the
+keys in Secrets for the managed and supplied gateway trials. The same local
+authenticated cloud-provider fixture used in Docker runs in kind with its key
+in a separate Secret. It allows OpenAI- and Anthropic-shaped Add model trials
+without a paid subscription; it is not a real external model. Re-running the
 setup preserves those credentials and records.
 In the Models screen, choose **Add model**, enter `http://qwen:8080`, choose
 **Find models**, select `qwen2.5-coder:0.5b`, and add it. Keeplane checks the
@@ -28,6 +31,8 @@ KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_runner_flow.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_accounts.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_data_classes.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_audit.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_cloud_add.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_key_rotation.py
 python3 tests/e2e/test_model_runtime.py --kind
 python3 tests/e2e/test_kind.py
 python3 tests/e2e/test_stack_lock.py
@@ -83,8 +88,11 @@ simultaneous app NodePort. Managed and supplied-gateway renders pass the
 management route is configured in that Ingress. It is off in the previews.
 An [isolated live ingress fixture](../../tests/e2e/runs/2026-10-10-chart-ingress-live.md)
 verified the TLS host, HTTP redirect and app-only route with ingress-nginx.
-The full Keeplane UI/API journey, customer controller behavior, certificate
-renewal and the project-bound runtime route still need release tests.
+A later [full-chart Calico trial](../../tests/e2e/runs/2026-10-10-full-product-edge.md)
+passed HTTPS sign-in, identity and model listing through the actual app and
+blocked an unrelated pod from calling its managed gateway. These options are
+still off in this everyday kindnet preview. Customer controller behavior,
+certificate renewal and the project-bound runtime route still need release tests.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.

@@ -11,10 +11,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.request import urlopen
 
 from test_accounts import Browser, RUNTIME
-from protected_preview import login_if_protected
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,7 +35,7 @@ def py(name, *args):
 
 
 SUITES = (
-    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04 PKG-05", needs_stack=False),
+    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04 PKG-05 PKG-06", needs_stack=False),
     Suite("catalog-store", py("model_catalog"), "catalog-store", needs_stack=False),
     Suite("data-class-store", py("data_classes_store"), "data-class-store", needs_stack=False),
     Suite("audit-store", py("audit_store"), "audit-store", needs_stack=False),
@@ -49,6 +47,7 @@ SUITES = (
     Suite("break-glass-store", py("break_glass_audit_store"),
           "BG-01 BG-02 BG-03 BG-04 BG-05 BG-06", needs_stack=False),
     Suite("stack-lock", py("stack_lock"), "LOCK-01 LOCK-02 LOCK-03 LOCK-04 LOCK-05"),
+    Suite("preview-parity", py("preview_parity"), "PARITY-01 PARITY-02"),
     Suite("docker-local", py("local"), "LOCAL-01 LOCAL-02 LOCAL-03 LOCAL-04 LOCAL-05 LOCAL-08 LOCAL-11",
           environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:3000"),)),
     Suite("kind-local", py("local"), "LOCAL-01 LOCAL-02 LOCAL-03 LOCAL-04 LOCAL-05 LOCAL-08 LOCAL-11",
@@ -69,40 +68,85 @@ SUITES = (
     Suite("accounts", py("accounts"),
           "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20 ACCT-23",
           report="2026-10-10-users-react.json"),
+    Suite("kind-accounts", py("accounts"),
+          "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20 ACCT-23",
+          report="2026-10-10-users-react.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("data-classes", py("data_classes"),
           "CLASS-00 CLASS-10 CLASS-01 CLASS-09 CLASS-02 CLASS-03 CLASS-04 CLASS-05 CLASS-06 CLASS-08 CLASS-07",
           report="2026-10-09-data-classes.json"),
+    Suite("kind-data-classes", py("data_classes"),
+          "CLASS-00 CLASS-10 CLASS-01 CLASS-09 CLASS-02 CLASS-03 CLASS-04 CLASS-05 CLASS-06 CLASS-08 CLASS-07",
+          report="2026-10-09-data-classes.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("model-approval", py("model_approval"),
           "MODEL-01 MODEL-02 MODEL-03 MODEL-10 MODEL-04 MODEL-05 MODEL-06 MODEL-07 MODEL-08 MODEL-09",
           report="2026-10-09-model-approval.json"),
+    Suite("kind-model-approval", py("model_approval"),
+          "MODEL-01 MODEL-02 MODEL-03 MODEL-10 MODEL-04 MODEL-05 MODEL-06 MODEL-07 MODEL-08 MODEL-09",
+          report="2026-10-09-model-approval.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("model-edit", py("model_edit"), "EDIT-01 EDIT-02 EDIT-03 EDIT-04 EDIT-05",
           report="2026-10-09-model-edit.json"),
+    Suite("kind-model-edit", py("model_edit"), "EDIT-01 EDIT-02 EDIT-03 EDIT-04 EDIT-05",
+          report="2026-10-09-model-edit.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("model-replacement", py("model_replacement"),
           "REPLACE-01 REPLACE-02 REPLACE-03 REPLACE-04 REPLACE-05",
           report="2026-10-09-model-replacement.json"),
+    Suite("kind-model-replacement", py("model_replacement"),
+          "REPLACE-01 REPLACE-02 REPLACE-03 REPLACE-04 REPLACE-05",
+          report="2026-10-09-model-replacement.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("audit", py("audit"),
           "AUD-01 AUD-02 AUD-05 AUD-03 AUD-04 AUD-06 AUD-08 AUD-09 AUD-07",
           report="2026-10-10-audit-developer.json"),
+    Suite("kind-audit", py("audit"),
+          "AUD-01 AUD-02 AUD-05 AUD-03 AUD-04 AUD-06 AUD-08 AUD-09 AUD-07",
+          report="2026-10-10-audit-developer.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("break-glass-audit", py("break_glass_audit"), "BG-07 BG-08 BG-09",
           report="2026-10-10-break-glass-audit.json"),
     Suite("model-add", py("model_add"), "ADD-01 ADD-02 ADD-03 ADD-04 ADD-05 ADD-06 ADD-07 ADD-08",
           report="2026-10-09-model-add.json"),
+    Suite("kind-model-add", py("model_add"), "ADD-01 ADD-02 ADD-03 ADD-04 ADD-05 ADD-06 ADD-07 ADD-08",
+          report="2026-10-09-model-add.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("cloud-listing", py("cloud_listing"), "CLOUD-01 CLOUD-02 CLOUD-03 CLOUD-04",
           report="2026-10-09-cloud-listing.json"),
+    Suite("kind-cloud-listing", py("cloud_listing"), "CLOUD-01 CLOUD-02 CLOUD-03 CLOUD-04",
+          report="2026-10-09-cloud-listing.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("cloud-add", py("cloud_add"),
           "CADD-01 CADD-02 CADD-03 CADD-04 CADD-05 CADD-06 CADD-07 CADD-08 CADD-09",
           report="2026-10-09-cloud-add.json"),
+    Suite("kind-cloud-add", py("cloud_add"),
+          "CADD-01 CADD-02 CADD-03 CADD-04 CADD-05 CADD-06 CADD-07 CADD-08 CADD-09",
+          report="2026-10-09-cloud-add.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("key-rotation", py("key_rotation"),
           "ROT-01 ROT-02 ROT-03 ROT-04 ROT-05",
           report="2026-10-09-key-rotation.json"),
+    Suite("kind-key-rotation", py("key_rotation"),
+          "ROT-01 ROT-02 ROT-03 ROT-04 ROT-05",
+          report="2026-10-09-key-rotation.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("model-removal", py("model_removal"),
           "REMOVE-01 REMOVE-02 REMOVE-03 REMOVE-04 REMOVE-05 REMOVE-06 REMOVE-07",
           report="2026-10-09-model-removal.json"),
+    Suite("kind-model-removal", py("model_removal"),
+          "REMOVE-01 REMOVE-02 REMOVE-03 REMOVE-04 REMOVE-05 REMOVE-06 REMOVE-07",
+          report="2026-10-09-model-removal.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("docker-runtime", py("model_runtime", "--docker"), "LOCAL-19 LOCAL-20"),
     Suite("kind-runtime", py("model_runtime", "--kind"), "LOCAL-19 LOCAL-20"),
     Suite("integrated-demo", py("integrated_demo"),
           "DEMO-01 DEMO-02 DEMO-03 DEMO-04 DEMO-05 DEMO-06",
           report="2026-10-09-integrated-demo.json"),
+    Suite("kind-integrated-demo", py("integrated_demo"),
+          "DEMO-01 DEMO-02 DEMO-03 DEMO-04 DEMO-05 DEMO-06",
+          report="2026-10-09-integrated-demo.json",
+          environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
 )
 
 
@@ -122,19 +166,23 @@ def preflight():
     docker_status, docker_health, _ = browser.fetch("/health")
     if login_status != 200 or docker_status != 200 or docker_health.get("gateway") != "ready":
         raise RuntimeError("Protected Docker preview or gateway is not healthy")
-    login_if_protected("http://127.0.0.1:13000")
-    with urlopen("http://127.0.0.1:13000/health", timeout=10) as response:
-        if response.status != 200 or json.load(response).get("gateway") != "ready":
-            raise RuntimeError("Isolated kind preview or gateway is not healthy")
-    mode_status, settings, _ = browser.fetch("/api/data-classes")
-    if mode_status != 200:
-        raise RuntimeError("Could not read the Data Classes mode")
-    initial_mode = settings["enabled"]
-    if not initial_mode:
-        changed, _, _ = browser.fetch("/api/data-classes/mode", {"enabled": True}, method="PUT")
-        if changed != 200:
-            raise RuntimeError("Could not enable classes for the older class-dependent suites")
-    return browser, initial_mode
+    kind_browser = Browser("http://127.0.0.1:13000")
+    kind_login, _, _, _, _ = kind_browser.login(
+        "first-admin", (RUNTIME / "first-admin-password").read_text().strip())
+    kind_health_status, kind_health, _ = kind_browser.fetch("/health")
+    if kind_login != 200 or kind_health_status != 200 or kind_health.get("gateway") != "ready":
+        raise RuntimeError("Isolated kind preview or gateway is not healthy")
+    initial_modes = []
+    for preview in (browser, kind_browser):
+        mode_status, settings, _ = preview.fetch("/api/data-classes")
+        if mode_status != 200:
+            raise RuntimeError("Could not read the Data Classes mode")
+        initial_modes.append(settings["enabled"])
+        if not settings["enabled"]:
+            changed, _, _ = preview.fetch("/api/data-classes/mode", {"enabled": True}, method="PUT")
+            if changed != 200:
+                raise RuntimeError("Could not enable classes for the class-dependent suites")
+    return (browser, kind_browser), initial_modes
 
 
 def case_rows(suite, stdout, report_dir, exit_code):
@@ -156,7 +204,9 @@ def case_rows(suite, stdout, report_dir, exit_code):
 
 def run_suite(suite, report_dir):
     env = os.environ.copy()
-    env["KEEPLANE_TEST_REPORT_DIR"] = str(report_dir)
+    suite_report_dir = report_dir / suite.name
+    suite_report_dir.mkdir()
+    env["KEEPLANE_TEST_REPORT_DIR"] = str(suite_report_dir)
     env.update(suite.environment)
     input_text = (ROOT / suite.stdin).read_text() if suite.stdin else None
     started = time.monotonic()
@@ -169,7 +219,7 @@ def run_suite(suite, report_dir):
         exit_code, stdout = None, ""
         execution_error = "Suite timed out after %d seconds" % suite.timeout
     try:
-        rows = case_rows(suite, stdout, report_dir, exit_code)
+        rows = case_rows(suite, stdout, suite_report_dir, exit_code)
         expected = suite.case_ids.split()
         actual = [row["id"] for row in rows]
         missing = sorted(set(expected) - set(actual))
@@ -203,7 +253,7 @@ def main():
     if output.exists():
         parser.error("Output exists; choose a new evidence filename")
     selected = [suite for suite in SUITES if not args.suite or suite.name in args.suite]
-    mode_browser, initial_mode = preflight() if any(suite.needs_stack for suite in selected) else (None, None)
+    mode_browsers, initial_modes = preflight() if any(suite.needs_stack for suite in selected) else ((), ())
     output.parent.mkdir(parents=True, exist_ok=True)
     result = {"started_utc": datetime.now(timezone.utc).isoformat(),
               "git_head": git("rev-parse", "HEAD"), "branch": git("branch", "--show-current"),
@@ -221,11 +271,14 @@ def main():
                 print(suite.name + ": " + ("PASS" if item["passed"] else "FAIL") +
                       " (%d cases, %.1fs)" % (len(item["cases"]), item["duration_seconds"]), flush=True)
     finally:
-        if mode_browser is not None:
-            restored, _, _ = mode_browser.fetch("/api/data-classes/mode",
-                                                {"enabled": initial_mode}, method="PUT")
-            result["data_classes_mode_restored"] = restored == 200
-            result["data_classes_initial_mode"] = initial_mode
+        if mode_browsers:
+            restored = []
+            for preview, initial_mode in zip(mode_browsers, initial_modes):
+                status, _, _ = preview.fetch("/api/data-classes/mode",
+                                             {"enabled": initial_mode}, method="PUT")
+                restored.append(status == 200)
+            result["data_classes_mode_restored"] = all(restored)
+            result["data_classes_initial_mode"] = initial_modes
     result["completed"] = True
     result["finished_utc"] = datetime.now(timezone.utc).isoformat()
     result["suites_passed"] = sum(item["passed"] for item in result["results"])

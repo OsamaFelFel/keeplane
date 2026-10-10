@@ -105,3 +105,12 @@ test('AU-UI-04: failed writes roll back and failed record loads do not show stal
   await expect(page.getByRole('alert').last()).toContainText('Audit storage is unavailable')
   await expect(page.getByRole('row', { name: /first-admin/ })).toHaveCount(0)
 })
+
+test('AU-UI-05: initial search settling does not undo a quick Next click', async ({ page }) => {
+  await mockAudit(page)
+  await page.goto('/app/audit')
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByRole('row', { name: /admin-example-final/ })).toBeVisible()
+  await page.waitForTimeout(350)
+  await expect(page.getByText('Showing 26–26 of 26 records')).toBeVisible()
+})

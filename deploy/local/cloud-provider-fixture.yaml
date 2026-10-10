@@ -1,0 +1,57 @@
+# Disposable authenticated model-provider fixture for the local kind preview.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-provider
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-provider
+  template:
+    metadata:
+      labels:
+        app: cloud-provider
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: cloud-provider
+          image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/fixture/cloud_provider.py"]
+          env:
+            - name: TRIAL_KEY_FILE
+              value: /run/provider-key/key
+          ports:
+            - containerPort: 18082
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 18082
+            periodSeconds: 5
+          volumeMounts:
+            - name: fixture
+              mountPath: /fixture
+              readOnly: true
+            - name: provider-key
+              mountPath: /run/provider-key
+              readOnly: true
+      volumes:
+        - name: fixture
+          configMap:
+            name: cloud-provider-fixture
+        - name: provider-key
+          secret:
+            secretName: cloud-provider-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-provider
+spec:
+  selector:
+    app: cloud-provider
+  ports:
+    - name: http
+      port: 18082
+      targetPort: 18082

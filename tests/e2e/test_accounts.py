@@ -19,7 +19,8 @@ REPORT = report_path("2026-10-10-users-react.json")
 
 
 class Browser:
-    def __init__(self):
+    def __init__(self, base=BASE):
+        self.base = base.rstrip("/")
         self.cookies = http.cookiejar.CookieJar()
         self.opener = build_opener(HTTPCookieProcessor(self.cookies))
 
@@ -29,7 +30,7 @@ class Browser:
             headers["Content-Type"] = "application/json"
             if action:
                 headers["X-Keeplane-Action"] = "1"
-        request = Request(BASE + path,
+        request = Request(self.base + path,
                           None if payload is None else json.dumps(payload).encode(),
                           headers, method=method)
         try:
@@ -46,14 +47,14 @@ class Browser:
 
     def page(self, path):
         try:
-            with self.opener.open(BASE + path, timeout=20) as response:
+            with self.opener.open(self.base + path, timeout=20) as response:
                 return response.status, response.url, response.read().decode()
         except HTTPError as error:
             return error.code, error.url, error.read().decode()
 
     def login(self, username, password):
         sign_status, sign_url, sign_page = self.page("/")
-        if sign_status != 200 or sign_url != BASE + "/sign-in":
+        if sign_status != 200 or sign_url != self.base + "/sign-in":
             raise RuntimeError("Keeplane sign-in page was not returned")
         code, result, url = self.fetch("/api/session", {"username": username,
                                                           "password": password}, method="POST")

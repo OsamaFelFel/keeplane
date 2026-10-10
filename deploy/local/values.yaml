@@ -6,6 +6,8 @@ app:
     firstAdminSecret: keeplane-first-admin
     publicOrigin: http://127.0.0.1:13000
     publicOriginAliases: http://localhost:13000
+    openAIBaseUrl: http://cloud-provider:18082/v1
+    anthropicBaseUrl: http://cloud-provider:18082/v1
   service:
     type: NodePort
     nodePort: 30080

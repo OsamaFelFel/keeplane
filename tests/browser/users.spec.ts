@@ -43,7 +43,7 @@ test('BR-02: the live first admin can open Users but has no role action', async 
 test('BR-03: desktop and narrow Users layouts match stable screenshots', async ({ page }) => {
   const externalRequests: string[] = []
   page.on('request', request => {
-    if (new URL(request.url()).origin !== 'http://127.0.0.1:3000') externalRequests.push(request.url())
+    if (new URL(request.url()).origin !== (process.env.KEEPLANE_BASE_URL ?? 'http://127.0.0.1:3000')) externalRequests.push(request.url())
   })
   await mockAdmin(page)
   await page.setViewportSize({ width: 1280, height: 800 })
@@ -136,4 +136,24 @@ test('BR-06: Create user returns keyboard focus to its trigger', async ({ page }
   await expect(trigger).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog', { name: 'Create user' })).toBeVisible()
+})
+
+test('BR-07: initial search settling does not undo a quick Next click', async ({ page }) => {
+  await mockAdmin(page)
+  await page.route(url => url.pathname === '/api/users' && url.searchParams.has('page'), route => {
+    const pageNumber = Number(new URL(route.request().url()).searchParams.get('page'))
+    const listedUsers = pageNumber === 2 ? [{
+      id: 'last-user', username: 'last-page-user', role: 'developer', sign_in: 'local', managed: false,
+    }] : [{ ...users[0] }, ...Array.from({ length: 24 }, (_, index) => ({
+      id: `first-page-${index}`, username: `first-page-${index}`, role: 'developer',
+      sign_in: 'local', managed: false,
+    }))]
+    return route.fulfill({ json: { users: listedUsers, page: pageNumber, page_size: 25,
+      total: 26, has_more: pageNumber === 1 } })
+  })
+  await page.goto('/app/')
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByRole('row', { name: /last-page-user/ })).toBeVisible()
+  await page.waitForTimeout(350)
+  await expect(page.getByText('Showing 26–26 of 26 users')).toBeVisible()
 })

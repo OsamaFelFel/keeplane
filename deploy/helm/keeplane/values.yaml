@@ -9,6 +9,8 @@ app:
     firstAdminSecret: ""
     publicOrigin: ""
     publicOriginAliases: ""
+    openAIBaseUrl: ""
+    anthropicBaseUrl: ""
     storageSize: 1Gi
   service:
     type: ClusterIP

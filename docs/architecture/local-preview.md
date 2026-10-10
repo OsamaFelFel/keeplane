@@ -16,6 +16,7 @@ flowchart LR
   App -->|model API, runtime key| Gateway
   Gateway --> Fixture[Local test model]
   Gateway --> Qwen[Local Qwen runner]
+  Gateway -->|shared key file| Cloud[Authenticated cloud-format fixture]
   Gateway -->|disposable test key| Guarded[Guarded endpoint fixture]
   Guarded -. optional .-> Qwen
 ```
@@ -25,20 +26,27 @@ endpoints stay on the private Compose network and require separate keys. The
 gateway stores registrations in a Docker volume so a restart does not erase
 them. Docker runs one gateway replica and kind runs two. Project-bound and
 final-destination policy enforcement need later work.
+The cloud-format fixture accepts OpenAI and Anthropic request shapes and runs
+in both Docker and kind. The kind copy gets its expected key from a local
+Kubernetes Secret; Keeplane's chosen key stays in its private provider-key
+volume and the gateway reads it through a file reference. This fixture is not
+a real cloud subscription.
+
 The guarded endpoint accepts only its fixed test key and forwards chat requests
 to Qwen. Keeplane registers that key through the gateway management API, and
 its model-list API omits the key. The fixture runs on Docker's private network
 and does not represent production secret storage or external-provider TLS.
 
-## Protected Open Source Docker trial
+## Protected Open Source local trials
 
-The single app on port 3000 has a local SQLite account store. It checks a
+The Docker app on port 3000 and the managed kind app on port 13000 each have a
+local SQLite account store. Each checks a
 revocable session cookie before serving the admin UI and APIs. The
 account store owns the first admin, users, roles and Editions note preferences; model
 approvals and audit records stay in their separate local tables. A first-admin
 session and its mandatory Audit record commit together; an Audit write failure
 refuses the sign-in. The app
-uses the gateway through the internal Docker network. Existing gateway and
+uses its gateway through a private network. Existing gateway and
 account volumes are reused when the stack starts again. A fresh account store
 has no Team tables or Team API.
 Data classes start off in a fresh settings store. The React Data Classes page
