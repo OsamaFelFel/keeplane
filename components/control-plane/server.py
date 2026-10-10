@@ -19,6 +19,7 @@ from local_identity import IdentityError, LocalIdentity
 from audit import AuditError, AuditStore
 from data_classes import DataClassError, DataClassStore
 from model_catalog import ModelCatalog, fingerprint
+from model_listing import list_models
 from provider_keys import (save as save_provider_key, remove as remove_provider_key,
                            from_resource as provider_key_file, is_managed as managed_provider_key)
 
@@ -164,35 +165,6 @@ def gateway_model_resources():
         if status < 500 or attempt == 2:
             return status, result
         time.sleep(0.25)
-
-
-def model_details(model_id, resources):
-    # The fixture in local.yaml is file-owned and absent from the resource API.
-    if model_id == "local-fixture":
-        return {"id": model_id, "provider": "Test fixture", "kind": "fixture",
-                "upstream_model": "mock-local"}
-
-    resource = resources.get(model_id, {})
-    params = resource.get("params", {})
-    provider = resource.get("provider")
-    if provider in ("openAI", "anthropic"):
-        return {"id": model_id, "provider": "OpenAI" if provider == "openAI" else "Anthropic",
-                "kind": "cloud", "upstream_model": params.get("model")}
-    source = params.get("baseUrl")
-    if source == "http://qwen:8080/v1":
-        return {"id": model_id, "provider": "Qwen Coder via llama.cpp", "kind": "real-local",
-                "upstream_model": params.get("model")}
-    if source == "http://guarded-provider:18081/v1":
-        return {"id": model_id, "provider": "Guarded endpoint trial (Qwen)", "kind": "endpoint-trial",
-                "upstream_model": params.get("model")}
-    if source == "http://model:18080/v1":
-        return {"id": model_id, "provider": "Test fixture", "kind": "fixture",
-                "upstream_model": params.get("model")}
-    if isinstance(source, str) and source.endswith("/v1") and source[:-3] in RUNNER_URLS:
-        return {"id": model_id, "provider": "Local runner", "kind": "real-local",
-                "upstream_model": params.get("model")}
-    return {"id": model_id, "provider": "Unknown source", "kind": "unknown",
-            "upstream_model": params.get("model")}
 
 
 def effective_approval_ids():
@@ -574,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         query = parse_qs(route.query)
         path = route.path
-        if DJANGO_ACCOUNT_API and account_api_path(path):
+        if DJANGO_ACCOUNT_API and (account_api_path(path) or path == "/api/models"):
             return self.forward_account_api()
         if IDENTITY:
             if path == "/api/auth-options":
@@ -640,30 +612,10 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.reply(status, result)
         elif self.path == "/api/models":
-            status, result = gateway("/v1/models", timeout=10)
-            if status != 200:
-                return self.reply(status, result)
-            resource_status, resource_result = gateway_model_resources()
-            if resource_status != 200:
-                return self.reply(resource_status, resource_result)
-            raw_resources = resource_result.get("resources", [])
-            resources = {item["id"]: item.get("value", {})
-                         for item in raw_resources if "id" in item}
-            models = []
-            for item in result.get("data", []):
-                if "id" not in item:
-                    continue
-                details = model_details(item["id"], resources)
-                if CATALOG:
-                    approval = CATALOG.get(item["id"])
-                    if approval and approval["gateway_fingerprint"] != model_fingerprint(item["id"], raw_resources):
-                        approval = None
-                    details.update({"approved": approval is not None,
-                                    "key_choice": approval["key_choice"] if approval else None,
-                                    "approved_classes": approval["approved_classes"] if approval else [],
-                                    "owned_by_keeplane": approval["owned_by_keeplane"] if approval else False})
-                models.append(details)
-            self.reply(200, {"models": models})
+            status, result = list_models(lambda: gateway("/v1/models", timeout=10),
+                                         gateway_model_resources, CATALOG,
+                                         GATEWAY_FILE_CONFIG, RUNNER_URLS)
+            self.reply(status, result)
         elif IDENTITY and path == "/users":
             self.send_response(302)
             self.send_header("Location", "/app/")

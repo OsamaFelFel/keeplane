@@ -6,6 +6,7 @@ urlpatterns = [
     path("api/auth-options", views.auth_options),
     path("api/session", views.session),
     path("api/identity", views.identity),
+    path("api/models", views.models),
     path("api/users", views.users),
     path("api/users/<str:user_id>", views.user_detail),
     path("api/users/<str:user_id>/role", views.user_role),

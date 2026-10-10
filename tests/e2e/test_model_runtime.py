@@ -37,7 +37,9 @@ def completion(url, model):
     if url == gateway:
         key = Path(os.environ["GATEWAY_RUNTIME_KEY_FILE"]).read_text().strip()
         request.add_header("Authorization", "Bearer " + key)
-    with urlopen(request, timeout=120) as response:
+    # The case checks the output limit, not latency. Shared local CPU can take
+    # over two minutes to emit 256 tokens while Docker and kind run together.
+    with urlopen(request, timeout=300) as response:
         result = json.load(response)
     choice = result["choices"][0]
     return {"completion_tokens": result["usage"]["completion_tokens"],
@@ -79,7 +81,7 @@ def main():
         command = ["docker", "compose", "--profile", "qwen", "exec", "-T", "app",
                    "python", "-c", PROBE, "http://gateway:4000", PROMPT]
 
-    observed = json.loads(subprocess.check_output(command, text=True, timeout=300))
+    observed = json.loads(subprocess.check_output(command, text=True, timeout=660))
     runtime_ok = (observed["model"] == "qwen2.5-coder:0.5b"
                   and observed["active_context"] == 4096
                   and observed["training_context"] == 32768

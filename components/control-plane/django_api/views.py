@@ -9,11 +9,21 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from audit import AuditStore
+from gateway_read_adapter import AgentgatewayModelReader
 from local_identity import IdentityError, LocalIdentity
+from model_catalog import ModelCatalog
+from model_listing import list_models
 
 
 AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"])
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT)
+CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"])
+MODEL_GATEWAY = AgentgatewayModelReader(
+    os.environ.get("GATEWAY_URL", "http://gateway:4000"),
+    os.environ.get("GATEWAY_RUNTIME_KEY_FILE", ""),
+    os.environ.get("GATEWAY_ADMIN_KEY_FILE", ""))
+RUNNER_URLS = {url.strip().rstrip("/") for url in
+               os.environ.get("PREVIEW_RUNNER_URLS", "http://qwen:8080").split(",") if url.strip()}
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 PUBLIC_ORIGIN_ALIASES = {part.strip() for part in
                          os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if part.strip()}
@@ -80,6 +90,19 @@ def session(request):
 def identity(request):
     user = actor(request)
     return Response(user) if user else failure(401, "Sign in to Keeplane")
+
+
+@api_view(["GET"])
+def models(request):
+    _, denied = admin(request)
+    if denied:
+        return denied
+    try:
+        status, listing = list_models(MODEL_GATEWAY.models, MODEL_GATEWAY.resources,
+                                      CATALOG, os.environ.get("GATEWAY_FILE_CONFIG"), RUNNER_URLS)
+        return Response(listing, status=status)
+    except sqlite3.Error:
+        return failure(503, "Keeplane settings storage is unavailable")
 
 
 @api_view(["GET", "POST"])
