@@ -1,0 +1,47 @@
+{
+  "suite": "current gateway bypass diagnostic",
+  "time_utc": "2026-10-10T03:49:13.634865+00:00",
+  "gateway_image": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+  "context": "kind-keeplane",
+  "observations": {
+    "docker_managed": {
+      "model_list_status": 200,
+      "management_read_status": 200,
+      "direct_chat_status": 200,
+      "forged_chat_status": 200,
+      "upstream_calls_added": 2,
+      "model": "local-fixture",
+      "release_policy_passes": false
+    },
+    "kind_managed": {
+      "model_list_status": 200,
+      "management_read_status": 200,
+      "direct_chat_status": 200,
+      "forged_chat_status": 200,
+      "upstream_calls_added": 2,
+      "model": "local-fixture",
+      "release_policy_passes": false
+    },
+    "kind_supplied": {
+      "model_list_status": 200,
+      "management_read_status": 200,
+      "direct_chat_status": 200,
+      "forged_chat_status": 200,
+      "upstream_calls_added": 2,
+      "model": "customer-fixture",
+      "release_policy_passes": false
+    },
+    "public_docker": {
+      "models": 401,
+      "management": 401,
+      "chat": 401,
+      "release_policy_passes": true
+    },
+    "public_kind": {
+      "models": 401,
+      "management": 401,
+      "chat": 401,
+      "release_policy_passes": true
+    }
+  }
+}
