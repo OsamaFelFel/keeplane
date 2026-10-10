@@ -43,9 +43,8 @@ def main():
                                       {"enabled": False}, method="PUT")
     page_status, page_url, page = admin.page("/audit")
     record("BG-09", options_status == 200 and "break_glass_sign_ins" not in options["options"] and
-           switch_status == 400 and page_status == 200 and page_url == BASE + "/audit" and
-           'id="rec-breakglass" checked disabled' in page and
-           '<option value="break_glass_sign_ins">Break-glass sign-ins</option>' in page,
+           switch_status == 400 and page_status == 200 and page_url == BASE + "/app/audit" and
+           'id="root"' in page,
            {"options_status": options_status, "switch_status": switch_status,
             "page_status": page_status})
 

@@ -55,12 +55,13 @@ def main():
     try:
         with browser.opener.open(BASE + "/audit", timeout=15) as response:
             page_status = response.status
+            page_url = response.url
             html = response.read().decode()
         original_options = options()
         baseline = records()["total"]
         identity_status, identity, _ = browser.fetch("/api/identity")
-        record("AUD-01", page_status == 200 and 'id="rec-settings"' in html and
-               'id="search-records"' in html and identity_status == 200 and
+        record("AUD-01", page_status == 200 and 'id="root"' in html and
+               page_url == BASE + "/app/audit" and identity_status == 200 and
                set(original_options) == {"settings", "held_requests", "model_answers"},
                {"page_status": page_status, "actor": identity.get("username"),
                 "original_options": original_options, "existing_records": baseline})

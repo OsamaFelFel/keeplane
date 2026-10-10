@@ -2,7 +2,7 @@
 
 **Edition:** Open Source
 
-Open the protected preview at `http://127.0.0.1:3000/audit` and sign in as an
+Open the protected preview at [Audit](http://127.0.0.1:3000/app/audit) and sign in as an
 admin. Break-glass admin sign-ins are always recorded, with no off switch.
 The other three record kinds start off. Turn on **Changes to models, routing
 and data classes**, then add or edit a data class, or set up a model already in
@@ -35,3 +35,7 @@ run in both an isolated store and the Docker preview. The dated JSON run under
 `tests/e2e/runs/` records the observed statuses. The live test leaves its
 clearly named trial audit records in the local volume because audit records
 are append-only; it removes temporary data classes and restores the switches.
+The Audit screen now uses the same React shell and shadcn components as Users
+and Data Classes. Its [browser cases](../../tests/browser/audit-cases.md) cover
+the checked, disabled break-glass control, independent switches, search, Show,
+paging and the 320px layout. The earlier Audit HTML page is no longer served.

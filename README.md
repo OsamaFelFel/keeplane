@@ -36,6 +36,8 @@ The [Add model guide](docs/guide/model-add-local.md) covers the protected
 OpenAI and Anthropic format trial through a local authenticated mock.
 The [data-class trial](docs/guide/data-classes-local.md) starts off on a new
 installation; admins can opt in, then change starter classes and approvals.
+The [Audit guide](docs/guide/audit-local.md) covers the React screen and the
+mandatory break-glass sign-in records in the protected Docker preview.
 
 ## What this preview covers
 

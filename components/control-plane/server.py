@@ -534,7 +534,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Location", "/app/")
                 self.end_headers()
                 return
-            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/", "/app/data-classes") \
+            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/", "/app/data-classes", "/app/audit") \
                     and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
@@ -609,12 +609,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(302)
             self.send_header("Location", "/app/data-classes")
             self.end_headers()
-        elif IDENTITY and path in ("/audit", "/audit.js", "/editions", "/editions.js"):
-            name = {"/audit": "audit.html", "/audit.js": "audit.js",
-                    "/editions": "editions.html", "/editions.js": "editions.js"}[path]
+        elif IDENTITY and path == "/audit":
+            self.send_response(302)
+            self.send_header("Location", "/app/audit")
+            self.end_headers()
+        elif IDENTITY and path in ("/editions", "/editions.js"):
+            name = {"/editions": "editions.html", "/editions.js": "editions.js"}[path]
             content_type = "text/javascript" if name.endswith(".js") else "text/html"
             self.reply(200, (UI / name).read_bytes(), content_type + "; charset=utf-8")
-        elif path in ("/app", "/app/", "/app/data-classes"):
+        elif path in ("/app", "/app/", "/app/data-classes", "/app/audit"):
             index = UI / "web/dist/index.html"
             self.reply(200, index.read_bytes(), "text/html; charset=utf-8") if index.is_file() else \
                 self.reply(503, {"error": "Admin UI build is unavailable"})

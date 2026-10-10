@@ -1,0 +1,96 @@
+{
+  "started_utc": "2026-10-10T02:04:40.465336+00:00",
+  "git_head": "209dd88ec9daa7629b911b6b9f63d6cf7202fdd2",
+  "branch": "feat/react-audit",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "0b79e64e66897f37aed2dcc62ce62d75c10f9934dcfa547c8a9f67c4b1d0b5ec",
+  "selected_suites": [
+    "audit",
+    "break-glass-audit"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.3,
+      "cases": [
+        {
+          "id": "AUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.9,
+      "cases": [
+        {
+          "id": "BG-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": false,
+  "finished_utc": "2026-10-10T02:04:48.922505+00:00",
+  "suites_passed": 2,
+  "suites_total": 2,
+  "cases_reported": 12
+}

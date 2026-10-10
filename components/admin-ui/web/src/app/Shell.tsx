@@ -13,7 +13,7 @@ const links = [
   { label: 'Agents', href: null },
   { label: 'Models and routing', href: '/' },
   { label: 'Data classes', href: '/app/data-classes' },
-  { label: 'Audit', href: '/audit' },
+  { label: 'Audit', href: '/app/audit' },
   { label: 'Single sign-on', href: null },
   { label: 'Editions', href: '/editions' },
 ]
