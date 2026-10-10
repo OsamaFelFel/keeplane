@@ -87,6 +87,20 @@ def main():
                  "--from-file=first-admin-password=" + str(PASSWORD))
             kube("-n", APP_NS, "create", "secret", "tls", "keeplane-tls",
                  "--cert=" + str(cert), "--key=" + str(key))
+            policy = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+                      "metadata": {"name": "customer-gateway-ingress"},
+                      "spec": {"podSelector": {"matchLabels": {
+                          "app.kubernetes.io/name": "agentgateway-standalone",
+                          "app.kubernetes.io/instance": "customer-gateway"}},
+                          "policyTypes": ["Ingress"], "ingress": [{"from": [
+                              {"namespaceSelector": {"matchLabels": {
+                                  "kubernetes.io/metadata.name": APP_NS}},
+                               "podSelector": {"matchLabels": {"app": "keeplane-app"}}},
+                              {"namespaceSelector": {"matchLabels": {
+                                  "kubernetes.io/metadata.name": APP_NS}},
+                               "podSelector": {"matchLabels": {"app": "keeplane-gateway-preflight"}}}],
+                              "ports": [{"protocol": "TCP", "port": 4000}]}]}}
+            kube("-n", GATEWAY_NS, "apply", "-f", "-", input_text=json.dumps(policy))
             run(HELM, "--kubeconfig", KUBECONFIG, "install", "keeplane",
                 "deploy/helm/keeplane", "--namespace", APP_NS,
                 "-f", "deploy/local/existing-values.yaml",
@@ -128,17 +142,6 @@ def main():
                    identity.stdout == "200", {"tls_verified": True, "anonymous_status": root.stdout,
                                                 "session_status": signed.stdout,
                                                 "identity_status": identity.stdout})
-            policy = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
-                      "metadata": {"name": "customer-gateway-ingress"},
-                      "spec": {"podSelector": {"matchLabels": {
-                          "app.kubernetes.io/name": "agentgateway-standalone",
-                          "app.kubernetes.io/instance": "customer-gateway"}},
-                          "policyTypes": ["Ingress"], "ingress": [{"from": [{
-                              "namespaceSelector": {"matchLabels": {
-                                  "kubernetes.io/metadata.name": APP_NS}},
-                              "podSelector": {"matchLabels": {"app": "keeplane-app"}}}],
-                              "ports": [{"protocol": "TCP", "port": 4000}]}]}}
-            kube("-n", GATEWAY_NS, "apply", "-f", "-", input_text=json.dumps(policy))
             app_probe = kube("-n", APP_NS, "exec", "deployment/keeplane-app", "--", "python", "-c",
                              "import urllib.request,urllib.error\ntry: urllib.request.urlopen('" +
                              GATEWAY_URL + "/v1/models', timeout=3); print('allowed')\nexcept urllib.error.HTTPError as error: print('HTTP:' + str(error.code))\nexcept Exception as error: print(type(error).__name__ + ':' + type(getattr(error, 'reason', None)).__name__)")

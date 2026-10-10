@@ -5,7 +5,7 @@ Run `python3 tests/e2e/test_chart_package.py --output <new JSON path>` with Helm
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
 | PKG-01 | Lint and render the managed local chart. | The app has no Kubernetes API token, uses the default seccomp profile, and receives its private gateway key Secret; the managed gateway is present. |
-| PKG-02 | Render existing-gateway mode with its URL and key Secret. | The preflight Job and app both use the key Secret and no managed gateway Deployment is installed. |
+| PKG-02 | Render existing-gateway mode with its URL and key Secret. | The preflight Job and app both use the key Secret, the Job has a stable label for a customer-owned gateway policy, and no managed gateway Deployment is installed. |
 | PKG-03 | Set private image-pull credentials and app CPU/memory requests. | Both app and preflight receive those pod settings in the rendered manifests. |
 | PKG-04 | Request conflicting gateway modes or turn on the local protected trial without a key Secret. | Helm rejects the values before installation. |
 | PKG-05 | Render managed gateway ingress isolation, then try that policy in existing-gateway mode. | The policy selects only this release's gateway pods, admits only its app pods on port 4000, and refuses to claim control over a customer-supplied gateway. Rendering alone does not prove enforcement. |

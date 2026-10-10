@@ -60,6 +60,7 @@ def main():
                    and "name: GATEWAY_MODE\n              value: \"existing\"" in existing_app
                    and "secretName: \"keeplane-gateway-keys\"" in preflight
                    and "automountServiceAccountToken: false" in preflight
+                   and "app: keeplane-existing-gateway-preflight" in preflight
                    and not named(existing.stdout, "Deployment", "keeplane-existing"),
                    {"render_exit": existing.returncode, "app_present": bool(existing_app),
                     "preflight_present": bool(preflight)} )]

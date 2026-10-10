@@ -101,8 +101,9 @@ also passed a fixture model answer after one managed gateway pod was removed.
 The [customer-run gateway trial](../../tests/e2e/runs/2026-10-10-full-existing-edge.md)
 passed HTTPS sign-in, Keeplane model registration and an answer through a
 separately installed gateway while Calico blocked an unrelated pod. Its customer
-policy was applied after installation preflight, so install-time access still
-needs a release rule.
+policy also passed when applied before installation preflight; the preflight
+Job now has a stable label for that rule. Production namespace permissions must
+prevent untrusted pods from adopting the allowed labels.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
