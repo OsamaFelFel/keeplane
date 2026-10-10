@@ -13,6 +13,7 @@ KUBECONFIG = os.environ.get("KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-k
 HELM = (os.environ.get("KEEPLANE_HELM_BIN") or shutil.which("helm") or
         "/private/tmp/keeplane-helm/darwin-amd64/helm")
 URL = "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000"
+KEY_DIR = Path("/private/tmp/keeplane-accounts-trial")
 
 
 def run(*args):
@@ -44,6 +45,7 @@ def main():
     install = run(HELM, "upgrade", "--install", "keeplane-existing", "deploy/helm/keeplane",
                   "--kubeconfig", KUBECONFIG, "--namespace", "keeplane-existing",
                   "--set", "gateway.mode=existing", "--set", "gateway.install=false",
+                  "--set", "gateway.keysSecret=keeplane-gateway-keys",
                   "--set", "gateway.url=" + URL,
                   "--set", "gateway.preflightModel=customer-fixture",
                   "--set", "app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080",
@@ -65,9 +67,16 @@ def main():
     created = run("kubectl", "--kubeconfig", KUBECONFIG, "create", "namespace", namespace)
     if created.returncode == 0:
         try:
+            secret = run("kubectl", "--kubeconfig", KUBECONFIG, "-n", namespace,
+                         "create", "secret", "generic", "keeplane-gateway-keys",
+                         "--from-file=runtime-key=" + str(KEY_DIR / "gateway-runtime-key"),
+                         "--from-file=admin-key=" + str(KEY_DIR / "gateway-admin-key"))
+            if secret.returncode != 0:
+                raise RuntimeError("Could not create disposable gateway key Secret")
             refused = run(HELM, "install", "keeplane-preflight", "deploy/helm/keeplane",
                           "--kubeconfig", KUBECONFIG, "--namespace", namespace,
                           "--set", "gateway.mode=existing", "--set", "gateway.install=false",
+                          "--set", "gateway.keysSecret=keeplane-gateway-keys",
                           "--set", "gateway.url=" + URL,
                           "--set", "gateway.expectedVersion=0.0.0",
                           "--set", "gateway.preflightModel=customer-fixture",

@@ -19,6 +19,7 @@ gateway:
   url: ""
   expectedVersion: "1.6.0"
   preflightModel: ""
+  keysSecret: ""
 
 agentgateway-standalone:
   mode: database

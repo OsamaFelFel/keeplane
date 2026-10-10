@@ -50,6 +50,23 @@ def register_existing():
         return error.code, json.load(error)
 
 
+def direct_catalog(namespace, app, url):
+    probe = '''import json,pathlib,sys,urllib.error,urllib.request
+url=sys.argv[1]+"/v1/models"
+try:
+ urllib.request.urlopen(url,timeout=10)
+ anonymous=200
+except urllib.error.HTTPError as error:
+ anonymous=error.code
+key=pathlib.Path("/run/gateway-keys/runtime-key").read_text().strip()
+request=urllib.request.Request(url,headers={"Authorization":"Bearer "+key})
+with urllib.request.urlopen(request,timeout=15) as response:
+ models=[item["id"] for item in json.load(response)["data"]]
+print(json.dumps({"anonymous":anonymous,"models":models}))'''
+    return json.loads(kubectl("-n", namespace, "exec", "deploy/" + app, "--",
+                              "python", "-c", probe, url))
+
+
 def main():
     context = kubectl("config", "current-context")
     if context != "kind-keeplane":
@@ -85,12 +102,11 @@ def main():
     direct = []
     for pod in ready:
         ip = pod["status"]["podIP"]
-        body = kubectl("-n", "keeplane", "exec", "deploy/keeplane-app", "--",
-                       "python", "-c", "import urllib.request,sys;print(urllib.request.urlopen(sys.argv[1]).read().decode())",
-                       f"http://{ip}:4000/v1/models")
+        body = direct_catalog("keeplane", "keeplane-app", f"http://{ip}:4000")
         direct.append({"pod": pod["metadata"]["name"],
-                       "models": [m["id"] for m in json.loads(body)["data"]]})
-    check("K8S-02", all("second-local" in entry["models"] for entry in direct), direct)
+                       **body})
+    check("K8S-02", all(entry["anonymous"] == 401 and "second-local" in entry["models"]
+                         for entry in direct), direct)
 
     removed = ready[0]["metadata"]["name"]
     kubectl("-n", "keeplane", "delete", "pod", removed, "--wait=false")
@@ -142,14 +158,15 @@ def main():
           {"resources": names, "gateway_url": gateway_url,
            "registration": json.loads(registration), "answer": json.loads(answer).get("answer")})
 
-    catalogs = json.loads(kubectl("-n", "keeplane-existing", "exec", "deploy/keeplane-existing-app",
-                                  "--", "python", "-c",
-                                  "import json,urllib.request;u=['http://supplied-gateway.supplied-gateway.svc.cluster.local:4000','http://keeplane.keeplane.svc.cluster.local:4000'];print(json.dumps({x:[m['id'] for m in json.load(urllib.request.urlopen(x+'/v1/models',timeout=15))['data']] for x in u}))"))
-    supplied = catalogs.get("http://supplied-gateway.supplied-gateway.svc.cluster.local:4000", [])
-    managed = catalogs.get("http://keeplane.keeplane.svc.cluster.local:4000", [])
+    supplied_probe = direct_catalog("keeplane-existing", "keeplane-existing-app",
+                                    "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000")
+    managed_probe = direct_catalog("keeplane-existing", "keeplane-existing-app",
+                                   "http://keeplane.keeplane.svc.cluster.local:4000")
+    supplied, managed = supplied_probe["models"], managed_probe["models"]
     customer_deployment = json.loads(kubectl("-n", "supplied-gateway", "get", "deployment",
                                              "supplied-gateway", "-o", "json"))
     separate = (customer_deployment["status"].get("readyReplicas") == 1
+                and supplied_probe["anonymous"] == 401 and managed_probe["anonymous"] == 401
                 and "customer-fixture" in supplied and "customer-fixture" not in managed
                 and "customer-managed" in supplied and "customer-managed" not in managed
                 and "second-local" in managed and "second-local" not in supplied)

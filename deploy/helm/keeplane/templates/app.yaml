@@ -28,6 +28,12 @@ spec:
               value: {{ if eq .Values.gateway.mode "managed" }}{{ if not .Values.gateway.install }}{{ fail "gateway.install must be true in managed mode" }}{{ end }}{{ printf "http://%s:4000" .Release.Name | quote }}{{ else if eq .Values.gateway.mode "existing" }}{{ if .Values.gateway.install }}{{ fail "gateway.install must be false in existing mode" }}{{ end }}{{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}{{ else }}{{ fail "gateway.mode must be managed or existing" }}{{ end }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
+            {{- if .Values.gateway.keysSecret }}
+            - name: GATEWAY_RUNTIME_KEY_FILE
+              value: /run/gateway-keys/runtime-key
+            - name: GATEWAY_ADMIN_KEY_FILE
+              value: /run/gateway-keys/admin-key
+            {{- end }}
             {{- if .Values.app.localTrial.enabled }}
             - name: ACCOUNT_DB
               value: /state/accounts.sqlite3
@@ -48,8 +54,14 @@ spec:
               value: /gateway-config/config.yaml
             {{- end }}
             {{- end }}
-          {{- if .Values.app.localTrial.enabled }}
+          {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret }}
           volumeMounts:
+            {{- if .Values.gateway.keysSecret }}
+            - name: gateway-keys
+              mountPath: /run/gateway-keys
+              readOnly: true
+            {{- end }}
+            {{- if .Values.app.localTrial.enabled }}
             - name: state
               mountPath: /state
             - name: provider-keys
@@ -61,6 +73,7 @@ spec:
             - name: gateway-config
               mountPath: /gateway-config
               readOnly: true
+            {{- end }}
             {{- end }}
           {{- end }}
           readinessProbe:
@@ -80,8 +93,14 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
-      {{- if .Values.app.localTrial.enabled }}
+      {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret }}
       volumes:
+        {{- if .Values.gateway.keysSecret }}
+        - name: gateway-keys
+          secret:
+            secretName: {{ .Values.gateway.keysSecret | quote }}
+        {{- end }}
+        {{- if .Values.app.localTrial.enabled }}
         - name: state
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-state
@@ -95,6 +114,7 @@ spec:
         - name: gateway-config
           configMap:
             name: {{ .Release.Name }}-config
+        {{- end }}
         {{- end }}
       {{- end }}
 ---

@@ -81,34 +81,42 @@ def public_trial(base):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--targets", choices=("all", "docker"), default="all")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Evidence output already exists")
-    context = run("kubectl", "--kubeconfig", KUBECONFIG, "config", "current-context")
-    if context != "kind-keeplane":
-        raise RuntimeError(f"Refusing Kubernetes context {context!r}")
+    context = "not checked"
+    if args.targets == "all":
+        context = run("kubectl", "--kubeconfig", KUBECONFIG, "config", "current-context")
+        if context != "kind-keeplane":
+            raise RuntimeError(f"Refusing Kubernetes context {context!r}")
     observations = {
         "docker_managed": docker_trial(),
-        "kind_managed": kind_trial("keeplane", "keeplane", "local-fixture"),
-        "kind_supplied": kind_trial("supplied-gateway", "supplied-gateway", "customer-fixture"),
         "public_docker": public_trial("http://127.0.0.1:3000"),
-        "public_kind": public_trial("http://127.0.0.1:13000"),
     }
+    if args.targets == "all":
+        observations["kind_managed"] = kind_trial("keeplane", "keeplane", "local-fixture")
+        observations["kind_supplied"] = kind_trial("supplied-gateway", "supplied-gateway", "customer-fixture")
+        observations["public_kind"] = public_trial("http://127.0.0.1:13000")
     for name in ("docker_managed", "kind_managed", "kind_supplied"):
+        if name not in observations:
+            continue
         row = observations[name]
-        row["release_policy_passes"] = (
+        row["tested_probe_passes"] = (
             row["model_list_status"] in (401, 403) and
             row["management_read_status"] in (401, 403, 404) and
             row["direct_chat_status"] in (401, 403) and
             row["forged_chat_status"] in (401, 403) and
             row["upstream_calls_added"] == 0)
     for name in ("public_docker", "public_kind"):
-        observations[name]["release_policy_passes"] = all(
+        if name not in observations:
+            continue
+        observations[name]["tested_probe_passes"] = all(
             value in (401, 403, 404) for key, value in observations[name].items()
-            if key != "release_policy_passes")
+            if key != "tested_probe_passes")
     report = {"suite": "current gateway bypass diagnostic", "time_utc": datetime.now(timezone.utc).isoformat(),
               "gateway_image": json.loads((ROOT / "deploy/local/stack.lock.json").read_text())["images"]["agentgateway"],
-              "context": context, "observations": observations}
+              "context": context, "observations": observations, "release_gateway_selected": False}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

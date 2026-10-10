@@ -29,6 +29,23 @@ chmod 700 "$RUNTIME_DIR"
 if [ ! -f "$FIRST_ADMIN_PASSWORD" ]; then
   python3 -c 'import pathlib,secrets,sys; p=pathlib.Path(sys.argv[1]); p.write_text(secrets.token_urlsafe(32)+"\n"); p.chmod(0o600)' "$FIRST_ADMIN_PASSWORD"
 fi
+python3 - "$RUNTIME_DIR" <<'PY'
+import hashlib
+from pathlib import Path
+import secrets
+import sys
+
+root = Path(sys.argv[1])
+for kind in ("runtime", "admin"):
+    path = root / f"gateway-{kind}-key"
+    if not path.exists():
+        path.write_text(secrets.token_urlsafe(32) + "\n")
+        path.chmod(0o600)
+    digest = hashlib.sha256(path.read_text().strip().encode()).hexdigest()
+    hash_path = root / f"gateway-{kind}-key-hash"
+    hash_path.write_text("sha256:" + digest + "\n")
+    hash_path.chmod(0o600)
+PY
 if [ ! -d components/admin-ui/web/node_modules ]; then
   (cd components/admin-ui/web && npm ci)
 fi
@@ -58,6 +75,15 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane-existing --dry
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace supplied-gateway --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
+for NS in keeplane supplied-gateway keeplane-existing; do
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n "$NS" create secret generic keeplane-gateway-keys \
+    --from-file=runtime-key="$RUNTIME_DIR/gateway-runtime-key" \
+    --from-file=admin-key="$RUNTIME_DIR/gateway-admin-key" \
+    --from-file=runtime-key-hash="$RUNTIME_DIR/gateway-runtime-key-hash" \
+    --from-file=admin-key-hash="$RUNTIME_DIR/gateway-admin-key-hash" \
+    --dry-run=client -o yaml |
+    kubectl --kubeconfig "$KUBECONFIG_PATH" -n "$NS" apply -f -
+done
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap model-fixture \
   --from-file=mock_model.py=tests/fixtures/mock_model.py --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
@@ -91,6 +117,7 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/ke
 "$HELM_BIN" upgrade --install keeplane-existing deploy/helm/keeplane \
   --kubeconfig "$KUBECONFIG_PATH" --namespace keeplane-existing \
   --set gateway.mode=existing --set gateway.install=false \
+  --set gateway.keysSecret=keeplane-gateway-keys \
   --set gateway.url=http://supplied-gateway.supplied-gateway.svc.cluster.local:4000 \
   --set gateway.preflightModel=customer-fixture \
   --set app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080 \

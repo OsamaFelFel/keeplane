@@ -32,6 +32,9 @@ services:
   gateway:
     image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
     command: ["-f", "/config.yaml"]
+    environment:
+      GATEWAY_RUNTIME_KEY_HASH: ${GATEWAY_RUNTIME_KEY_HASH}
+      GATEWAY_ADMIN_KEY_HASH: ${GATEWAY_ADMIN_KEY_HASH}
     depends_on:
       volume-init:
         condition: service_completed_successfully
@@ -95,6 +98,8 @@ services:
       GATEWAY_FILE_CONFIG: /gateway-config/local.yaml
       PROVIDER_KEY_DIR: /provider-keys
       DJANGO_ACCOUNT_API: "1"
+      GATEWAY_RUNTIME_KEY_FILE: /run/secrets/gateway-runtime-key
+      GATEWAY_ADMIN_KEY_FILE: /run/secrets/gateway-admin-key
       PREVIEW_OPENAI_BASE_URL: http://cloud-provider:18082/v1
       PREVIEW_ANTHROPIC_BASE_URL: http://cloud-provider:18082/v1
     depends_on:
@@ -106,6 +111,8 @@ services:
       - ./components/control-plane:/app:ro
       - ./components/admin-ui:/ui:ro
       - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/first-admin-password:/run/secrets/first-admin-password:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/gateway-runtime-key:/run/secrets/gateway-runtime-key:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/gateway-admin-key:/run/secrets/gateway-admin-key:ro
       - ./integrations/gateway/local.yaml:/gateway-config/local.yaml:ro
       - account-data:/state
       - provider-keys:/provider-keys

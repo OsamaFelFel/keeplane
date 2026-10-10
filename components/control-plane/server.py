@@ -24,6 +24,8 @@ from provider_keys import (save as save_provider_key, remove as remove_provider_
 
 
 GATEWAY = os.environ.get("GATEWAY_URL", "http://gateway:4000")
+GATEWAY_RUNTIME_KEY_FILE = os.environ.get("GATEWAY_RUNTIME_KEY_FILE", "")
+GATEWAY_ADMIN_KEY_FILE = os.environ.get("GATEWAY_ADMIN_KEY_FILE", "")
 UI = Path("/ui")
 MAX_BODY = 64 * 1024
 TRIAL_KEY = os.environ.get("PREVIEW_PROVIDER_KEY", "")
@@ -124,6 +126,15 @@ def gateway(path, body=None, method=None, connection_retries=0, timeout=120):
     request = Request(GATEWAY + path, data=payload, method=method or ("POST" if payload is not None else "GET"))
     if payload is not None:
         request.add_header("Content-Type", "application/json")
+    key_file = GATEWAY_ADMIN_KEY_FILE if path.startswith("/api/") else GATEWAY_RUNTIME_KEY_FILE
+    if key_file:
+        try:
+            key = Path(key_file).read_text().strip()
+        except OSError:
+            key = ""
+        if not key:
+            return 503, {"error": "Gateway credential unavailable"}
+        request.add_header("Authorization", "Bearer " + key)
     try:
         with urlopen(request, timeout=timeout) as response:
             return response.status, json.load(response)

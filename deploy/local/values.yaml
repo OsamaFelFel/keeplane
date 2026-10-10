@@ -13,8 +13,20 @@ app:
 gateway:
   mode: managed
   install: true
+  keysSecret: keeplane-gateway-keys
 
 agentgateway-standalone:
+  extraEnv:
+    - name: GATEWAY_RUNTIME_KEY_HASH
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-keys
+          key: runtime-key-hash
+    - name: GATEWAY_ADMIN_KEY_HASH
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-keys
+          key: admin-key-hash
   podSecurityContext:
     fsGroup: 65532
   extraVolumes:
@@ -34,7 +46,17 @@ agentgateway-standalone:
         port: 4000
     ui:
       gateways: default
+      policies:
+        apiKey:
+          mode: strict
+          keys:
+            - keyHash: ${GATEWAY_ADMIN_KEY_HASH}
     llm:
+      policies:
+        apiKey:
+          mode: strict
+          keys:
+            - keyHash: ${GATEWAY_RUNTIME_KEY_HASH}
       models:
         - name: local-fixture
           provider:

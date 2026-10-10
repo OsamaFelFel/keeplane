@@ -18,13 +18,17 @@ for the product.
 
 The script builds the React admin UI from its committed npm lockfile before
 starting Docker. Open the [Users screen](http://127.0.0.1:3000/users) to
-try the React, shadcn/ui and Tailwind implementation. The other working admin
-screens still use the earlier UI; links to unfinished screens are disabled in
-the React navigation.
+try the React, shadcn/ui and Tailwind implementation. Data Classes and Audit
+also use React; Models and routing still uses the earlier UI.
 
 The first admin is `first-admin`. Read the generated password on your own
 machine with `cat /private/tmp/keeplane-accounts-trial/first-admin-password`.
 The file is private and must stay out of Git. The app listens only on loopback.
+The script also creates separate private gateway runtime and management keys.
+The gateway holds their hashes, while the app reads the keys from local files.
+Re-running the script preserves them. Direct gateway calls without a key are
+refused; the [versioned bypass checks](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md)
+record the result and its limits.
 
 ## Five-minute walkthrough
 

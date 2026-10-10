@@ -12,8 +12,8 @@ flowchart LR
   Django -->|first-admin session| Accounts[(Local account and session store)]
   Django -->|same transaction, mandatory sign-in record| Audit[(Local Audit store)]
   App -->|model setup and optional data-class mode| Settings[(Local settings store)]
-  App -->|management API| Gateway[agentgateway]
-  App -->|inference API| Gateway
+  App -->|management API, admin key| Gateway[agentgateway]
+  App -->|model API, runtime key| Gateway
   Gateway --> Fixture[Local test model]
   Gateway --> Qwen[Local Qwen runner]
   Gateway -->|disposable test key| Guarded[Guarded endpoint fixture]
@@ -21,9 +21,10 @@ flowchart LR
 ```
 
 Only Keeplane is published on loopback. The gateway management API and model
-endpoints stay on the private Compose network. The gateway stores registrations
-in a Docker volume so a restart does not erase them. This preview has one
-gateway replica; production availability and policy enforcement need later work.
+endpoints stay on the private Compose network and require separate keys. The
+gateway stores registrations in a Docker volume so a restart does not erase
+them. Docker runs one gateway replica and kind runs two. Project-bound and
+final-destination policy enforcement need later work.
 The guarded endpoint accepts only its fixed test key and forwards chat requests
 to Qwen. Keeplane registers that key through the gateway management API, and
 its model-list API omits the key. The fixture runs on Docker's private network

@@ -16,10 +16,13 @@ REPO = Path(__file__).resolve().parents[2]
 REPORT = report_path("2026-10-09-model-replacement.json")
 RESOURCE_PATH = "/api/config/resources/llm.model"
 GATEWAY_SCRIPT = """
-import json, sys, urllib.error, urllib.request
+import json, pathlib, sys, urllib.error, urllib.request
 method, path, payload = sys.argv[1:]
 data = None if payload == '-' else payload.encode()
 request = urllib.request.Request('http://gateway:4000' + path, data=data, method=method)
+key_type = 'admin' if path.startswith('/api/') else 'runtime'
+key = pathlib.Path('/run/secrets/gateway-' + key_type + '-key').read_text().strip()
+request.add_header('Authorization', 'Bearer ' + key)
 if data is not None:
     request.add_header('Content-Type', 'application/json')
 try:

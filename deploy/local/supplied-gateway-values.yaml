@@ -3,6 +3,17 @@
 mode: database
 replicaCount: 1
 image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+extraEnv:
+  - name: GATEWAY_RUNTIME_KEY_HASH
+    valueFrom:
+      secretKeyRef:
+        name: keeplane-gateway-keys
+        key: runtime-key-hash
+  - name: GATEWAY_ADMIN_KEY_HASH
+    valueFrom:
+      secretKeyRef:
+        name: keeplane-gateway-keys
+        key: admin-key-hash
 database:
   postgres:
     url: postgresql://keeplane:local-test-only@postgres:5432/keeplane
@@ -20,7 +31,17 @@ config:
       port: 4000
   ui:
     gateways: default
+    policies:
+      apiKey:
+        mode: strict
+        keys:
+          - keyHash: ${GATEWAY_ADMIN_KEY_HASH}
   llm:
+    policies:
+      apiKey:
+        mode: strict
+        keys:
+          - keyHash: ${GATEWAY_RUNTIME_KEY_HASH}
     models:
       - name: customer-fixture
         provider:

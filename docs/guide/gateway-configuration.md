@@ -33,6 +33,7 @@ helm upgrade --install keeplane-existing deploy/helm/keeplane \
   --namespace keeplane-existing \
   --set gateway.mode=existing \
   --set gateway.install=false \
+  --set gateway.keysSecret=keeplane-gateway-keys \
   --set gateway.url=http://supplied-gateway.supplied-gateway.svc.cluster.local:4000 \
   --set gateway.expectedVersion=1.6.0 \
   --set gateway.preflightModel=customer-fixture \
@@ -43,6 +44,11 @@ helm upgrade --install keeplane-existing deploy/helm/keeplane \
 
 The app-only install registers new models through the supplied gateway's
 management API; it must have permission to change Keeplane-managed models.
+The local setup creates a `keeplane-gateway-keys` Secret in each trial
+namespace. Its runtime key can list and call models but cannot read gateway
+management; its admin key can manage models but cannot call them. The selected
+customer gateway must support this separation and supply usable credentials
+before installation. The sample Secret is only for the local fixture.
 In this local trial, a Helm pre-install or pre-upgrade job checks the pinned
 gateway version, model listing, and management read API before installing the
 app. When `gateway.preflightModel` is set, it also makes one small inference
@@ -82,8 +88,10 @@ contract, we need to:
    supplies a known model. It does not prove management write permission.
 3. Carry the protected preview's model ownership and approval rules into both
    Kubernetes modes. Preserve unrelated gateway models and settings.
-4. Supply production PostgreSQL and secret configuration for `managed`, then
-   repeat the full regression suite in both modes on each supported version.
+4. Supply production PostgreSQL and secret configuration for `managed`, enforce
+   the internal network boundary, then repeat the full regression suite in
+   both modes on each supported version. The local key trial closes the tested
+   credential-free calls, not project-class bypass or alternate routes.
 
 These mode settings choose the **gateway deployment**. They do not choose a
 model. After installation, an admin adds an external endpoint or a local

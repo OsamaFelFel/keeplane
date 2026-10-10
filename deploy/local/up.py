@@ -50,11 +50,15 @@ def prepare():
     if digest.hexdigest() != EXPECTED_MODEL_SHA256:
         raise RuntimeError(f"Local Qwen model checksum does not match: {MODEL}")
     RUNTIME.mkdir(mode=0o700, exist_ok=True)
-    for name in ("first-admin-password", "cloud-provider-key"):
+    for name in ("first-admin-password", "cloud-provider-key", "gateway-runtime-key", "gateway-admin-key"):
         path = RUNTIME / name
         if not path.exists():
             save_private(path, secrets.token_urlsafe(32) + "\n")
-    save_private(RUNTIME / ".env", f"KEEPLANE_RUNTIME_DIR={RUNTIME}\n")
+    key_hashes = {name: hashlib.sha256((RUNTIME / name).read_text().strip().encode()).hexdigest()
+                  for name in ("gateway-runtime-key", "gateway-admin-key")}
+    save_private(RUNTIME / ".env", f"KEEPLANE_RUNTIME_DIR={RUNTIME}\n"
+                 f"GATEWAY_RUNTIME_KEY_HASH=sha256:{key_hashes['gateway-runtime-key']}\n"
+                 f"GATEWAY_ADMIN_KEY_HASH=sha256:{key_hashes['gateway-admin-key']}\n")
 
 
 def build_admin_ui():

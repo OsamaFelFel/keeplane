@@ -8,7 +8,9 @@ Classes and Audit screens use the same React account flow as Docker. The kind
 and Docker previews keep separate accounts and model approvals; sign-in uses
 the same local password file. The kind setup keeps its account and approval
 files in two local PersistentVolumeClaims, and mounts a private Secret for the
-first-admin password. Re-running the setup preserves those records.
+first-admin password. It also creates private gateway runtime and management
+keys in Secrets for the managed and supplied gateway trials. Re-running the
+setup preserves those credentials and records.
 In the Models screen, choose **Add model**, enter `http://qwen:8080`, choose
 **Find models**, select `qwen2.5-coder:0.5b`, and add it. Keeplane checks the
 runner before registration. To test an answer, use the `/api/ask` example in
@@ -60,9 +62,12 @@ instead of removing the admin UI from the Service. The isolated
 
 The checked-in chart dependency and lock file pin the upstream chart to
 `v1.6.0`. The gateway and fixture container images are also pinned by digest.
-The chart is an integration trial, not a production installation. Release
-work remains for durable PostgreSQL, secret handling, external network
-controls, production image clearance, node failure and upgrade testing.
+The chart is an integration trial, not a production installation. The local
+gateway now rejects direct calls without a runtime or management key, as the
+[bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
+Release work remains for durable PostgreSQL, secret handling, enforced
+NetworkPolicy, project and class policy, production image clearance, node
+failure and upgrade testing.
 The exact trial images, chart versions, kind node and Qwen model checksum are
 recorded in [stack.lock.json](../../deploy/local/stack.lock.json). The lock
 check compares those entries with the running Docker and kind installations;
@@ -95,24 +100,11 @@ installed existing-gateway app remains an unprotected integration fixture and
 is not exposed on the host. Only the managed kind preview on port 13000 has
 the local account setup.
 
-Agentgateway's own management UI is available through a local port forward.
-Keep this command running in a terminal, then open
-[http://127.0.0.1:14000/ui/llm/models](http://127.0.0.1:14000/ui/llm/models).
-This trial UI has no sign-in, so the port forward binds only to loopback.
-
-```sh
-kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane \
-  port-forward service/keeplane 14000:4000 --address 127.0.0.1
-```
-
-To inspect the separate supplied gateway's `customer-fixture` catalog, run a
-second port forward and open
-[http://127.0.0.1:14001/ui/llm/models](http://127.0.0.1:14001/ui/llm/models).
-
-```sh
-kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway \
-  port-forward service/supplied-gateway 14001:4000 --address 127.0.0.1
-```
+The raw agentgateway UI and configuration API now require the private admin
+key. A plain browser port forward will return 401. Use Keeplane's Models and
+routing screen to inspect and manage models; the raw gateway UI needs a safe
+admin sign-in arrangement before we offer it again in this trial. A runtime
+key cannot open gateway management.
 
 To inspect Qwen's *effective* context and sampler defaults, read the running
 server. `/props` shows its active context and sampling defaults; `/v1/models`

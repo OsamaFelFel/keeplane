@@ -55,7 +55,8 @@ def main():
                                                 "source": "guarded", "approved_classes": ["Public"]})
     models_status, models = call(APP, "/api/models")
     entry = next((item for item in models.get("models", []) if item.get("id") == MODEL), {})
-    management_status, management = call(GATEWAY, "/api/config/resources/llm.model")
+    management_status, management = call(GATEWAY, "/api/config/resources/llm.model", headers={
+        "Authorization": "Bearer " + Path("/run/secrets/gateway-admin-key").read_text().strip()})
     managed = next((item.get("value", {}) for item in management.get("resources", [])
                     if item.get("id") == MODEL), {})
     has_key = managed.get("auth", {}).get("key", {}).get("value") == KEY

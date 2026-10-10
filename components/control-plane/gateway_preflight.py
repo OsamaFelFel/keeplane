@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 import sys
 import time
 from urllib.error import HTTPError, URLError
@@ -11,11 +12,22 @@ from urllib.request import Request, urlopen
 URL = os.environ.get("GATEWAY_URL", "").rstrip("/")
 EXPECTED_VERSION = os.environ.get("EXPECTED_GATEWAY_VERSION", "")
 MODEL = os.environ.get("GATEWAY_PREFLIGHT_MODEL", "")
+RUNTIME_KEY_FILE = os.environ.get("GATEWAY_RUNTIME_KEY_FILE", "")
+ADMIN_KEY_FILE = os.environ.get("GATEWAY_ADMIN_KEY_FILE", "")
 
 
 def fetch(path, body=None):
     data = None if body is None else json.dumps(body).encode()
     headers = {"Content-Type": "application/json"} if data is not None else {}
+    key_file = ADMIN_KEY_FILE if path.startswith("/api/") else RUNTIME_KEY_FILE
+    if key_file:
+        try:
+            key = Path(key_file).read_text().strip()
+        except OSError:
+            return 0, None
+        if not key:
+            return 0, None
+        headers["Authorization"] = "Bearer " + key
     request = Request(URL + path, data=data, headers=headers)
     try:
         with urlopen(request, timeout=8) as response:

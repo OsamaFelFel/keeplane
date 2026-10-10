@@ -24,6 +24,18 @@ spec:
               value: {{ required "gateway.expectedVersion is required in existing mode" .Values.gateway.expectedVersion | quote }}
             - name: GATEWAY_PREFLIGHT_MODEL
               value: {{ .Values.gateway.preflightModel | quote }}
+            {{- if .Values.gateway.keysSecret }}
+            - name: GATEWAY_RUNTIME_KEY_FILE
+              value: /run/gateway-keys/runtime-key
+            - name: GATEWAY_ADMIN_KEY_FILE
+              value: /run/gateway-keys/admin-key
+            {{- end }}
+          {{- if .Values.gateway.keysSecret }}
+          volumeMounts:
+            - name: gateway-keys
+              mountPath: /run/gateway-keys
+              readOnly: true
+          {{- end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
@@ -31,4 +43,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+      {{- if .Values.gateway.keysSecret }}
+      volumes:
+        - name: gateway-keys
+          secret:
+            secretName: {{ .Values.gateway.keysSecret | quote }}
+      {{- end }}
 {{- end }}

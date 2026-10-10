@@ -18,3 +18,6 @@ context, uses no project or provider credential, and deletes its two test pods
 in a `finally` block. Its output records only statuses and fixture call counts,
 not prompts or credentials. GW-17–GW-23 in governance remain the actual release
 acceptance cases; these probes expose the current setup's gaps.
+Use `--targets docker` to check only the running Docker preview during a staged
+rollout. `tested_probe_passes` covers only the paths in this table;
+`release_gateway_selected` remains false even if every probe passes.

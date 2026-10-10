@@ -15,6 +15,7 @@ HELM = (os.environ.get("KEEPLANE_HELM_BIN") or shutil.which("helm") or
         "/private/tmp/keeplane-helm/darwin-amd64/helm")
 NAMESPACE = "keeplane-gateway-down-" + str(os.getpid())
 RELEASE = "keeplane-down"
+KEY_DIR = Path("/private/tmp/keeplane-accounts-trial")
 
 
 def run(*args):
@@ -40,10 +41,14 @@ def main():
     try:
         kubectl("create", "namespace", NAMESPACE)
         created = True
+        kubectl("-n", NAMESPACE, "create", "secret", "generic", "keeplane-gateway-keys",
+                "--from-file=runtime-key=" + str(KEY_DIR / "gateway-runtime-key"),
+                "--from-file=admin-key=" + str(KEY_DIR / "gateway-admin-key"))
         stage = "helm install"
         run(HELM, "upgrade", "--install", RELEASE, "deploy/helm/keeplane",
             "--kubeconfig", KUBECONFIG, "--namespace", NAMESPACE,
             "--set", "gateway.mode=existing", "--set", "gateway.install=false",
+            "--set", "gateway.keysSecret=keeplane-gateway-keys",
             "--set", "gateway.url=http://supplied-gateway.supplied-gateway.svc.cluster.local:4000",
             "--set", "gateway.preflightModel=customer-fixture",
             "--set", "app.image=keeplane-preview:kind-local",

@@ -1,0 +1,24 @@
+{
+  "suite": "current gateway bypass diagnostic",
+  "time_utc": "2026-10-10T04:02:56.045596+00:00",
+  "gateway_image": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+  "context": "not checked",
+  "observations": {
+    "docker_managed": {
+      "model_list_status": 401,
+      "management_read_status": 401,
+      "direct_chat_status": 401,
+      "forged_chat_status": 401,
+      "upstream_calls_added": 0,
+      "model": "local-fixture",
+      "tested_probe_passes": true
+    },
+    "public_docker": {
+      "models": 401,
+      "management": 401,
+      "chat": 401,
+      "tested_probe_passes": true
+    }
+  },
+  "release_gateway_selected": false
+}

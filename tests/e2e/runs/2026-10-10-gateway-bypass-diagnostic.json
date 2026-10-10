@@ -11,7 +11,7 @@
       "forged_chat_status": 200,
       "upstream_calls_added": 2,
       "model": "local-fixture",
-      "release_policy_passes": false
+      "tested_probe_passes": false
     },
     "kind_managed": {
       "model_list_status": 200,
@@ -20,7 +20,7 @@
       "forged_chat_status": 200,
       "upstream_calls_added": 2,
       "model": "local-fixture",
-      "release_policy_passes": false
+      "tested_probe_passes": false
     },
     "kind_supplied": {
       "model_list_status": 200,
@@ -29,19 +29,20 @@
       "forged_chat_status": 200,
       "upstream_calls_added": 2,
       "model": "customer-fixture",
-      "release_policy_passes": false
+      "tested_probe_passes": false
     },
     "public_docker": {
       "models": 401,
       "management": 401,
       "chat": 401,
-      "release_policy_passes": true
+      "tested_probe_passes": true
     },
     "public_kind": {
       "models": 401,
       "management": 401,
       "chat": 401,
-      "release_policy_passes": true
+      "tested_probe_passes": true
     }
-  }
+  },
+  "release_gateway_selected": false
 }
