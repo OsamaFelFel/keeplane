@@ -1,0 +1,23 @@
+{{- if .Values.networkPolicy.gatewayIngressEnabled }}
+{{- if ne .Values.gateway.mode "managed" }}
+{{- fail "networkPolicy.gatewayIngressEnabled belongs to managed mode; secure a supplied gateway in its own installation" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gateway-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-app
+      ports:
+        - protocol: TCP
+          port: 4000
+{{- end }}

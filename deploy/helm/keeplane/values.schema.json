@@ -39,6 +39,12 @@
           "then": {"properties": {"install": {"const": true}}}
         }
       ]
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "gatewayIngressEnabled": {"type": "boolean"}
+      }
     }
   }
 }

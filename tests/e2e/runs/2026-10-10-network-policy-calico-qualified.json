@@ -1,0 +1,16 @@
+{
+  "suite": "isolated enforcing-CNI gateway ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "NET-TRIAL",
+      "verdict": "fail",
+      "observed": {
+        "error": "RuntimeError",
+        "detail": "kubectl failed: timed out waiting for the condition on pods/gateway\ntimed out waiting for the condition on pods/keeplane-app\ntimed out waiting for the condition on pods/sibling\n"
+      }
+    }
+  ],
+  "production_network_boundary_proved": false
+}

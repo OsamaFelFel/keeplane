@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: keeplane
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: server
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-m", "http.server", "4000", "--bind", "0.0.0.0"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: keeplane
+  ports:
+    - port: 4000
+      targetPort: 4000
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: keeplane-app
+  labels:
+    app: keeplane-app
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: caller
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-c", "import time; time.sleep(600)"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sibling
+  labels:
+    app: sibling
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: caller
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-c", "import time; time.sleep(600)"]

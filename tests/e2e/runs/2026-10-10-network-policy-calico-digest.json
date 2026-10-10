@@ -1,0 +1,32 @@
+{
+  "suite": "isolated enforcing-CNI gateway ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "NET-01",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "200"
+      }
+    },
+    {
+      "case": "NET-02",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "blocked:URLError"
+      }
+    },
+    {
+      "case": "NET-TRIAL",
+      "verdict": "fail",
+      "observed": {
+        "error": "RuntimeError",
+        "detail": "kubectl failed: error: 'app' already has a value (sibling), and --overwrite is false\n"
+      }
+    }
+  ],
+  "production_network_boundary_proved": false
+}

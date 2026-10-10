@@ -67,11 +67,16 @@ supports private app image-pull credentials and resource requests, and keeps
 Kubernetes service-account tokens out of the app and preflight pods. The
 [packaging cases and live run](../../tests/e2e/runs/2026-10-10-chart-hardening.md)
 record the tested behavior.
+An optional managed-gateway ingress NetworkPolicy has passed selector checks
+in a separate Calico kind fixture. It remains disabled in this kindnet preview.
+The [plain-English cases and result](../../tests/e2e/runs/2026-10-10-gateway-alternate-and-network.md)
+also show that a pod allowed to adopt the trusted app label can pass the policy;
+production namespace permissions must prevent that.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
-Release work remains for durable PostgreSQL, secret handling, enforced
-NetworkPolicy, project and class policy, production image clearance, node
+Release work remains for durable PostgreSQL, secret handling, full-product
+network policy, project and class policy, production image clearance, node
 failure and upgrade testing.
 The exact trial images, chart versions, kind node and Qwen model checksum are
 recorded in [stack.lock.json](../../deploy/local/stack.lock.json). The lock

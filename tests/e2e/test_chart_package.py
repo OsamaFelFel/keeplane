@@ -82,6 +82,20 @@ def main():
                        {"missing_url_exit": invalid_existing.returncode,
                         "conflicting_mode_exit": invalid_managed.returncode,
                         "missing_key_secret_exit": missing_keys.returncode}))
+    policy = run("template", "keeplane", CHART, "-f", "deploy/local/values.yaml",
+                 "--set", "networkPolicy.gatewayIngressEnabled=true")
+    policy_manifest = named(policy.stdout, "NetworkPolicy", "keeplane-gateway-ingress")
+    invalid_existing_policy = run("template", "keeplane-existing", CHART, *existing_args,
+                                  "--set", "networkPolicy.gatewayIngressEnabled=true")
+    checks.append(case("PKG-05", policy.returncode == 0 and bool(policy_manifest)
+                       and "app.kubernetes.io/name: agentgateway-standalone" in policy_manifest
+                       and "app.kubernetes.io/instance: keeplane" in policy_manifest
+                       and "app: keeplane-app" in policy_manifest
+                       and "port: 4000" in policy_manifest
+                       and invalid_existing_policy.returncode != 0,
+                       {"managed_render_exit": policy.returncode,
+                        "policy_present": bool(policy_manifest),
+                        "existing_policy_exit": invalid_existing_policy.returncode}))
     report = {"suite": "Keeplane local Helm packaging", "results": checks,
               "release_package_approved": False}
     if args.output:

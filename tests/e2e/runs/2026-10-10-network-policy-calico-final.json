@@ -1,0 +1,48 @@
+{
+  "suite": "isolated enforcing-CNI gateway ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "NET-01",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "200"
+      }
+    },
+    {
+      "case": "NET-02",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "blocked:URLError"
+      }
+    },
+    {
+      "case": "NET-03",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "200"
+      }
+    },
+    {
+      "case": "NET-04",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "blocked:URLError"
+      }
+    },
+    {
+      "case": "NET-05",
+      "verdict": "pass",
+      "observed": {
+        "app": "200",
+        "sibling": "200"
+      }
+    }
+  ],
+  "production_network_boundary_proved": false
+}

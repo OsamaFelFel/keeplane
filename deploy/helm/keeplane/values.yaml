@@ -23,6 +23,11 @@ gateway:
   preflightModel: ""
   keysSecret: ""
 
+networkPolicy:
+  # Requires a Kubernetes CNI that enforces NetworkPolicy. The local kindnet
+  # preview does not; keep disabled in that preview.
+  gatewayIngressEnabled: false
+
 agentgateway-standalone:
   mode: database
   replicaCount: 2
