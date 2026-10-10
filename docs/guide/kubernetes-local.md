@@ -77,8 +77,10 @@ requires an ingress class, hostname and existing TLS Secret, and refuses a
 simultaneous app NodePort. Managed and supplied-gateway renders pass the
 [edge packaging case](../../tests/e2e/chart-package-cases.md); no gateway
 management route is configured in that Ingress. It is off in the previews.
-An ingress controller, HTTPS redirect, certificate handling and a live
-single-address journey still need testing before this is a release edge.
+An [isolated live ingress fixture](../../tests/e2e/runs/2026-10-10-chart-ingress-live.md)
+verified the TLS host, HTTP redirect and app-only route with ingress-nginx.
+The full Keeplane UI/API journey, customer controller behavior, certificate
+renewal and the project-bound runtime route still need release tests.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.

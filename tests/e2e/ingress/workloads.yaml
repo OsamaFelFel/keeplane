@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  labels:
+    app: edge-app
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: server
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-u", "-c"]
+      args:
+        - |
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  body = ('app:' + self.path).encode()
+                  self.send_response(200)
+                  self.send_header('Content-Length', str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+          HTTPServer(('0.0.0.0', 3000), Handler).serve_forever()
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keeplane-app
+spec:
+  selector:
+    app: edge-app
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gateway
+  labels:
+    app: edge-gateway
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: server
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-u", "-c"]
+      args:
+        - |
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  body = ('gateway:' + self.path).encode()
+                  self.send_response(200)
+                  self.send_header('Content-Length', str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+          HTTPServer(('0.0.0.0', 4000), Handler).serve_forever()
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app: edge-gateway
+  ports:
+    - port: 4000
+      targetPort: 4000

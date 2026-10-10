@@ -1,0 +1,38 @@
+{
+  "suite": "isolated app-only TLS ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "EDGE-01",
+      "verdict": "pass",
+      "observed": {
+        "tls_verified": true,
+        "body": "app:/"
+      }
+    },
+    {
+      "case": "EDGE-02",
+      "verdict": "pass",
+      "observed": {
+        "body": "app:/api/config/resources/llm.model"
+      }
+    },
+    {
+      "case": "EDGE-03",
+      "verdict": "pass",
+      "observed": {
+        "http_status": 308,
+        "redirect_https": true
+      }
+    },
+    {
+      "case": "EDGE-04",
+      "verdict": "pass",
+      "observed": {
+        "other_host_status": 404
+      }
+    }
+  ],
+  "release_edge_approved": false
+}
