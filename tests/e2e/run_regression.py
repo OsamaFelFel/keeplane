@@ -35,7 +35,7 @@ def py(name, *args):
 
 
 SUITES = (
-    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04 PKG-05 PKG-06", needs_stack=False),
+    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04 PKG-05 PKG-06 PKG-07", needs_stack=False),
     Suite("catalog-store", py("model_catalog"), "catalog-store", needs_stack=False),
     Suite("data-class-store", py("data_classes_store"), "data-class-store", needs_stack=False),
     Suite("audit-store", py("audit_store"), "audit-store", needs_stack=False),
@@ -62,9 +62,11 @@ SUITES = (
           environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:3000"),)),
     Suite("kind-runner", py("runner_flow"), "LOCAL-23 LOCAL-21 LOCAL-24 LOCAL-21-ADD LOCAL-22",
           environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
-    Suite("kind-failover", py("kind"), "K8S-01 K8S-02 K8S-03 K8S-04 K8S-07 K8S-05 K8S-06"),
+    Suite("kind-failover", py("kind"), "K8S-01 K8S-02 K8S-03 K8S-04 K8S-07 K8S-05 K8S-17 K8S-06"),
     Suite("kind-gateway-down", py("gateway_down"), "K8S-08 K8S-09", timeout=240),
     Suite("kind-existing-preflight", py("existing_gateway_preflight"), "K8S-10 K8S-11 K8S-12 K8S-13", timeout=240),
+    Suite("kind-existing-protected", py("existing_gateway_live"),
+          "EXIST-01 EXIST-02 EXIST-03", report="2026-10-10-protected-existing-live.json"),
     Suite("accounts", py("accounts"),
           "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20 ACCT-23",
           report="2026-10-10-users-react.json"),

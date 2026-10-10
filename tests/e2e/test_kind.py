@@ -11,7 +11,9 @@ import sys
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from kind_port_forward import existing_app
 from protected_preview import login_if_protected
+from test_accounts import Browser, RUNTIME
 
 
 KUBECONFIG = os.environ.get("KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig")
@@ -162,21 +164,40 @@ def main():
 
     resources = json.loads(kubectl("-n", "keeplane-existing", "get", "deploy,svc,pvc", "-o", "json"))["items"]
     names = sorted((r["kind"], r["metadata"]["name"]) for r in resources)
-    registration = kubectl("-n", "keeplane-existing", "exec", "deploy/keeplane-existing-app", "--",
-                           "python", "-c", "import json,urllib.request;u='http://localhost:3000';h={'Content-Type':'application/json'};b=json.dumps({'name':'customer-managed','source':'fixture','model':'mock-local'}).encode();r=urllib.request.Request(u+'/api/models',data=b,headers=h);print(urllib.request.urlopen(r,timeout=45).read().decode())")
-    answer = kubectl("-n", "keeplane-existing", "exec", "deploy/keeplane-existing-app", "--",
-                     "python", "-c", "import json,urllib.request;d=json.dumps({'model':'customer-managed','prompt':'fixture'}).encode();r=urllib.request.Request('http://localhost:3000/api/ask',data=d,headers={'Content-Type':'application/json'});print(urllib.request.urlopen(r,timeout=45).read().decode())")
+    with existing_app() as existing_base:
+        anonymous_status, _, _ = Browser(existing_base).fetch("/api/models")
+        existing_browser = Browser(existing_base)
+        login_status = existing_browser.login(
+            "first-admin", (RUNTIME / "first-admin-password").read_text().strip())[0]
+        users_status, _, _ = existing_browser.fetch("/api/users")
+        classes_status, _, _ = existing_browser.fetch("/api/data-classes")
+        audit_status, _, _ = existing_browser.fetch("/api/audit/options")
+        registration_status, registration, _ = existing_browser.fetch("/api/models", {
+            "name": "customer-managed", "source": "fixture", "model": "mock-local"}, method="POST")
+        setup_status, setup, _ = existing_browser.fetch("/api/models/customer-managed/setup", {
+            "key_choice": "none", "approved_classes": []}, method="POST")
+        answer_status, answer, _ = existing_browser.fetch("/api/ask", {
+            "model": "customer-managed", "prompt": "fixture"}, method="POST")
     existing_deployment = json.loads(kubectl("-n", "keeplane-existing", "get", "deployment",
                                              "keeplane-existing-app", "-o", "json"))
     gateway_url = next((env["value"] for env in existing_deployment["spec"]["template"]["spec"]["containers"][0]["env"]
                         if env["name"] == "GATEWAY_URL"), "")
     check("K8S-05", names == [("Deployment", "keeplane-existing-app"),
+                              ("PersistentVolumeClaim", "keeplane-existing-provider-keys"),
+                              ("PersistentVolumeClaim", "keeplane-existing-state"),
                               ("Service", "keeplane-existing-app")] and
           gateway_url == "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000" and
-          json.loads(registration).get("name") == "customer-managed" and
-          json.loads(answer).get("answer") == "mock answer",
+          registration_status == setup_status == answer_status == 200 and
+          (registration or {}).get("name") == "customer-managed" and
+          (answer or {}).get("answer") == "mock answer",
           {"resources": names, "gateway_url": gateway_url,
-           "registration": json.loads(registration), "answer": json.loads(answer).get("answer")})
+           "registration_status": registration_status, "setup_status": setup_status,
+           "answer_status": answer_status, "answer": (answer or {}).get("answer")})
+    check("K8S-17", anonymous_status == 401 and login_status == 200 and
+          users_status == classes_status == audit_status == 200,
+          {"anonymous_model_status": anonymous_status, "sign_in_status": login_status,
+           "users_status": users_status, "classes_status": classes_status,
+           "audit_status": audit_status})
 
     supplied_probe = direct_catalog("keeplane-existing", "keeplane-existing-app",
                                     "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000")

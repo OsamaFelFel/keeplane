@@ -16,7 +16,7 @@ the current Open Source release scope.
 ## Try both modes locally
 
 Follow [the kind setup](kubernetes-local.md) to start the isolated trial. It
-installs managed Keeplane in `keeplane` and app-only Keeplane in
+installs managed Keeplane in `keeplane` and a protected Keeplane app in
 `keeplane-existing`. Inspect what actually runs:
 
 ```sh
@@ -25,24 +25,28 @@ kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane-existing 
 kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway get deploy,svc
 ```
 
-The example app-only Helm settings are:
+The tested local settings are in `deploy/local/existing-values.yaml`. The kind
+setup creates the first-admin and gateway-key Secrets in this namespace. To
+reapply the existing-gateway app without installing another gateway:
 
 ```sh
 helm upgrade --install keeplane-existing deploy/helm/keeplane \
   --kubeconfig /private/tmp/keeplane-kind-kubeconfig \
   --namespace keeplane-existing \
-  --set gateway.mode=existing \
-  --set gateway.install=false \
-  --set gateway.keysSecret=keeplane-gateway-keys \
-  --set gateway.url=http://supplied-gateway.supplied-gateway.svc.cluster.local:4000 \
-  --set gateway.expectedVersion=1.6.0 \
-  --set gateway.preflightModel=customer-fixture \
-  --set app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080 \
-  --set app.image=keeplane-preview:kind-local \
-  --set app.pullPolicy=Never
+  -f deploy/local/existing-values.yaml --wait
 ```
 
-The app-only install registers new models through the supplied gateway's
+For a temporary browser path, run the command below in another terminal and
+open [the existing-gateway app](http://127.0.0.1:13001). Close the port-forward
+when finished; the main Docker and managed kind previews stay on ports 3000
+and 13000.
+
+```sh
+kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane-existing \
+  port-forward service/keeplane-existing-app 13001:3000 --address 127.0.0.1
+```
+
+The protected app registers new models through the supplied gateway's
 management API; it must have permission to change Keeplane-managed models.
 The local setup creates a `keeplane-gateway-keys` Secret in each trial
 namespace. Its runtime key can list and call models but cannot read gateway
@@ -61,18 +65,30 @@ starts with a valid install, then simulates an outage and confirms the app UI
 stays available. The [versioned run](../../tests/e2e/runs/2026-10-09-existing-preflight.md)
 includes the final full regression and the corrected rollout test.
 The trial's `app.runnerUrls` setting allows the Add model form to reach a
-specified local runner; it is separate
-from `gateway.url`. A release installation needs authenticated admins and
+specified local runner; it is separate from `gateway.url`. The local app now
+requires an admin session. A release still needs production identity and
 runner address controls before accepting arbitrary network addresses.
-The `K8S-05` and `K8S-06` cases check registration, a model call and separation
+The `K8S-05`, `K8S-17` and `K8S-06` cases check protected registration, a model call and separation
 from the managed gateway's catalog. An existing model that the customer added
 outside Keeplane must remain untouched and receive no Keeplane work until an
-admin sets up its key choice and, if data classes are on, its class approvals. The protected Docker preview
-now enforces that approval and preserves an outside model's gateway
-registration when its Keeplane setup is removed. The managed kind preview now
-exercises the same protected account and model flow; the separate app-only
-existing-gateway fixture remains unprotected, so this policy has not been
-tested end to end in existing-gateway mode.
+admin sets up its key choice and, if data classes are on, its class approvals.
+The local customer-run gateway trial now refuses anonymous app calls, signs in
+the first admin, sets up a no-key model and refuses work through an unrelated
+unapproved model. Its account and browser cases are versioned under `tests/`.
+Run the [plain-English existing-gateway cases](../../tests/e2e/existing-gateway-cases.md)
+with the full regression command in [the regression guide](regression-local.md).
+To repeat the React browser suite through a temporary port-forward, use a new
+output filename:
+
+```sh
+python3 tests/e2e/test_existing_gateway_browser.py \
+  --output tests/browser/runs/YYYY-MM-DD-existing-browser.json
+```
+
+Shared cloud-provider keys are not proven in this mode: the supplied gateway
+runs in a different namespace and cannot read Keeplane's private provider-key
+PVC. The release gateway contract needs a supported secret-delivery mechanism
+for customer-run gateways before this mode handles shared or personal keys.
 
 ## Release configuration plan
 
@@ -87,8 +103,9 @@ contract, we need to:
    changing the customer's gateway if any check fails. The current trial checks
    the version and read APIs; its inference check is enabled when an operator
    supplies a known model. It does not prove management write permission.
-3. Carry the protected preview's model ownership and approval rules into both
-   Kubernetes modes. Preserve unrelated gateway models and settings.
+3. Carry the protected trial's model ownership and approval rules into both
+   production modes, including shared and developer-owned key delivery.
+   Preserve unrelated gateway models and settings.
 4. Supply production PostgreSQL and secret configuration for `managed`, enforce
    the internal network boundary, then repeat the full regression suite in
    both modes on each supported version. The local key trial closes the tested

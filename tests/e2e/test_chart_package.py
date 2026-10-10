@@ -124,6 +124,26 @@ def main():
                         "existing_render_exit": existing_edge.returncode,
                         "missing_tls_exit": missing_tls.returncode,
                         "public_nodeport_exit": public_nodeport.returncode}))
+    protected_lint = run("lint", CHART, "-f", "deploy/local/existing-values.yaml")
+    protected_existing = run("template", "keeplane-existing", CHART,
+                             "-f", "deploy/local/existing-values.yaml")
+    protected_app = named(protected_existing.stdout, "Deployment", "keeplane-existing-app")
+    protected_service = named(protected_existing.stdout, "Service", "keeplane-existing-app")
+    checks.append(case("PKG-07", protected_lint.returncode == 0 and
+                       protected_existing.returncode == 0 and bool(protected_app) and
+                       "value: /state/accounts.sqlite3" in protected_app and
+                       "value: /state/model-approvals.sqlite3" in protected_app and
+                       "value: \"http://127.0.0.1:13001\"" in protected_app and
+                       "secretName: keeplane-first-admin" in protected_app and
+                       "type: ClusterIP" in protected_service and
+                       bool(named(protected_existing.stdout, "PersistentVolumeClaim",
+                                  "keeplane-existing-state")) and
+                       not named(protected_existing.stdout, "Deployment", "keeplane-existing"),
+                       {"lint_exit": protected_lint.returncode,
+                        "render_exit": protected_existing.returncode,
+                        "app_present": bool(protected_app),
+                        "state_pvc_present": bool(named(protected_existing.stdout,
+                            "PersistentVolumeClaim", "keeplane-existing-state"))}))
     report = {"suite": "Keeplane local Helm packaging", "results": checks,
               "release_package_approved": False}
     if args.output:

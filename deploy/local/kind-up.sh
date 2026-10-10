@@ -77,6 +77,9 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create secret generic keepla
   kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane-existing --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing create secret generic keeplane-first-admin \
+  --from-file=first-admin-password="$FIRST_ADMIN_PASSWORD" --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace supplied-gateway --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
 for NS in keeplane supplied-gateway keeplane-existing; do
@@ -129,12 +132,7 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/ke
 
 "$HELM_BIN" upgrade --install keeplane-existing deploy/helm/keeplane \
   --kubeconfig "$KUBECONFIG_PATH" --namespace keeplane-existing \
-  --set gateway.mode=existing --set gateway.install=false \
-  --set gateway.keysSecret=keeplane-gateway-keys \
-  --set gateway.url=http://supplied-gateway.supplied-gateway.svc.cluster.local:4000 \
-  --set gateway.preflightModel=customer-fixture \
-  --set app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080 \
-  --set app.image=keeplane-preview:kind-local --set app.pullPolicy=Never \
+  -f deploy/local/existing-values.yaml \
   --wait --timeout 180s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing rollout restart deployment/keeplane-existing-app
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing rollout status deployment/keeplane-existing-app --timeout=120s

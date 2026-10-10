@@ -3,9 +3,11 @@
 Run `test_local.py` against port 13000 first. It registers `second-local`, which
 the replica tests use. Then run `test_kind.py`. The latter deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
-The managed kind preview requires first-admin sign-in; the test helpers use the
-local password file and never print its value. The account cases in
-`accounts-cases.md` also run against port 13000 using `KEEPLANE_BASE_URL`.
+The managed kind preview and the customer-run gateway app require first-admin
+sign-in; the test helpers use the local password file and never print its value.
+The account cases in `accounts-cases.md` also run against port 13000 using
+`KEEPLANE_BASE_URL`. The existing-gateway app is accessed only through a
+short-lived loopback port-forward on port 13001 during its tests.
 K8S-10–13 exercise the live existing-gateway install hook in kind. K8S-14–16
 use simulated gateway replies to cover retry and refusal paths without changing
 the supplied gateway.
@@ -16,7 +18,8 @@ the supplied gateway.
 | K8S-02 | Register `second-local` through Keeplane, then request the model list from each gateway copy directly without a key and with the app's runtime key. | Both copies refuse the anonymous request and list `second-local` only for the app key; registration is shared. |
 | K8S-03 | Delete one gateway pod, observe the Service remove it as a ready endpoint, then send ten new questions to `second-local`. | All ten return the fixed answer. A call aimed at the stopped pod during endpoint propagation, including an active stream, may fail visibly and be retried. |
 | K8S-04 | Wait for the gateway Deployment to recover. | Two copies are ready again. |
-| K8S-05 | Install Keeplane in existing-gateway mode against a separately installed agentgateway; inspect Keeplane's namespace, add `customer-managed` through Keeplane, and ask it a question. | Keeplane's namespace contains only its app Deployment and Service; the app points to the supplied gateway, registers the model there and returns the fixture answer. |
+| K8S-05 | Install Keeplane in existing-gateway mode against a separately installed agentgateway; sign in, set up `customer-managed` through Keeplane, and ask it a question. | Keeplane's namespace contains its app Deployment, Service and local trial PVCs but no gateway Deployment. The app points to the supplied gateway, registers and approves the model there, and returns the fixture answer. |
+| K8S-17 | Ask the existing-gateway app for models anonymously, then sign in as the first admin and open Users, Data Classes and Audit APIs. | The anonymous request is refused; the protected account and admin APIs work through the customer-run gateway installation. |
 | K8S-06 | Compare the supplied gateway's model catalog with Keeplane's managed gateway catalog using the app key, and try both without a key. | Anonymous lists are refused. The supplied gateway keeps its pre-existing `customer-fixture` and gains `customer-managed`; neither appears in the managed gateway. The managed gateway's `second-local` does not appear in the supplied gateway. Both are Ready. |
 | K8S-07 | After the managed gateway has recovered from pod replacement, register `second-local` again five times with the same settings. | Every registration is idempotent and returns HTTP 200; no management API error occurs. |
 | K8S-08 | Install a temporary Keeplane app against a working supplied gateway, then simulate that gateway becoming unreachable. Inspect its Deployment and Service. | The app stays Ready and its Service has an endpoint, so the admin UI remains reachable. |

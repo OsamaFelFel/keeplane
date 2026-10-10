@@ -17,7 +17,8 @@ python3 tests/e2e/run_regression.py \
 Replace the filename with a new date and run label. The runner checks the
 isolated kind context and both preview health endpoints first. It then runs
 the [plain-English regression set](../../tests/e2e/regression-cases.md) in
-order. The JSON result lists every suite, case verdict, duration, exit code,
+order, including the protected customer-run gateway app through a temporary
+loopback port-forward. The JSON result lists every suite, case verdict, duration, exit code,
 Git commit, and stack-lock checksum. It rejects a suite that silently omits
 an expected case. The command exits nonzero when any suite fails.
 

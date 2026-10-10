@@ -1,0 +1,216 @@
+{
+  "suite": "Keeplane local Kubernetes",
+  "results": [
+    {
+      "case": "K8S-01",
+      "verdict": "pass",
+      "observed": {
+        "ready_replicas": 2
+      }
+    },
+    {
+      "case": "K8S-02",
+      "verdict": "pass",
+      "observed": [
+        {
+          "pod": "keeplane-5944cfbf5-xv22x",
+          "anonymous": 401,
+          "models": [
+            "qwen2.5-coder:0.5b",
+            "ui-qwen-verified",
+            "local-fixture",
+            "ui-qwen-smoke",
+            "second-local",
+            "local-qwen",
+            "demo-qwen",
+            "tesr"
+          ]
+        },
+        {
+          "pod": "keeplane-5944cfbf5-zfc6c",
+          "anonymous": 401,
+          "models": [
+            "qwen2.5-coder:0.5b",
+            "ui-qwen-verified",
+            "local-fixture",
+            "ui-qwen-smoke",
+            "second-local",
+            "local-qwen",
+            "demo-qwen",
+            "tesr"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "K8S-03",
+      "verdict": "pass",
+      "observed": {
+        "removed_pod": "keeplane-5944cfbf5-xv22x",
+        "service_removed_stopped_endpoint": true,
+        "calls": [
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          },
+          {
+            "status": 200,
+            "answer": "mock answer",
+            "error": null,
+            "detail": null
+          }
+        ]
+      }
+    },
+    {
+      "case": "K8S-04",
+      "verdict": "pass",
+      "observed": {
+        "ready_replicas": 2
+      }
+    },
+    {
+      "case": "K8S-07",
+      "verdict": "pass",
+      "observed": [
+        {
+          "status": 200,
+          "existing": true,
+          "error": null
+        },
+        {
+          "status": 200,
+          "existing": true,
+          "error": null
+        },
+        {
+          "status": 200,
+          "existing": true,
+          "error": null
+        },
+        {
+          "status": 200,
+          "existing": true,
+          "error": null
+        },
+        {
+          "status": 200,
+          "existing": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "case": "K8S-05",
+      "verdict": "pass",
+      "observed": {
+        "resources": [
+          [
+            "Deployment",
+            "keeplane-existing-app"
+          ],
+          [
+            "PersistentVolumeClaim",
+            "keeplane-existing-provider-keys"
+          ],
+          [
+            "PersistentVolumeClaim",
+            "keeplane-existing-state"
+          ],
+          [
+            "Service",
+            "keeplane-existing-app"
+          ]
+        ],
+        "gateway_url": "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000",
+        "registration_status": 200,
+        "setup_status": 200,
+        "answer_status": 200,
+        "answer": "mock answer"
+      }
+    },
+    {
+      "case": "K8S-17",
+      "verdict": "pass",
+      "observed": {
+        "anonymous_model_status": 401,
+        "sign_in_status": 200,
+        "users_status": 200,
+        "classes_status": 200,
+        "audit_status": 200
+      }
+    },
+    {
+      "case": "K8S-06",
+      "verdict": "pass",
+      "observed": {
+        "supplied_models": [
+          "customer-fixture",
+          "customer-managed",
+          "mock-local"
+        ],
+        "managed_models": [
+          "qwen2.5-coder:0.5b",
+          "ui-qwen-verified",
+          "local-fixture",
+          "ui-qwen-smoke",
+          "second-local",
+          "local-qwen",
+          "demo-qwen",
+          "tesr"
+        ],
+        "supplied_ready_replicas": 1
+      }
+    }
+  ]
+}

@@ -2,6 +2,9 @@
 
 This trial runs Keeplane at [http://127.0.0.1:13000](http://127.0.0.1:13000).
 The Docker preview remains available at [http://127.0.0.1:3000](http://127.0.0.1:3000).
+The protected app using the separately installed gateway can be reached on
+port 13001 through the temporary port-forward in the
+[gateway configuration guide](gateway-configuration.md).
 Sign in as `first-admin` with the password in
 `/private/tmp/keeplane-accounts-trial/first-admin-password`. The Users, Data
 Classes and Audit screens use the same React account flow as Docker. The kind
@@ -51,7 +54,7 @@ The managed install uses agentgateway's **official standalone Helm chart**,
 version `v1.6.0`, with two gateway replicas and PostgreSQL-backed model
 registration. Qwen is a real local model served by llama.cpp, while
 `local-fixture` returns a fixed test answer. The PostgreSQL Deployment in `deploy/local` is a disposable test
-fixture with a fixed test password and temporary storage. The app-only install
+fixture with a fixed test password and temporary storage. The protected app-only install
 in the `keeplane-existing` namespace points to a separately installed upstream
 agentgateway in `supplied-gateway`. That gateway has its own disposable
 PostgreSQL and a pre-existing fixture model. Keeplane installs no gateway into
@@ -126,10 +129,12 @@ kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway g
 In the `keeplane-existing` app-only trial, the enabled runner address is
 `http://model.supplied-gateway.svc.cluster.local:18080`. Its model is
 `mock-local`, a fixed-answer fixture. The runner allowlist is configured by
-the chart's `app.runnerUrls` value; it is a preview safeguard. The separately
-installed existing-gateway app remains an unprotected integration fixture and
-is not exposed on the host. Only the managed kind preview on port 13000 has
-the local account setup.
+the chart's `app.runnerUrls` value; it is a preview safeguard. The
+existing-gateway app has its own protected local account, Data Classes and
+Audit stores. It is not permanently exposed on the host. Its first-admin
+password matches the other local previews, but its records are separate.
+The local trial proves no-key model setup with the supplied gateway; it does
+not yet prove shared provider-key delivery across namespaces.
 
 The raw agentgateway UI and configuration API now require the private admin
 key. A plain browser port forward will return 401. Use Keeplane's Models and

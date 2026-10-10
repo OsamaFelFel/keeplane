@@ -72,3 +72,11 @@ installs Keycloak or an SSO proxy. The kind trial storage and password Secret
 are local integration fixtures, not the approved PostgreSQL release identity
 design. Optional OpenID Connect sign-in remains later Open Source work behind
 the Keeplane account contract.
+
+The `keeplane-existing` kind installation now runs the same protected app with
+its own trial PVCs and first-admin Secret. A short-lived loopback port-forward
+can show it on port 13001. Its gateway is installed independently in the
+`supplied-gateway` namespace; Keeplane does not create another gateway there.
+The no-key model setup path and unrelated-model rejection have live evidence.
+The gateway cannot read the app's provider-key PVC across namespaces, so
+shared provider-key delivery remains an unproven release contract for this mode.

@@ -44,13 +44,7 @@ def main():
         raise SystemExit("Refusing a Kubernetes context other than kind-keeplane")
     install = run(HELM, "upgrade", "--install", "keeplane-existing", "deploy/helm/keeplane",
                   "--kubeconfig", KUBECONFIG, "--namespace", "keeplane-existing",
-                  "--set", "gateway.mode=existing", "--set", "gateway.install=false",
-                  "--set", "gateway.keysSecret=keeplane-gateway-keys",
-                  "--set", "gateway.url=" + URL,
-                  "--set", "gateway.preflightModel=customer-fixture",
-                  "--set", "app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080",
-                  "--set", "app.image=keeplane-preview:kind-local",
-                  "--set", "app.pullPolicy=Never", "--wait", "--timeout", "120s")
+                  "-f", "deploy/local/existing-values.yaml", "--wait", "--timeout", "120s")
     good_code, good = probe("1.6.0", "customer-fixture") if install.returncode == 0 else (1, {})
     results.append(record("K8S-10", install.returncode == 0 and good_code == 0 and
                           good.get("passed") is True and good.get("inference_checked") is True,
