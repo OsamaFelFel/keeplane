@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Keeplane integration chart values",
+  "type": "object",
+  "properties": {
+    "app": {
+      "type": "object",
+      "properties": {
+        "image": {"type": "string", "minLength": 1},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]},
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {"name": {"type": "string", "minLength": 1}}
+          }
+        },
+        "resources": {"type": "object"}
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "mode": {"enum": ["managed", "existing"]},
+        "install": {"type": "boolean"},
+        "url": {"type": "string"},
+        "keysSecret": {"type": "string"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"mode": {"const": "existing"}}},
+          "then": {
+            "properties": {"install": {"const": false}, "url": {"minLength": 1}}
+          }
+        },
+        {
+          "if": {"properties": {"mode": {"const": "managed"}}},
+          "then": {"properties": {"install": {"const": true}}}
+        }
+      ]
+    }
+  }
+}

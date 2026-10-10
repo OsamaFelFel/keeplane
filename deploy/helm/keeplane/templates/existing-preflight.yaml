@@ -12,6 +12,14 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: preflight
           image: {{ .Values.app.image | quote }}
@@ -43,6 +51,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          {{- with .Values.app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- if .Values.gateway.keysSecret }}
       volumes:
         - name: gateway-keys

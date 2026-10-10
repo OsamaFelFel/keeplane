@@ -1,0 +1,7 @@
+# 10 October 2026 — first chart packaging controls
+
+The [plain-English packaging cases](../chart-package-cases.md), [verifier](../test_chart_package.py), and [render result](2026-10-10-chart-package.json) record four passing Helm checks. The chart now rejects conflicting managed/existing settings and a protected local install without a gateway key Secret. It accepts app image-pull Secrets and CPU/memory requests, passes them to the app and existing-gateway preflight Job, and disables Kubernetes service-account token mounting for both. The pod uses `RuntimeDefault` seccomp.
+
+After `kind-up.sh` upgraded the managed and existing-gateway releases, a live Deployment read found one Ready app in each namespace, `automountServiceAccountToken: false`, `seccompProfile.type: RuntimeDefault`, and the gateway key Secret mounted. Both public previews returned 302 to an unauthenticated root request, as expected for sign-in. The [complete regression](2026-10-10-chart-hardening-regression.json) then passed **34/34 suites and 178 case records**, including the four new chart cases.
+
+This is chart hardening, not production packaging approval. A customer image digest, registry mirroring, production PostgreSQL and secret management, TLS ingress, an enforcing NetworkPolicy, a release-approved gateway artifact, project/class policy and upgrade tests remain open. The upstream gateway chart already supplies its own image-pull, resource and disruption-budget values; Keeplane will configure those instead of duplicating that chart.

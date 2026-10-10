@@ -62,6 +62,11 @@ instead of removing the admin UI from the Service. The isolated
 
 The checked-in chart dependency and lock file pin the upstream chart to
 `v1.6.0`. The gateway and fixture container images are also pinned by digest.
+Keeplane's chart validates the gateway mode and protected local key Secret,
+supports private app image-pull credentials and resource requests, and keeps
+Kubernetes service-account tokens out of the app and preflight pods. The
+[packaging cases and live run](../../tests/e2e/runs/2026-10-10-chart-hardening.md)
+record the tested behavior.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
 [bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.

@@ -1,3 +1,6 @@
+{{- if and .Values.app.localTrial.enabled (not .Values.gateway.keysSecret) }}
+{{- fail "app.localTrial requires gateway.keysSecret" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,10 +15,17 @@ spec:
       labels:
         app: {{ .Release.Name }}-app
     spec:
-      {{- if .Values.app.localTrial.enabled }}
+      automountServiceAccountToken: false
       securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if .Values.app.localTrial.enabled }}
         fsGroup: 65532
         fsGroupChangePolicy: OnRootMismatch
+      {{- end }}
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: app
@@ -93,6 +103,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          {{- with .Values.app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret }}
       volumes:
         {{- if .Values.gateway.keysSecret }}

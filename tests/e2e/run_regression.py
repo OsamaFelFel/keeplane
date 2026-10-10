@@ -37,6 +37,7 @@ def py(name, *args):
 
 
 SUITES = (
+    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04", needs_stack=False),
     Suite("catalog-store", py("model_catalog"), "catalog-store", needs_stack=False),
     Suite("data-class-store", py("data_classes_store"), "data-class-store", needs_stack=False),
     Suite("audit-store", py("audit_store"), "audit-store", needs_stack=False),

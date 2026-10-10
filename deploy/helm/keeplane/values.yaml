@@ -1,6 +1,8 @@
 app:
   image: keeplane-preview:local
   pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  resources: {}
   runnerUrls: "http://qwen:8080"
   localTrial:
     enabled: false
