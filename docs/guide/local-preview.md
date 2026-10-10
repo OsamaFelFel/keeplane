@@ -1,5 +1,7 @@
 # Run Keeplane locally
 
+**Edition:** Open Source
+
 From the Open Source repository root, with Docker running and Node.js 22 or
 newer installed:
 
@@ -44,7 +46,9 @@ The model field reports the runner's active context when available. This
 preview uses 4,096 active tokens, while the underlying model reports a
 32,768-token training context. The active limit constrains live requests.
 Keeplane reads these values; it does not tune the model. The pinned runner
-stops at 256 output tokens by default, as checked in `LOCAL-20`.
+stops at 256 output tokens by default, as checked in `LOCAL-20`. The
+preview-only `/api/ask` demo requests at most 64 output tokens so a slow CPU
+runner can finish its smoke answer within the gateway timeout.
 
 `local-fixture` returns a fixed `mock answer` for transport checks. The guarded
 endpoint and cloud-provider containers are disposable integration fixtures;

@@ -64,11 +64,15 @@ def public_user(row):
 
 
 class LocalIdentity:
-    def __init__(self, database, first_admin_password_file):
+    def __init__(self, database, first_admin_password_file, audit):
+        if audit is None:
+            raise RuntimeError("An audit store is required for break-glass sign-in")
         self.database = database
+        self.audit = audit
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
-            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA journal_mode=DELETE")
+            db.execute("PRAGMA synchronous=FULL")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY, username TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -120,17 +124,27 @@ class LocalIdentity:
     def login(self, username, password):
         if not isinstance(username, str) or not isinstance(password, str):
             raise IdentityError(401, "Invalid username or password")
-        with self.connect() as db:
-            user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-            stored = user["password_hash"] if user else DUMMY_HASH
-            if not password_matches(password, stored) or not user:
-                raise IdentityError(401, "Invalid username or password")
-            token = secrets.token_urlsafe(32)
-            digest = hashlib.sha256(token.encode()).hexdigest()
-            db.execute("DELETE FROM sessions WHERE expires_at <= ?", (int(time.time()),))
-            db.execute("INSERT INTO sessions VALUES (?, ?, ?)",
-                       (digest, user["id"], int(time.time()) + SESSION_SECONDS))
-            return token
+        try:
+            with self.connect() as db:
+                user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+                stored = user["password_hash"] if user else DUMMY_HASH
+                if not password_matches(password, stored) or not user:
+                    raise IdentityError(401, "Invalid username or password")
+                if user["username"] == "first-admin":
+                    db.execute("ATTACH DATABASE ? AS audit_store", (str(self.audit.path),))
+                    if db.execute("PRAGMA audit_store.journal_mode").fetchone()[0] != "delete":
+                        raise IdentityError(503, "Sign-in storage needs operator repair")
+                    db.execute("PRAGMA audit_store.synchronous=FULL")
+                    db.execute("BEGIN IMMEDIATE")
+                    self.audit.record_break_glass_in_transaction(db, user["id"], user["username"])
+                token = secrets.token_urlsafe(32)
+                digest = hashlib.sha256(token.encode()).hexdigest()
+                db.execute("DELETE FROM sessions WHERE expires_at <= ?", (int(time.time()),))
+                db.execute("INSERT INTO sessions VALUES (?, ?, ?)",
+                           (digest, user["id"], int(time.time()) + SESSION_SECONDS))
+                return token
+        except sqlite3.Error as error:
+            raise IdentityError(503, "Sign-in storage is unavailable; contact your operator") from error
 
     def session(self, token):
         if not token or len(token) > 200:

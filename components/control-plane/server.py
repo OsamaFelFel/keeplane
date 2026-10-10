@@ -34,9 +34,10 @@ class NoRunnerRedirect(HTTPRedirectHandler):
 
 
 RUNNER_OPENER = build_opener(NoRunnerRedirect)
-IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"]) \
+AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
+    if os.environ.get("ACCOUNT_DB") and os.environ.get("MODEL_APPROVAL_DB") else None
+IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
     if os.environ.get("ACCOUNT_DB") else None
-AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) if IDENTITY and os.environ.get("MODEL_APPROVAL_DB") else None
 CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else None
 DATA_CLASSES = DataClassStore(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else None
 GATEWAY_FILE_CONFIG = os.environ.get("GATEWAY_FILE_CONFIG")
@@ -844,7 +845,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(resource_status, resource_result)
                 if approval["gateway_fingerprint"] != model_fingerprint(model, resource_result.get("resources", [])):
                     return self.reply(403, {"error": "This model changed in the gateway and must be set up again"})
-            status, result = gateway("/v1/chat/completions", {"model": model, "messages": [{"role": "user", "content": prompt}]},
+            # This preview-only request has a fixed bound so a local runner
+            # cannot spend the entire gateway timeout generating a smoke answer.
+            request_body = {"model": model, "messages": [{"role": "user", "content": prompt}],
+                            "max_tokens": 64}
+            status, result = gateway("/v1/chat/completions", request_body,
                                      connection_retries=3)
             # A second gateway replica can briefly report model_not_found while
             # it applies a registration. That response has not reached a model.
@@ -852,8 +857,7 @@ class Handler(BaseHTTPRequestHandler):
                     and result["error"].get("code") == "model_not_found":
                 for delay in (0.1, 0.2, 0.4):
                     time.sleep(delay)
-                    status, result = gateway("/v1/chat/completions", {"model": model,
-                                             "messages": [{"role": "user", "content": prompt}]},
+                    status, result = gateway("/v1/chat/completions", request_body,
                                              connection_retries=3)
                     if status != 404 or not isinstance(result.get("error"), dict) \
                             or result["error"].get("code") != "model_not_found":

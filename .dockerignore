@@ -1,0 +1,9 @@
+.git
+models
+tests
+docs
+deploy
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.DS_Store

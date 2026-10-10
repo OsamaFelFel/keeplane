@@ -1,0 +1,73 @@
+{
+  "started_utc": "2026-10-10T01:12:05.057444+00:00",
+  "git_head": "f8fb0de4ad8ba11ba6cd57ef992ccbd5756bf780",
+  "branch": "feat/react-users-stack",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "0b79e64e66897f37aed2dcc62ce62d75c10f9934dcfa547c8a9f67c4b1d0b5ec",
+  "selected_suites": [
+    "docker-qwen",
+    "kind-qwen"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "docker-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 1,
+      "duration_seconds": 121.1,
+      "cases": [
+        {
+          "id": "LOCAL-07",
+          "verdict": "fail",
+          "observed": {
+            "register_status": 200,
+            "answer_status": 503,
+            "model": null,
+            "answer_excerpt": "",
+            "error": "Gateway unavailable"
+          }
+        },
+        {
+          "id": "LOCAL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": false
+    },
+    {
+      "suite": "kind-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 24.9,
+      "cases": [
+        {
+          "id": "LOCAL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    }
+  ],
+  "finished_utc": "2026-10-10T01:14:31.350664+00:00",
+  "suites_passed": 1,
+  "suites_total": 2,
+  "cases_reported": 4
+}

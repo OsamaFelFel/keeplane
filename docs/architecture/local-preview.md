@@ -8,6 +8,8 @@ registry. The test fixture is replaceable with a local Qwen runner.
 flowchart LR
   Browser[Admin browser on port 3000] --> App[Keeplane UI, local identity and control plane]
   App --> Editions[Editions and one-time note preference]
+  App -->|first-admin session| Accounts[(Local account and session store)]
+  App -->|same transaction, mandatory sign-in record| Audit[(Local Audit store)]
   App -->|management API| Gateway[agentgateway]
   App -->|inference API| Gateway
   Gateway --> Fixture[Local test model]
@@ -30,7 +32,9 @@ and does not represent production secret storage or external-provider TLS.
 The single app on port 3000 has a local SQLite account store. It checks a
 revocable session cookie before serving the admin UI and APIs. The
 account store owns the first admin, users, roles and Editions note preferences; model
-approvals and audit records stay in their separate local tables. The app
+approvals and audit records stay in their separate local tables. A first-admin
+session and its mandatory Audit record commit together; an Audit write failure
+refuses the sign-in. The app
 uses the gateway through the internal Docker network. Existing gateway and
 account volumes are reused when the stack starts again. A fresh account store
 has no Team tables or Team API.

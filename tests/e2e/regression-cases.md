@@ -33,7 +33,7 @@ suite if the run is interrupted.
 | Runtime limits | The running Qwen context and completion limit match observed behavior in Docker and kind. | [Local model](cases.md), [model runtime guide](../../docs/guide/kubernetes-local.md) |
 | Integrated Docker journey | The admin signs in, discovers Qwen, approves Public and Internal, gets a generated answer through the gateway, and signs out. | [Integrated demo](integrated-demo-cases.md) |
 
-The full set has 29 suites and 150 case records. A smaller check can
+The runner reports the current suite and case totals. A smaller check can
 run with repeated `--suite NAME` options, but it is not a full regression.
 The latest full run reports its selected suites and case count. Review any
 failed case and preserve the result, including failures; do not label a partial

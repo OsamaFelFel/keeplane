@@ -1,0 +1,270 @@
+{
+  "started_utc": "2026-10-10T01:06:37.954076+00:00",
+  "git_head": "f8fb0de4ad8ba11ba6cd57ef992ccbd5756bf780",
+  "branch": "feat/react-users-stack",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "0b79e64e66897f37aed2dcc62ce62d75c10f9934dcfa547c8a9f67c4b1d0b5ec",
+  "selected_suites": [
+    "audit-store",
+    "local-identity",
+    "break-glass-store",
+    "accounts",
+    "audit",
+    "break-glass-audit"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "audit-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.3,
+      "cases": [
+        {
+          "id": "audit-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "local-identity",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local_identity.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.9,
+      "cases": [
+        {
+          "id": "ACCT-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-22",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 2.9,
+      "cases": [
+        {
+          "id": "BG-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    },
+    {
+      "suite": "accounts",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_accounts.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 17.7,
+      "cases": [
+        {
+          "id": "ACCT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-11",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-14",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-15",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-16",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-17",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-18",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-20",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-13",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 20,
+      "passed": true
+    },
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.4,
+      "cases": [
+        {
+          "id": "AUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.6,
+      "cases": [
+        {
+          "id": "BG-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    }
+  ],
+  "finished_utc": "2026-10-10T01:07:08.926381+00:00",
+  "suites_passed": 6,
+  "suites_total": 6,
+  "cases_reported": 41
+}

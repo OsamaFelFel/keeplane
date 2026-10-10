@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "components/control-plane"))
 from local_identity import IdentityError, LocalIdentity
+from audit import AuditStore
 
 
 def main():
@@ -16,7 +17,8 @@ def main():
         secret = root / "first-admin-password"
         secret.write_text("first-test-password-123\n")
         database = root / "accounts.sqlite3"
-        identity = LocalIdentity(database, secret)
+        audit = AuditStore(root / "audit.sqlite3")
+        identity = LocalIdentity(database, secret, audit)
         token = identity.login("first-admin", "first-test-password-123")
         listed = identity.users({"search": ["first-admin"]})["users"]
         first = listed[0]
@@ -25,7 +27,7 @@ def main():
                         first["managed"] and first["sign_in"] == "break-glass" else "fail"})
 
         secret.write_text("new-test-password-456\n")
-        restarted = LocalIdentity(database, secret)
+        restarted = LocalIdentity(database, secret, audit)
         old_password_refused = False
         try:
             restarted.login("first-admin", "first-test-password-123")

@@ -1,0 +1,925 @@
+{
+  "started_utc": "2026-10-10T01:07:19.657151+00:00",
+  "git_head": "f8fb0de4ad8ba11ba6cd57ef992ccbd5756bf780",
+  "branch": "feat/react-users-stack",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "0b79e64e66897f37aed2dcc62ce62d75c10f9934dcfa547c8a9f67c4b1d0b5ec",
+  "selected_suites": [
+    "catalog-store",
+    "data-class-store",
+    "audit-store",
+    "management-retry",
+    "local-identity",
+    "break-glass-store",
+    "stack-lock",
+    "docker-local",
+    "kind-local",
+    "docker-qwen",
+    "kind-qwen",
+    "guarded-endpoint",
+    "docker-runner",
+    "kind-runner",
+    "kind-failover",
+    "kind-gateway-down",
+    "kind-existing-preflight",
+    "accounts",
+    "data-classes",
+    "model-approval",
+    "model-edit",
+    "model-replacement",
+    "audit",
+    "break-glass-audit",
+    "model-add",
+    "cloud-listing",
+    "cloud-add",
+    "key-rotation",
+    "model-removal",
+    "docker-runtime",
+    "kind-runtime",
+    "integrated-demo"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "catalog-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_catalog.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.2,
+      "cases": [
+        {
+          "id": "catalog-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "data-class-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.1,
+      "cases": [
+        {
+          "id": "data-class-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "audit-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.2,
+      "cases": [
+        {
+          "id": "audit-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "management-retry",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_management_retry.py"
+      ],
+      "environment": {
+        "PYTHONPATH": "components/control-plane"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.5,
+      "cases": [
+        {
+          "id": "MGMT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MGMT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MGMT-03",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    },
+    {
+      "suite": "local-identity",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local_identity.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.9,
+      "cases": [
+        {
+          "id": "ACCT-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-22",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 5.1,
+      "cases": [
+        {
+          "id": "BG-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    },
+    {
+      "suite": "stack-lock",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_stack_lock.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.1,
+      "cases": [
+        {
+          "id": "LOCK-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-04",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "docker-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.2,
+      "cases": [
+        {
+          "id": "LOCAL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-11",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 7,
+      "passed": true
+    },
+    {
+      "suite": "kind-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.7,
+      "cases": [
+        {
+          "id": "LOCAL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-11",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 7,
+      "passed": true
+    },
+    {
+      "suite": "docker-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 1,
+      "duration_seconds": 15.1,
+      "cases": [],
+      "expected_case_count": 2,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-07",
+          "LOCAL-09"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "kind-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 1,
+      "duration_seconds": 0.3,
+      "cases": [],
+      "expected_case_count": 2,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-07",
+          "LOCAL-09"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "guarded-endpoint",
+      "command": [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "app",
+        "python",
+        "-"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 12.4,
+      "cases": [],
+      "expected_case_count": 4,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-12",
+          "LOCAL-13",
+          "LOCAL-14",
+          "LOCAL-15"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "docker-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 5,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-23",
+          "LOCAL-21",
+          "LOCAL-24",
+          "LOCAL-21-ADD",
+          "LOCAL-22"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "kind-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 5,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-23",
+          "LOCAL-21",
+          "LOCAL-24",
+          "LOCAL-21-ADD",
+          "LOCAL-22"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "kind-failover",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_kind.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.4,
+      "cases": [],
+      "expected_case_count": 7,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "K8S-01",
+          "K8S-02",
+          "K8S-03",
+          "K8S-04",
+          "K8S-07",
+          "K8S-05",
+          "K8S-06"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "kind-gateway-down",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_gateway_down.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.3,
+      "cases": [
+        {
+          "id": "K8S gateway-down setup",
+          "verdict": "fail",
+          "observed": {
+            "stage": "namespace",
+            "error_type": "CalledProcessError"
+          }
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "K8S-08",
+          "K8S-09"
+        ],
+        "extra": [
+          "K8S gateway-down setup"
+        ]
+      }
+    },
+    {
+      "suite": "kind-existing-preflight",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_existing_gateway_preflight.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.4,
+      "cases": [
+        {
+          "id": "K8S-10",
+          "verdict": "fail",
+          "observed": {
+            "helm_exit": 1,
+            "probe": {}
+          }
+        },
+        {
+          "id": "K8S-11",
+          "verdict": "fail",
+          "observed": {
+            "exit": 1,
+            "probe": {}
+          }
+        },
+        {
+          "id": "K8S-12",
+          "verdict": "fail",
+          "observed": {
+            "exit": 1,
+            "probe": {}
+          }
+        },
+        {
+          "id": "K8S-13",
+          "verdict": "fail",
+          "observed": {
+            "namespace_created": false
+          }
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": false
+    },
+    {
+      "suite": "accounts",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_accounts.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 20,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "ACCT-01",
+          "ACCT-02",
+          "ACCT-03",
+          "ACCT-04",
+          "ACCT-05",
+          "ACCT-06",
+          "ACCT-07",
+          "ACCT-08",
+          "ACCT-09",
+          "ACCT-10",
+          "ACCT-11",
+          "ACCT-12",
+          "ACCT-13",
+          "ACCT-14",
+          "ACCT-15",
+          "ACCT-16",
+          "ACCT-17",
+          "ACCT-18",
+          "ACCT-19",
+          "ACCT-20"
+        ],
+        "extra": []
+      }
+    },
+    {
+      "suite": "data-classes",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 8,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "CLASS-01",
+          "CLASS-02",
+          "CLASS-03",
+          "CLASS-04",
+          "CLASS-05",
+          "CLASS-06",
+          "CLASS-08",
+          "CLASS-07"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 10,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "MODEL-01",
+          "MODEL-02",
+          "MODEL-03",
+          "MODEL-10",
+          "MODEL-04",
+          "MODEL-05",
+          "MODEL-06",
+          "MODEL-07",
+          "MODEL-08",
+          "MODEL-09"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "model-edit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_edit.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 5,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "EDIT-01",
+          "EDIT-02",
+          "EDIT-03",
+          "EDIT-04",
+          "EDIT-05"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "model-replacement",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_replacement.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 5,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "REPLACE-01",
+          "REPLACE-02",
+          "REPLACE-03",
+          "REPLACE-04",
+          "REPLACE-05"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 9,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "AUD-01",
+          "AUD-02",
+          "AUD-05",
+          "AUD-03",
+          "AUD-04",
+          "AUD-06",
+          "AUD-08",
+          "AUD-09",
+          "AUD-07"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "break-glass-audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 3,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "BG-07",
+          "BG-08",
+          "BG-09"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "model-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_add.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 8,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "ADD-01",
+          "ADD-02",
+          "ADD-03",
+          "ADD-04",
+          "ADD-05",
+          "ADD-06",
+          "ADD-07",
+          "ADD-08"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "cloud-listing",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_listing.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 4,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "CLOUD-01",
+          "CLOUD-02",
+          "CLOUD-03",
+          "CLOUD-04"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "cloud-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_add.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 9,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "CADD-01",
+          "CADD-02",
+          "CADD-03",
+          "CADD-04",
+          "CADD-05",
+          "CADD-06",
+          "CADD-07",
+          "CADD-08",
+          "CADD-09"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "key-rotation",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_key_rotation.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 5,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "ROT-01",
+          "ROT-02",
+          "ROT-03",
+          "ROT-04",
+          "ROT-05"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "model-removal",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_removal.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 7,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "REMOVE-01",
+          "REMOVE-02",
+          "REMOVE-03",
+          "REMOVE-04",
+          "REMOVE-05",
+          "REMOVE-06",
+          "REMOVE-07"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    },
+    {
+      "suite": "docker-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--docker"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.2,
+      "cases": [],
+      "expected_case_count": 2,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-19",
+          "LOCAL-20"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "kind-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--kind"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.3,
+      "cases": [],
+      "expected_case_count": 2,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "LOCAL-19",
+          "LOCAL-20"
+        ],
+        "extra": []
+      },
+      "error": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "suite": "integrated-demo",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_integrated_demo.py"
+      ],
+      "environment": {},
+      "exit_code": 1,
+      "duration_seconds": 0.1,
+      "cases": [],
+      "expected_case_count": 6,
+      "passed": false,
+      "case_mismatch": {
+        "missing": [
+          "DEMO-01",
+          "DEMO-02",
+          "DEMO-03",
+          "DEMO-04",
+          "DEMO-05",
+          "DEMO-06"
+        ],
+        "extra": []
+      },
+      "error": "ValueError: Suite did not write a fresh report"
+    }
+  ],
+  "finished_utc": "2026-10-10T01:08:06.509779+00:00",
+  "suites_passed": 9,
+  "suites_total": 32,
+  "cases_reported": 37
+}

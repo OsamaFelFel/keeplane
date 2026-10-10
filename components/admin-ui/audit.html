@@ -17,16 +17,17 @@
       <p id="notice" class="notice" role="status" hidden></p>
       <section class="card audit-options" aria-labelledby="audit-options-title">
         <h2 id="audit-options-title">What is recorded</h2>
-        <p>Each is off until you turn it on.</p>
+        <p>Break-glass sign-ins are always recorded. The rest are off until you turn them on.</p>
         <div class="audit-option"><div><input type="checkbox" role="switch" id="rec-settings" data-kind="settings"><label for="rec-settings">Changes to models, routing and data classes</label></div><p>Who changed what, and when.</p></div>
         <div class="audit-option"><div><input type="checkbox" role="switch" id="rec-held" data-kind="held_requests"><label for="rec-held">Requests held back by personal-data detection</label></div><p>Which request, whose, and the class it was handled as.</p></div>
         <div class="audit-option"><div><input type="checkbox" role="switch" id="rec-answers" data-kind="model_answers"><label for="rec-answers">Which model answered each task</label></div><p>The model, the developer and the project.</p></div>
+        <div class="audit-option"><div><input type="checkbox" role="switch" id="rec-breakglass" checked disabled><label for="rec-breakglass">Sign-ins with the break-glass admin</label></div><p>When someone signed in with it.</p></div>
       </section>
       <section class="audit-records" aria-labelledby="records-title">
         <h2 id="records-title">Records</h2>
         <div class="audit-filters">
           <div class="field"><label for="search-records">Search records</label><input id="search-records" type="search" maxlength="80"></div>
-          <div class="field"><label for="record-kind">Show</label><select id="record-kind"><option value="all">All records</option><option value="settings">Settings changes</option><option value="held_requests">Held-back requests</option><option value="model_answers">Model answers</option></select></div>
+          <div class="field"><label for="record-kind">Show</label><select id="record-kind"><option value="all">All records</option><option value="settings">Settings changes</option><option value="held_requests">Held-back requests</option><option value="model_answers">Model answers</option><option value="break_glass_sign_ins">Break-glass sign-ins</option></select></div>
         </div>
         <div class="table-wrap"><table><thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th></tr></thead><tbody id="records"><tr><td colspan="3">Loading records…</td></tr></tbody></table></div>
         <div class="pager"><span id="record-count">Showing 0 records</span><span class="pager-buttons"><button id="previous" type="button" disabled>Previous</button><button id="next" type="button" disabled>Next</button></span></div>
