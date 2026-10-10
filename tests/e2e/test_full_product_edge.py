@@ -43,6 +43,16 @@ def record(rows, identifier, passed, observed):
     rows.append({"case": identifier, "verdict": "pass" if passed else "fail", "observed": observed})
 
 
+def ready_gateway_pods():
+    pods = json.loads(kube("-n", NAMESPACE, "get", "pods", "-l",
+                          "app.kubernetes.io/name=agentgateway-standalone,app.kubernetes.io/instance=keeplane",
+                          "-o", "json"))["items"]
+    return [pod["metadata"]["name"] for pod in pods
+            if pod["status"].get("phase") == "Running" and
+            any(condition.get("type") == "Ready" and condition.get("status") == "True"
+                for condition in pod["status"].get("conditions", []))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -63,8 +73,12 @@ def main():
         key = temporary / "key.pem"
         cookie = temporary / "cookie.txt"
         login = temporary / "login.json"
+        ask = temporary / "ask.json"
+        setup = temporary / "setup.json"
         login.write_text(json.dumps({"username": "first-admin", "password": PASSWORD.read_text().strip()}))
         login.chmod(0o600)
+        ask.write_text(json.dumps({"model": "local-fixture", "prompt": "fixture"}))
+        setup.write_text(json.dumps({"key_choice": "none", "approved_classes": ["Public"]}))
         run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
             "-keyout", str(key), "-out", str(cert), "-days", "1",
             "-subj", "/CN=" + HOST, "-addext", "subjectAltName=DNS:" + HOST,
@@ -95,7 +109,7 @@ def main():
                 "--set", "ingress.enabled=true", "--set", "ingress.className=nginx",
                 "--set", "ingress.host=" + HOST,
                 "--set", "ingress.tlsSecretName=keeplane-tls",
-                "--set", "agentgateway-standalone.replicaCount=1",
+                "--set", "agentgateway-standalone.replicaCount=2",
                 "--wait", "--timeout", "300s")
             kube("-n", NAMESPACE, "rollout", "status", "deployment/keeplane-app", "--timeout=240s")
             kube("-n", NAMESPACE, "rollout", "status", "deployment/keeplane", "--timeout=240s")
@@ -145,6 +159,50 @@ def main():
             record(rows, "FULL-05", policy["spec"]["podSelector"]["matchLabels"].get(
                 "app.kubernetes.io/instance") == "keeplane",
                    {"gateway_policy_present": True})
+            initial_pods = ready_gateway_pods()
+            record(rows, "FULL-06", len(initial_pods) == 2,
+                   {"ready_gateway_replicas": len(initial_pods)})
+            model_response = run(*base, "-b", str(cookie), url + "/api/models")
+            model = next((item for item in json.loads(model_response.stdout).get("models", [])
+                          if item.get("id") == "local-fixture"), {})
+            setup_status = None
+            if model and not model.get("approved"):
+                setup_response = run(*base, "-b", str(cookie), "-o", "/dev/null", "-w", "%{http_code}",
+                                     "-X", "POST", "-H", "Content-Type: application/json",
+                                     "-H", "X-Keeplane-Action: 1", "-H", "Origin: " + url,
+                                     "--data-binary", "@" + str(setup),
+                                     url + "/api/models/local-fixture/setup", check=False)
+                setup_status = setup_response.stdout
+
+            def ask_fixture():
+                response = run(*base, "-b", str(cookie), "-X", "POST",
+                               "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
+                               "-H", "Origin: " + url, "--data-binary", "@" + str(ask),
+                               "-o", str(temporary / "answer.json"), "-w", "%{http_code}",
+                               url + "/api/ask", check=False)
+                try:
+                    answer = json.loads((temporary / "answer.json").read_text())
+                except (ValueError, FileNotFoundError):
+                    answer = {}
+                return response.stdout, answer.get("answer")
+
+            before_status, before_answer = ask_fixture()
+            record(rows, "FULL-07", bool(model) and setup_status in (None, "200") and
+                   before_status == "200" and before_answer == "mock answer",
+                   {"model_found": bool(model), "setup_status": setup_status,
+                    "ask_status": before_status, "expected_answer": before_answer == "mock answer"})
+            if len(initial_pods) == 2:
+                kube("-n", NAMESPACE, "delete", "pod", initial_pods[0],
+                     "--grace-period=0", "--force", "--wait=true")
+                remaining = ready_gateway_pods()
+                after_status, after_answer = ask_fixture()
+                record(rows, "FULL-08", remaining == [initial_pods[1]] and after_status == "200" and
+                       after_answer == "mock answer",
+                       {"only_original_survivor_ready": remaining == [initial_pods[1]],
+                        "ready_gateway_replicas": len(remaining), "ask_status": after_status,
+                        "expected_answer": after_answer == "mock answer"})
+            else:
+                record(rows, "FULL-08", False, {"reason": "two gateway replicas were not ready"})
         except Exception as error:
             record(rows, "FULL-TRIAL", False,
                    {"error": type(error).__name__, "detail": str(error)[:350]})
@@ -163,7 +221,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
-    return int(len(rows) != 5 or any(row["verdict"] == "fail" for row in rows))
+    return int(len(rows) != 8 or any(row["verdict"] == "fail" for row in rows))
 
 
 if __name__ == "__main__":

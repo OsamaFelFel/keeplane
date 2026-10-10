@@ -1,0 +1,9 @@
+# Full chart: two managed gateway replicas behind TLS and Calico
+
+The [plain-English cases](../full-product-edge-cases.md) and [repeatable verifier](../test_full_product_edge.py) ran against the Keeplane chart from Open Source revision `87e7c59` in the separate `kind-keeplane-netpol` cluster. The run installed two managed agentgateway replicas, the protected Keeplane app, fixture model and PostgreSQL, app-only HTTPS Ingress, and the managed-gateway ingress NetworkPolicy. The test used a disposable namespace and removed it afterward; the regular Docker and kind previews were not redeployed.
+
+The [confirmed machine result](2026-10-10-full-product-two-replica-confirmed.json) records **8/8 passing cases**. The app signed in and listed models through verified TLS. Both gateway replicas were Ready. After the local fixture model was approved, an ask returned the fixture answer. The verifier then forcibly removed one gateway pod and repeated the ask while **only the other original replica** was Ready; that answer also succeeded. A same-namespace sibling remained blocked from the gateway Service by Calico. Helm lint passed, and both daily preview app-health endpoints returned HTTP 200 after the first run.
+
+The [first passing run](2026-10-10-full-product-two-replica.json) used an asynchronous pod deletion. Its answer could have reached the terminating pod, so the verifier was tightened to wait for the pod to be gone and require exactly the original survivor to be Ready. Both results are retained; the confirmed run supports the replica-failure observation.
+
+This establishes a two-replica model-answer and single-pod-removal path for this local controller and CNI. It does not test a policy change propagating between replicas, project-bound identity or class enforcement, direct provider egress, a customer-run gateway, production storage, certificate renewal, or the gateway artifact's release-license gate. The release gateway remains unselected.

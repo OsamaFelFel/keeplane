@@ -4,10 +4,13 @@ Edition: Open Source. Run `python3 tests/e2e/test_full_product_edge.py --output 
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
-| FULL-01 | Install the actual Keeplane chart with one managed gateway, gateway ingress policy, and an HTTPS app Ingress; visit its root without signing in. | The trusted TLS route reaches Keeplane and asks the visitor to sign in. |
+| FULL-01 | Install the actual Keeplane chart with two managed gateway replicas, gateway ingress policy, and an HTTPS app Ingress; visit its root without signing in. | The trusted TLS route reaches Keeplane and asks the visitor to sign in. |
 | FULL-02 | Sign in as the local first admin through HTTPS and read the identity API. | The session works through the Ingress and the identity API answers. |
 | FULL-03 | Read the model list through the signed-in app route. | The app can still reach its managed gateway under the NetworkPolicy. |
 | FULL-04 | From an unrelated model fixture pod in the same namespace, call the internal gateway Service. | The network connection is blocked before the gateway can answer. |
 | FULL-05 | Read the installed policy. | It selects the managed gateway pods for this Helm release. |
+| FULL-06 | Inspect the installed gateway pods after Helm reports the release ready. | Both gateway replicas are Ready. |
+| FULL-07 | Approve the local fixture model, then ask it through the signed-in HTTPS app route. | The app receives the fixture answer through the managed gateway. |
+| FULL-08 | Remove one gateway pod and immediately ask the same model again while another original replica is Ready. | The app receives the fixture answer with one original gateway replica remaining. |
 
-Passing these cases would cover only this local CNI/controller and one gateway replica. A pod creator who can copy the trusted app label, a copied gateway key, direct vendor access, project identity, data-class policy, production certificate rotation and two-replica cold startup require separate evidence.
+Passing these cases covers one local CNI/controller and a single gateway-pod removal. It does not prove policy propagation after an authorization change, protection from a pod creator who can copy the trusted app label, a copied gateway key, direct vendor access, project identity, data-class policy, production certificate rotation or production storage durability.
