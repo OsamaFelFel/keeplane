@@ -8,6 +8,7 @@ urlpatterns = [
     path("api/identity", views.identity),
     path("api/models", views.models),
     path("api/models/<str:model_id>/setup", views.model_setup),
+    path("api/runners/models", views.runner_models),
     path("api/users", views.users),
     path("api/users/<str:user_id>", views.user_detail),
     path("api/users/<str:user_id>/role", views.user_role),

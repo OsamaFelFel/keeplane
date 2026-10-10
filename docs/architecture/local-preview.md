@@ -7,14 +7,14 @@ registry. The test fixture is replaceable with a local Qwen runner.
 ```mermaid
 flowchart LR
   Browser[Admin browser on port 3000 or 13000] --> App[Keeplane UI and model API]
-  App -->|account and model-list API on loopback| Django[Django and DRF HTTP layer]
+  App -->|accounts and model management on loopback| Django[Django and DRF HTTP layer]
   Django --> Editions[Editions and one-time note preference]
   Django -->|first-admin session| Accounts[(Local account and session store)]
   Django -->|same transaction, mandatory sign-in record| Audit[(Local Audit store)]
-  Django -->|model listing, separate runtime and admin keys| Gateway[agentgateway]
-  App -->|model setup and optional data-class mode| Settings[(Local settings store)]
-  App -->|management API, admin key| Gateway[agentgateway]
-  App -->|model API, runtime key| Gateway
+  Django -->|registration, listing and verification; separate runtime and admin keys| Gateway[agentgateway]
+  Django -->|model approvals| Settings[(Local settings store)]
+  App -->|Data Classes, Audit and Ask| Settings
+  App -->|Ask via runtime key| Gateway
   Gateway --> Fixture[Local test model]
   Gateway --> Qwen[Local Qwen runner]
   Gateway -->|shared key file| Cloud[Authenticated cloud-format fixture]
@@ -55,18 +55,22 @@ turns them on, creating starter definitions once. Turning them off leaves
 definitions and approvals stored but removes class controls from the admin UI.
 Model setup remains a separate record, including when a model has no class
 approval. This trial has no project-class enforcement yet.
-React's account requests, protected Models listing and model removal now pass through an
-internal Django and DRF HTTP layer. Model listing joins gateway readback to
-Keeplane's small approval catalog through an agentgateway adapter with
-separate runtime and management credentials;
+React's account requests and protected Models management now pass through an
+internal Django and DRF HTTP layer. This includes runner discovery, Add, Set up,
+shared-key rotation, listing, and removal. The model use case joins gateway
+readback to Keeplane's small approval catalog through an agentgateway adapter
+with separate runtime and management credentials;
 gateway transport and its model registry remain in agentgateway. The existing
 local account use cases still own the SQLite trial store. Model removal keeps
 customer-added gateway definitions and removes owned definitions only after
-checking their revision. Model registration, setup, Data Classes and Audit HTTP
-routes remain in the earlier Python server.
+checking their revision. The earlier Python server still serves the UI, proxies
+these routes to Django on loopback, and handles Data Classes, Audit, and the
+preview Ask request. Its model write handlers have been removed.
 The internal Django listener binds to container loopback; only Keeplane
 port 3000 (Docker) or 13000 (kind) is published. If the account listener fails,
-the public account route returns 503 rather than falling back to the old route.
+the public account and model management routes return 503 rather than using an
+older handler. Model writes have a longer proxy timeout so gateway answer
+verification and shared-key rotation can finish.
 This is a partial API cutover, not the completed Django ORM and PostgreSQL
 release persistence cutover.
 The Docker and managed kind trials use the same local account API and React

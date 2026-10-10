@@ -1,46 +1,35 @@
-"""Small Keeplane local preview: UI, model registration, and gateway calls."""
+"""Local preview entry point: UI, legacy settings, and Django API proxy."""
 
 import json
 import http.client
 import os
 import sqlite3
 import time
-import uuid
 from http.cookies import SimpleCookie
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from socketserver import ThreadingMixIn
 from threading import Thread
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, unquote, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.parse import parse_qs, urlsplit
+from urllib.request import Request, urlopen
 
 from local_identity import IdentityError, LocalIdentity
 from audit import AuditError, AuditStore
 from data_classes import DataClassError, DataClassStore
 from model_catalog import ModelCatalog, fingerprint
-from model_listing import list_models
-from provider_keys import (save as save_provider_key, remove as remove_provider_key,
-                           from_resource as provider_key_file, is_managed as managed_provider_key)
+from runner_adapter import local_runner as inspect_local_runner
 
 
 GATEWAY = os.environ.get("GATEWAY_URL", "http://gateway:4000")
-GATEWAY_MODE = os.environ.get("GATEWAY_MODE", "managed")
 GATEWAY_RUNTIME_KEY_FILE = os.environ.get("GATEWAY_RUNTIME_KEY_FILE", "")
 GATEWAY_ADMIN_KEY_FILE = os.environ.get("GATEWAY_ADMIN_KEY_FILE", "")
 UI = Path("/ui")
 MAX_BODY = 64 * 1024
-TRIAL_KEY = os.environ.get("PREVIEW_PROVIDER_KEY", "")
 RUNNER_URLS = {url.strip().rstrip("/") for url in
                os.environ.get("PREVIEW_RUNNER_URLS", "http://qwen:8080").split(",") if url.strip()}
 
 
-class NoRunnerRedirect(HTTPRedirectHandler):
-    def redirect_request(self, request, fp, code, message, headers, newurl):
-        return None
-
-
-RUNNER_OPENER = build_opener(NoRunnerRedirect)
 AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
     if os.environ.get("ACCOUNT_DB") and os.environ.get("MODEL_APPROVAL_DB") else None
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
@@ -51,11 +40,8 @@ GATEWAY_FILE_CONFIG = os.environ.get("GATEWAY_FILE_CONFIG")
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 PUBLIC_ORIGIN_ALIASES = {origin.strip() for origin in
                          os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if origin.strip()}
-PROVIDER_KEY_DIR = os.environ.get("PROVIDER_KEY_DIR", "")
 DJANGO_ACCOUNT_API = os.environ.get("DJANGO_ACCOUNT_API") == "1"
 DJANGO_ACCOUNT_PORT = 8765
-CLOUD_BASE_URLS = {"openai": os.environ.get("PREVIEW_OPENAI_BASE_URL", ""),
-                   "anthropic": os.environ.get("PREVIEW_ANTHROPIC_BASE_URL", "")}
 
 
 def account_api_path(path):
@@ -64,63 +50,18 @@ def account_api_path(path):
         path.startswith(("/api/users/", "/api/user-operations/"))
 
 
+def django_model_path(path):
+    return path in {"/api/models", "/api/runners/models"} or \
+        (path.startswith("/api/models/") and path.endswith("/setup"))
+
+
 def model_fingerprint(model_id, resources):
     return fingerprint(model_id, resources, GATEWAY_FILE_CONFIG)
 
 
 def local_runner(address, model=None):
-    """Inspect an explicitly allowed runner; the preview has no admin login."""
-    address = address.rstrip("/") if isinstance(address, str) else ""
-    if address not in RUNNER_URLS:
-        return 400, {"error": "This runner address is not enabled in the local preview"}
-    try:
-        with RUNNER_OPENER.open(address + "/v1/models", timeout=10) as response:
-            listing = json.load(response)
-        if not isinstance(listing, dict) or not isinstance(listing.get("data"), list):
-            raise ValueError("Invalid model list")
-        served = listing["data"]
-        names = [item.get("id") for item in served if isinstance(item, dict) and isinstance(item.get("id"), str)]
-        if model is None:
-            runtime = {}
-            # llama.cpp exposes the loaded instance's effective context in
-            # /props. Its model metadata reports a different training limit.
-            # Only attribute the instance setting when it serves one model.
-            if len(names) == 1:
-                try:
-                    with RUNNER_OPENER.open(address + "/props", timeout=2) as response:
-                        props = json.load(response)
-                    active = props.get("default_generation_settings", {}).get("n_ctx")
-                    if type(active) is int and active > 0:
-                        runtime[names[0]] = {"active_context_tokens": active}
-                        matching = next(item for item in served if isinstance(item, dict)
-                                        and item.get("id") == names[0])
-                        metadata = matching.get("meta", {})
-                        training = metadata.get("n_ctx_train") if isinstance(metadata, dict) else None
-                        if type(training) is int and training > 0:
-                            runtime[names[0]]["training_context_tokens"] = training
-                except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError,
-                        AttributeError, TypeError):
-                    pass  # Discovery still works for runners without /props.
-            return 200, {"models": names, "runtime": runtime}
-        if model not in names:
-            return 400, {"error": f"{model} is not served by the runner at {address}"}
-        probe = Request(address + "/v1/chat/completions", method="POST",
-                        data=json.dumps({"model": model, "messages": [{"role": "user", "content": "Reply OK."}],
-                                         "max_tokens": 1}).encode(),
-                        headers={"Content-Type": "application/json"})
-        with RUNNER_OPENER.open(probe, timeout=30) as response:
-            checked = json.load(response)
-        if not isinstance(checked, dict) or not isinstance(checked.get("choices"), list) or not checked["choices"]:
-            raise ValueError("No completion choice")
-        choice = checked["choices"][0]
-        if not isinstance(choice, dict):
-            raise ValueError("Invalid completion choice")
-        message = choice.get("message", {})
-        if not isinstance(message, dict) or not isinstance(message.get("content"), str) or not message["content"].strip():
-            raise ValueError("No model answer")
-        return 200, {"models": names}
-    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
-        return 503, {"error": f"The runner at {address} didn't answer."}
+    # Keep discovery callable for the standalone runner context trial.
+    return inspect_local_runner(address, RUNNER_URLS, model)
 
 
 def gateway(path, body=None, method=None, connection_retries=0, timeout=120):
@@ -184,104 +125,6 @@ def effective_approval_ids():
     return 200, {}, active
 
 
-def confirm_new_model(model_id, expected_params):
-    """Wait for management readback, then ask through the registered gateway path."""
-    deadline = time.monotonic() + 20
-    while time.monotonic() < deadline:
-        status, listing = gateway("/v1/models", timeout=5)
-        resource_status, resources = gateway("/api/config/resources/llm.model", timeout=5)
-        if status == 200 and resource_status == 200:
-            raw = resources.get("resources", [])
-            entry = next((item.get("value", {}) for item in raw if item.get("id") == model_id), {})
-            if model_id in {item.get("id") for item in listing.get("data", [])} and \
-                    entry.get("params") == expected_params:
-                model_revision = model_fingerprint(model_id, raw)
-                if model_revision:
-                    for delay in (0, 0.2, 0.4, 0.8, 1.6):
-                        if delay:
-                            time.sleep(delay)
-                        answer_status, answer = gateway("/v1/chat/completions", {
-                            "model": model_id, "messages": [{"role": "user", "content": "Reply OK."}],
-                            "max_tokens": 1}, timeout=30, connection_retries=3)
-                        if answer_status == 200 and answer.get("choices") and \
-                                answer["choices"][0].get("message", {}).get("content"):
-                            return model_revision
-                        # A different replica may not have applied the registration yet.
-                        # Only this explicit not-found response is safe to retry.
-                        if answer_status != 404 or not isinstance(answer.get("error"), dict) or \
-                                answer["error"].get("code") != "model_not_found":
-                            break
-                    return None
-        if time.monotonic() < deadline:
-            time.sleep(0.3)
-    return None
-
-
-def undo_new_model(model_id, expected_params):
-    """Remove only the model definition this request created when it can be verified."""
-    status, resources = gateway("/api/config/resources/llm.model", timeout=5)
-    if status != 200:
-        return False
-    entry = next((item.get("value", {}) for item in resources.get("resources", [])
-                  if item.get("id") == model_id), {})
-    if entry.get("params") != expected_params:
-        return False
-    status, _ = gateway("/api/config/resources/llm.model/" + model_id, method="DELETE")
-    return status == 200
-
-
-def undo_cloud_model(model_id, expected_resource):
-    """Remove a failed cloud registration only if its complete definition is unchanged."""
-    status, resources = gateway_model_resources()
-    if status != 200:
-        return False
-    entry = next((item.get("value", {}) for item in resources.get("resources", [])
-                  if item.get("id") == model_id), {})
-    if not entry:
-        return True
-    if entry != expected_resource:
-        return False
-    status, _ = gateway("/api/config/resources/llm.model/" + model_id, method="DELETE")
-    return status == 200
-
-
-def confirm_cloud_model(model_id, expected_resource, retry_refused=False):
-    """Verify management readback and one answer through the chosen gateway."""
-    deadline = time.monotonic() + 20
-    while time.monotonic() < deadline:
-        status, listing = gateway("/v1/models", timeout=5)
-        resource_status, resources = gateway_model_resources()
-        if status == 200 and resource_status == 200:
-            raw = resources.get("resources", [])
-            entry = next((item.get("value", {}) for item in raw if item.get("id") == model_id), {})
-            if model_id in {item.get("id") for item in listing.get("data", [])} and \
-                    entry == expected_resource:
-                revision = model_fingerprint(model_id, raw)
-                if not revision:
-                    return None, "The gateway didn't register it."
-                for delay in (0, 0.2, 0.4, 0.8, 1.6, 3.2):
-                    if delay:
-                        time.sleep(delay)
-                    answer_status, answer = gateway("/v1/chat/completions", {
-                        "model": model_id,
-                        "messages": [{"role": "user", "content": "Reply OK."}],
-                        "max_tokens": 1}, timeout=30, connection_retries=3)
-                    if answer_status == 200 and answer.get("choices") and \
-                            answer["choices"][0].get("message", {}).get("content"):
-                        return revision, None
-                    if answer_status in (401, 403):
-                        if retry_refused and delay != 3.2:
-                            continue
-                        return None, "The provider refused the key."
-                    if answer_status == 404 and isinstance(answer.get("error"), dict) and \
-                            answer["error"].get("code") == "model_not_found":
-                        continue
-                    return None, "The provider didn't answer."
-                return None, "The gateway didn't register it."
-        time.sleep(0.3)
-    return None, "The gateway didn't register it."
-
-
 class Handler(BaseHTTPRequestHandler):
     def forward_account_api(self):
         try:
@@ -294,7 +137,8 @@ class Handler(BaseHTTPRequestHandler):
                        if name in self.headers}
             route = urlsplit(self.path)
             target = route.path + ("?" + route.query if route.query else "")
-            connection = http.client.HTTPConnection("127.0.0.1", DJANGO_ACCOUNT_PORT, timeout=15)
+            timeout = 300 if self.command == "POST" and django_model_path(route.path) else 15
+            connection = http.client.HTTPConnection("127.0.0.1", DJANGO_ACCOUNT_PORT, timeout=timeout)
             try:
                 connection.request(self.command, target, body=body, headers=headers)
                 upstream = connection.getresponse()
@@ -309,155 +153,7 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 connection.close()
         except (OSError, http.client.HTTPException):
-            self.reply(503, {"error": "Account service is unavailable"})
-
-    def replace_shared_key(self, model_id, resource, previous, classes, replacement):
-        if GATEWAY_MODE == "existing":
-            return self.reply(422, {"error": "Shared provider keys need a supported delivery path to the customer-run gateway"})
-        if not previous["owned_by_keeplane"] or resource.get("provider") not in ("openAI", "anthropic"):
-            return self.reply(400, {"error": "This trial can replace keys only for cloud models Keeplane added"})
-        old_path = provider_key_file(resource)
-        if not managed_provider_key(PROVIDER_KEY_DIR, old_path):
-            return self.reply(400, {"error": "This model's shared key is not managed by Keeplane"})
-        try:
-            new_path = save_provider_key(PROVIDER_KEY_DIR, replacement)
-        except OSError:
-            return self.reply(503, {"error": "Shared provider key storage is unavailable"})
-        updated = json.loads(json.dumps(resource))
-        updated["auth"]["key"]["value"] = {"file": new_path}
-        resource_path = "/api/config/resources/llm.model/" + model_id
-        check_name = "keeplane-keycheck-" + uuid.uuid4().hex
-        check_resource = json.loads(json.dumps(updated))
-        check_resource["name"] = check_name
-
-        # A model already in service may still answer with its old route just
-        # after a management update. A unique model proves the new key first.
-        check_status, _ = gateway("/api/config/resources/llm.model",
-                                  {"resources": [{"value": check_resource}]}, "PUT")
-        checked, _ = confirm_cloud_model(check_name, check_resource) if check_status == 200 else (None, None)
-        check_removed = undo_cloud_model(check_name, check_resource)
-        if checked is None or not check_removed:
-            if check_removed:
-                remove_provider_key(PROVIDER_KEY_DIR, new_path)
-            return self.reply(503, {"error": "The replacement key didn't answer through the gateway. " +
-                              ("The previous key is still active." if check_removed else
-                               "A verification model may need cleanup; check Models.")})
-
-        def restore_previous():
-            status, resources = gateway_model_resources()
-            if status != 200:
-                return False
-            current = next((item.get("value", {}) for item in resources.get("resources", [])
-                            if item.get("id") == model_id), {})
-            if current == updated:
-                status, _ = gateway(resource_path, {"value": resource}, "PUT")
-                if status != 200:
-                    return False
-            elif current != resource:
-                return False
-            revision, _ = confirm_cloud_model(model_id, resource, retry_refused=True)
-            if revision is None:
-                return False
-            try:
-                CATALOG.approve(model_id, previous["approved_classes"], revision, self.actor(),
-                                owned_by_keeplane=True, key_choice="shared")
-            except (ValueError, IdentityError, sqlite3.Error):
-                return False
-            return remove_provider_key(PROVIDER_KEY_DIR, new_path)
-
-        status, _ = gateway(resource_path, {"value": updated}, "PUT")
-        revision, _ = confirm_cloud_model(model_id, updated, retry_refused=True) if status == 200 else (None, None)
-        if revision is None:
-            restored = restore_previous()
-            return self.reply(503, {"error": "The replacement key didn't work. " +
-                              ("The previous key is still active." if restored else
-                               "The model may need admin attention; check Models.")})
-        try:
-            approval = CATALOG.approve(model_id, classes, revision, self.actor(),
-                                       owned_by_keeplane=True, key_choice="shared")
-        except (ValueError, IdentityError, sqlite3.Error):
-            restored = restore_previous()
-            return self.reply(503, {"error": "Keeplane couldn't save the change. " +
-                              ("The previous key is still active." if restored else
-                               "The model may need admin attention; check Models.")})
-        if not remove_provider_key(PROVIDER_KEY_DIR, old_path):
-            return self.reply(503, {"error": "New key saved, but the previous key file needs cleanup"})
-        return self.reply(200, approval)
-
-    def add_cloud_model(self, body, name, model, classes):
-        if not CATALOG or not IDENTITY:
-            return self.reply(403, {"error": "Sign in as an admin to add a cloud model"})
-        source = body.get("source")
-        provider = {"openai": "openAI", "anthropic": "anthropic"}[source]
-        key_choice = body.get("key_choice")
-        if key_choice not in ("shared", "none"):
-            return self.reply(400, {"error": "Choose a supported provider key option"})
-        if key_choice == "shared":
-            if GATEWAY_MODE == "existing":
-                return self.reply(422, {"error": "Shared provider keys need a supported delivery path to the customer-run gateway"})
-            shared_key = body.get("shared_key")
-            if not isinstance(shared_key, str) or not 12 <= len(shared_key) <= 512 or \
-                    "\n" in shared_key or "\r" in shared_key:
-                return self.reply(400, {"error": "Enter a valid shared provider key"})
-
-        status, listing = gateway("/v1/models", timeout=10)
-        if status != 200:
-            return self.reply(status, listing)
-        resource_status, resources = gateway_model_resources()
-        if resource_status != 200:
-            return self.reply(resource_status, resources)
-        if name in {item.get("id") for item in listing.get("data", [])} or any(
-            item.get("value", {}).get("provider") == provider and
-            item.get("value", {}).get("params", {}).get("model") == model
-            for item in resources.get("resources", [])):
-            label = "OpenAI" if source == "openai" else "Anthropic"
-            return self.reply(409, {"error": f"{model} from {label} is already added."})
-
-        key_path = None
-        if key_choice == "shared":
-            try:
-                key_path = save_provider_key(PROVIDER_KEY_DIR, shared_key)
-            except OSError:
-                return self.reply(503, {"error": "Shared provider key storage is unavailable"})
-        params = {"model": model}
-        if CLOUD_BASE_URLS[source]:
-            params["baseUrl"] = CLOUD_BASE_URLS[source]
-        resource = {"name": name, "provider": provider, "params": params}
-        if key_path:
-            resource["auth"] = {"key": {"value": {"file": key_path}}}
-        status, _ = gateway("/api/config/resources/llm.model",
-                            {"resources": [{"value": resource}]}, "PUT")
-        if status != 200:
-            removed = undo_cloud_model(name, resource)
-            if key_path and removed:
-                remove_provider_key(PROVIDER_KEY_DIR, key_path)
-            return self.reply(503, {"error": "The gateway didn't confirm registration. " +
-                              ("Nothing was saved." if removed else
-                               "Its entry may remain without approval; check Models.")})
-        revision, reason = confirm_cloud_model(name, resource)
-        if revision is None:
-            removed = undo_cloud_model(name, resource)
-            if key_path and removed:
-                remove_provider_key(PROVIDER_KEY_DIR, key_path)
-            suffix = " Nothing was saved." if removed else \
-                " Its gateway entry may remain without a working key; check Models."
-            if reason == "The provider refused the key.":
-                reason = f"{'OpenAI' if source == 'openai' else 'Anthropic'} refused the key."
-            elif reason == "The provider didn't answer.":
-                reason = f"{'OpenAI' if source == 'openai' else 'Anthropic'} didn't answer."
-            return self.reply(503, {"error": reason + suffix})
-        try:
-            approval = CATALOG.approve(name, classes, revision, self.actor(),
-                                       owned_by_keeplane=True, key_choice=key_choice)
-        except (ValueError, IdentityError, sqlite3.Error):
-            removed = undo_cloud_model(name, resource)
-            if key_path and removed:
-                remove_provider_key(PROVIDER_KEY_DIR, key_path)
-            return self.reply(503, {"error": "Keeplane couldn't save model approval. " +
-                              ("Registration was removed." if removed else
-                               "The model may remain in the gateway without Keeplane approval.")})
-        return self.reply(200, {"name": name, "key_choice": approval["key_choice"],
-                                "approved_classes": approval["approved_classes"]})
+            self.reply(503, {"error": "Keeplane API is unavailable"})
 
     def actor(self):
         return self._signed_in_user["id"], self._signed_in_user["username"]
@@ -546,7 +242,7 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         query = parse_qs(route.query)
         path = route.path
-        if DJANGO_ACCOUNT_API and (account_api_path(path) or path == "/api/models"):
+        if path == "/api/models" or (DJANGO_ACCOUNT_API and account_api_path(path)):
             return self.forward_account_api()
         if IDENTITY:
             if path == "/api/auth-options":
@@ -611,11 +307,6 @@ class Handler(BaseHTTPRequestHandler):
                                              "version": result.get("build", {}).get("version", "unknown")}})
             else:
                 self.reply(status, result)
-        elif self.path == "/api/models":
-            status, result = list_models(lambda: gateway("/v1/models", timeout=10),
-                                         gateway_model_resources, CATALOG,
-                                         GATEWAY_FILE_CONFIG, RUNNER_URLS)
-            self.reply(status, result)
         elif IDENTITY and path == "/users":
             self.send_response(302)
             self.send_header("Location", "/app/")
@@ -658,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
-        if DJANGO_ACCOUNT_API and account_api_path(path):
+        if django_model_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
             return self.forward_account_api()
         if IDENTITY and path == "/api/session":
             if not self.trusted_origin():
@@ -682,77 +373,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             return self.identity_result(lambda: (200, IDENTITY.consume_edition_note(self.actor()[0])))
         segments = urlsplit(self.path).path.strip("/").split("/")
-        if CATALOG and len(segments) == 4 and segments[:2] == ["api", "models"] and segments[3] == "setup":
-            if not self.identity_action_allowed():
-                return
-            model_id = unquote(segments[2])
-            choice = body.get("key_choice")
-            previous = CATALOG.get(model_id)
-            if choice not in ("none", "shared") or (choice == "shared" and
-                                                      (not previous or previous["key_choice"] != "shared")):
-                return self.reply(400, {"error": "Choose a supported provider key option"})
-            replacement = body.get("replace_shared_key", "")
-            if not isinstance(replacement, str) or (replacement and
-                    (choice != "shared" or not 12 <= len(replacement) <= 512 or
-                     "\n" in replacement or "\r" in replacement)):
-                return self.reply(400, {"error": "Enter a valid replacement shared key"})
-            try:
-                classes_on = DATA_CLASSES.enabled()
-                # Editing a key while classes are off must not erase approvals
-                # that will apply if the admin turns the mode on again.
-                classes = body.get("approved_classes", []) if classes_on else \
-                    (previous["approved_classes"] if previous else [])
-                # Validate before making a model call or changing storage.
-                known_classes = {item["name"] for item in DATA_CLASSES.list()}
-                if not isinstance(classes, list) or \
-                        any(not isinstance(item, str) or item not in known_classes for item in classes) or \
-                        len(classes) != len(set(classes)):
-                    raise ValueError("Choose valid data classes")
-            except ValueError as error:
-                return self.reply(400, {"error": str(error)})
-            except sqlite3.Error:
-                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
-            status, listing = gateway("/v1/models", timeout=10)
-            if status != 200:
-                return self.reply(status, listing)
-            if model_id not in {item.get("id") for item in listing.get("data", [])}:
-                return self.reply(404, {"error": "Model not found in the gateway"})
-            resource_status, resource_result = gateway_model_resources()
-            if resource_status != 200:
-                return self.reply(resource_status, resource_result)
-            raw_resources = resource_result.get("resources", [])
-            resource = next((item.get("value", {}) for item in raw_resources
-                             if item.get("id") == model_id), {})
-            if choice == "none" and resource.get("auth"):
-                return self.reply(400, {"error": "This model has a provider key in the gateway"})
-            if choice == "shared" and not managed_provider_key(
-                    PROVIDER_KEY_DIR, provider_key_file(resource)):
-                return self.reply(400, {"error": "This model's shared key is not managed by Keeplane"})
-            current_fingerprint = model_fingerprint(model_id, raw_resources)
-            if not current_fingerprint:
-                return self.reply(503, {"error": "The gateway model definition could not be verified"})
-            if choice == "shared" and previous["gateway_fingerprint"] != current_fingerprint:
-                return self.reply(409, {"error": "This model changed in the gateway and must be set up again"})
-            if replacement:
-                return self.replace_shared_key(model_id, resource, previous, classes, replacement)
-            answer_status, answer = gateway("/v1/chat/completions", {
-                "model": model_id, "messages": [{"role": "user", "content": "Reply OK."}],
-                "max_tokens": 1}, timeout=30)
-            if answer_status != 200 or not answer.get("choices"):
-                return self.reply(503, {"error": "The model didn't answer. Nothing was saved."})
-            try:
-                # A definition replaced outside Keeplane loses its provenance.
-                still_owned = bool(previous and previous["owned_by_keeplane"] and
-                                   previous["gateway_fingerprint"] == current_fingerprint)
-                return self.reply(200, CATALOG.approve(model_id, classes, current_fingerprint,
-                                                       self.actor(), owned_by_keeplane=still_owned,
-                                                       key_choice=choice))
-            except ValueError as error:
-                return self.reply(400, {"error": str(error)})
-            except IdentityError as error:
-                return self.reply(error.status, {"error": error.message})
-            except sqlite3.Error:
-                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
         if IDENTITY and self.path == "/api/users":
             if self.identity_action_allowed():
                 return self.identity_result(lambda: (201, IDENTITY.create_user(body, self.actor()[0])))
@@ -766,105 +386,6 @@ class Handler(BaseHTTPRequestHandler):
                         return self.reply(status, result)
                 return self.identity_result(lambda: (201, DATA_CLASSES.add(body, effective, self.actor())))
             return
-        if self.path == "/api/runners/models":
-            status, result = local_runner(body.get("address"))
-            return self.reply(status, result)
-        if self.path == "/api/models":
-            if IDENTITY and not self.identity_action_allowed():
-                return
-            name = body.get("name", "")
-            model = body.get("model", "")
-            source = body.get("source", "fixture")
-            if not isinstance(name, str) or not name or len(name) > 80 or not all(c.isalnum() or c in "-_.:" for c in name):
-                return self.reply(400, {"error": "Model name must use letters, numbers, dots, dashes, underscores or colons"})
-            if not isinstance(model, str) or not model or len(model) > 100:
-                return self.reply(400, {"error": "Enter an upstream model ID"})
-            try:
-                classes = (body.get("approved_classes", []) if DATA_CLASSES.enabled() else []) if CATALOG else None
-                if classes is not None:
-                    known_classes = {item["name"] for item in DATA_CLASSES.list()}
-            except sqlite3.Error:
-                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
-            if classes is not None:
-                if not isinstance(classes, list) or \
-                        any(not isinstance(item, str) or item not in known_classes for item in classes) or \
-                        len(classes) != len(set(classes)):
-                    return self.reply(400, {"error": "Choose valid data classes"})
-            if source in CLOUD_BASE_URLS:
-                return self.add_cloud_model(body, name, model, classes)
-            sources = {"fixture": "http://model:18080/v1", "qwen": "http://qwen:8080/v1",
-                       "guarded": "http://guarded-provider:18081/v1"}
-            if source == "runner":
-                address = body.get("address", "")
-                checked_status, checked = local_runner(address, model)
-                if checked_status != 200:
-                    return self.reply(checked_status, checked)
-                sources["runner"] = address.rstrip("/") + "/v1"
-            if source not in sources:
-                return self.reply(400, {"error": "Choose a supported local source"})
-            if source in ("qwen", "guarded"):
-                try:
-                    with urlopen("http://qwen:8080/health", timeout=10) as response:
-                        if response.status != 200:
-                            raise URLError("Qwen is still loading")
-                except (HTTPError, URLError, TimeoutError):
-                    return self.reply(503, {"error": "The local Qwen runner is not ready"})
-            if source == "guarded":
-                if not TRIAL_KEY:
-                    return self.reply(503, {"error": "The disposable test key is not configured"})
-                try:
-                    with urlopen("http://guarded-provider:18081/health", timeout=2) as response:
-                        if response.status != 200:
-                            raise URLError("Guarded endpoint is still loading")
-                except (HTTPError, URLError, TimeoutError):
-                    return self.reply(503, {"error": "The guarded endpoint is not ready"})
-            listed_status, listed = gateway("/v1/models", timeout=10)
-            if listed_status != 200:
-                return self.reply(listed_status, listed)
-            if name in {item.get("id") for item in listed.get("data", [])}:
-                resource_status, resource_result = gateway_model_resources()
-                if resource_status != 200:
-                    return self.reply(resource_status, resource_result)
-                existing = next((item.get("value", {})
-                                 for item in resource_result.get("resources", []) if item.get("id") == name), None)
-                if name == "local-fixture":
-                    existing = {"params": {"model": "mock-local", "baseUrl": sources["fixture"]}}
-                expected_auth = {"key": {"value": TRIAL_KEY}} if source == "guarded" else None
-                if existing and existing.get("params") == {"model": model, "baseUrl": sources[source]} \
-                        and (source != "guarded" or existing.get("auth") == expected_auth):
-                    return self.reply(200, {"name": name, "existing": True})
-                return self.reply(409, {"error": "A model with this name is already registered"})
-            # External endpoints and credentials need account and policy controls.
-            resource = {"name": name, "provider": {"custom": {"formats": [{"type": "completions"}]}},
-                        "params": {"model": model, "baseUrl": sources[source]}}
-            if source == "guarded":
-                resource["auth"] = {"key": {"value": TRIAL_KEY}}
-            status, result = gateway("/api/config/resources/llm.model", {"resources": [{"value": resource}]}, "PUT")
-            if status != 200:
-                if classes is not None:
-                    if undo_new_model(name, resource["params"]):
-                        return self.reply(503, {"error": "The gateway did not confirm registration. A matching definition was removed."})
-                    if status >= 500:
-                        return self.reply(503, {"error": "The gateway did not confirm registration. The model may remain in the gateway without Keeplane approval; check Models."})
-                return self.reply(status, result)
-            if classes is None:
-                return self.reply(200, {"name": name})
-            params = resource["params"]
-            model_revision = confirm_new_model(name, params)
-            if model_revision is None:
-                removed = undo_new_model(name, params)
-                return self.reply(503, {"error": "The model did not answer through the gateway. " +
-                                  ("Registration was removed." if removed else
-                                   "It may remain in the gateway without Keeplane approval; check Models.")})
-            try:
-                approval = CATALOG.approve(name, classes, model_revision, self.actor(),
-                                           owned_by_keeplane=True)
-            except (ValueError, IdentityError, sqlite3.Error):
-                removed = undo_new_model(name, params)
-                return self.reply(503, {"error": "Keeplane could not save the model approval. " +
-                                  ("Registration was removed." if removed else
-                                   "It may remain in the gateway without Keeplane approval; check Models.")})
-            return self.reply(200, {"name": name, "approved_classes": approval["approved_classes"]})
         if self.path == "/api/ask":
             model = body.get("model")
             prompt = body.get("prompt")
@@ -961,7 +482,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         segments = path.strip("/").split("/")
         model_setup_path = len(segments) == 4 and segments[:2] == ["api", "models"] and segments[3] == "setup"
-        if DJANGO_ACCOUNT_API and (account_api_path(path) or model_setup_path):
+        if model_setup_path or (DJANGO_ACCOUNT_API and account_api_path(path)):
             return self.forward_account_api()
         if IDENTITY and not self.require_admin(path):
             return
@@ -973,40 +494,6 @@ class Handler(BaseHTTPRequestHandler):
             if not self.identity_action_allowed():
                 return
             return self.identity_result(lambda: (200, DATA_CLASSES.remove(segments[2], self.actor())))
-        if CATALOG and len(segments) == 4 and segments[:2] == ["api", "models"] and segments[3] == "setup":
-            if not self.identity_action_allowed():
-                return
-            model_id = unquote(segments[2])
-            try:
-                approval = CATALOG.get(model_id)
-                if approval is None:
-                    return self.reply(404, {"error": "Model setup not found"})
-                if approval["owned_by_keeplane"]:
-                    status, resources = gateway_model_resources()
-                    if status != 200:
-                        return self.reply(status, resources)
-                    resource = next((item.get("value", {}) for item in resources.get("resources", [])
-                                     if item.get("id") == model_id), {})
-                    if model_fingerprint(model_id, resources.get("resources", [])) != \
-                            approval["gateway_fingerprint"]:
-                        return self.reply(409, {"error": "The model changed in the gateway. "
-                                                      "Keeplane will not remove a changed definition."})
-                    status, result = gateway("/api/config/resources/llm.model/" + model_id,
-                                             method="DELETE", timeout=10)
-                    if status != 200:
-                        return self.reply(status, result)
-                    removed = CATALOG.remove(model_id, self.actor(), gateway_removed=True)
-                    if approval["key_choice"] == "shared" and not remove_provider_key(
-                            PROVIDER_KEY_DIR, provider_key_file(resource)):
-                        return self.reply(503, {"error": "Model removed, but its shared key file needs cleanup"})
-                    return self.reply(200, {"removed_from_keeplane": removed,
-                                            "gateway_model_preserved": False})
-                return self.reply(200, {"removed_from_keeplane": CATALOG.remove(model_id, self.actor()),
-                                        "gateway_model_preserved": True})
-            except IdentityError as error:
-                return self.reply(error.status, {"error": error.message})
-            except sqlite3.Error:
-                return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
         self.reply(404, {"error": "Not found"})
 
 

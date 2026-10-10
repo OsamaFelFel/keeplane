@@ -9,16 +9,20 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from audit import AuditError, AuditStore
+from data_classes import DataClassStore
 from gateway_adapter import AgentgatewayModelAdapter
 from local_identity import IdentityError, LocalIdentity
 from model_catalog import ModelCatalog
 from model_listing import list_models
+from model_management import ModelManagement
 from model_removal import remove_model_setup
+from runner_adapter import local_runner
 
 
 AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"])
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT)
 CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT)
+DATA_CLASSES = DataClassStore(os.environ["MODEL_APPROVAL_DB"], AUDIT)
 MODEL_GATEWAY = AgentgatewayModelAdapter(
     os.environ.get("GATEWAY_URL", "http://gateway:4000"),
     os.environ.get("GATEWAY_RUNTIME_KEY_FILE", ""),
@@ -28,6 +32,16 @@ RUNNER_URLS = {url.strip().rstrip("/") for url in
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 PUBLIC_ORIGIN_ALIASES = {part.strip() for part in
                          os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if part.strip()}
+
+
+def model_management(user):
+    return ModelManagement(
+        CATALOG, DATA_CLASSES, MODEL_GATEWAY, (user["id"], user["username"]),
+        os.environ.get("GATEWAY_MODE", "managed"), os.environ.get("GATEWAY_FILE_CONFIG"),
+        os.environ.get("PROVIDER_KEY_DIR", ""), RUNNER_URLS,
+        {"openai": os.environ.get("PREVIEW_OPENAI_BASE_URL", ""),
+         "anthropic": os.environ.get("PREVIEW_ANTHROPIC_BASE_URL", "")},
+        os.environ.get("PREVIEW_PROVIDER_KEY", ""))
 
 
 def failure(status, message):
@@ -93,11 +107,19 @@ def identity(request):
     return Response(user) if user else failure(401, "Sign in to Keeplane")
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 def models(request):
-    _, denied = admin(request)
+    user, denied = admin(request)
     if denied:
         return denied
+    if request.method == "POST":
+        denied = action_error(request)
+        if denied:
+            return denied
+        if not isinstance(request.data, dict):
+            return failure(400, "Enter a model request")
+        status, body = model_management(user).add(request.data)
+        return Response(body, status=status)
     try:
         status, listing = list_models(MODEL_GATEWAY.models, MODEL_GATEWAY.resources,
                                       CATALOG, os.environ.get("GATEWAY_FILE_CONFIG"), RUNNER_URLS)
@@ -106,7 +128,7 @@ def models(request):
         return failure(503, "Keeplane settings storage is unavailable")
 
 
-@api_view(["DELETE"])
+@api_view(["POST", "DELETE"])
 def model_setup(request, model_id):
     user, denied = admin(request)
     if denied:
@@ -114,6 +136,11 @@ def model_setup(request, model_id):
     denied = action_error(request)
     if denied:
         return denied
+    if request.method == "POST":
+        if not isinstance(request.data, dict):
+            return failure(400, "Enter a model setup request")
+        status, body = model_management(user).setup(model_id, request.data)
+        return Response(body, status=status)
     try:
         status, result = remove_model_setup(
             model_id, (user["id"], user["username"]), CATALOG, MODEL_GATEWAY,
@@ -123,6 +150,17 @@ def model_setup(request, model_id):
         return failure(error.status, error.message)
     except sqlite3.Error:
         return failure(503, "Keeplane settings storage is unavailable")
+
+
+@api_view(["POST"])
+def runner_models(request):
+    _, denied = admin(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a runner address")
+    status, body = local_runner(request.data.get("address"), RUNNER_URLS)
+    return Response(body, status=status)
 
 
 @api_view(["GET", "POST"])
