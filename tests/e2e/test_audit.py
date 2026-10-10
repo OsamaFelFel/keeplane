@@ -2,7 +2,6 @@
 
 import json
 import secrets
-import subprocess
 import sys
 import time
 import uuid
@@ -13,6 +12,7 @@ from urllib.parse import urlencode
 
 from test_accounts import BASE, Browser, RUNTIME
 from reporting import report_path
+from restart_preview import restart_app
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -28,6 +28,7 @@ def main():
     cases = []
     cleanup_errors = []
     original_options = None
+    original_mode = None
 
     def record(identifier, passed, observed):
         cases.append({"id": identifier, "verdict": "pass" if passed else "fail",
@@ -58,6 +59,12 @@ def main():
             page_url = response.url
             html = response.read().decode()
         original_options = options()
+        original_mode = browser.fetch("/api/data-classes")[1]["enabled"]
+        if not original_mode:
+            mode_status, _, _ = browser.fetch("/api/data-classes/mode",
+                                              {"enabled": True}, method="PUT")
+            if mode_status != 200:
+                raise RuntimeError("Could not enable data classes for Audit cases")
         baseline = records()["total"]
         identity_status, identity, _ = browser.fetch("/api/identity")
         record("AUD-01", page_status == 200 and 'id="root"' in html and
@@ -152,8 +159,7 @@ def main():
                 "developer_api_status": developer_api_status,
                 "anonymous_api_status": anonymous_status})
 
-        subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                        "restart", "app"], check=True, cwd=REPO, capture_output=True, text=True)
+        restart_app(BASE)
         for _ in range(30):
             try:
                 persisted_options = options()
@@ -195,6 +201,14 @@ def main():
                             cleanup_errors.append(f"restoring {kind} raised {type(error).__name__}")
                         else:
                             time.sleep(1)
+        if original_mode is False:
+            try:
+                status, _, _ = browser.fetch("/api/data-classes/mode",
+                                              {"enabled": False}, method="PUT")
+                if status != 200:
+                    cleanup_errors.append(f"restoring class mode returned {status}")
+            except Exception as error:
+                cleanup_errors.append(f"restoring class mode raised {type(error).__name__}")
         report = {"suite": "Spec 006 Audit protected Docker preview",
                   "time_utc": datetime.now(timezone.utc).isoformat(),
                   "cases": cases, "cleanup": "complete" if not cleanup_errors else cleanup_errors,

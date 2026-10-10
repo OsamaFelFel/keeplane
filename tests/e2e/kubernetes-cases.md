@@ -3,6 +3,9 @@
 Run `test_local.py` against port 13000 first. It registers `second-local`, which
 the replica tests use. Then run `test_kind.py`. The latter deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
+The managed kind preview requires first-admin sign-in; the test helpers use the
+local password file and never print its value. The account cases in
+`accounts-cases.md` also run against port 13000 using `KEEPLANE_BASE_URL`.
 K8S-10–13 exercise the live existing-gateway install hook in kind. K8S-14–16
 use simulated gateway replies to cover retry and refusal paths without changing
 the supplied gateway.

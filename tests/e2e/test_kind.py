@@ -11,6 +11,7 @@ import sys
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from protected_preview import login_if_protected
 
 
 KUBECONFIG = os.environ.get("KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig")
@@ -53,6 +54,18 @@ def main():
     context = kubectl("config", "current-context")
     if context != "kind-keeplane":
         raise SystemExit(f"Refusing Kubernetes context {context!r}; expected kind-keeplane")
+    login_if_protected(BASE)
+    # The protected app requires a reviewed model setup before model calls.
+    with urlopen(BASE + "/api/models", timeout=15) as response:
+        catalog = json.load(response)["models"]
+    second = next((model for model in catalog if model["id"] == "second-local"), None)
+    if second and not second["approved"]:
+        setup = Request(BASE + "/api/models/second-local/setup", method="POST",
+                        data=json.dumps({"key_choice": "none", "approved_classes": []}).encode(),
+                        headers={"Content-Type": "application/json"})
+        with urlopen(setup, timeout=45) as response:
+            if response.status != 200:
+                raise RuntimeError("Could not set up the gateway failover fixture")
 
     results = []
 

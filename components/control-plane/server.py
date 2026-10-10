@@ -42,6 +42,8 @@ CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else Non
 DATA_CLASSES = DataClassStore(os.environ["MODEL_APPROVAL_DB"], AUDIT) if AUDIT else None
 GATEWAY_FILE_CONFIG = os.environ.get("GATEWAY_FILE_CONFIG")
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
+PUBLIC_ORIGIN_ALIASES = {origin.strip() for origin in
+                         os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if origin.strip()}
 PROVIDER_KEY_DIR = os.environ.get("PROVIDER_KEY_DIR", "")
 CLOUD_BASE_URLS = {"openai": os.environ.get("PREVIEW_OPENAI_BASE_URL", ""),
                    "anthropic": os.environ.get("PREVIEW_ANTHROPIC_BASE_URL", "")}
@@ -471,10 +473,14 @@ class Handler(BaseHTTPRequestHandler):
     def identity_action_allowed(self):
         if self.headers.get("X-Keeplane-Action") != "1" or \
                 self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json" or \
-                (self.headers.get("Origin") and self.headers.get("Origin") != PUBLIC_ORIGIN):
+                not self.trusted_origin():
             self.reply(403, {"error": "Changes require Keeplane's admin UI"})
             return False
         return True
+
+    def trusted_origin(self):
+        origin = self.headers.get("Origin")
+        return not origin or origin in {PUBLIC_ORIGIN, *PUBLIC_ORIGIN_ALIASES}
 
     def identity_result(self, action):
         try:
@@ -644,6 +650,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlsplit(self.path).path
         if IDENTITY and path == "/api/session":
+            if not self.trusted_origin():
+                return self.reply(403, {"error": "Sign in from Keeplane's page"})
             body = self.incoming()
             if body is None:
                 return

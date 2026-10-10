@@ -2,6 +2,7 @@
 
 import http.cookiejar
 import json
+import os
 import secrets
 import sys
 import uuid
@@ -12,7 +13,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 from reporting import report_path
 
 
-BASE = "http://127.0.0.1:3000"
+BASE = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:3000").rstrip("/")
 RUNTIME = Path("/private/tmp/keeplane-accounts-trial")
 REPORT = report_path("2026-10-10-users-react.json")
 
@@ -103,6 +104,20 @@ def main():
         wrong_api_status, _, _ = wrong.fetch("/api/users")
         record("ACCT-15", wrong_status == 401 and wrong_api_status == 401,
                {"wrong_password_status": wrong_status, "api_status": wrong_api_status})
+        origin_statuses = {}
+        for origin in (BASE, "http://untrusted.example"):
+            request = Request(BASE + "/api/session", method="POST",
+                              data=json.dumps({"username": "first-admin", "password":
+                                               (RUNTIME / "first-admin-password").read_text().strip()}).encode(),
+                              headers={"Content-Type": "application/json", "Origin": origin})
+            try:
+                with urlopen(request, timeout=10) as response:
+                    origin_statuses[origin] = response.status
+            except HTTPError as error:
+                origin_statuses[origin] = error.code
+        record("ACCT-23", origin_statuses == {BASE: 200, "http://untrusted.example": 403},
+               {"trusted_status": origin_statuses[BASE],
+                "foreign_status": origin_statuses["http://untrusted.example"]})
 
         signed_out = Browser()
         signed_out.login("first-admin", (RUNTIME / "first-admin-password").read_text().strip())

@@ -12,6 +12,11 @@ spec:
       labels:
         app: {{ .Release.Name }}-app
     spec:
+      {{- if .Values.app.localTrial.enabled }}
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      {{- end }}
       containers:
         - name: app
           image: {{ .Values.app.image | quote }}
@@ -23,6 +28,39 @@ spec:
               value: {{ if eq .Values.gateway.mode "managed" }}{{ if not .Values.gateway.install }}{{ fail "gateway.install must be true in managed mode" }}{{ end }}{{ printf "http://%s:4000" .Release.Name | quote }}{{ else if eq .Values.gateway.mode "existing" }}{{ if .Values.gateway.install }}{{ fail "gateway.install must be false in existing mode" }}{{ end }}{{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}{{ else }}{{ fail "gateway.mode must be managed or existing" }}{{ end }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
+            {{- if .Values.app.localTrial.enabled }}
+            - name: ACCOUNT_DB
+              value: /state/accounts.sqlite3
+            - name: MODEL_APPROVAL_DB
+              value: /state/model-approvals.sqlite3
+            - name: FIRST_ADMIN_PASSWORD_FILE
+              value: /run/keeplane-secrets/first-admin-password
+            - name: PUBLIC_ORIGIN
+              value: {{ required "app.localTrial.publicOrigin is required" .Values.app.localTrial.publicOrigin | quote }}
+            - name: PUBLIC_ORIGIN_ALIASES
+              value: {{ .Values.app.localTrial.publicOriginAliases | quote }}
+            - name: PROVIDER_KEY_DIR
+              value: /provider-keys
+            {{- if eq .Values.gateway.mode "managed" }}
+            - name: GATEWAY_FILE_CONFIG
+              value: /gateway-config/config.yaml
+            {{- end }}
+            {{- end }}
+          {{- if .Values.app.localTrial.enabled }}
+          volumeMounts:
+            - name: state
+              mountPath: /state
+            - name: provider-keys
+              mountPath: /provider-keys
+            - name: first-admin
+              mountPath: /run/keeplane-secrets
+              readOnly: true
+            {{- if eq .Values.gateway.mode "managed" }}
+            - name: gateway-config
+              mountPath: /gateway-config
+              readOnly: true
+            {{- end }}
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /health/app
@@ -40,6 +78,23 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+      {{- if .Values.app.localTrial.enabled }}
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-state
+        - name: provider-keys
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-provider-keys
+        - name: first-admin
+          secret:
+            secretName: {{ required "app.localTrial.firstAdminSecret is required" .Values.app.localTrial.firstAdminSecret }}
+        {{- if eq .Values.gateway.mode "managed" }}
+        - name: gateway-config
+          configMap:
+            name: {{ .Release.Name }}-config
+        {{- end }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

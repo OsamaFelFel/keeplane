@@ -1,7 +1,6 @@
 """Live Spec 005 starter class regression for the protected Docker trial."""
 
 import json
-import subprocess
 import sys
 import time
 import uuid
@@ -11,6 +10,7 @@ from urllib.error import URLError
 
 from test_accounts import BASE, Browser, RUNTIME
 from reporting import report_path
+from restart_preview import restart_app
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -120,8 +120,7 @@ def main():
                {"status": edit_status, "renamed_in_classes": renamed in [item["name"] for item in listing],
                 "renamed_on_model": renamed in configured["approved_classes"]})
 
-        subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                        "restart", "app"], check=True, cwd=REPO, capture_output=True, text=True)
+        restart_app(BASE)
         for _ in range(30):
             try:
                 status, listing = classes()

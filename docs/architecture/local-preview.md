@@ -44,6 +44,13 @@ turns them on, creating starter definitions once. Turning them off leaves
 definitions and approvals stored but removes class controls from the admin UI.
 Model setup remains a separate record, including when a model has no class
 approval. This trial has no project-class enforcement yet.
-The Docker trial does not install Keycloak or an SSO proxy. The kind integration
-chart has not yet been given production Open Source identity. Optional OpenID
-Connect sign-in is later Open Source work behind the Keeplane account contract.
+The Docker and managed kind trials use the same local account API and React
+screens. They have separate account, audit and approval stores; a change in one
+preview does not appear in the other. The kind trial stores its SQLite files
+and provider-key files in local PersistentVolumeClaims and mounts the gateway's
+file-owned fixture configuration for approval verification. Both trials read
+the same first-admin password file on the developer machine. Neither trial
+installs Keycloak or an SSO proxy. The kind trial storage and password Secret
+are local integration fixtures, not the approved PostgreSQL release identity
+design. Optional OpenID Connect sign-in remains later Open Source work behind
+the Keeplane account contract.

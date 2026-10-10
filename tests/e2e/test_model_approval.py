@@ -1,7 +1,6 @@
 """Live Spec 004 outside-model approval regression for the Docker trial."""
 
 import json
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -10,6 +9,7 @@ from urllib.error import URLError
 
 from test_accounts import BASE, Browser, RUNTIME
 from reporting import report_path
+from restart_preview import restart_app
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -94,8 +94,7 @@ def main():
         record("MODEL-06", status == 200 and answer.get("answer") == "mock answer",
                {"status": status, "answer": answer.get("answer")})
 
-        subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                        "restart", "app"], check=True, cwd=REPO, capture_output=True, text=True)
+        restart_app(BASE)
         found = wait_model(MODEL)
         status, answer, _ = browser.fetch("/api/ask", {"model": MODEL, "prompt": "Reply OK."}, method="POST")
         record("MODEL-07", found["approved"] and status == 200 and answer.get("answer") == "mock answer",
@@ -118,8 +117,7 @@ def main():
         setup_status, _, _ = browser.fetch(dynamic_path, payload, method="POST")
         if setup_status == 200:
             touched.add(DYNAMIC_MODEL)
-        subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                        "restart", "app"], check=True, cwd=REPO, capture_output=True, text=True)
+        restart_app(BASE)
         dynamic = wait_model(DYNAMIC_MODEL)
         answer_status, answer, _ = browser.fetch("/api/ask", {
             "model": DYNAMIC_MODEL, "prompt": "Reply OK."}, method="POST")

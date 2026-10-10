@@ -1,6 +1,11 @@
 app:
   image: keeplane-preview:kind-local
   pullPolicy: Never
+  localTrial:
+    enabled: true
+    firstAdminSecret: keeplane-first-admin
+    publicOrigin: http://127.0.0.1:13000
+    publicOriginAliases: http://localhost:13000
   service:
     type: NodePort
     nodePort: 30080
@@ -10,6 +15,16 @@ gateway:
   install: true
 
 agentgateway-standalone:
+  podSecurityContext:
+    fsGroup: 65532
+  extraVolumes:
+    - name: provider-keys
+      persistentVolumeClaim:
+        claimName: keeplane-provider-keys
+  extraVolumeMounts:
+    - name: provider-keys
+      mountPath: /provider-keys
+      readOnly: true
   database:
     postgres:
       url: postgresql://keeplane:local-test-only@postgres:5432/keeplane

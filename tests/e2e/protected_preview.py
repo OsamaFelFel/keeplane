@@ -1,4 +1,4 @@
-"""Authenticate legacy transport checks when aimed at the protected Docker UI."""
+"""Authenticate transport checks against the protected local previews."""
 
 import http.cookiejar
 import json
@@ -10,7 +10,7 @@ PASSWORD = Path("/private/tmp/keeplane-accounts-trial/first-admin-password")
 
 
 def login_if_protected(base):
-    if base != "http://127.0.0.1:3000":
+    if base not in {"http://127.0.0.1:3000", "http://127.0.0.1:13000"}:
         return False
     opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
     opener.addheaders = [("X-Keeplane-Action", "1")]

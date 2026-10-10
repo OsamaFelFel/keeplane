@@ -2,12 +2,19 @@
 
 This trial runs Keeplane at [http://127.0.0.1:13000](http://127.0.0.1:13000).
 The Docker preview remains available at [http://127.0.0.1:3000](http://127.0.0.1:3000).
+Sign in as `first-admin` with the password in
+`/private/tmp/keeplane-accounts-trial/first-admin-password`. The Users, Data
+Classes and Audit screens use the same React account flow as Docker. The kind
+and Docker previews keep separate accounts and model approvals; sign-in uses
+the same local password file. The kind setup keeps its account and approval
+files in two local PersistentVolumeClaims, and mounts a private Secret for the
+first-admin password. Re-running the setup preserves those records.
 In the Models screen, choose **Add model**, enter `http://qwen:8080`, choose
 **Find models**, select `qwen2.5-coder:0.5b`, and add it. Keeplane checks the
 runner before registration. To test an answer, use the `/api/ask` example in
 the [local model guide](local-preview.md) with port `13000`.
 
-Install Docker, `kind`, `kubectl`, Helm and `rg`. Download the pinned Qwen model
+Install Docker, Node.js 22 or later, `kind`, `kubectl`, Helm and `rg`. Download the pinned Qwen model
 as described in the [local model guide](local-preview.md), then run from the
 repository root:
 
@@ -16,6 +23,9 @@ deploy/local/kind-up.sh
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_local.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_qwen.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_runner_flow.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_accounts.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_data_classes.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_audit.py
 python3 tests/e2e/test_model_runtime.py --kind
 python3 tests/e2e/test_kind.py
 python3 tests/e2e/test_stack_lock.py
@@ -80,8 +90,10 @@ kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway g
 In the `keeplane-existing` app-only trial, the enabled runner address is
 `http://model.supplied-gateway.svc.cluster.local:18080`. Its model is
 `mock-local`, a fixed-answer fixture. The runner allowlist is configured by
-the chart's `app.runnerUrls` value; it is a preview safeguard while the admin
-page has no sign-in.
+the chart's `app.runnerUrls` value; it is a preview safeguard. The separately
+installed existing-gateway app remains an unprotected integration fixture and
+is not exposed on the host. Only the managed kind preview on port 13000 has
+the local account setup.
 
 Agentgateway's own management UI is available through a local port forward.
 Keep this command running in a terminal, then open

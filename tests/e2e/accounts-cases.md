@@ -19,6 +19,7 @@
 | ACCT-13 | Turn the one-time note off, then on; visit twice. | Off shows nothing; on shows the line once for that admin. |
 | ACCT-14 | Forge a forwarded-user header without a session. | Keeplane refuses the request. |
 | ACCT-15 | Use a wrong first-admin password. | Sign-in and account API refuse access. |
+| ACCT-23 | Send sign-in from Keeplane's own browser origin, then from an unrelated origin. | Own origin succeeds; unrelated origin is refused before a session is issued. |
 | ACCT-16 | Search for the first admin in Users. | Its account appears as an infrastructure-managed break-glass admin. |
 | ACCT-17 | Try to change the first admin's role. | Keeplane refuses the change. |
 | ACCT-18 | Repeat a create-user request with the same operation ID, then check its result. | One user is created and both requests return that user. |

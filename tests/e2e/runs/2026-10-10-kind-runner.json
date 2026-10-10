@@ -1,0 +1,61 @@
+{
+  "suite": "Keeplane local runner flow",
+  "runner": "http://qwen:8080",
+  "results": [
+    {
+      "case": "LOCAL-23",
+      "verdict": "pass",
+      "observed": {
+        "page_status": 200,
+        "gateway_identity_visible": false,
+        "try_panel_visible": false
+      }
+    },
+    {
+      "case": "LOCAL-21",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "models": [
+          "qwen2.5-coder:0.5b"
+        ],
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-24",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "active_context_tokens": 4096,
+        "training_context_tokens": 32768
+      }
+    },
+    {
+      "case": "LOCAL-21-ADD",
+      "verdict": "pass",
+      "observed": {
+        "add_status": 200,
+        "add_result": {
+          "name": "qwen2.5-coder:0.5b",
+          "existing": true
+        },
+        "listed": true,
+        "answer_status": 200,
+        "answer_excerpt": "OK."
+      }
+    },
+    {
+      "case": "LOCAL-22",
+      "verdict": "pass",
+      "observed": {
+        "unknown_status": 400,
+        "unknown_error": "not-served-by-runner is not served by the runner at http://qwen:8080",
+        "denied_status": 400,
+        "denied_error": "This runner address is not enabled in the local preview",
+        "saved_unknown": false,
+        "saved_denied": false
+      }
+    }
+  ]
+}

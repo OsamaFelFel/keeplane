@@ -14,6 +14,7 @@ import time
 from urllib.request import urlopen
 
 from test_accounts import Browser, RUNTIME
+from protected_preview import login_if_protected
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,7 +66,7 @@ SUITES = (
     Suite("kind-gateway-down", py("gateway_down"), "K8S-08 K8S-09", timeout=240),
     Suite("kind-existing-preflight", py("existing_gateway_preflight"), "K8S-10 K8S-11 K8S-12 K8S-13", timeout=240),
     Suite("accounts", py("accounts"),
-          "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20",
+          "ACCT-01 ACCT-02 ACCT-03 ACCT-04 ACCT-05 ACCT-06 ACCT-07 ACCT-08 ACCT-09 ACCT-10 ACCT-11 ACCT-12 ACCT-13 ACCT-14 ACCT-15 ACCT-16 ACCT-17 ACCT-18 ACCT-19 ACCT-20 ACCT-23",
           report="2026-10-10-users-react.json"),
     Suite("data-classes", py("data_classes"),
           "CLASS-00 CLASS-10 CLASS-01 CLASS-09 CLASS-02 CLASS-03 CLASS-04 CLASS-05 CLASS-06 CLASS-08 CLASS-07",
@@ -120,6 +121,7 @@ def preflight():
     docker_status, docker_health, _ = browser.fetch("/health")
     if login_status != 200 or docker_status != 200 or docker_health.get("gateway") != "ready":
         raise RuntimeError("Protected Docker preview or gateway is not healthy")
+    login_if_protected("http://127.0.0.1:13000")
     with urlopen("http://127.0.0.1:13000/health", timeout=10) as response:
         if response.status != 200 or json.load(response).get("gateway") != "ready":
             raise RuntimeError("Isolated kind preview or gateway is not healthy")

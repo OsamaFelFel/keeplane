@@ -11,6 +11,8 @@ POSTGRES_IMAGE=postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be
 GATEWAY_IMAGE=cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
 QWEN_MODEL=models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf
 QWEN_SHA256=1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32
+RUNTIME_DIR=/private/tmp/keeplane-accounts-trial
+FIRST_ADMIN_PASSWORD="$RUNTIME_DIR/first-admin-password"
 
 cd "$ROOT"
 if [ ! -f "$QWEN_MODEL" ]; then
@@ -22,6 +24,15 @@ if [ "$ACTUAL_QWEN_SHA256" != "$QWEN_SHA256" ]; then
   printf 'Qwen model checksum does not match the pinned file.\n' >&2
   exit 1
 fi
+mkdir -p "$RUNTIME_DIR"
+chmod 700 "$RUNTIME_DIR"
+if [ ! -f "$FIRST_ADMIN_PASSWORD" ]; then
+  python3 -c 'import pathlib,secrets,sys; p=pathlib.Path(sys.argv[1]); p.write_text(secrets.token_urlsafe(32)+"\n"); p.chmod(0o600)' "$FIRST_ADMIN_PASSWORD"
+fi
+if [ ! -d components/admin-ui/web/node_modules ]; then
+  (cd components/admin-ui/web && npm ci)
+fi
+(cd components/admin-ui/web && npm run build)
 docker pull "$PYTHON_IMAGE"
 docker pull "$POSTGRES_IMAGE"
 docker pull "$GATEWAY_IMAGE"
@@ -40,6 +51,9 @@ docker cp "$QWEN_MODEL" "keeplane-control-plane:/models/$(basename "$QWEN_MODEL"
 
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create secret generic keeplane-first-admin \
+  --from-file=first-admin-password="$FIRST_ADMIN_PASSWORD" --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane-existing --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace supplied-gateway --dry-run=client -o yaml |

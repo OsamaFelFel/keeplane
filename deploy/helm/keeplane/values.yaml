@@ -2,6 +2,12 @@ app:
   image: keeplane-preview:local
   pullPolicy: IfNotPresent
   runnerUrls: "http://qwen:8080"
+  localTrial:
+    enabled: false
+    firstAdminSecret: ""
+    publicOrigin: ""
+    publicOriginAliases: ""
+    storageSize: 1Gi
   service:
     type: ClusterIP
     nodePort: null
