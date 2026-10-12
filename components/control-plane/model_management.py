@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from storage_errors import StorageUnavailable
 import time
 import uuid
 from urllib.error import HTTPError, URLError
@@ -187,7 +188,7 @@ class ModelManagement:
             try:
                 self.catalog.approve(model_id, previous["approved_classes"], revision, self.actor(),
                                 owned_by_keeplane=True, key_choice="shared")
-            except (ValueError, IdentityError, sqlite3.Error):
+            except (ValueError, IdentityError, sqlite3.Error, StorageUnavailable):
                 return False
             return remove_provider_key(self.provider_key_dir, new_path)
 
@@ -201,7 +202,7 @@ class ModelManagement:
         try:
             approval = self.catalog.approve(model_id, classes, revision, self.actor(),
                                        owned_by_keeplane=True, key_choice="shared")
-        except (ValueError, IdentityError, sqlite3.Error):
+        except (ValueError, IdentityError, sqlite3.Error, StorageUnavailable):
             restored = restore_previous()
             return self.reply(503, {"error": "Keeplane couldn't save the change. " +
                               ("The previous key is still active." if restored else
@@ -275,7 +276,7 @@ class ModelManagement:
         try:
             approval = self.catalog.approve(name, classes, revision, self.actor(),
                                        owned_by_keeplane=True, key_choice=key_choice)
-        except (ValueError, IdentityError, sqlite3.Error):
+        except (ValueError, IdentityError, sqlite3.Error, StorageUnavailable):
             removed = self.undo_cloud_model(name, resource)
             if key_path and removed:
                 remove_provider_key(self.provider_key_dir, key_path)
@@ -310,7 +311,7 @@ class ModelManagement:
                 raise ValueError("Choose valid data classes")
         except ValueError as error:
             return self.reply(400, {"error": str(error)})
-        except sqlite3.Error:
+        except (sqlite3.Error, StorageUnavailable):
             return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
         status, listing = self.gateway.request("/v1/models", timeout=10)
         if status != 200:
@@ -351,7 +352,7 @@ class ModelManagement:
             return self.reply(400, {"error": str(error)})
         except IdentityError as error:
             return self.reply(error.status, {"error": error.message})
-        except sqlite3.Error:
+        except (sqlite3.Error, StorageUnavailable):
             return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
 
     def add(self, body):
@@ -366,7 +367,7 @@ class ModelManagement:
             classes = (body.get("approved_classes", []) if self.data_classes.enabled() else []) if self.catalog else None
             if classes is not None:
                 known_classes = {item["name"] for item in self.data_classes.list()}
-        except sqlite3.Error:
+        except (sqlite3.Error, StorageUnavailable):
             return self.reply(503, {"error": "Keeplane settings storage is unavailable"})
         if classes is not None:
             if not isinstance(classes, list) or \
@@ -442,7 +443,7 @@ class ModelManagement:
         try:
             approval = self.catalog.approve(name, classes, model_revision, self.actor(),
                                        owned_by_keeplane=True)
-        except (ValueError, IdentityError, sqlite3.Error):
+        except (ValueError, IdentityError, sqlite3.Error, StorageUnavailable):
             removed = self.undo_new_model(name, params)
             return self.reply(503, {"error": "Keeplane could not save the model approval. " +
                               ("Registration was removed." if removed else

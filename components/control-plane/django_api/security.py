@@ -1,6 +1,17 @@
 """Django CSRF checks also cover anonymous sign-in and DRF browser endpoints."""
 
 from django.http import JsonResponse
+from django.utils.deprecation import MiddlewareMixin
+
+from storage_errors import StorageUnavailable
+
+
+class StorageFailureMiddleware(MiddlewareMixin):
+    def process_exception(self, request, exception):
+        if isinstance(exception, StorageUnavailable):
+            response = JsonResponse({"error": "Keeplane storage is unavailable; contact your operator"}, status=503)
+            response["Cache-Control"] = "no-store"
+            return response
 from django.middleware.csrf import CsrfViewMiddleware
 
 

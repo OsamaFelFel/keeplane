@@ -8,6 +8,12 @@ pinned to commits and use a read-only repository token. These quick checks
 complement the running-stack and browser regression below; they do not certify
 the Kubernetes gateway or a production release.
 
+The PostgreSQL job also builds the real API/UI and runs the [two-copy account
+fixture](../../tests/e2e/postgres-accounts-cases.md), including shared throttling,
+atomic Audit failure, database/app restart, fresh-database restore and password
+rotation. Its gateway is a test API fixture; the running-stack suites still
+cover the supported trial gateway separately.
+
 Keep the single protected Docker preview and isolated kind cluster running.
 The [local model](local-preview.md), [account](accounts-local.md), and
 [Kubernetes](kubernetes-local.md) guides show how to start each. The Docker

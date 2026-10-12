@@ -5,14 +5,16 @@ import sqlite3
 from urllib.parse import parse_qs
 
 from django.middleware.csrf import get_token, rotate_token
+from django.utils.functional import SimpleLazyObject
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from audit import AuditError, AuditStore
-from data_classes import DataClassError, DataClassStore
+from audit import AuditError
+from data_classes import DataClassError
 from gateway_adapter import AgentgatewayModelAdapter
-from local_identity import IdentityError, LocalIdentity, LoginThrottled
-from model_catalog import ModelCatalog
+from local_identity import IdentityError, LoginThrottled
+from django_api.persistence import stores
+from storage_errors import StorageUnavailable
 from model_chat import ask_model
 from model_listing import list_models
 from model_management import ModelManagement
@@ -20,10 +22,12 @@ from model_removal import remove_model_setup
 from runner_adapter import local_runner
 
 
-AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"])
-IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT)
-CATALOG = ModelCatalog(os.environ["MODEL_APPROVAL_DB"], AUDIT)
-DATA_CLASSES = DataClassStore(os.environ["MODEL_APPROVAL_DB"], AUDIT)
+# Management commands validate URLs before initial migrations exist. Resolving
+# a route must not bootstrap an account or query any application table.
+AUDIT = SimpleLazyObject(lambda: stores()[0])
+IDENTITY = SimpleLazyObject(lambda: stores()[1])
+CATALOG = SimpleLazyObject(lambda: stores()[2])
+DATA_CLASSES = SimpleLazyObject(lambda: stores()[3])
 MODEL_GATEWAY = AgentgatewayModelAdapter(
     os.environ.get("GATEWAY_URL", "http://gateway:4000"),
     os.environ.get("GATEWAY_RUNTIME_KEY_FILE", ""),
@@ -58,7 +62,7 @@ def result(action):
         return response
     except IdentityError as error:
         return failure(error.status, error.message)
-    except sqlite3.Error:
+    except (sqlite3.Error, StorageUnavailable):
         return failure(503, "Account storage is unavailable")
 
 
@@ -67,7 +71,7 @@ def settings_result(action):
         return action()
     except (DataClassError, AuditError) as error:
         return failure(error.status, error.message)
-    except sqlite3.Error:
+    except (sqlite3.Error, StorageUnavailable):
         return failure(503, "Keeplane settings storage is unavailable")
 
 
@@ -153,7 +157,7 @@ def models(request):
         status, listing = list_models(MODEL_GATEWAY.models, MODEL_GATEWAY.resources,
                                       CATALOG, os.environ.get("GATEWAY_FILE_CONFIG"), RUNNER_URLS)
         return Response(listing, status=status)
-    except sqlite3.Error:
+    except (sqlite3.Error, StorageUnavailable):
         return failure(503, "Keeplane settings storage is unavailable")
 
 
@@ -177,7 +181,7 @@ def model_setup(request, model_id):
         return Response(result, status=status)
     except (IdentityError, AuditError) as error:
         return failure(error.status, error.message)
-    except sqlite3.Error:
+    except (sqlite3.Error, StorageUnavailable):
         return failure(503, "Keeplane settings storage is unavailable")
 
 
@@ -203,7 +207,7 @@ def ask(request):
         status, body = ask_model(request.data, CATALOG, MODEL_GATEWAY,
                                  os.environ.get("GATEWAY_FILE_CONFIG"))
         return Response(body, status=status)
-    except sqlite3.Error:
+    except (sqlite3.Error, StorageUnavailable):
         return failure(503, "Keeplane settings storage is unavailable")
 
 

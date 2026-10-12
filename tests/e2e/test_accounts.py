@@ -14,7 +14,7 @@ from reporting import report_path
 
 
 BASE = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:3000").rstrip("/")
-RUNTIME = Path("/private/tmp/keeplane-accounts-trial")
+RUNTIME = Path(os.environ.get("KEEPLANE_RUNTIME_DIR", "/private/tmp/keeplane-accounts-trial"))
 REPORT = report_path("2026-10-10-users-react.json")
 
 
@@ -304,7 +304,7 @@ def main():
                     failed_cleanup += 1
         report = {"suite": "Spec 003 Open Source account and edition trial",
                   "time_utc": datetime.now(timezone.utc).isoformat(),
-                  "identity": "Keeplane local SQLite trial",
+                  "identity": os.environ.get("KEEPLANE_TEST_IDENTITY", "Keeplane local SQLite trial"),
                   "cases": cases, "cleanup": "complete" if not failed_cleanup else
                              f"{failed_cleanup} actions failed",
                   "passed": sum(c["verdict"] == "pass" for c in cases),

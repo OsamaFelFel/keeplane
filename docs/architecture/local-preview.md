@@ -4,6 +4,32 @@ This is the first running Open Source slice. Keeplane owns the screen and the
 small registration/call API; agentgateway owns model transport and its model
 registry. The test fixture is replaceable with a local Qwen runner.
 
+The optional [shared PostgreSQL backend](../guide/postgres-accounts.md) implements
+the same account, settings and Audit APIs. It is tested with two app processes;
+the review previews described below remain on SQLite.
+
+```mermaid
+flowchart LR
+  Browser[Browser] --> Edge[Keeplane edge]
+  Edge --> API[Django API]
+  Edge -->|current session for protected assets| Identity[Django identity port]
+  API --> Identity
+  API --> Settings[Settings and model approval ports]
+  API --> Audit[Audit port]
+  Identity -->|session and mandatory record in one transaction| DB[(Shared PostgreSQL)]
+  Settings -->|change and enabled record in one transaction| DB
+  Audit --> DB
+  API -->|versioned adapter| Gateway[Gateway model API]
+```
+
+PostgreSQL mode uses Django password/session machinery, UUID users and a shared
+signing secret. Row locks serialize account retry IDs and login budgets; one
+settings row orders class/approval changes across replicas. Serving processes
+do not migrate. Database errors produce unavailable responses rather than a
+fallback store. The [integration cases](../../tests/e2e/postgres-accounts-cases.md)
+cover two-copy behavior, Audit failure, outage and restore. Production deployment
+and the final native-library package remain open.
+
 ```mermaid
 flowchart LR
   Browser[Admin browser on port 3000 or 13000] --> App[Keeplane UI and model API]

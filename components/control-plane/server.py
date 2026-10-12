@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 
 from local_identity import LocalIdentity
 from audit import AuditStore
+from storage_errors import StorageUnavailable
 from runner_adapter import local_runner as inspect_local_runner
 
 
@@ -27,9 +28,16 @@ RUNNER_URLS = {url.strip().rstrip("/") for url in
                os.environ.get("PREVIEW_RUNNER_URLS", "http://qwen:8080").split(",") if url.strip()}
 
 
-AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
+if os.environ.get("KEEPLANE_DATABASE_HOST"):
+    import django
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_api.settings")
+    django.setup()
+    from django_api.persistence import stores
+    AUDIT, IDENTITY, _, _ = stores()
+else:
+    AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
     if os.environ.get("ACCOUNT_DB") and os.environ.get("MODEL_APPROVAL_DB") else None
-IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
+    IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
     if os.environ.get("ACCOUNT_DB") else None
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
 DJANGO_ACCOUNT_PORT = 8765
@@ -141,10 +149,25 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return ""
 
+    def signed_in_user(self):
+        if not os.environ.get("KEEPLANE_DATABASE_HOST"):
+            return IDENTITY.session(self.session_token())
+        # Static-edge threads are outside Django's request lifecycle.
+        from django.db import close_old_connections, connections
+        close_old_connections()
+        try:
+            return IDENTITY.session(self.session_token())
+        finally:
+            connections.close_all()
+
     def require_admin(self, path):
         if not IDENTITY:
             return True
-        self._signed_in_user = IDENTITY.session(self.session_token())
+        try:
+            self._signed_in_user = self.signed_in_user()
+        except StorageUnavailable:
+            self.reply(503, {"error": "Keeplane storage is unavailable; contact your operator"})
+            return False
         if self._signed_in_user and self._signed_in_user["role"] == "admin":
             return True
         if path.startswith("/api/"):
@@ -176,11 +199,16 @@ class Handler(BaseHTTPRequestHandler):
         if IDENTITY:
             if path == "/sign-in":
                 return self.reply(200, (UI / "sign-in.html").read_bytes(), "text/html; charset=utf-8")
-            if path == "/" and (IDENTITY.session(self.session_token()) or {}).get("role") == "developer":
-                self.send_response(302)
-                self.send_header("Location", "/app/")
-                self.end_headers()
-                return
+            if path == "/":
+                try:
+                    developer = (self.signed_in_user() or {}).get("role") == "developer"
+                except StorageUnavailable:
+                    return self.reply(503, {"error": "Keeplane storage is unavailable; contact your operator"})
+                if developer:
+                    self.send_response(302)
+                    self.send_header("Location", "/app/")
+                    self.end_headers()
+                    return
             if path not in ("/health/app", "/style.css", "/sign-in.js", "/browser-security.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
                     and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
