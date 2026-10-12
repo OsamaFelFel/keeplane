@@ -16,6 +16,9 @@ sessions. The review previews remain SQLite.
   integration groups pass**, including all 29 original account/CSRF cases,
   ASCII username rules, project-count/removal guards and atomic rollback of
   class names, model approvals and their Audit records. The fixture is removed.
+- [Host-user fixture repeat](2026-10-12-postgres-api-host-user.json): **15/15
+  groups pass** with app processes matching the invoking host UID/GID; fixture
+  resources and private temporary files are removed successfully.
 
 - [Default-preview full regression](2026-10-12-postgres-backend-full-regression.json):
   **55/55 suites and 332/332 case records pass** against the rebuilt Docker/kind
@@ -47,8 +50,10 @@ sessions. The review previews remain SQLite.
 GitHub Actions now runs this fixture alongside frontend and isolated backend
 checks. Hosted execution is reported separately. The fixture uses a small
 gateway API to prove persistence coordination, rather than gateway runtime
-policy. Its root app containers and database-owner role enable failure injection;
-they are not production permissions evidence.
+policy. The initial local fixtures used root app containers; the runner now uses
+the invoking host's UID/GID so Linux-created reports remain removable. Its
+database-owner role enables failure injection and is not production permissions
+evidence.
 
 ## Retained failures and corrections
 
@@ -66,6 +71,12 @@ rotation assertion accidentally reread the updated password file as its old
 password. The fixture now preserves the original credential separately for that
 check. Both complete repeats pass all 13 groups. All failed fixtures were also
 removed; their reports remain versioned.
+
+The first hosted PostgreSQL job passed all 15 behavior groups, then failed while
+removing root-owned report files on Linux. The fixture now runs app copies as
+the invoking host UID/GID; secret/state files stay private and cleanup can remove
+them without elevated host permissions. The [initial CI result](https://github.com/OsamaFelFel/keeplane/actions/runs/38236288050)
+is retained; subsequent hosted status is reported by the PR checks.
 
 ## Remaining release work
 

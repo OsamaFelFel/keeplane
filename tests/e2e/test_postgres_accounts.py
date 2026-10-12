@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 import secrets
@@ -84,7 +85,8 @@ def main():
                        "GATEWAY_URL": "http://gateway:4000", "GATEWAY_FILE_CONFIG": "/fixture-config.yaml",
                        "KEEPLANE_RUNTIME_DIR": "/run/secrets", "KEEPLANE_TEST_IDENTITY": "Django/PostgreSQL API fixture",
                        "KEEPLANE_TEST_REPORT_DIR": "/trial-state/reports"}
-        app = {"image": image, "command": ["python", "/app/server.py"], "environment": environment,
+        app = {"image": image, "user": str(os.getuid()) + ":" + str(os.getgid()),
+               "command": ["python", "/app/server.py"], "environment": environment,
                "secrets": ["database", "first-admin-password", "original-password", "rotated", "signing"],
                "volumes": [str(state) + ":/trial-state"],
                "healthcheck": {"test": ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/health/app', timeout=2)"],
