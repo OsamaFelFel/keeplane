@@ -31,6 +31,7 @@ if [ ! -f "$FIRST_ADMIN_PASSWORD" ]; then
 fi
 python3 - "$RUNTIME_DIR" <<'PY'
 import hashlib
+import os
 from pathlib import Path
 import secrets
 import sys
@@ -49,6 +50,12 @@ cloud_key = root / "cloud-provider-key"
 if not cloud_key.exists():
     cloud_key.write_text(secrets.token_urlsafe(32) + "\n")
     cloud_key.chmod(0o600)
+for name in ("gateway-db-password", "supplied-gateway-db-password"):
+    path = root / name
+    if not path.exists():
+        # URL-safe characters work for both PostgreSQL and the gateway URI.
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as stream:
+            stream.write(secrets.token_urlsafe(32))
 PY
 if [ ! -d components/admin-ui/web/node_modules ]; then
   (cd components/admin-ui/web && npm ci)
@@ -65,6 +72,38 @@ else
   kind create cluster --name keeplane --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 \
     --config deploy/local/kind.yaml --kubeconfig "$KUBECONFIG_PATH" --wait 120s
 fi
+python3 - "$KUBECONFIG_PATH" <<'PY'
+import base64
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+for namespace in ("keeplane", "supplied-gateway"):
+    result = subprocess.run(
+        ("kubectl", "--kubeconfig", sys.argv[1], "-n", namespace,
+         "get", "deployment", "postgres", "--ignore-not-found", "-o", "json"),
+        capture_output=True, text=True, timeout=30)
+    if result.returncode:
+        raise SystemExit("Could not check the existing PostgreSQL fixture")
+    if result.stdout.strip():
+        deployment = json.loads(result.stdout)
+        env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
+        password = next(item for item in env if item["name"] == "POSTGRES_PASSWORD")
+        if password.get("valueFrom", {}).get("secretKeyRef") != {
+                "name": "keeplane-gateway-db", "key": "password"}:
+            raise SystemExit("Legacy PostgreSQL fixture in " + namespace +
+                "; back up and migrate it before rerunning. See docs/guide/gateway-database-secret.md.")
+        secret = subprocess.run(
+            ("kubectl", "--kubeconfig", sys.argv[1], "-n", namespace,
+             "get", "secret", "keeplane-gateway-db", "-o", "json"),
+            capture_output=True, text=True, timeout=30)
+        name = "gateway-db-password" if namespace == "keeplane" else "supplied-gateway-db-password"
+        path = Path("/private/tmp/keeplane-accounts-trial") / name
+        if secret.returncode or path.read_bytes() != base64.b64decode(json.loads(secret.stdout)["data"]["password"]):
+            raise SystemExit("Database password file does not match the existing Secret in " + namespace +
+                "; recover the file before setup. See docs/guide/gateway-database-secret.md.")
+PY
 kind load docker-image "$PYTHON_IMAGE" "$POSTGRES_IMAGE" "$GATEWAY_IMAGE" \
   keeplane-preview:kind-local --name keeplane
 docker exec keeplane-control-plane mkdir -p /models
@@ -89,6 +128,15 @@ for NS in keeplane supplied-gateway keeplane-existing; do
     --from-file=runtime-key-hash="$RUNTIME_DIR/gateway-runtime-key-hash" \
     --from-file=admin-key-hash="$RUNTIME_DIR/gateway-admin-key-hash" \
     --dry-run=client -o yaml |
+    kubectl --kubeconfig "$KUBECONFIG_PATH" -n "$NS" apply -f -
+done
+for NS in keeplane supplied-gateway; do
+  DB_PASSWORD_FILE="$RUNTIME_DIR/gateway-db-password"
+  if [ "$NS" = supplied-gateway ]; then
+    DB_PASSWORD_FILE="$RUNTIME_DIR/supplied-gateway-db-password"
+  fi
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n "$NS" create secret generic keeplane-gateway-db \
+    --from-file=password="$DB_PASSWORD_FILE" --dry-run=client -o yaml |
     kubectl --kubeconfig "$KUBECONFIG_PATH" -n "$NS" apply -f -
 done
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap model-fixture \

@@ -13,6 +13,7 @@ import time
 import uuid
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+from gateway_database_fixture import database_secret
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -137,6 +138,7 @@ def main():
             kube("-n", NAMESPACE, "create", "configmap", "model-fixture",
                  "--from-file=mock_model.py=tests/fixtures/mock_model.py")
             kube("-n", NAMESPACE, "apply", "-f", "deploy/local/model-fixture.yaml")
+            database_secret(KUBECONFIG, NAMESPACE)
             kube("-n", NAMESPACE, "apply", "-f", "deploy/local/postgres-fixture.yaml")
             kube("-n", NAMESPACE, "rollout", "status", "deployment/model", "--timeout=240s")
             kube("-n", NAMESPACE, "rollout", "status", "deployment/postgres", "--timeout=240s")

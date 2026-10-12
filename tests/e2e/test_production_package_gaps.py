@@ -24,8 +24,10 @@ def main():
                                "-f", "deploy/local/values.yaml"), cwd=ROOT,
                               text=True, capture_output=True, timeout=30, check=True).stdout
     configmaps = [part for part in rendered.split("---\n") if "kind: ConfigMap\n" in part]
-    password_in_configmap = any(re.search(r"postgres(?:ql)?://[^\s\"']+:[^\s\"']+@", part)
-                                for part in configmaps)
+    passwords = [match.group(1) for part in configmaps for match in re.finditer(
+        r"postgres(?:ql)?://[^:\s\"']+:([^@\s\"']+)@", part)]
+    password_in_configmap = any(not re.fullmatch(r"\$\{[A-Z_][A-Z0-9_]*\}", password)
+                                for password in passwords)
     report = {"suite": "production packaging diagnostic", "chart_dependency": "agentgateway-standalone-v1.6.0",
               "cases": [{"case": "PKG-GAP-01", "release_expectation_passes": not password_in_configmap,
                          "observed": {"password_in_rendered_configmap": password_in_configmap}}],

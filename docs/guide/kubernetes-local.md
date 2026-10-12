@@ -1,5 +1,7 @@
 # Run the Kubernetes integration trial locally
 
+**Edition:** Open Source
+
 This trial runs Keeplane at [http://127.0.0.1:13000](http://127.0.0.1:13000).
 The Docker preview remains available at [http://127.0.0.1:3000](http://127.0.0.1:3000).
 The protected app using the separately installed gateway can be reached on
@@ -54,7 +56,12 @@ The managed install uses agentgateway's **official standalone Helm chart**,
 version `v1.6.0`, with two gateway replicas and PostgreSQL-backed model
 registration. Qwen is a real local model served by llama.cpp, while
 `local-fixture` returns a fixed test answer. The PostgreSQL Deployment in `deploy/local` is a disposable test
-fixture with a fixed test password and temporary storage. The protected app-only install
+fixture with temporary storage and a generated password read from a Secret. Each
+gateway database has its own password file and namespaced Secret; gateway values
+and ConfigMaps contain only a placeholder. Keep the password files across setup
+runs. Existing previews with the older literal password need the backup and
+migration steps in the [database Secret guide](gateway-database-secret.md).
+The protected app-only install
 in the `keeplane-existing` namespace points to a separately installed upstream
 agentgateway in `supplied-gateway`. That gateway has its own disposable
 PostgreSQL and a pre-existing fixture model. Keeplane installs no gateway into

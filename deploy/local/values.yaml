@@ -19,6 +19,11 @@ gateway:
 
 agentgateway-standalone:
   extraEnv:
+    - name: KEEPLANE_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-db
+          key: password
     - name: GATEWAY_RUNTIME_KEY_HASH
       valueFrom:
         secretKeyRef:
@@ -41,7 +46,7 @@ agentgateway-standalone:
       readOnly: true
   database:
     postgres:
-      url: postgresql://keeplane:local-test-only@postgres:5432/keeplane
+      url: postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@postgres:5432/keeplane
   config:
     gateways:
       default:

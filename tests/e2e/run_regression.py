@@ -35,7 +35,7 @@ def py(name, *args):
 
 
 SUITES = (
-    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04 PKG-05 PKG-06 PKG-07", needs_stack=False),
+    Suite("chart-package", py("chart_package"), "PKG-01 PKG-02 PKG-03 PKG-04 PKG-05 PKG-06 PKG-07 PKG-08", needs_stack=False),
     Suite("catalog-store", py("model_catalog"), "catalog-store", needs_stack=False),
     Suite("data-class-store", py("data_classes_store"), "data-class-store", needs_stack=False),
     Suite("audit-store", py("audit_store"), "audit-store", needs_stack=False),
@@ -65,6 +65,8 @@ SUITES = (
     Suite("kind-runner", py("runner_flow"), "LOCAL-23 LOCAL-21 LOCAL-24 LOCAL-21-ADD LOCAL-22",
           environment=(("KEEPLANE_BASE_URL", "http://127.0.0.1:13000"),)),
     Suite("kind-failover", py("kind"), "K8S-01 K8S-02 K8S-03 K8S-04 K8S-07 K8S-05 K8S-17 K8S-06"),
+    Suite("kind-database-secrets", py("gateway_secret_rotation"),
+          "GSECRET-05 GSECRET-06 GSECRET-07 GSECRET-08 GSECRET-09", timeout=600),
     Suite("kind-gateway-down", py("gateway_down"), "K8S-08 K8S-09", timeout=240),
     Suite("kind-existing-preflight", py("existing_gateway_preflight"), "K8S-10 K8S-11 K8S-12 K8S-13", timeout=240),
     Suite("kind-existing-protected", py("existing_gateway_live"),

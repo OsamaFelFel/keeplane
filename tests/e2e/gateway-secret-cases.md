@@ -11,4 +11,14 @@ Run `python3 tests/e2e/test_gateway_secret_binding.py --output <new JSON path>` 
 
 Run `python3 tests/e2e/test_gateway_secret_kind.py --output <new JSON path>` for GSECRET-04 after preparing the isolated cluster in [network-policy-cases.md](network-policy-cases.md). The script refuses another kubeconfig context and removes its disposable namespace. Its [PostgreSQL fixture](gateway-secret/kind-db.yaml) uses memory-backed storage and a test-only password; [upstream values](gateway-secret/upstream-values.yaml) reference the Secret key.
 
-This is not a production database or a rotation test. A Kubernetes Secret is only a delivery mechanism; cluster encryption, RBAC, backup, rotation and a full Keeplane installation still need evidence.
+Run `python3 tests/e2e/test_gateway_secret_rotation.py --output <new JSON path>` for the following cases in `kind-keeplane`. The script installs the Keeplane wrapper chart in a disposable namespace, uses generated credentials, and removes the namespace afterward.
+
+| ID | Plain-English action | Expected result |
+| --- | --- | --- |
+| GSECRET-05 | Install the managed wrapper chart before creating its database Secret. | Gateway pods cannot start and report a missing Secret; no gateway replica is Ready. |
+| GSECRET-06 | Create the Secret and wait for PostgreSQL and both gateway replicas. | Both replicas become Ready; the live gateway ConfigMap and Helm manifest contain only the placeholder and Secret reference, with no password. |
+| GSECRET-07 | Register a new model through the management API, then read and call it on each replica. | Both replicas retain the model and answer through the local fixture. |
+| GSECRET-08 | Change the PostgreSQL role password, update the Secret, and restart both gateway replicas. | All gateway pods are replaced; the new password authenticates, the old one fails, and each new replica still lists and calls the model. |
+| GSECRET-09 | Back up the database, stop the gateways, replace the disposable PostgreSQL pod, restore the backup, and start both replicas. | Both replicas list and call the saved model after restoration. |
+
+These are disposable local credential and recovery tests. They do not prove uninterrupted rotation, durable storage, production backup policy, cluster encryption or RBAC. The fixture's PostgreSQL data is lost when its pod is replaced without a backup.

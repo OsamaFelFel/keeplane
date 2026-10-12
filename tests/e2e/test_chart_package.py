@@ -147,6 +147,25 @@ def main():
                         "app_present": bool(protected_app),
                         "state_pvc_present": bool(named(protected_existing.stdout,
                             "PersistentVolumeClaim", "keeplane-existing-state"))}))
+    supplied = run("template", "supplied-gateway",
+                   "deploy/helm/keeplane/charts/agentgateway-standalone-v1.6.0.tgz",
+                   "-f", "deploy/local/supplied-gateway-values.yaml")
+    db_fixture = (ROOT / "deploy/local/postgres-fixture.yaml").read_text()
+    secret_wiring = all(
+        "${KEEPLANE_DB_PASSWORD}" in named(result.stdout, "ConfigMap", name + "-config")
+        and "local-test-only" not in result.stdout
+        and "name: KEEPLANE_DB_PASSWORD" in named(result.stdout, "Deployment", name)
+        and "name: keeplane-gateway-db" in named(result.stdout, "Deployment", name)
+        and "key: password" in named(result.stdout, "Deployment", name)
+        for result, name in ((managed, "keeplane"), (supplied, "supplied-gateway")))
+    checks.append(case("PKG-08", supplied.returncode == 0 and secret_wiring
+                       and "secretKeyRef:" in db_fixture and "name: keeplane-gateway-db" in db_fixture
+                       and "local-test-only" not in db_fixture
+                       and "KEEPLANE_DB_PASSWORD" not in existing.stdout
+                       and "keeplane-gateway-db" not in existing.stdout,
+                       {"supplied_render_exit": supplied.returncode,
+                        "both_gateway_passwords_secret_backed": secret_wiring,
+                        "existing_app_has_database_credentials": "KEEPLANE_DB_PASSWORD" in existing.stdout}))
     report = {"suite": "Keeplane local Helm packaging", "results": checks,
               "release_package_approved": False}
     if args.output:

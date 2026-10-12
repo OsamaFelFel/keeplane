@@ -10,6 +10,7 @@ import tempfile
 import time
 import uuid
 
+from gateway_database_fixture import database_secret
 from test_full_product_edge import HELM, HOST, KEYS, KUBECONFIG, PASSWORD, ROOT, port
 
 
@@ -77,6 +78,7 @@ def main():
             kube("-n", GATEWAY_NS, "create", "configmap", "model-fixture",
                  "--from-file=mock_model.py=tests/fixtures/mock_model.py")
             kube("-n", GATEWAY_NS, "apply", "-f", "deploy/local/model-fixture.yaml")
+            database_secret(KUBECONFIG, GATEWAY_NS)
             kube("-n", GATEWAY_NS, "apply", "-f", "deploy/local/postgres-fixture.yaml")
             kube("-n", GATEWAY_NS, "rollout", "status", "deployment/model", "--timeout=240s")
             kube("-n", GATEWAY_NS, "rollout", "status", "deployment/postgres", "--timeout=240s")

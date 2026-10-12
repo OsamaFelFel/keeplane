@@ -16,6 +16,9 @@ flowchart LR
   Django -->|Data Classes and Audit| Settings
   Django -->|Ask approval check| Settings
   Django -->|Ask via runtime key| Gateway
+  DBSecret[Namespaced database password Secret in kind] -->|environment| Gateway
+  DBSecret -->|initial database password| Postgres[(Disposable kind PostgreSQL)]
+  Gateway -->|model catalog in kind| Postgres
   Gateway --> Fixture[Local test model]
   Gateway --> Qwen[Local Qwen runner]
   Gateway -->|shared key file| Cloud[Authenticated cloud-format fixture]

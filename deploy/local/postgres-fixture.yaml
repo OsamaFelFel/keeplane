@@ -1,10 +1,12 @@
-# Disposable local test database. Never use this password for a real installation.
+# Disposable local test database. Its storage is lost when the pod is replaced.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres
@@ -21,7 +23,10 @@ spec:
             - name: POSTGRES_USER
               value: keeplane
             - name: POSTGRES_PASSWORD
-              value: local-test-only
+              valueFrom:
+                secretKeyRef:
+                  name: keeplane-gateway-db
+                  key: password
             - name: POSTGRES_DB
               value: keeplane
           ports:
