@@ -22,10 +22,13 @@ POSTGRES = "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fd
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheels", type=Path, help="Optional offline cache; otherwise download the pinned fixture wheels with hash enforcement")
+    parser.add_argument("--app-image", help="Test an already packaged PostgreSQL image instead of the disposable binary driver")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Evidence already exists; choose a fresh output")
+    if args.app_image and (args.wheels or not re.fullmatch(r"[a-zA-Z0-9./:@_-]+", args.app_image)):
+        parser.error("Use a valid packaged image reference without --wheels")
     project = "keeplane-postgres-api-" + uuid.uuid4().hex[:10]
     image = project + ":local"
     result = {"time_utc": datetime.now(timezone.utc).isoformat(), "project": project,
@@ -71,10 +74,13 @@ def main():
         for path in sorted((build / "app").rglob("*.py")):
             source.update(str(path.relative_to(build / "app")).encode() + b"\0" + path.read_bytes())
         result["backend_source_sha256"] = source.hexdigest()
-        result["base_app_image"] = run(["docker", "image", "inspect", "keeplane-preview:kind-local", "--format", "{{.Id}}"] ).stdout.decode().strip()
+        base_image = args.app_image or "keeplane-preview:kind-local"
+        result["base_app_image"] = run(["docker", "image", "inspect", base_image, "--format", "{{.Id}}"] ).stdout.decode().strip()
+        if args.app_image:
+            result["limits"][2] = "This tests the packaged native driver; complete base-image source/notice work remains."
         (build / "Dockerfile").write_text(
-            "FROM keeplane-preview:kind-local\nUSER 0\nCOPY wheels /wheels/\n"
-            "RUN pip install --no-index --find-links /wheels --require-hashes --no-deps --target /deps -r /wheels/trial-requirements.txt\n"
+            "FROM " + base_image + "\nUSER 0\n" + ("" if args.app_image else "COPY wheels /wheels/\n"
+            "RUN pip install --no-index --find-links /wheels --require-hashes --no-deps --target /deps -r /wheels/trial-requirements.txt\n") +
             "COPY app /app/\nCOPY tests /tests/\nCOPY fixture.py /fixture.py\n"
             "COPY fixture-config.yaml /fixture-config.yaml\nENV PYTHONPATH=/deps:/app:/tests\n")
         environment = {"KEEPLANE_DATABASE_HOST": "database", "KEEPLANE_DATABASE_NAME": "keeplane",
@@ -134,7 +140,7 @@ def main():
             raise RuntimeError("Fixture database did not recover")
 
         try:
-            if not args.wheels:
+            if not args.wheels and not args.app_image:
                 run(["docker", "run", "--rm", "--user", "0", "-v", str(build / "wheels") + ":/wheels", "keeplane-preview:kind-local",
                      "pip", "--isolated", "download", "--no-cache-dir", "--index-url", "https://pypi.org/simple",
                      "--require-hashes", "--no-deps", "--only-binary=:all:", "--dest", "/wheels", "-r", "/wheels/trial-requirements.txt"])

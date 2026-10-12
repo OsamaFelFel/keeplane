@@ -3,7 +3,26 @@ app:
   pullPolicy: IfNotPresent
   imagePullSecrets: []
   resources: {}
+  replicaCount: 1
   runnerUrls: "http://qwen:8080"
+  postgres:
+    enabled: false
+    host: ""
+    port: 5432
+    database: ""
+    user: ""
+    # Separate Secrets: app password, identity material, database CA certificate.
+    credentialsSecret: ""
+    identitySecret: ""
+    caSecret: ""
+    publicOrigin: ""
+    publicOriginAliases: ""
+    # Existing shared PVC; configure the gateway's read-only mount separately.
+    providerKeysClaim: ""
+    migration:
+      enabled: true
+      user: ""
+      credentialsSecret: ""
   localTrial:
     enabled: false
     firstAdminSecret: ""

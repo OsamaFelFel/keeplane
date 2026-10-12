@@ -140,8 +140,27 @@ port 3000 (Docker) or 13000 (kind) is published. If the account listener fails,
 the public account and model management routes return 503 rather than using an
 older handler. Model writes have a longer proxy timeout so gateway answer
 verification and shared-key rotation can finish.
-This is a partial API cutover, not the completed Django ORM and PostgreSQL
-release persistence cutover.
+The default previews keep the SQLite store. The optional PostgreSQL deployment
+uses the same API with Django ORM records and native database sessions:
+
+```mermaid
+flowchart LR
+  Browser -->|HTTPS| Ingress
+  Ingress --> App1[App copy 1]
+  Ingress --> App2[App copy 2]
+  App1 -->|TLS, restricted role| DB[(Operated PostgreSQL)]
+  App2 -->|TLS, restricted role| DB
+  Migration[One-off Helm migration Job] -->|TLS, separate DDL role| DB
+  App1 --> Gateway
+  App2 --> Gateway
+  Gateway --> Model
+```
+
+Migration credentials are excluded from app pods. Database loss removes app
+readiness while preserving process liveness for recovery. The optional image
+keeps source and notice records for its replaceable PostgreSQL drivers. See the
+[PostgreSQL guide](../guide/postgres-accounts.md) for configuration and remaining
+production operations.
 The Docker and managed kind trials use the same local account API and React
 screens. They have separate account, audit and approval stores; a change in one
 preview does not appear in the other. The kind trial stores its SQLite files

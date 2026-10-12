@@ -11,8 +11,14 @@ the Kubernetes gateway or a production release.
 The PostgreSQL job also builds the real API/UI and runs the [two-copy account
 fixture](../../tests/e2e/postgres-accounts-cases.md), including shared throttling,
 atomic Audit failure, database/app restart, fresh-database restore and password
-rotation. Its gateway is a test API fixture; the running-stack suites still
+rotation against the source-built PostgreSQL image package. Its gateway is a test API fixture; the running-stack suites still
 cover the supported trial gateway separately.
+
+The six [PostgreSQL chart checks](../../tests/e2e/postgres-deployment-cases.md)
+run in the default regression too. The separate deployment trial exercises both
+gateway modes with the actual gateway, verified database TLS, separate roles,
+two app copies, PVC restart and fresh-database restore on the isolated Calico
+cluster. It creates and removes its own namespace.
 
 Keep the single protected Docker preview and isolated kind cluster running.
 The [local model](local-preview.md), [account](accounts-local.md), and

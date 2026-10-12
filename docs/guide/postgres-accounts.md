@@ -5,19 +5,30 @@
 Keeplane can run its existing API against PostgreSQL. UUID accounts, native
 Django sessions, sign-in budgets, account operation IDs, Editions preferences,
 model approvals, data classes and Audit records share one database. The Docker
-and kind review previews still use SQLite. The release chart and supported
-database operations remain in progress.
+and kind review previews still use SQLite. The chart has an explicit PostgreSQL
+integration mode. Production database operations and the release package remain
+in progress.
 
 ## Configure a clean installation
 
 Install the pinned API requirements and
 `components/control-plane/requirements-postgres.txt`. The latter uses the
 replaceable pure-Python Psycopg 3.3.6 distribution and needs an installed `libpq`.
-The default preview image does not yet include that optional driver or select
-a production native-library distribution. Keep the LGPL notice and corresponding
-source available, and record the exact native libraries and notices when
-packaging it. Binary wheels bundle additional native dependencies; their package
-license alone is insufficient inventory. See the [Psycopg installation choices](https://www.psycopg.org/psycopg3/docs/basic/install.html).
+The default preview image does not include that optional driver. Build the
+`postgres` target for chart integration:
+
+```sh
+docker build --target postgres -t keeplane-postgres:local \
+  -f components/control-plane/Dockerfile .
+```
+
+It builds the unmodified Psycopg C extension from hash-verified source and
+dynamically links Alpine libpq 18.6-r0. Compiler tools stay in the build stage.
+The image includes both driver source archives, notices and a runtime package
+inventory under `/usr/share/keeplane/`. Retain these when distributing it and
+allow replacement of the drivers. Complete native/base-image source and notice
+inventory remains release work. See the [package records](../../components/control-plane/licenses/README.md)
+and [Psycopg installation choices](https://www.psycopg.org/psycopg3/docs/basic/install.html).
 
 Configure every app replica and the one-off migration process:
 
@@ -38,8 +49,8 @@ Configure every app replica and the one-off migration process:
 Keep credentials in mounted Secrets rather than committed configuration,
 command arguments or logs. PostgreSQL mode requires its stable signing secret
 and database configuration; it never falls back to SQLite or a random signing
-key. The isolated HTTP fixture disables database TLS; that is not production TLS
-evidence.
+key. The API fixture disables database TLS. The separate chart fixture tests
+verified TLS, wrong-hostname/CA refusal and a server that rejects plaintext.
 
 Run `python /app/manage.py migrate --noinput` once before starting the app.
 Serving processes never migrate. `python /app/manage.py check` validates the
@@ -69,5 +80,49 @@ replicas that may restart.
 Back up the complete database and retain the matching signing secret separately.
 Restore into a fresh database and point all replicas at it. Integration cases
 prove identity, sessions, settings, approvals and Audit survive this operation.
-Production backup scheduling, retention, restricted database roles, Kubernetes
-storage, database TLS and deployment cutover remain release work.
+Production backup scheduling, retention, database availability, volume semantics
+and review-preview cutover remain release work.
+
+## Install the chart against an operated database
+
+Use [the example values](../../deploy/postgres/values.example.yaml). Provision a
+private database owned by a migration role and a separate app login. Neither
+role needs superuser, database creation or role creation permission. Revoke
+`PUBLIC` database access and schema creation. Grant the app only `CONNECT` on
+this database, `USAGE` on its schema, and table `SELECT, INSERT, UPDATE, DELETE`
+plus sequence `USAGE, SELECT`. Set the migration role's default privileges so
+new tables and sequences receive those grants. Keep database ownership and DDL
+permission with the migration role. See [PostgreSQL privileges](https://www.postgresql.org/docs/16/ddl-priv.html).
+
+Create namespaced Secrets with these keys:
+
+| Values field | Secret contents |
+| --- | --- |
+| `app.postgres.credentialsSecret` | `password` for the restricted app role |
+| `app.postgres.migration.credentialsSecret` | `password` for the separate migration role |
+| `app.postgres.identitySecret` | `first-admin-password` and stable `signing-secret` |
+| `app.postgres.caSecret` | `ca.crt` for the database's issuing CA |
+| `gateway.keysSecret` | `runtime-key` and separate `admin-key` |
+
+The chart mounts passwords as files and always uses database `verify-full`;
+the configured hostname must match the server certificate. See
+[PostgreSQL TLS verification](https://www.postgresql.org/docs/16/libpq-ssl.html).
+Its pre-install/pre-upgrade Job runs explicit migrations with the separate
+credential, which is never mounted in app pods. Failure stops the Helm operation.
+Do not run concurrent Helm upgrades. For a future incompatible migration,
+coordinate old-worker shutdown and backup before running it; automatic schema
+rollback is not supplied. Set `app.postgres.migration.enabled=false` only when
+an external migration process has already prepared the schema.
+
+`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` checks the
+shared settings table and returns 503 during database loss; `/health/app` keeps
+the process alive for recovery. Database failure does not trigger a liveness
+restart. SQLite trial mode requires one copy and cannot be combined with
+PostgreSQL.
+
+Supply an existing provider-key PVC. Multiple nodes need a volume that supports
+the required shared reads/writes; the single-node test's RWO claim does not prove
+that production property. Managed gateways need their read-only mount configured
+separately. Customer-gateway provider credentials remain a separate integration
+contract. This chart does not install or operate PostgreSQL, choose a database
+operator, schedule backups or claim a release-ready gateway policy boundary.

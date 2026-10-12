@@ -34,3 +34,5 @@ runner installs offline with hash enforcement, records source/base-image hashes,
 and removes its own containers, volumes, network, temporary secret files and
 derived image. It never prints credentials or cookies. Earlier failed reports
 remain versioned. Binary-wheel testing does not select the release distribution.
+
+Use `--app-image keeplane-preview:postgres-local` to test the source-built driver package. PGAPI-09 also requires readiness 503 and liveness 200 during database loss; recovery requires readiness 200. The default hash-verified binary-wheel fixture remains available for component comparison.

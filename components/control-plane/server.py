@@ -209,11 +209,24 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_header("Location", "/app/")
                     self.end_headers()
                     return
-            if path not in ("/health/app", "/style.css", "/sign-in.js", "/browser-security.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
+            if path not in ("/health/app", "/health/ready", "/style.css", "/sign-in.js", "/browser-security.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
                     and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
-        if self.path == "/health/app":
+        if self.path == "/health/ready":
+            if os.environ.get("KEEPLANE_DATABASE_HOST"):
+                from django.db import DatabaseError, connections
+                from django_api.accounts.models import Settings
+                try:
+                    # A clean schema can have no settings row until the first
+                    # settings change. Query availability, not row existence.
+                    Settings.objects.exists()
+                except DatabaseError:
+                    return self.reply(503, {"app": "unavailable"})
+                finally:
+                    connections.close_all()
+            self.reply(200, {"app": "ready"})
+        elif self.path == "/health/app":
             # Keep the admin UI in service while its gateway is unavailable.
             self.reply(200, {"app": "ready"})
         elif self.path == "/health":

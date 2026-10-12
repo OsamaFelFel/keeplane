@@ -1,0 +1,70 @@
+{{- if and .Values.app.postgres.enabled .Values.app.postgres.migration.enabled }}
+{{- if or (eq .Values.app.postgres.user .Values.app.postgres.migration.user) (eq .Values.app.postgres.credentialsSecret .Values.app.postgres.migration.credentialsSecret) }}
+{{- fail "PostgreSQL migrations require a separate user and credentials Secret" }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-accounts-migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-accounts-migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ .Values.app.image | quote }}
+          imagePullPolicy: {{ .Values.app.pullPolicy }}
+          command: ["python", "/app/manage.py", "migrate", "--noinput"]
+          env:
+            {{- include "keeplane.postgres.env" . | nindent 12 }}
+            - name: KEEPLANE_DATABASE_USER
+              value: {{ required "app.postgres.migration.user is required" .Values.app.postgres.migration.user | quote }}
+          volumeMounts:
+            {{- include "keeplane.postgres.mounts" . | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with .Values.app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        {{- include "keeplane.postgres.ca" . | nindent 8 }}
+        - name: database-credentials
+          secret:
+            secretName: {{ required "app.postgres.migration.credentialsSecret is required" .Values.app.postgres.migration.credentialsSecret | quote }}
+            defaultMode: 0440
+            items:
+              - key: password
+                path: password
+        - name: identity
+          secret:
+            secretName: {{ required "app.postgres.identitySecret is required" .Values.app.postgres.identitySecret | quote }}
+            defaultMode: 0440
+            items:
+              - key: signing-secret
+                path: signing-secret
+{{- end }}

@@ -44,3 +44,5 @@ failed case and preserve the result, including failures; do not label a partial
 run as a passing release gate. This local suite does not prove real cloud
 subscription behavior, production security, image-license compliance, or
 coding-session parity.
+
+The PostgreSQL chart contract adds PGCHART-01–06 from [the deployment cases](postgres-deployment-cases.md) to every default regression. Its separate live namespace fixture is run explicitly after deployment changes.

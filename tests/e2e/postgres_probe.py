@@ -203,7 +203,10 @@ def outage():
     anonymous = Browser(B)
     assert anonymous.fetch("/api/session", {"username": "first-admin", "password": PASSWORD}, method="POST")[0] == 503
     assert not any(cookie.name == "keeplane_session" for cookie in anonymous.cookies)
-    return {"identity_status": 503, "protected_page_status": 503, "sign_in_status": 503, "no_new_cookie": True}
+    assert Browser(A).fetch("/health/ready")[0] == 503
+    assert Browser(A).fetch("/health/app")[0] == 200
+    return {"identity_status": 503, "protected_page_status": 503, "sign_in_status": 503, "no_new_cookie": True,
+            "readiness_status": 503, "liveness_status": 200}
 
 
 def recovery():
@@ -212,6 +215,7 @@ def recovery():
     assert other(browser).fetch("/api/models")[1]["models"][0]["approved_classes"] == ["Public"]
     assert browser.fetch("/api/data-classes")[1]["enabled"] is True
     assert browser.fetch("/api/audit/records?kind=settings")[1]["total"] >= 5
+    assert Browser(A).fetch("/health/ready")[0] == 200
     return {"identity_and_session_preserved": True, "settings_and_approval_preserved": True, "audit_preserved": True}
 
 
@@ -221,7 +225,8 @@ def versions():
         cursor.execute("SHOW server_version")
         database = cursor.fetchone()[0]
     return {"django": django.get_version(), "psycopg": psycopg.__version__, "libpq": psycopg.pq.version(),
-            "postgresql": database, "session_engine": __import__('django.conf', fromlist=['settings']).settings.SESSION_ENGINE}
+            "driver_implementation": psycopg.pq.__impl__, "postgresql": database,
+            "session_engine": __import__('django.conf', fromlist=['settings']).settings.SESSION_ENGINE}
 
 
 def ascii_usernames():
