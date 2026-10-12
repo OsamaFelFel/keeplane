@@ -14,6 +14,7 @@ import uuid
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 from gateway_database_fixture import database_secret
+from protected_preview import curl_csrf_headers
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -176,7 +177,7 @@ def main():
             signed = run(*base, "-c", str(cookie), "-b", str(cookie), "-o", "/dev/null",
                          "-w", "%{http_code}", "-X", "POST",
                          "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
-                         "-H", "Origin: " + url,
+                         *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url,
                          "--data-binary", "@" + str(login), url + "/api/session")
             identity = run(*base, "-b", str(cookie), "-o", "/dev/null", "-w", "%{http_code}",
                            url + "/api/identity")
@@ -212,7 +213,7 @@ def main():
             if model and not model.get("approved"):
                 setup_response = run(*base, "-b", str(cookie), "-o", "/dev/null", "-w", "%{http_code}",
                                      "-X", "POST", "-H", "Content-Type: application/json",
-                                     "-H", "X-Keeplane-Action: 1", "-H", "Origin: " + url,
+                                     "-H", "X-Keeplane-Action: 1", *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url,
                                      "--data-binary", "@" + str(setup),
                                      url + "/api/models/local-fixture/setup", check=False)
                 setup_status = setup_response.stdout
@@ -220,7 +221,7 @@ def main():
             def ask_fixture():
                 response = run(*base, "-b", str(cookie), "-X", "POST",
                                "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
-                               "-H", "Origin: " + url, "--data-binary", "@" + str(ask),
+                               *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url, "--data-binary", "@" + str(ask),
                                "-o", str(temporary / "answer.json"), "-w", "%{http_code}",
                                url + "/api/ask", check=False)
                 try:
@@ -249,7 +250,7 @@ def main():
             ready_before_registration = len(ready_gateway_pods())
             registered = run(*base, "-b", str(cookie), "-X", "POST",
                              "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
-                             "-H", "Origin: " + url, "--data-binary", "@" + str(registration),
+                             *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url, "--data-binary", "@" + str(registration),
                              "-o", "/dev/null", "-w", "%{http_code}", url + "/api/models", check=False)
             record(rows, "FULL-09", registered.stdout == "200",
                    {"registration_status": registered.stdout,
@@ -267,7 +268,7 @@ def main():
                     "runtime_and_management_readback": present_on_both})
             removed = run(*base, "-b", str(cookie), "-X", "DELETE",
                           "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
-                          "-H", "Origin: " + url, "--data-binary", "{}",
+                          *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url, "--data-binary", "{}",
                           "-o", "/dev/null", "-w", "%{http_code}",
                           url + "/api/models/convergence-fixture/setup", check=False)
             deadline = time.monotonic() + 15
@@ -281,7 +282,7 @@ def main():
                 time.sleep(0.5)
             denied = run(*base, "-b", str(cookie), "-X", "POST",
                          "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
-                         "-H", "Origin: " + url, "--data-binary", "@" + str(removed_ask),
+                         *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url, "--data-binary", "@" + str(removed_ask),
                          "-o", "/dev/null", "-w", "%{http_code}", url + "/api/ask", check=False)
             record(rows, "FULL-11", removed.stdout == "200" and absent_on_both and
                    denied.stdout == "403",

@@ -4,7 +4,7 @@ import os
 import sqlite3
 from urllib.parse import parse_qs
 
-from django.http import HttpResponseRedirect
+from django.middleware.csrf import get_token, rotate_token
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -108,7 +108,9 @@ def action_error(request):
 
 @api_view(["GET"])
 def auth_options(request):
-    return Response({"sso_connected": False})
+    response = Response({"sso_connected": False, "csrf_token": get_token(request)})
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @api_view(["POST"])
@@ -119,6 +121,7 @@ def session(request):
         return failure(400, "Enter a username and password")
     def sign_in():
         token = IDENTITY.login(request.data.get("username"), request.data.get("password"))
+        rotate_token(request)
         response = Response({"signed_in": True})
         response.set_cookie("keeplane_session", token, max_age=8 * 60 * 60,
                             httponly=True, samesite="Strict", path="/",
@@ -373,10 +376,10 @@ def consume_edition_note(request):
     return result(lambda: Response(IDENTITY.consume_edition_note(user["id"])))
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 def sign_out(request):
     IDENTITY.logout(request.COOKIES.get("keeplane_session", ""))
-    response = HttpResponseRedirect("/sign-in")
+    response = Response({"signed_out": True})
     response.delete_cookie("keeplane_session", path="/", samesite="Strict")
     response["Cache-Control"] = "no-store"
     return response

@@ -2,6 +2,12 @@
 
 **Edition:** Open Source
 
+Pull requests run the frontend build, UI unit tests and lint, plus isolated
+account, storage, read-retry and HTTPS CSRF cases in GitHub Actions. Actions are
+pinned to commits and use a read-only repository token. These quick checks
+complement the running-stack and browser regression below; they do not certify
+the Kubernetes gateway or a production release.
+
 Keep the single protected Docker preview and isolated kind cluster running.
 The [local model](local-preview.md), [account](accounts-local.md), and
 [Kubernetes](kubernetes-local.md) guides show how to start each. The Docker

@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import mark from '@/assets/keeplane-mark-reversed.svg'
 import type { Identity } from './api'
+import { SignOut } from './SignOut'
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton,
   SidebarMenuItem, SidebarProvider, SidebarTrigger,
@@ -26,7 +27,7 @@ export function Shell({ identity, children }: { identity: Identity; children: Re
           <SidebarTrigger aria-label="Menu" className="h-11 w-11 text-white hover:bg-white/10 md:hidden" />
           <span className="keeplane-brand"><img src={mark} width="28" height="28" alt="" /> Keeplane</span>
         </div>
-        <div className="flex items-center gap-5 text-[14px]"><span className="hidden md:inline">{identity.username}</span><a href="/sign-out">Sign out</a></div>
+        <div className="flex items-center gap-5 text-[14px]"><span className="hidden md:inline">{identity.username}</span><SignOut /></div>
       </header>
       <div className="flex min-w-0 flex-1">
       <Sidebar aria-label="Main" className="keeplane-sidebar" collapsible="offcanvas">

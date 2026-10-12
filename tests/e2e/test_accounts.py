@@ -24,8 +24,17 @@ class Browser:
         self.cookies = http.cookiejar.CookieJar()
         self.opener = build_opener(HTTPCookieProcessor(self.cookies))
 
-    def fetch(self, path, payload=None, action=True, method=None):
+    def fetch(self, path, payload=None, action=True, method=None, csrf=True, headers=None):
+        supplied_headers = headers or {}
         headers = {"Accept": "application/json"}
+        actual_method = method or ("POST" if payload is not None else "GET")
+        if csrf and actual_method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+            status, options, _ = self.fetch("/api/auth-options")
+            if status != 200 or not options.get("csrf_token"):
+                raise RuntimeError("CSRF bootstrap failed")
+            headers["X-CSRFToken"] = options["csrf_token"]
+            headers["Origin"] = self.base
+        headers.update(supplied_headers)
         if payload is not None:
             headers["Content-Type"] = "application/json"
             if action:
@@ -107,22 +116,17 @@ def main():
                {"wrong_password_status": wrong_status, "api_status": wrong_api_status})
         origin_statuses = {}
         for origin in (BASE, "http://untrusted.example"):
-            request = Request(BASE + "/api/session", method="POST",
-                              data=json.dumps({"username": "first-admin", "password":
-                                               (RUNTIME / "first-admin-password").read_text().strip()}).encode(),
-                              headers={"Content-Type": "application/json", "Origin": origin})
-            try:
-                with urlopen(request, timeout=10) as response:
-                    origin_statuses[origin] = response.status
-            except HTTPError as error:
-                origin_statuses[origin] = error.code
+            origin_statuses[origin] = Browser().fetch("/api/session", {
+                "username": "first-admin", "password":
+                (RUNTIME / "first-admin-password").read_text().strip()},
+                method="POST", headers={"Origin": origin})[0]
         record("ACCT-23", origin_statuses == {BASE: 200, "http://untrusted.example": 403},
                {"trusted_status": origin_statuses[BASE],
                 "foreign_status": origin_statuses["http://untrusted.example"]})
 
         signed_out = Browser()
         signed_out.login("first-admin", (RUNTIME / "first-admin-password").read_text().strip())
-        signed_out.page("/sign-out")
+        signed_out.fetch("/sign-out", method="POST")
         status, _, _ = signed_out.fetch("/api/users")
         sign_status, _, signed_out_page = signed_out.page("/")
         record("ACCT-03", status == 401 and sign_status == 200 and

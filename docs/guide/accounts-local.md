@@ -13,10 +13,24 @@ limit. A successful sign-in clears earlier failures. Infrastructure rotation of
 the break-glass password also clears that account's limit. Malformed account
 requests return 400 rather than changing an account or issuing a session.
 
+Sign-in and all browser changes now require Django's CSRF token and cookie.
+The UI obtains a fresh masked token before each change; successful sign-in
+rotates it. Sign out sends a protected POST request. Following a GET link to
+`/sign-out` does not end a session. If a token is rejected, reload Keeplane and
+try again; the UI does not repeat a write automatically. Cookies are marked
+Secure when the configured public origin uses HTTPS.
+
 The [Editions page](http://127.0.0.1:3000/editions) lists the Release 1 Open Source and Enterprise scope. The Enterprise feature note appears once for each admin on Users and links to Editions. An admin can turn that note off or back on from Editions; turning it back on permits one more view. “How to get Enterprise” is plain text until a destination is provided.
 
 Team screens and API routes are absent from Open Source.
 
 The [plain-English API cases](../../tests/e2e/accounts-cases.md) cover accounts, role changes, create retries, route denial and Editions. The [full regression](regression-local.md) includes them. The [browser cases](../../tests/browser/users-cases.md) check the real first-admin sign-in, desktop and 320px layouts, keyboard focus, local assets, role changes and the no-answer flow. Run them from `tests/browser/` with `npm ci`, `npx playwright install chromium --only-shell`, and `npm test`. The [UI unit case](../../tests/unit/ui/cases.md) checks validation without writing an account.
 
-The Docker preview is not a production identity system. The release identity component, backup, replica behavior and secure session deployment remain to be selected and tested.
+The Docker preview is not a production identity system. Shared PostgreSQL
+identity, backup, replica behavior and the complete secure session deployment
+still need implementation and verification.
+
+The [live security browser cases](../../tests/browser/security-cases.md) verify
+both React and static sign-in/sign-out, and a real Editions change followed by
+restoration. The [API security cases](../../tests/e2e/csrf-cases.md) check rejected
+requests before any mutation and the HTTPS cookie/origin rules.

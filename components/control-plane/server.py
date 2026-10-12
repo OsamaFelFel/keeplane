@@ -1,9 +1,8 @@
-"""Local preview entry point: UI, legacy settings, and Django API proxy."""
+"""Local preview edge: static UI, health, and protected Django API proxy."""
 
 import json
 import http.client
 import os
-import sqlite3
 import time
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -11,10 +10,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from socketserver import ThreadingMixIn
 from threading import Thread
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from local_identity import IdentityError, LocalIdentity
+from local_identity import LocalIdentity
 from audit import AuditStore
 from runner_adapter import local_runner as inspect_local_runner
 
@@ -33,9 +32,6 @@ AUDIT = AuditStore(os.environ["MODEL_APPROVAL_DB"]) \
 IDENTITY = LocalIdentity(os.environ["ACCOUNT_DB"], os.environ["FIRST_ADMIN_PASSWORD_FILE"], AUDIT) \
     if os.environ.get("ACCOUNT_DB") else None
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "")
-PUBLIC_ORIGIN_ALIASES = {origin.strip() for origin in
-                         os.environ.get("PUBLIC_ORIGIN_ALIASES", "").split(",") if origin.strip()}
-DJANGO_ACCOUNT_API = os.environ.get("DJANGO_ACCOUNT_API") == "1"
 DJANGO_ACCOUNT_PORT = 8765
 
 
@@ -113,8 +109,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(413, {"error": "Request is too large"})
             body = self.rfile.read(length) if length else None
             headers = {name: self.headers[name] for name in
-                       ("Cookie", "Content-Type", "Origin", "X-Keeplane-Action", "Accept")
+                       ("Cookie", "Content-Type", "Origin", "Referer", "X-CSRFToken",
+                        "X-Keeplane-Action", "Accept")
                        if name in self.headers}
+            headers["X-Keeplane-Scheme"] = urlsplit(PUBLIC_ORIGIN).scheme or "http"
             route = urlsplit(self.path)
             target = route.path + ("?" + route.query if route.query else "")
             timeout = 300 if self.command == "POST" and django_model_path(route.path) else 15
@@ -134,9 +132,6 @@ class Handler(BaseHTTPRequestHandler):
                 connection.close()
         except (OSError, http.client.HTTPException):
             self.reply(503, {"error": "Keeplane API is unavailable"})
-
-    def actor(self):
-        return self._signed_in_user["id"], self._signed_in_user["username"]
 
     def session_token(self):
         cookie = SimpleCookie()
@@ -162,38 +157,6 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
         return False
 
-    def session_cookie(self, token, max_age):
-        cookie = SimpleCookie()
-        cookie["keeplane_session"] = token
-        cookie["keeplane_session"]["path"] = "/"
-        cookie["keeplane_session"]["httponly"] = True
-        cookie["keeplane_session"]["samesite"] = "Strict"
-        cookie["keeplane_session"]["max-age"] = max_age
-        if PUBLIC_ORIGIN.startswith("https://"):
-            cookie["keeplane_session"]["secure"] = True
-        return cookie.output(header="").strip()
-
-    def identity_action_allowed(self):
-        if self.headers.get("X-Keeplane-Action") != "1" or \
-                self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json" or \
-                not self.trusted_origin():
-            self.reply(403, {"error": "Changes require Keeplane's admin UI"})
-            return False
-        return True
-
-    def trusted_origin(self):
-        origin = self.headers.get("Origin")
-        return not origin or origin in {PUBLIC_ORIGIN, *PUBLIC_ORIGIN_ALIASES}
-
-    def identity_result(self, action):
-        try:
-            status, result = action()
-            self.reply(status, result)
-        except IdentityError as error:
-            self.reply(error.status, {"error": error.message})
-        except sqlite3.Error:
-            self.reply(503, {"error": "Keeplane settings storage is unavailable"})
-
     def reply(self, status, body, content_type="application/json; charset=utf-8", headers=None):
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(status)
@@ -205,58 +168,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def incoming(self):
-        try:
-            size = int(self.headers.get("Content-Length", "0"))
-            if size < 1 or size > MAX_BODY:
-                raise ValueError("Request body must be between 1 byte and 64 KB")
-            value = json.loads(self.rfile.read(size))
-            if not isinstance(value, dict):
-                raise ValueError("Expected a JSON object")
-            return value
-        except (ValueError, json.JSONDecodeError) as error:
-            self.reply(400, {"error": str(error)})
-            return None
-
     def do_GET(self):
         route = urlsplit(self.path)
-        query = parse_qs(route.query)
         path = route.path
-        if path == "/api/models" or settings_api_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
+        if path == "/api/models" or settings_api_path(path) or account_api_path(path):
             return self.forward_account_api()
         if IDENTITY:
-            if path == "/api/auth-options":
-                return self.reply(200, {"sso_connected": False})
-            if path == "/api/identity":
-                signed_in = IDENTITY.session(self.session_token())
-                return self.reply(200, signed_in) if signed_in else self.reply(401, {"error": "Sign in to Keeplane"})
             if path == "/sign-in":
                 return self.reply(200, (UI / "sign-in.html").read_bytes(), "text/html; charset=utf-8")
-            if path == "/sign-out":
-                IDENTITY.logout(self.session_token())
-                self.send_response(302)
-                self.send_header("Location", "/sign-in")
-                self.send_header("Set-Cookie", self.session_cookie("", 0))
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                return
             if path == "/" and (IDENTITY.session(self.session_token()) or {}).get("role") == "developer":
                 self.send_response(302)
                 self.send_header("Location", "/app/")
                 self.end_headers()
                 return
-            if path not in ("/health/app", "/style.css", "/sign-in.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
+            if path not in ("/health/app", "/style.css", "/sign-in.js", "/browser-security.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
                     and not path.startswith(("/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
-        if IDENTITY and path.startswith("/api/user-operations/"):
-            operation_id = path.removeprefix("/api/user-operations/")
-            return self.identity_result(lambda: (200, IDENTITY.user_operation(
-                operation_id, self.actor()[0])))
-        if IDENTITY and path == "/api/users":
-            return self.identity_result(lambda: (200, IDENTITY.users(query)))
-        if IDENTITY and path == "/api/edition-note":
-            return self.identity_result(lambda: (200, IDENTITY.edition_note(self.actor()[0])))
         if self.path == "/health/app":
             # Keep the admin UI in service while its gateway is unavailable.
             self.reply(200, {"app": "ready"})
@@ -299,10 +227,11 @@ class Handler(BaseHTTPRequestHandler):
                 "text/javascript" if name.endswith(".js") else \
                 "image/svg+xml" if name.endswith(".svg") else "application/octet-stream"
             self.reply(200, asset.read_bytes(), media_type)
-        elif self.path in ("/", "/style.css", "/app.js", "/sign-in.js"):
+        elif self.path in ("/", "/style.css", "/app.js", "/sign-in.js", "/browser-security.js"):
             name = "index.html" if self.path == "/" else self.path[1:]
             content_type = {"index.html": "text/html", "style.css": "text/css",
-                            "app.js": "text/javascript", "sign-in.js": "text/javascript"}[name]
+                            "app.js": "text/javascript", "sign-in.js": "text/javascript",
+                            "browser-security.js": "text/javascript"}[name]
             self.reply(200, (UI / name).read_bytes(), content_type + "; charset=utf-8")
         elif self.path in ("/fonts/IBMPlexSans-Regular.woff2", "/fonts/IBMPlexSans-SemiBold.woff2",
                            "/fonts/IBMPlexMono-Regular.woff2"):
@@ -310,79 +239,22 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, {"error": "Not found"})
 
-    def do_POST(self):
+    def browser_change(self):
         path = urlsplit(self.path).path
-        if django_model_path(path) or settings_api_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
+        if django_model_path(path) or settings_api_path(path) or account_api_path(path):
             return self.forward_account_api()
-        if IDENTITY and path == "/api/session":
-            if not self.trusted_origin():
-                return self.reply(403, {"error": "Sign in from Keeplane's page"})
-            body = self.incoming()
-            if body is None:
-                return
-            try:
-                token = IDENTITY.login(body.get("username"), body.get("password"))
-            except IdentityError as error:
-                return self.reply(error.status, {"error": error.message})
-            return self.reply(200, {"signed_in": True},
-                              headers={"Set-Cookie": self.session_cookie(token, 8 * 60 * 60)})
-        if IDENTITY and not self.require_admin(path):
-            return
-        body = self.incoming()
-        if body is None:
-            return
-        if IDENTITY and path == "/api/edition-note/consume":
-            if not self.identity_action_allowed():
-                return
-            return self.identity_result(lambda: (200, IDENTITY.consume_edition_note(self.actor()[0])))
-        segments = urlsplit(self.path).path.strip("/").split("/")
-        if IDENTITY and self.path == "/api/users":
-            if self.identity_action_allowed():
-                return self.identity_result(lambda: (201, IDENTITY.create_user(body, self.actor()[0])))
-            return
         self.reply(404, {"error": "Not found"})
 
-    def do_PUT(self):
-        if settings_api_path(urlsplit(self.path).path) or (DJANGO_ACCOUNT_API and account_api_path(urlsplit(self.path).path)):
-            return self.forward_account_api()
-        if IDENTITY and not self.require_admin(urlsplit(self.path).path):
-            return
-        if IDENTITY:
-            segments = urlsplit(self.path).path.strip("/").split("/")
-            if len(segments) == 4 and segments[:2] == ["api", "users"] and segments[3] == "role":
-                if not self.identity_action_allowed():
-                    return
-                body = self.incoming()
-                if body is None:
-                    return
-                return self.identity_result(lambda: (200, IDENTITY.change_role(segments[2], body.get("role"))))
-        if IDENTITY and urlsplit(self.path).path == "/api/edition-note":
-            if not self.identity_action_allowed():
-                return
-            body = self.incoming()
-            if body is None:
-                return
-            return self.identity_result(lambda: (200, IDENTITY.set_edition_note(
-                self.actor()[0], body.get("enabled"))))
-        self.reply(404, {"error": "Not found"})
-
-    def do_DELETE(self):
-        path = urlsplit(self.path).path
-        segments = path.strip("/").split("/")
-        model_setup_path = len(segments) == 4 and segments[:2] == ["api", "models"] and segments[3] == "setup"
-        if model_setup_path or settings_api_path(path) or (DJANGO_ACCOUNT_API and account_api_path(path)):
-            return self.forward_account_api()
-        if IDENTITY and not self.require_admin(path):
-            return
-        if IDENTITY and len(segments) == 3 and segments[:2] == ["api", "users"]:
-            if not self.identity_action_allowed():
-                return
-            return self.identity_result(lambda: (200, IDENTITY.delete_user(segments[2])))
-        self.reply(404, {"error": "Not found"})
+    do_POST = browser_change
+    do_PUT = browser_change
+    do_DELETE = browser_change
 
 
 if __name__ == "__main__":
-    if DJANGO_ACCOUNT_API:
+    # A chart packaging probe without account storage serves assets and health
+    # only; every API still proxies and fails closed. Protected installations
+    # always start Django, with no legacy-account fallback or opt-out flag.
+    if IDENTITY:
         from django.core.wsgi import get_wsgi_application
         from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 

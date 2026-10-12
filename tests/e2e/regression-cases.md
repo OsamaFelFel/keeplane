@@ -28,6 +28,7 @@ suite if the run is interrupted.
 | --- | --- | --- |
 | Storage and read retries | Changed model definitions lose approval; data-class and audit constraints hold; gateway read retries are bounded. | [Model approval](model-approval-cases.md), [data classes](data-classes-cases.md), [audit](audit-cases.md), [Kubernetes](kubernetes-cases.md) |
 | Locked Docker and kind stacks | Pinned images, chart, model file, and actual runtime versions match the lock. | [Kubernetes](kubernetes-cases.md) |
+| Browser CSRF | Token and cookie are paired; sign-in rotates the token; every mutation is protected and sign-out requires POST. | [CSRF cases](csrf-cases.md) |
 | Database Secret and recovery | The wrapper chart refuses to start without its password Secret; both gateway replicas retain a model through credential rotation and a disposable database backup/restore. | [Gateway database cases](gateway-secret-cases.md), [chart packaging](chart-package-cases.md) |
 | Build and protected UI parity | Both running app containers contain the same backend and React build; first-admin sign-in reaches Users, Data Classes, Audit, Models and their APIs on both addresses. | [Preview parity](preview-parity-cases.md) |
 | Docker and kind transport | UI, local font, registration, mock answers, Qwen answers, runner discovery, replica failover, and admin UI availability during a gateway outage work. | [Local model](cases.md), [Kubernetes](kubernetes-cases.md) |

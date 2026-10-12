@@ -78,6 +78,37 @@ definition before passing the request through the gateway. The earlier Python
 server still serves the UI, exposes health, and proxies protected routes to
 Django on loopback. Its model write, Ask, Data Classes, and Audit handlers have
 been removed.
+
+All browser mutations, including anonymous sign-in, pass Django's CSRF
+middleware. The small middleware adapter applies Django's checks to DRF's
+normally exempt views because the trial still uses its existing account store.
+The edge forwards the token, Cookie, Origin and Referer, and sets the internal
+scheme from deployment configuration. Client-supplied proxy scheme headers
+are not trusted. Public origins and explicit aliases are configured in Django;
+the internal host stays on loopback.
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant Edge as Keeplane edge
+  participant Django
+  Browser->>Edge: GET /api/auth-options
+  Edge->>Django: Read token bootstrap
+  Django-->>Browser: Masked token + HttpOnly Strict cookie, no-store
+  Browser->>Edge: POST, PUT or DELETE + token + cookie
+  Edge->>Django: Forward browser headers + configured scheme
+  Django->>Django: Check cookie/token and Origin or HTTPS Referer
+  alt Rejected
+    Django-->>Browser: 403 before the action
+  else Accepted
+    Django->>Django: Authenticate and authorize the action
+    Django-->>Browser: Action result; rotate CSRF token on successful sign-in
+  end
+```
+
+Sign out requires POST and clears the server-side session and browser cookie.
+Neither browser client automatically retries a write after a refusal or a lost
+response. HTTPS deployments set Secure on the CSRF and session cookies.
 The internal Django listener binds to container loopback; only Keeplane
 port 3000 (Docker) or 13000 (kind) is published. If the account listener fails,
 the public account and model management routes return 503 rather than using an

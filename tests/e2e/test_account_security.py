@@ -11,11 +11,16 @@ from test_accounts import BASE, Browser, RUNTIME
 
 
 def sign_in(username, password):
+    browser = Browser()
+    status, options, _ = browser.fetch("/api/auth-options")
+    if status != 200:
+        raise RuntimeError("CSRF bootstrap failed")
     request = Request(BASE + "/api/session", method="POST",
                       data=json.dumps({"username": username, "password": password}).encode(),
-                      headers={"Content-Type": "application/json"})
+                      headers={"Content-Type": "application/json", "Origin": BASE,
+                               "X-CSRFToken": options["csrf_token"]})
     try:
-        response = urlopen(request, timeout=15)
+        response = browser.opener.open(request, timeout=15)
     except HTTPError as error:
         response = error
     with response:

@@ -20,6 +20,11 @@ RESULTS = []
 
 def call(base, path, body=None, headers=None):
     data = None if body is None else json.dumps(body).encode()
+    headers = dict(headers or {})
+    if base == APP and body is not None:
+        with urlopen(APP + "/api/auth-options", timeout=15) as response:
+            headers["X-CSRFToken"] = json.load(response)["csrf_token"]
+        headers["Origin"] = APP
     request = Request(base + path, data=data, headers={"Content-Type": "application/json", **(headers or {})})
     try:
         with urlopen(request, timeout=120) as response:
@@ -36,9 +41,12 @@ def main():
     opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
     opener.addheaders = [("X-Keeplane-Action", "1")]
     credential = Path("/run/secrets/first-admin-password").read_text().strip()
+    with opener.open(APP + "/api/auth-options", timeout=15) as response:
+        token = json.load(response)["csrf_token"]
     request = Request(APP + "/api/session", method="POST",
                       data=json.dumps({"username": "first-admin", "password": credential}).encode(),
-                      headers={"Content-Type": "application/json"})
+                      headers={"Content-Type": "application/json", "Origin": APP,
+                               "X-CSRFToken": token})
     with opener.open(request, timeout=15) as response:
         if response.status != 200:
             raise RuntimeError("Admin sign-in failed")

@@ -69,8 +69,8 @@ def main():
            {"ask_status": ask_status, "model": answer.get("model"),
             "answer_excerpt": content[:120]})
 
-    with admin.opener.open(BASE + "/sign-out", timeout=15) as response:
-        response.read()
+    if admin.fetch("/sign-out", method="POST")[0] != 200:
+        raise RuntimeError("Sign-out failed")
     after_signout, _, _ = admin.fetch("/api/models")
     record("DEMO-06", after_signout == 401,
            {"model_api_after_signout": after_signout})

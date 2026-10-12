@@ -1,6 +1,7 @@
 import mark from '@/assets/keeplane-mark-reversed.svg'
 import { Card } from '@/components/ui/card'
 import type { Identity } from './api'
+import { SignOut } from './SignOut'
 
 export function DeveloperPage({ identity }: { identity: Identity }) {
   return <div className="min-h-svh bg-background">
@@ -8,7 +9,7 @@ export function DeveloperPage({ identity }: { identity: Identity }) {
       <span className="keeplane-brand"><img src={mark} width="28" height="28" alt="" />Keeplane</span>
       <div className="flex items-center gap-5 text-[14px]">
         <span className="hidden sm:inline">{identity.username}</span>
-        <a href="/sign-out">Sign out</a>
+        <SignOut />
       </div>
     </header>
     <main className="flex justify-center px-4 py-8 sm:px-6 sm:py-16">

@@ -11,6 +11,7 @@ import time
 import uuid
 
 from gateway_database_fixture import database_secret
+from protected_preview import curl_csrf_headers
 from test_full_product_edge import HELM, HOST, KEYS, KUBECONFIG, PASSWORD, ROOT, port
 
 
@@ -129,7 +130,7 @@ def main():
                 time.sleep(1)
             signed = run(*base, "-c", str(cookie), "-b", str(cookie), "-o", "/dev/null",
                          "-w", "%{http_code}", "-X", "POST", "-H", "Content-Type: application/json",
-                         "-H", "X-Keeplane-Action: 1", "-H", "Origin: " + url,
+                         "-H", "X-Keeplane-Action: 1", *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url,
                          "--data-binary", "@" + str(login), url + "/api/session")
             identity = run(*base, "-b", str(cookie), "-o", "/dev/null", "-w", "%{http_code}",
                            url + "/api/identity")
@@ -144,7 +145,7 @@ def main():
             registration_result = run(*base, "-b", str(cookie), "-o", str(registration_file),
                                       "-w", "%{http_code}", "-X", "POST",
                                       "-H", "Content-Type: application/json",
-                                      "-H", "X-Keeplane-Action: 1", "-H", "Origin: " + url,
+                                      "-H", "X-Keeplane-Action: 1", *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url,
                                       "--data-binary", "@" + str(registration),
                                       url + "/api/models", check=False)
             try:
@@ -155,7 +156,7 @@ def main():
             answer_result = run(*base, "-b", str(cookie), "-o", str(answer_file),
                                 "-w", "%{http_code}", "-X", "POST",
                                 "-H", "Content-Type: application/json", "-H", "X-Keeplane-Action: 1",
-                                "-H", "Origin: " + url, "--data-binary", "@" + str(ask),
+                                *curl_csrf_headers(run, base, url, cookie), "-H", "Origin: " + url, "--data-binary", "@" + str(ask),
                                 url + "/api/ask", check=False)
             try:
                 answer = json.loads(answer_file.read_text()).get("answer")
