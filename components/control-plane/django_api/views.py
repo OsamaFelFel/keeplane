@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from audit import AuditError, AuditStore
 from data_classes import DataClassError, DataClassStore
 from gateway_adapter import AgentgatewayModelAdapter
-from local_identity import IdentityError, LocalIdentity
+from local_identity import IdentityError, LocalIdentity, LoginThrottled
 from model_catalog import ModelCatalog
 from model_chat import ask_model
 from model_listing import list_models
@@ -52,6 +52,10 @@ def failure(status, message):
 def result(action):
     try:
         return action()
+    except LoginThrottled as error:
+        response = failure(error.status, error.message)
+        response["Retry-After"] = str(error.retry_after)
+        return response
     except IdentityError as error:
         return failure(error.status, error.message)
     except sqlite3.Error:
@@ -97,7 +101,9 @@ def action_allowed(request):
 
 
 def action_error(request):
-    return None if action_allowed(request) else failure(403, "Changes require Keeplane's admin UI")
+    if not action_allowed(request):
+        return failure(403, "Changes require Keeplane's admin UI")
+    return None if isinstance(request.data, dict) else failure(400, "Enter a JSON object")
 
 
 @api_view(["GET"])
@@ -109,6 +115,8 @@ def auth_options(request):
 def session(request):
     if not trusted_origin(request):
         return failure(403, "Sign in from Keeplane's page")
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a username and password")
     def sign_in():
         token = IDENTITY.login(request.data.get("username"), request.data.get("password"))
         response = Response({"signed_in": True})

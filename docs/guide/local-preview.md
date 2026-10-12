@@ -19,7 +19,7 @@ for the product.
 The script builds the React admin UI from its committed npm lockfile before
 starting Docker. Open the [Users screen](http://127.0.0.1:3000/users) to
 try the React, shadcn/ui and Tailwind implementation. Data Classes and Audit
-also use React; Models and routing still uses the earlier UI.
+also use React, together with Models and routing.
 
 The first admin is `first-admin`. Read the generated password on your own
 machine with `cat /private/tmp/keeplane-accounts-trial/first-admin-password`.

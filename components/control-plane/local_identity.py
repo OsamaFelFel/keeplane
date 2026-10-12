@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 SESSION_SECONDS = 8 * 60 * 60
+LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 60
 USERNAME_PATTERN = re.compile(r"[A-Za-z0-9._-]{3,64}\Z")
 
 
@@ -23,6 +25,17 @@ class IdentityError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
+
+
+class LoginThrottled(IdentityError):
+    def __init__(self, retry_after):
+        super().__init__(429, "Too many sign-in attempts. Wait a minute and try again.")
+        self.retry_after = retry_after
+
+
+def login_bucket(username):
+    # Match SQLite's case-insensitive ASCII usernames without storing their text.
+    return hashlib.sha256(username.lower().encode()).hexdigest()
 
 
 def pagination(query):
@@ -94,6 +107,13 @@ class LocalIdentity:
                     actor_id TEXT NOT NULL,
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    bucket TEXT PRIMARY KEY,
+                    attempts INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS login_attempts_expiry
+                    ON login_attempts(expires_at);
             """)
             password = Path(first_admin_password_file).read_text().strip()
             if len(password) < 12:
@@ -106,6 +126,8 @@ class LocalIdentity:
                 db.execute("UPDATE users SET password_hash=?, role='admin' WHERE id=?",
                            (password_hash(password), first_admin["id"]))
                 db.execute("DELETE FROM sessions WHERE user_id=?", (first_admin["id"],))
+                db.execute("DELETE FROM login_attempts WHERE bucket=?",
+                           (login_bucket("first-admin"),))
 
     @contextmanager
     def connect(self):
@@ -121,10 +143,27 @@ class LocalIdentity:
         finally:
             db.close()
 
+    def reserve_login(self, username):
+        now = int(time.time())
+        bucket = login_bucket(username)
+        with self.connect() as db:
+            # Reserve before the costly password check so concurrent workers
+            # share the same budget, including after an app restart.
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM login_attempts WHERE expires_at<=?", (now,))
+            row = db.execute("SELECT attempts, expires_at FROM login_attempts WHERE bucket=?",
+                             (bucket,)).fetchone()
+            if row and row["attempts"] >= LOGIN_ATTEMPTS:
+                raise LoginThrottled(max(1, row["expires_at"] - now))
+            db.execute("""INSERT INTO login_attempts VALUES (?, 1, ?)
+                          ON CONFLICT(bucket) DO UPDATE SET attempts=attempts+1""",
+                       (bucket, now + LOGIN_WINDOW_SECONDS))
+
     def login(self, username, password):
         if not isinstance(username, str) or not isinstance(password, str):
             raise IdentityError(401, "Invalid username or password")
         try:
+            self.reserve_login(username)
             with self.connect() as db:
                 user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
                 stored = user["password_hash"] if user else DUMMY_HASH
@@ -142,6 +181,7 @@ class LocalIdentity:
                 db.execute("DELETE FROM sessions WHERE expires_at <= ?", (int(time.time()),))
                 db.execute("INSERT INTO sessions VALUES (?, ?, ?)",
                            (digest, user["id"], int(time.time()) + SESSION_SECONDS))
+                db.execute("DELETE FROM login_attempts WHERE bucket=?", (login_bucket(username),))
                 return token
         except sqlite3.Error as error:
             raise IdentityError(503, "Sign-in storage is unavailable; contact your operator") from error

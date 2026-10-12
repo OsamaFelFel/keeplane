@@ -44,6 +44,11 @@ and does not represent production secret storage or external-provider TLS.
 The Docker app on port 3000 and the managed kind app on port 13000 each have a
 local SQLite account store. Each checks a
 revocable session cookie before serving the admin UI and APIs. The
+account database also reserves a shared one-minute sign-in budget before password
+verification. Five failed attempts exhaust a username's budget; casing changes
+and app restarts keep it. Successful sign-in clears the budget in the session
+transaction. Expired budgets are pruned, and unavailable storage refuses sign-in.
+This local guard is not the release PostgreSQL or distributed rate-limit design. The
 account store owns the first admin, users, roles and Editions note preferences; model
 approvals and audit records stay in their separate local tables. A first-admin
 session and its mandatory Audit record commit together; an Audit write failure

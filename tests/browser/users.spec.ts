@@ -157,3 +157,41 @@ test('BR-07: initial search settling does not undo a quick Next click', async ({
   await page.waitForTimeout(350)
   await expect(page.getByText('Showing 26–26 of 26 users')).toBeVisible()
 })
+
+test('BR-08: a limited sign-in explains the wait and keeps the form usable', async ({ page }) => {
+  await page.route('**/api/session', route => route.fulfill({
+    status: 429,
+    headers: { 'Retry-After': '60' },
+    json: { error: 'Too many sign-in attempts. Wait a minute and try again.' },
+  }))
+  await page.goto('/app/')
+  await page.getByLabel('Username').fill('developer-example')
+  await page.getByLabel('Password').fill('disposable-test-password')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('alert')).toContainText('Wait a minute and try again.')
+  await expect(page.getByLabel('Username')).toHaveValue('developer-example')
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+})
+
+test('BR-09: invalid credentials keep the same generic sign-in message', async ({ page }) => {
+  await page.route('**/api/session', route => route.fulfill({
+    status: 401, json: { error: 'Invalid username or password' },
+  }))
+  await page.goto('/app/')
+  await page.getByLabel('Username').fill('missing-user')
+  await page.getByLabel('Password').fill('disposable-test-password')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('alert')).toHaveText('The username or password is wrong.')
+})
+
+test('BR-10: unavailable sign-in storage is explained without blaming the password', async ({ page }) => {
+  await page.route('**/api/session', route => route.fulfill({
+    status: 503, json: { error: 'Sign-in storage is unavailable; contact your operator' },
+  }))
+  await page.goto('/app/')
+  await page.getByLabel('Username').fill('first-admin')
+  await page.getByLabel('Password').fill('disposable-test-password')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('alert')).toContainText('contact your operator')
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+})

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { api, type Identity } from '@/app/api'
+import { api, ApiError, type Identity } from '@/app/api'
 import { Shell } from '@/app/Shell'
 import { DeveloperPage } from '@/app/DeveloperPage'
 import { UsersPage } from '@/features/users/UsersPage'
@@ -25,7 +25,11 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
     try {
       await api('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) })
       onSignedIn()
-    } catch { setError('The username or password is wrong.') }
+    } catch (cause) {
+      setError(cause instanceof ApiError && cause.status === 401
+        ? 'The username or password is wrong.'
+        : cause instanceof ApiError ? cause.message : 'Keeplane could not sign you in. Try again.')
+    }
     finally { setBusy(false) }
   }
   return <main className="flex min-h-svh items-center justify-center p-4">

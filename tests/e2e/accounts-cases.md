@@ -27,5 +27,13 @@
 | ACCT-20 | Promote a developer with an active session, then demote them. | Admin access begins after promotion and the old session is invalid after demotion. |
 | ACCT-21 | Install an isolated local account store with an infrastructure password. | The first admin can sign in and is listed as managed break-glass. |
 | ACCT-22 | Change the mounted break-glass password and restart the isolated account store. | The old password and session stop working; the new password works. |
+| ACCT-24 | Use five wrong passwords for a disposable account, then its correct password with different username casing. | The next attempt returns 429 and Retry-After, with no session cookie. |
+| ACCT-25 | Repeat the same attempts for a nonexistent account. | The limit and error match an existing account; no session is issued. |
+| ACCT-26 | Submit an array instead of sign-in details. | The API returns 400, and the caller stays anonymous. |
+| ACCT-27 | Submit arrays to Create user, Change role and Editions preferences. | Each API returns 400 without changing account state. |
 
 `test_local_identity.py` runs ACCT-21 and ACCT-22 without a Docker stack. The HTTP suite does not prove visual layout. Compare Users and Editions in a browser with the supplied canvas. Team behavior is absent from Open Source.
+
+`test_account_security.py` runs ACCT-24–ACCT-27 against either preview, using
+disposable accounts. The [isolated limit cases](../unit/login-limits-cases.md)
+also cover concurrency, restart, expiry, credential rotation and storage failure.

@@ -16,6 +16,9 @@ current database contents.
 | BR-05 | Change a Developer to Admin from Users against a fixed API response. | The UI calls the role endpoint, reports the new role and updates the row. |
 | BR-06 | Open Create user, press Escape, then Enter. | Focus returns to Create user and the keyboard reopens the dialog. |
 | BR-07 | As soon as Users appear, click Next and wait for the initial search timer to settle. | Page 2 remains selected; the timer cannot return the table to page 1. |
+| BR-08 | Sign in while the API returns a one-minute attempt limit. | The form explains the wait, retains the username, and allows another attempt. |
+| BR-09 | Sign in with invalid credentials. | The same generic message hides which usernames exist. |
+| BR-10 | Sign in while account storage is unavailable. | The form explains the storage problem and allows retry; it does not blame the password. |
 
 The real Docker and kind account and Audit suites separately test backend permissions,
 database effects and idempotent writes. Browser mocks here isolate UI behavior.

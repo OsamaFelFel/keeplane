@@ -6,6 +6,13 @@ An admin can create username and password accounts with either the **Admin** or 
 
 The break-glass password comes from the mounted file. Changing that file and restarting the app updates the password and invalidates its previous sessions. Keep the file private and out of Git. React's account API now uses Django and DRF inside the app container; the account store remains a SQLite development trial. OpenID Connect sign-in is not yet connected, and Keycloak is not installed by this preview.
 
+After five unsuccessful sign-in attempts for the same username within a minute,
+the preview asks you to wait. The API returns 429 with a `Retry-After` delay in
+seconds. Changing username casing or restarting the app does not reset the
+limit. A successful sign-in clears earlier failures. Infrastructure rotation of
+the break-glass password also clears that account's limit. Malformed account
+requests return 400 rather than changing an account or issuing a session.
+
 The [Editions page](http://127.0.0.1:3000/editions) lists the Release 1 Open Source and Enterprise scope. The Enterprise feature note appears once for each admin on Users and links to Editions. An admin can turn that note off or back on from Editions; turning it back on permits one more view. “How to get Enterprise” is plain text until a destination is provided.
 
 Team screens and API routes are absent from Open Source.
