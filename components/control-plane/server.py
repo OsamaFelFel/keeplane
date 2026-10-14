@@ -210,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.end_headers()
                     return
             if path not in ("/health/app", "/health/ready", "/style.css", "/sign-in.js", "/browser-security.js", "/app", "/app/", "/app/data-classes", "/app/audit", "/app/models") \
-                    and not path.startswith(("/fonts/", "/app/assets/")) \
+                    and not path.startswith(("/fonts/", "/app/fonts/", "/app/assets/")) \
                     and not self.require_admin(path):
                 return
         if self.path == "/health/ready":
@@ -274,9 +274,9 @@ class Handler(BaseHTTPRequestHandler):
                             "app.js": "text/javascript", "sign-in.js": "text/javascript",
                             "browser-security.js": "text/javascript"}[name]
             self.reply(200, (UI / name).read_bytes(), content_type + "; charset=utf-8")
-        elif self.path in ("/fonts/IBMPlexSans-Regular.woff2", "/fonts/IBMPlexSans-SemiBold.woff2",
+        elif path.removeprefix("/app") in ("/fonts/IBMPlexSans-Regular.woff2", "/fonts/IBMPlexSans-SemiBold.woff2",
                            "/fonts/IBMPlexMono-Regular.woff2"):
-            self.reply(200, (UI / self.path[1:]).read_bytes(), "font/woff2")
+            self.reply(200, (UI / "web/public/fonts" / path.rsplit("/", 1)[-1]).read_bytes(), "font/woff2")
         else:
             self.reply(404, {"error": "Not found"})
 

@@ -51,7 +51,7 @@ python3 tests/e2e/test_accounts.py
 ```
 
 The model approval test removes its trial approval at the end. Its
-[observations](../../tests/e2e/runs/2026-10-09-model-approval.json) cover the
+[observations](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-approval.json) cover the
 before, approved, restarted and removed states. Production needs a shared
 catalog database, authenticated developer traffic, class-aware routing and a
 gateway artifact that passes the release gates.

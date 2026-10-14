@@ -2,3 +2,9 @@
 node_modules/
 __pycache__/
 *.pyc
+.keeplane/
+test-results/
+playwright-report/
+tests/e2e/runs/*.json
+tests/browser/runs/*.json
+tests/unit/runs/*.txt

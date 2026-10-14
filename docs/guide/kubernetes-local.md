@@ -1,7 +1,5 @@
 # Run the Kubernetes integration trial locally
 
-**Edition:** Open Source
-
 This trial runs Keeplane at [http://127.0.0.1:13000](http://127.0.0.1:13000).
 The Docker preview remains available at [http://127.0.0.1:3000](http://127.0.0.1:3000).
 The protected app using the separately installed gateway can be reached on

@@ -12,10 +12,13 @@ services:
   account-volume-init:
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
     user: "0"
-    command: ["chown", "-R", "65532:65532", "/state", "/provider-keys"]
+    command: ["python", "/prepare_volumes.py"]
     volumes:
       - account-data:/state
       - provider-keys:/provider-keys
+      - app-secrets:/secrets
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}:/host-secrets:ro
+      - ./deploy/local/prepare_volumes.py:/prepare_volumes.py:ro
 
   model:
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
@@ -51,7 +54,7 @@ services:
   qwen:
     profiles: ["qwen"]
     image: ghcr.io/ggml-org/llama.cpp@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b
-    command: ["-m", "/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf", "--alias", "qwen2.5-coder:0.5b", "--host", "0.0.0.0", "--port", "8080", "--ctx-size", "4096", "-n", "256"]
+    command: ["-m", "/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf", "--alias", "qwen2.5-coder:0.5b", "--host", "0.0.0.0", "--port", "8080", "--ctx-size", "${QWEN_CONTEXT_TOKENS:-4096}", "-n", "256"]
     volumes:
       - ./models:/models:ro
     restart: unless-stopped
@@ -93,7 +96,7 @@ services:
       PREVIEW_RUNNER_URLS: http://qwen:8080,http://host.docker.internal:14424
       ACCOUNT_DB: /state/accounts.sqlite3
       FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
-      PUBLIC_ORIGIN: http://127.0.0.1:3000
+      PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
       MODEL_APPROVAL_DB: /state/model-approvals.sqlite3
       GATEWAY_FILE_CONFIG: /gateway-config/local.yaml
       PROVIDER_KEY_DIR: /provider-keys
@@ -109,19 +112,18 @@ services:
     volumes:
       - ./components/control-plane:/app:ro
       - ./components/admin-ui:/ui:ro
-      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/first-admin-password:/run/secrets/first-admin-password:ro
-      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/gateway-runtime-key:/run/secrets/gateway-runtime-key:ro
-      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/gateway-admin-key:/run/secrets/gateway-admin-key:ro
+      - app-secrets:/run/secrets:ro
       - ./integrations/gateway/local.yaml:/gateway-config/local.yaml:ro
       - account-data:/state
       - provider-keys:/provider-keys
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - 127.0.0.1:3000:3000
+      - 127.0.0.1:${KEEPLANE_PORT:-3000}:3000
     restart: unless-stopped
 
 volumes:
+  app-secrets:
   gateway-data:
   provider-keys:
   account-data:

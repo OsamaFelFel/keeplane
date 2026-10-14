@@ -1,72 +1,111 @@
 # Run Keeplane locally
 
-**Edition:** Open Source
+This starts the development application, its model gateway and a small Qwen demo
+model on your computer. It keeps existing accounts and registered models.
 
-From the Open Source repository root, with Docker running and Node.js 22 or
-newer installed:
+## Before you start
+
+- Python 3.9 or newer.
+- Node.js 22.12 or newer, including npm.
+- Docker running, with Docker Compose supporting `up --wait`.
+- A free local port; the default is 3000.
+- Internet access for the first dependency, image and model downloads. The model
+  download is about 0.4 GB; allow more space for Docker images and npm packages.
+
+The launcher checks the tools before downloading or building. Use macOS or Linux.
+On Windows, use a Linux environment such as WSL with Docker.
+
+## Start
+
+From the repository root:
 
 ```sh
 python3 deploy/local/up.py
 ```
 
-Open [Keeplane](http://127.0.0.1:3000). The script starts one protected Docker
-installation, including agentgateway 1.6.0 and a real Qwen2.5 Coder 0.5B
-runner. It downloads and verifies the pinned Qwen file if needed. Repeating the
-command keeps existing accounts, approvals, provider keys, and gateway models.
-The runner is small enough for a CPU demo; its output is not a quality target
-for the product.
+The command installs the locked frontend dependencies, builds the application,
+starts Docker and checks sign-in and the gateway. The first run takes longer
+because it downloads dependencies and the demo model. Success looks like:
 
-The script builds the React admin UI from its committed npm lockfile before
-starting Docker. Open the [Users screen](http://127.0.0.1:3000/users) to
-try the React, shadcn/ui and Tailwind implementation. Data Classes and Audit
-also use React, together with Models and routing.
-
-The first admin is `first-admin`. Read the generated password on your own
-machine with `cat /private/tmp/keeplane-accounts-trial/first-admin-password`.
-The file is private and must stay out of Git. The app listens only on loopback.
-The script also creates separate private gateway runtime and management keys.
-The gateway holds their hashes, while the app reads the keys from local files.
-Re-running the script preserves them. Direct gateway calls without a key are
-refused; the [versioned bypass checks](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md)
-record the result and its limits.
-
-## Five-minute walkthrough
-
-1. Sign in at port 3000 and open **Models and routing**.
-2. Choose **Add model** → **Local runner**. Enter `http://qwen:8080`, then
-   choose **Find models**. Select `qwen2.5-coder:0.5b`.
-3. Choose **Public** and **Internal** under **Approved for**, then add the
-   model. If a prior run already added it, use **Set up** on its row to approve
-   it. The row must show the approved classes.
-4. Run `python3 tests/e2e/test_integrated_demo.py` to exercise the full
-   journey and leave `demo-qwen` in the list. Then try your own prompt with
-   `python3 deploy/local/ask.py demo-qwen 'Reply with READY.'`. The helper
-   signs in, sends the request through agentgateway, and signs out; it is a
-   developer demo tool, not the planned Keeplane CLI.
-5. Choose **Sign out**. The admin model API should refuse a request made with
-   that signed-out session.
-
-The model field reports the runner's active context when available. This
-preview uses 4,096 active tokens, while the underlying model reports a
-32,768-token training context. The active limit constrains live requests.
-Keeplane reads these values; it does not tune the model. The pinned runner
-stops at 256 output tokens by default, as checked in `LOCAL-20`. The
-preview-only `/api/ask` demo requests at most 64 output tokens so a slow CPU
-runner can finish its smoke answer within the gateway timeout.
-
-`local-fixture` returns a fixed `mock answer` for transport checks. The guarded
-endpoint and cloud-provider containers are disposable integration fixtures;
-neither is a production model or an external subscription. The supplied admin
-UI has no separate chat or Try panel yet. API calls in the test runner use the
-same session and model registration endpoints as the UI.
-
-Run the full [plain-English regression](regression-local.md) with:
-
-```sh
-python3 tests/e2e/run_regression.py --output /private/tmp/keeplane-regression-new.json
+```text
+Keeplane is ready: http://127.0.0.1:3000
+First admin username: first-admin
+First admin password file: <path on your computer>
+Configuration file: <path on your computer>
 ```
 
-For optional Qwen3 4B on the host, see the [Qwen3 guide](qwen3-local.md).
-For Users and Editions, see [accounts](accounts-local.md). Stop containers with
-`docker compose down`; omit `-v` to retain local data. This is a development
-preview, not a Release 1 production installation.
+Open the printed address. `127.0.0.1` means your own computer; this development
+installation is accessible only from there. Read the password from the printed
+file and sign in as `first-admin`.
+
+New installations keep private credentials under `.keeplane/local/`, which Git
+ignores. Earlier installations reuse `/private/tmp/keeplane-accounts-trial/`
+when it exists. Accounts and registered models live in Docker volumes. Preserve
+both the credential files and the volumes when keeping an installation.
+
+## Configuration
+
+```sh
+python3 deploy/local/up.py --port 3080
+```
+
+The port option changes Docker's published port, the application's browser origin
+and the startup checks together. Open the printed address. Private addresses
+between containers stay the same.
+
+| Option | Purpose | Default |
+| --- | --- | --- |
+| `--port` / `KEEPLANE_PORT` | Browser port | `3000` |
+| `--runtime-dir` / `KEEPLANE_RUNTIME_DIR` | Local credential directory | Existing legacy directory, otherwise `.keeplane/local/` |
+| `--context-size` / `QWEN_CONTEXT_TOKENS` | Bundled runner context, in tokens | `4096` |
+| `--verbose` | Show dependency and container build output | Off |
+
+Command-line options override environment variables. Keep using the same
+credential directory when restarting. Choosing another directory does not create
+another installation: this launcher manages one Compose project and its volumes.
+
+## Try the application
+
+1. Open **Users**. The first admin is managed by infrastructure and cannot have
+   its role changed in the UI. Create user starts with Developer selected.
+2. Open **Models and routing**, then **Add model** → **Local runner**.
+3. Enter `http://qwen:8080`, choose **Find models**, select
+   `qwen2.5-coder:0.5b`, then add it. That address is the runner inside Docker.
+   If the model already exists, use **Set up** on its row instead.
+4. Data classes start off on a fresh installation. If you enable them in
+   **Data classes**, return to the model and choose its approved classes.
+5. Open **Audit** to see the infrastructure admin's sign-ins, then sign out.
+
+There is no chat panel or finished developer CLI yet. The local
+[`ask.py`](../../deploy/local/ask.py) helper exercises a model request; it is a
+development tool. See [model setup](model-add-local.md) for the supported flows.
+
+## Model limits
+
+The displayed active context is the running model's configured limit. Training
+context is model metadata; it does not increase the running limit. The demo
+starts with 4,096 context tokens. To change its allocation:
+
+```sh
+python3 deploy/local/up.py --context-size 8192
+```
+
+This restarts the bundled runner and may use more memory. Configure customer
+runners where they run. Request parameters, such as temperature and output
+limits, are separate from runner capacity and belong to the client request.
+
+## Stop and troubleshoot
+
+Stop with `docker compose --env-file "<printed configuration file>" down`.
+Volumes are kept. Add `-v` only if you intend to delete their data.
+
+- **Missing tool:** install the prerequisites above and retry.
+- **Port in use:** choose another port with `--port`.
+- **Build failure:** repeat the command with `--verbose` for the underlying error.
+- **Sign-in check refused:** check the address and credential directory; retain
+  the original password file when restarting.
+- **Gateway not ready:** run `docker compose logs app gateway qwen`. The model
+  may still be loading, or Docker may need more available memory.
+
+[PostgreSQL operations](postgres-accounts.md) and
+[Kubernetes installation](kubernetes-local.md) have separate requirements.

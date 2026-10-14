@@ -7,7 +7,7 @@ curl -fL https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v
 shasum -a 256 /private/tmp/keeplane-ingress-nginx-kind-v1.15.1.yaml
 kubectl --kubeconfig /private/tmp/keeplane-netpol-kubeconfig apply -f /private/tmp/keeplane-ingress-nginx-kind-v1.15.1.yaml
 kubectl --kubeconfig /private/tmp/keeplane-netpol-kubeconfig -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=240s
-python3 tests/e2e/test_chart_ingress.py --output tests/e2e/runs/<new-result>.json
+python3 tests/e2e/test_chart_ingress.py --output test-results/<new-result>.json
 ```
 
 Stop and inspect the manifest if its hash differs. The verifier refuses any context other than `kind-keeplane-netpol`, generates a one-day self-signed certificate in a temporary directory, and removes its fixture namespace and port-forward afterward.

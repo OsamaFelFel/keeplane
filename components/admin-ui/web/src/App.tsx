@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,10 +8,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { api, ApiError, type Identity } from '@/app/api'
 import { Shell } from '@/app/Shell'
 import { DeveloperPage } from '@/app/DeveloperPage'
-import { UsersPage } from '@/features/users/UsersPage'
-import { DataClassesPage } from '@/features/data-classes/DataClassesPage'
-import { AuditPage } from '@/features/audit/AuditPage'
-import { ModelsPage } from '@/features/models/ModelsPage'
+const UsersPage = lazy(() => import('@/features/users/UsersPage').then(module => ({ default: module.UsersPage })))
+const DataClassesPage = lazy(() => import('@/features/data-classes/DataClassesPage').then(module => ({ default: module.DataClassesPage })))
+const AuditPage = lazy(() => import('@/features/audit/AuditPage').then(module => ({ default: module.AuditPage })))
+const ModelsPage = lazy(() => import('@/features/models/ModelsPage').then(module => ({ default: module.ModelsPage })))
 
 function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [busy, setBusy] = useState(false)
@@ -54,5 +54,5 @@ export default function App() {
   if (identity === null) return <SignIn onSignedIn={refresh} />
   if (identity.role === 'developer') return <DeveloperPage identity={identity} />
   const page = window.location.pathname
-  return <Shell identity={identity}>{page === '/app/data-classes' ? <DataClassesPage /> : page === '/app/audit' ? <AuditPage /> : page === '/app/models' ? <ModelsPage /> : <UsersPage />}</Shell>
+  return <Shell identity={identity}><Suspense fallback={<p role="status">Loading…</p>}>{page === '/app/data-classes' ? <DataClassesPage /> : page === '/app/audit' ? <AuditPage /> : page === '/app/models' ? <ModelsPage /> : <UsersPage />}</Suspense></Shell>
 }

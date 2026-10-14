@@ -10,7 +10,7 @@ using the [local](../../docs/guide/local-preview.md),
 
 ```sh
 python3 tests/e2e/run_regression.py \
-  --output tests/e2e/runs/YYYY-MM-DD-full-regression.json
+  --output test-results/full-regression.json
 ```
 
 Choose a new filename for each saved run. The runner refuses to overwrite an
@@ -20,8 +20,7 @@ gateway-ready JSON rather than accepting a sign-in redirect as health, then
 runs the suites in dependency order and checks that each
 suite reports its complete expected set of case IDs. It keeps only IDs,
 verdicts, failed observations, exit codes, and timing in the result. Individual
-trial reports go to a temporary directory, so an ordinary regression does not
-rewrite previously committed evidence. A partial result is saved after every
+suite reports and logs stay beside the summary in its `-suites` directory. A partial result is saved after every
 suite if the run is interrupted.
 
 | Group | Plain-English expectation | Case source |

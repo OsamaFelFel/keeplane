@@ -1,7 +1,5 @@
 # Audit in the local preview
 
-**Edition:** Open Source
-
 Open the protected preview at [Audit](http://127.0.0.1:3000/app/audit) and sign in as an
 admin. Break-glass admin sign-ins are always recorded, with no off switch.
 The other three record kinds start off. Turn on **Changes to models, routing

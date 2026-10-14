@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 import time
 
 from test_accounts import Browser, RUNTIME
@@ -232,10 +231,17 @@ def run_suite(suite, report_dir):
         process = subprocess.run(suite.command, cwd=ROOT, env=env, input=input_text,
                                  capture_output=True, text=True, timeout=suite.timeout)
         exit_code, stdout = process.returncode, process.stdout
+        stderr = process.stderr
         execution_error = ""
-    except subprocess.TimeoutExpired:
-        exit_code, stdout = None, ""
+    except subprocess.TimeoutExpired as error:
+        exit_code = None
+        stdout = error.stdout or ""
+        stderr = error.stderr or ""
+        stdout = stdout.decode(errors="replace") if isinstance(stdout, bytes) else stdout
+        stderr = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
         execution_error = "Suite timed out after %d seconds" % suite.timeout
+    (suite_report_dir / "stdout.txt").write_text(stdout)
+    (suite_report_dir / "stderr.txt").write_text(stderr)
     try:
         rows = case_rows(suite, stdout, suite_report_dir, exit_code)
         expected = suite.case_ids.split()
@@ -266,13 +272,19 @@ def main():
                         help="New JSON evidence file; existing files are never overwritten")
     parser.add_argument("--suite", action="append", choices=[suite.name for suite in SUITES],
                         help="Run selected suite(s); omit for all suites")
+    parser.add_argument("--report-dir", type=Path,
+                        help="Keep individual suite reports here; defaults beside the JSON result")
     args = parser.parse_args()
     output = args.output.resolve()
     if output.exists():
         parser.error("Output exists; choose a new evidence filename")
+    report_dir = (args.report_dir or output.parent / (output.stem + "-suites")).resolve()
+    if report_dir.exists():
+        parser.error("Report directory exists; choose a new directory")
     selected = [suite for suite in SUITES if not args.suite or suite.name in args.suite]
     mode_browsers, initial_modes = preflight() if any(suite.needs_stack for suite in selected) else ((), ())
     output.parent.mkdir(parents=True, exist_ok=True)
+    report_dir.mkdir(parents=True)
     result = {"started_utc": datetime.now(timezone.utc).isoformat(),
               "git_head": git("rev-parse", "HEAD"), "branch": git("branch", "--show-current"),
               "working_tree_dirty": bool(git("status", "--porcelain")),
@@ -280,14 +292,12 @@ def main():
               "selected_suites": [suite.name for suite in selected],
               "completed": False, "results": []}
     try:
-        with tempfile.TemporaryDirectory(prefix="keeplane-regression-") as temp:
-            report_dir = Path(temp)
-            for suite in selected:
-                item = run_suite(suite, report_dir)
-                result["results"].append(item)
-                output.write_text(json.dumps(result, indent=2) + "\n")
-                print(suite.name + ": " + ("PASS" if item["passed"] else "FAIL") +
-                      " (%d cases, %.1fs)" % (len(item["cases"]), item["duration_seconds"]), flush=True)
+        for suite in selected:
+            item = run_suite(suite, report_dir)
+            result["results"].append(item)
+            output.write_text(json.dumps(result, indent=2) + "\n")
+            print(suite.name + ": " + ("PASS" if item["passed"] else "FAIL") +
+                  " (%d cases, %.1fs)" % (len(item["cases"]), item["duration_seconds"]), flush=True)
     finally:
         if mode_browsers:
             restored = []
@@ -297,6 +307,8 @@ def main():
                 restored.append(status == 200)
             result["data_classes_mode_restored"] = all(restored)
             result["data_classes_initial_mode"] = initial_modes
+        # An interrupted run must retain its partial results and cleanup outcome.
+        output.write_text(json.dumps(result, indent=2) + "\n")
     result["completed"] = True
     result["finished_utc"] = datetime.now(timezone.utc).isoformat()
     result["suites_passed"] = sum(item["passed"] for item in result["results"])
