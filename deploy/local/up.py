@@ -77,7 +77,7 @@ def prepare(port=3000, context_size=4096):
             digest.update(chunk)
     if digest.hexdigest() != EXPECTED_MODEL_SHA256:
         raise RuntimeError(f"Local Qwen model checksum does not match: {MODEL}")
-    RUNTIME.mkdir(mode=0o700, exist_ok=True)
+    RUNTIME.mkdir(mode=0o700, parents=True, exist_ok=True)
     for name in ("first-admin-password", "cloud-provider-key", "gateway-runtime-key", "gateway-admin-key"):
         path = RUNTIME / name
         if not path.exists():

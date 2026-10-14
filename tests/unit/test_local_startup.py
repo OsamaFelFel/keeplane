@@ -108,6 +108,21 @@ class StartupCheck(unittest.TestCase):
                 up.wait_preview(self.base, timeout=1)
         self.assertEqual(self.events, ["sign-in", "sign-out"])
 
+    def test_fresh_nested_runtime_directory_is_private_and_preserves_credentials(self):
+        model = self.runtime / "fixture-model.gguf"
+        model.write_bytes(b"fixture model")
+        directory = self.runtime / "new/state/local"
+        with patch.object(up, "MODEL", model), patch.object(up, "RUNTIME", directory), \
+                patch.object(up, "EXPECTED_MODEL_SHA256", up.hashlib.sha256(model.read_bytes()).hexdigest()):
+            up.prepare(port=3080, context_size=8192)
+            password = (directory / "first-admin-password").read_bytes()
+            up.prepare(port=3080, context_size=8192)
+        self.assertEqual((directory / "first-admin-password").read_bytes(), password)
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((directory / "first-admin-password").stat().st_mode & 0o777, 0o600)
+        self.assertIn("KEEPLANE_PORT=3080\n", (directory / ".env").read_text())
+        self.assertIn("QWEN_CONTEXT_TOKENS=8192\n", (directory / ".env").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

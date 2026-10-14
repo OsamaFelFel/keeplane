@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { firstAdminPassword } from './credentials'
 import { expect, test } from '@playwright/test'
 
 test('DC-UI-01: the optional mode reveals starter classes and hides them again', async ({ page }) => {
@@ -68,7 +68,7 @@ test('DC-UI-02: an admin can add a class without silently approving a model', as
 })
 
 test('DC-UI-03: Models hides every class field while the mode is off', async ({ page }) => {
-  const password = readFileSync('/private/tmp/keeplane-accounts-trial/first-admin-password', 'utf8').trim()
+  const password = firstAdminPassword()
   await page.goto('/app/')
   await page.getByLabel('Username').fill('first-admin')
   await page.getByLabel('Password').fill(password)

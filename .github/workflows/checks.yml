@@ -85,12 +85,15 @@ jobs:
             tests/browser/package-lock.json
       - name: Start with the documented command
         run: |
+          set -o pipefail
           mkdir -p test-results
           python3 deploy/local/up.py | tee test-results/startup-default.log
       - name: Check a command-line port override
         env:
           KEEPLANE_PORT: 3090
-        run: python3 deploy/local/up.py --port 3080 | tee test-results/startup-custom-port.log
+        run: |
+          set -o pipefail
+          python3 deploy/local/up.py --port 3080 | tee test-results/startup-custom-port.log
       - name: Install the browser tests
         working-directory: tests/browser
         run: |
@@ -105,7 +108,7 @@ jobs:
         run: npm test -- --workers=1 --grep-invert 'BR-03|MO-UI-01|DC-UI-01|AU-UI-03' --reporter=list,json
       - name: Collect container diagnostics
         if: failure()
-        run: docker compose logs --no-color app gateway qwen > test-results/containers.log
+        run: docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" --profile qwen logs --no-color app gateway qwen > test-results/containers.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -116,7 +119,10 @@ jobs:
           retention-days: 30
       - name: Stop the disposable application
         if: always()
-        run: docker compose down
+        run: |
+          if [ -f "$KEEPLANE_RUNTIME_DIR/.env" ]; then
+            docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" --profile qwen down
+          fi
 
   postgres:
     runs-on: ubuntu-24.04
