@@ -66,6 +66,7 @@ jobs:
           .venv/bin/python tests/e2e/test_gateway_preflight_read_retry.py
           .venv/bin/python tests/unit/test_browser_csrf.py
           .venv/bin/python tests/unit/test_local_startup.py
+          .venv/bin/python tests/unit/test_reporting.py
 
   local-application:
     runs-on: ubuntu-24.04
