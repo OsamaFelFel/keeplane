@@ -7,7 +7,7 @@ running.
 
 `python3 tests/e2e/test_data_classes.py` followed the
 [plain-English cases](../data-classes-cases.md): **8 passed, 0 failed, trial
-resources removed**. The [JSON report](2026-10-09-data-classes.json) records
+resources removed**. The [JSON report](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-data-classes.json) records
 the observed HTTP results. The run covered starter classes, adding a class
 with an approved model, duplicate and unknown-model rejection, renaming,
 restart persistence, removal and admin action protection.

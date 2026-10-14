@@ -12,9 +12,9 @@ PostgreSQL release cutover is not complete.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| [Model-listing backend cases](../../unit/model-listing-cases.md) | 5/5 pass | [Unit run](../../unit/runs/2026-10-10-django-model-listing.txt) |
-| Protected preview parity, accounts, approval, and customer-run gateway | 6/6 suites, 68 cases pass | [Focused run](2026-10-10-django-model-listing-focused.json) |
-| Complete current-feature Docker and kind regression | 48/48 suites, 288 case records pass; original Data Classes mode restored | [Full run](2026-10-10-django-model-listing-regression.json) |
+| [Model-listing backend cases](../../unit/model-listing-cases.md) | 5/5 pass | [Unit run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/unit/runs/2026-10-10-django-model-listing.txt) |
+| Protected preview parity, accounts, approval, and customer-run gateway | 6/6 suites, 68 cases pass | [Focused run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-model-listing-focused.json) |
+| Complete current-feature Docker and kind regression | 48/48 suites, 288 case records pass; original Data Classes mode restored | [Full run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-model-listing-regression.json) |
 
 An unsigned Docker or managed kind Models request returned 401; a signed-in
 first admin received the live model list on each. Both UI addresses remained

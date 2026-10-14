@@ -7,7 +7,7 @@ nor gateway was exposed on a host port for this test.
 
 | Case | Docker | kind | Evidence |
 | --- | --- | --- | --- |
-| LOCAL-19: read the active context, model training context and sampler defaults | Pass | Pass | [Docker JSON](2026-10-08-model-runtime-docker.json), [kind JSON](2026-10-08-model-runtime-kind.json) |
+| LOCAL-19: read the active context, model training context and sampler defaults | Pass | Pass | [Docker JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-model-runtime-docker.json), [kind JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-model-runtime-kind.json) |
 | LOCAL-20: observe the output cap directly and through agentgateway | Pass: both stopped at 256 tokens | Pass: both stopped at 256 tokens | Same JSON files |
 
 The server's `/props` response reported `max_tokens: -1` while both measured

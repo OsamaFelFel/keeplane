@@ -16,10 +16,10 @@ implemented.
   table and 320px layout, local runner Add, unsupported shared-key error, and
   removing an outside model's Keeplane setup. All four passed as part of the
   full browser runs, which passed 19/19 each on
-  [Docker](../../browser/runs/2026-10-10-react-models-all-docker.json),
-  [managed kind](../../browser/runs/2026-10-10-react-models-all-kind.json), and
-  [customer-run gateway kind](../../browser/runs/2026-10-10-react-models-all-existing.json).
-- The [full local regression](2026-10-10-react-models-regression.json)
+  [Docker](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-10-react-models-all-docker.json),
+  [managed kind](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-10-react-models-all-kind.json), and
+  [customer-run gateway kind](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-10-react-models-all-existing.json).
+- The [full local regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-react-models-regression.json)
   completed with 47/48 suites and 286 recorded cases. Preview parity, protected
   account, Data Classes, Audit, model management, cloud key rotation, and the
   managed kind Qwen runtime cases passed. The run restored the original Data

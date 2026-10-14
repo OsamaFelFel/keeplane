@@ -7,7 +7,7 @@ resource and removed its own approval and resource afterward.
 
 `python3 tests/e2e/test_model_replacement.py` followed the
 [plain-English cases](../model-replacement-cases.md): **5 passed, 0 failed,
-cleanup complete**. The [JSON report](2026-10-09-model-replacement.json)
+cleanup complete**. The [JSON report](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-replacement.json)
 records the HTTP observations. A model created directly in the gateway
 appeared as outside and unapproved. After Keeplane approved it, the model
 answered. Changing its upstream model ID under the same name advanced the
@@ -17,7 +17,7 @@ returned HTTP 403, requiring setup again.
 An expanded test found an approval rollback bug: returning the resource value
 to its original definition at gateway revision 3 made Keeplane accept the old
 approval and answer without reapproval. The
-[before-fix report](2026-10-09-model-replacement-rollback-before.json) records
+[before-fix report](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-replacement-rollback-before.json) records
 **4 passed, 1 failed**, with complete cleanup. Keeplane now includes the
 gateway resource revision in its approval fingerprint. The final run kept the
 model blocked after the rollback and allowed an answer only after reapproval.

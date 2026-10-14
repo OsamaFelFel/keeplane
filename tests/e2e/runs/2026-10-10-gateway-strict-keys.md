@@ -1,6 +1,6 @@
 # 10 October 2026 — isolated gateway key separation
 
-The [plain-English cases](../gateway-policy/strict-key-cases.md), [configuration](../gateway-policy/strict-keys.yaml), [runner](../gateway-policy/verify_strict_keys.py) and [JSON result](2026-10-10-gateway-strict-keys.json) are versioned. The runner launched a disposable instance of the same pinned agentgateway image used by the previews on the existing local Docker network. It generated two fresh keys in memory and removed the instance after the checks.
+The [plain-English cases](../gateway-policy/strict-key-cases.md), [configuration](../gateway-policy/strict-keys.yaml), [runner](../gateway-policy/verify_strict_keys.py) and [JSON result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-gateway-strict-keys.json) are versioned. The runner launched a disposable instance of the same pinned agentgateway image used by the previews on the existing local Docker network. It generated two fresh keys in memory and removed the instance after the checks.
 
 | Case | Observed | Verdict |
 | --- | --- | --- |

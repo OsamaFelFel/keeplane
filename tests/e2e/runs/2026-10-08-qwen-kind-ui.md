@@ -13,13 +13,13 @@ until the new model appears.
 
 | Case | Observed result | Evidence |
 | --- | --- | --- |
-| LOCAL-07 and LOCAL-09 on Kubernetes port 13000 | `local-qwen` registered and returned generated Python code; its source and upstream ID were correct | [JSON](2026-10-08-kind-qwen.json) |
-| LOCAL-07 and LOCAL-09 on Docker port 3000 | The existing real Qwen route still answered | [JSON](2026-10-08-docker-qwen-recheck.json) |
+| LOCAL-07 and LOCAL-09 on Kubernetes port 13000 | `local-qwen` registered and returned generated Python code; its source and upstream ID were correct | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-kind-qwen.json) |
+| LOCAL-07 and LOCAL-09 on Docker port 3000 | The existing real Qwen route still answered | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-docker-qwen-recheck.json) |
 | LOCAL-17 in the browser | Add model offered only Qwen Coder and the fixed answer fixture. Previously registered guarded trial entries were absent from the Docker model list and selector. | Browser inspection on both local URLs |
 | LOCAL-18 in the Kubernetes browser | Added `ui-qwen-verified`; it appeared immediately and was selected. A coding prompt returned a generated `add_integers` Python function. | Browser inspection at port 13000 |
-| Local model regression on both installs | Seven checks passed on each | [Kind JSON](2026-10-08-kind-after-qwen.json), [Docker JSON](2026-10-08-docker-after-qwen.json) |
-| Gateway replica failure regression | Five checks passed, including ten new calls after removing a pod | [JSON](2026-10-08-kind-failover-after-qwen.json) |
-| Guarded credential-forwarding transport test | Four checks passed through the test-only API path | [JSON](2026-10-08-guarded-after-ui.json) |
+| Local model regression on both installs | Seven checks passed on each | [Kind JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-kind-after-qwen.json), [Docker JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-docker-after-qwen.json) |
+| Gateway replica failure regression | Five checks passed, including ten new calls after removing a pod | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-kind-failover-after-qwen.json) |
+| Guarded credential-forwarding transport test | Four checks passed through the test-only API path | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-guarded-after-ui.json) |
 
 The guarded endpoint is a disposable credential-forwarding fixture backed by
 the same Qwen runner. It is not a separate model offered to users. The real

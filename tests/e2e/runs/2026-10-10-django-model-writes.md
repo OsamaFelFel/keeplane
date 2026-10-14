@@ -26,15 +26,15 @@ rollback, key cleanup, and the customer-run gateway restrictions.
 
 | Preview | Result | Evidence |
 | --- | --- | --- |
-| Docker | 6 of 6 suites; 37 cases passed | [Docker JSON](2026-10-10-django-model-writes-docker-focused.json) |
-| Managed kind and customer-run gateway | 7 of 7 suites; 41 cases passed | [kind JSON](2026-10-10-django-model-writes-kind-focused.json) |
+| Docker | 6 of 6 suites; 37 cases passed | [Docker JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-model-writes-docker-focused.json) |
+| Managed kind and customer-run gateway | 7 of 7 suites; 41 cases passed | [kind JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-model-writes-kind-focused.json) |
 
 The standalone runner discovery case `LOCAL-25` also passed after extraction
 to its adapter. The final full regression result is recorded separately below.
 
 ## Full regression on the final preview images
 
-The [full Docker and kind run](2026-10-10-django-model-writes-full-regression.json)
+The [full Docker and kind run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-model-writes-full-regression.json)
 passed all 48 suites and all 290 case records. It covered chart packaging,
 image parity, protected UI and account APIs, Data Classes, Audit, model flows,
 gateway failover and outage behavior, the customer-run gateway path, Qwen

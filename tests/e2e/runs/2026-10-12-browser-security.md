@@ -19,23 +19,23 @@ Docker serves the matching backend and built UI from its mounted directories.
 
 ## Results
 
-- [Final full regression](2026-10-12-csrf-verified-full-regression.json):
+- [Final full regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-csrf-verified-full-regression.json):
   **55/55 suites, 332/332 case records**. This includes eight CSRF cases on each
   preview and four isolated HTTPS cookie/origin/referer cases.
-- [Docker browser run](../../browser/runs/2026-10-12-csrf-verified-docker.json)
-  and [kind browser run](../../browser/runs/2026-10-12-csrf-verified-kind.json):
+- [Docker browser run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-12-csrf-verified-docker.json)
+  and [kind browser run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-12-csrf-verified-kind.json):
   **24/24 cases each**, no skipped or flaky cases. The live React and static
   sign-in/sign-out journeys pass, including a real Editions write and restore.
   Existing desktop and 320px screenshots pass without changing their baselines.
-- [Managed TLS/Calico](2026-10-12-csrf-verified-managed-tls.json):
+- [Managed TLS/Calico](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-csrf-verified-managed-tls.json):
   **11/11 cases**, including protected model setup, calls, replica loss,
   recovery and removal. The fixture namespace is removed.
-- [Customer gateway TLS/Calico](2026-10-12-csrf-verified-existing-tls.json):
+- [Customer gateway TLS/Calico](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-csrf-verified-existing-tls.json):
   **5/5 cases**, including protected model setup and calls, blocked sibling
   access and the public-route guard. Both fixture namespaces are removed.
 - Frontend build, five UI unit tests and lint pass. Existing lint warnings and
   the build's bundle-size/local-font warnings remain; no warning was suppressed.
-- [Registry advisory snapshot](2026-10-12-application-advisories.json): npm's
+- [Registry advisory snapshot](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-application-advisories.json): npm's
   production audit reports zero advisories, and PyPI reports none for the four
   pinned Python API distributions. This snapshot excludes OS/native gateway
   dependencies and dev-only npm packages; it is not a complete security audit.

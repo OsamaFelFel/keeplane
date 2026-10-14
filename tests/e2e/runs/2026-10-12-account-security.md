@@ -23,16 +23,16 @@ status-aware handling corrected that failure. No dependency versions changed.
 - The eight isolated limit cases pass, including parallel workers, restart,
   expiry, credential rotation, storage outage and no session/Audit on refusal.
 - Docker and kind each pass ACCT-24–ACCT-27 at the public HTTP edge.
-- The [initial API regression](2026-10-12-account-security-regression.json)
+- The [initial API regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-account-security-regression.json)
   passed 51/51 suites and 306 recorded cases. Its UI image preceded the React
   error-message correction.
-- The [Docker browser run](../../browser/runs/2026-10-12-account-security-docker.json)
-  and [kind browser run](../../browser/runs/2026-10-12-account-security-kind.json)
+- The [Docker browser run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-12-account-security-docker.json)
+  and [kind browser run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/browser/runs/2026-10-12-account-security-kind.json)
   each pass 10/10 Users cases, including cooldown, invalid credentials and storage
   failure, as well as the existing desktop and 320px screenshots.
 - The final full regression against the rebuilt UI passed **51/51 suites and
   306 cases**, with the prior Data Classes modes restored. It is recorded in
-  [the final manifest](2026-10-12-account-security-final-regression.json).
+  [the final manifest](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-account-security-final-regression.json).
 - TypeScript build and the existing UI unit test pass. Lint returns success
   with existing React/TanStack warnings; no new warning was introduced in App.
   Python compilation and `git diff --check` pass. The stack-lock cases verify

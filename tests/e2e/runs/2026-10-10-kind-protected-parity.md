@@ -8,13 +8,13 @@ remained internal and unprotected.
 
 | Plain-English cases | Result | Evidence |
 | --- | --- | --- |
-| Sign in, list and manage accounts, reject spoofed identity and foreign sign-in origin, and open React pages | 21/21 | [kind users](2026-10-10-kind-users-react.json), [Docker users](2026-10-10-docker-users-origin.json) (21/21) |
-| Turn Data Classes on and off, manage approvals, and retain changes across a kind app restart | 11/11 | [Data Classes](2026-10-10-kind-data-classes.json) |
-| Record and filter Audit events, enforce roles, and retain records across a kind app restart | 9/9 | [Audit](2026-10-10-kind-audit-developer.json) |
-| Register and call fixture models; refuse an unknown model | 7/7 | [local gateway](2026-10-10-kind-local.json) |
-| Register and call real local Qwen | 2/2 | [Qwen](2026-10-10-kind-qwen.json) |
-| Discover runner model and context, add it, and refuse invalid choices | 5/5 | [runner](2026-10-10-kind-runner.json) |
-| Read both gateway replicas, replace one pod, and verify existing-gateway isolation | 7/7 | [replica and existing gateway](2026-10-10-kind-replica.json) |
+| Sign in, list and manage accounts, reject spoofed identity and foreign sign-in origin, and open React pages | 21/21 | [kind users](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-users-react.json), [Docker users](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-docker-users-origin.json) (21/21) |
+| Turn Data Classes on and off, manage approvals, and retain changes across a kind app restart | 11/11 | [Data Classes](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-data-classes.json) |
+| Record and filter Audit events, enforce roles, and retain records across a kind app restart | 9/9 | [Audit](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-audit-developer.json) |
+| Register and call fixture models; refuse an unknown model | 7/7 | [local gateway](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-local.json) |
+| Register and call real local Qwen | 2/2 | [Qwen](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-qwen.json) |
+| Discover runner model and context, add it, and refuse invalid choices | 5/5 | [runner](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-runner.json) |
+| Read both gateway replicas, replace one pod, and verify existing-gateway isolation | 7/7 | [replica and existing gateway](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-replica.json) |
 
 The first protected fixture call failed because the app could not verify the
 gateway's file-owned `local-fixture` definition. The chart now mounts the
@@ -30,5 +30,5 @@ or that the gateway enforces project-class policy against bypass.
 
 The complete documented regression then passed **33/33 suites and 173/173
 case records** across Docker, kind and isolated component checks. The
-[full run](2026-10-10-kind-parity-regression.json) includes commands, case IDs,
+[full run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-kind-parity-regression.json) includes commands, case IDs,
 durations and the tested Git state.

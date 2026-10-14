@@ -1,6 +1,6 @@
 # 10 October 2026 — current gateway bypass diagnostic
 
-The [plain-English cases](../gateway-bypass-cases.md), [probe](../test_gateway_bypass_probe.py), [worker](../gateway_bypass_worker.py), and [machine result](2026-10-10-gateway-bypass-diagnostic.json) are versioned together. The probe used the image pinned in `deploy/local/stack.lock.json` and the running protected Docker and kind previews. The sibling Docker container and two kind pods carried no Keeplane credentials or Kubernetes service-account token. The probe removed both pods after the run.
+The [plain-English cases](../gateway-bypass-cases.md), [probe](../test_gateway_bypass_probe.py), [worker](../gateway_bypass_worker.py), and [machine result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-gateway-bypass-diagnostic.json) are versioned together. The probe used the image pinned in `deploy/local/stack.lock.json` and the running protected Docker and kind previews. The sibling Docker container and two kind pods carried no Keeplane credentials or Kubernetes service-account token. The probe removed both pods after the run.
 
 | Path | Unauthenticated model list | Unauthenticated management read | Direct chat | Chat with invalid bearer and forged identity headers | Fixture calls added | Release policy |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
