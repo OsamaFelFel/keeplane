@@ -49,6 +49,11 @@ once, and starts Gunicorn. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
 Serving workers do not migrate schemas.
 
+Readiness compares the database's migration history with the app's
+known migrations. The graph is cached per worker; each probe makes one read
+query. Pending migrations or unavailable storage keep the copy out of service,
+while liveness stays independent so it can recover without restarting.
+
 Existing preview account, approval, class and Audit files remain unchanged.
 Their data is imported into the Django database; old sessions require a fresh
 sign-in. Imported password hashes are upgraded by Django when a user signs in.

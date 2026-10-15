@@ -383,6 +383,7 @@ def run_cases():
             )
             dc("up", "-d", "--wait", "--wait-timeout", "90", "app-a", "app-b")
             result["runtime_versions"] = probe("versions")
+            record("PGAPI-17", lambda: probe("schema-readiness"))
             record("PGAPI-01", lambda: existing_suite("test_accounts.py", 21))
             record("PGAPI-02", lambda: existing_suite("test_csrf.py", 8))
             record("PGAPI-03", lambda: probe("shared"))

@@ -3,10 +3,11 @@
 import mimetypes
 import os
 from django.conf import settings
-from django.db import connection
+from django.db import DatabaseError, connection
 from django.http import FileResponse, HttpResponseRedirect, JsonResponse
 from django.views.decorators.http import require_GET
 from .api import MODEL_GATEWAY, actor, admin
+from .readiness import schema_ready
 
 
 @require_GET
@@ -58,8 +59,11 @@ def app_health(request):
 
 @require_GET
 def readiness(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT 1")
+    try:
+        if not schema_ready(connection):
+            return JsonResponse({"app": "unavailable"}, status=503)
+    except DatabaseError:
+        return JsonResponse({"app": "unavailable"}, status=503)
     return JsonResponse({"app": "ready"})
 
 
