@@ -101,7 +101,7 @@ class DjangoDeveloperKeyStore:
                 if not row or not row.key_name:
                     raise ValueError
                 return read_private_key(self.directory, row.key_name)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- credential boundary hides all underlying failures
             raise StorageUnavailable("Provider key is unavailable") from None
 
     def _finish(self, model_id):

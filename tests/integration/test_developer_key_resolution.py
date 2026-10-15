@@ -1,18 +1,17 @@
 """Internal owner reads: real files, current Django policy, synthetic keys only."""
 
-from copy import deepcopy
 import json
 import os
 import stat
+import traceback
+from copy import deepcopy
 from threading import Event, Thread
 from types import SimpleNamespace
-import traceback
 
 import pytest
-from django.db import DatabaseError, connection, connections
-
 from accounts.models import User
 from common.errors import StorageUnavailable
+from django.db import DatabaseError, connection, connections
 from model_registry import developer_keys, resolved_keys
 from model_registry.developer_keys import DjangoDeveloperKeyStore
 from model_registry.fingerprints import fingerprint
@@ -246,7 +245,7 @@ def test_sqlite_owner_mutation_waits_for_resolution_transaction(
     def reader():
         try:
             outcomes.append(resolve(owned.a, owned.digest).for_provider())
-        except Exception as error:
+        except (StorageUnavailable, DatabaseError, AssertionError, OSError) as error:
             failures.append(type(error).__name__)
         finally:
             connections.close_all()
@@ -263,7 +262,7 @@ def test_sqlite_owner_mutation_waits_for_resolution_transaction(
                     owned.a.put("model", NEXT)
                 else:
                     owned.a.remove("model")
-        except Exception as error:
+        except (StorageUnavailable, DatabaseError, AssertionError, OSError) as error:
             failures.append(type(error).__name__)
         finally:
             done.set()
