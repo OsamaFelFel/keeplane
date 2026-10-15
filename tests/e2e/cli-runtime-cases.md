@@ -40,5 +40,7 @@ check can use disposable `--tmpfs /tmp:mode=1777,exec` with a read-only root and
 `--network none`. No model weights or cloud provider are needed.
 Use the same pinned binary with `tests/e2e/test_cli_resume_native.py` for CLI-05.
 The state unit cases cover private files, exact bindings, foreign-state refusal,
-credential presence, history reset and inherited lock lifetime. Native crash
-recovery and server-account binding are separate acceptance boundaries.
+credential presence, history reset and inherited lock lifetime. The native lock
+control kills the wrapper while its native parent is active: reset stays blocked
+until the owned native group stops, then succeeds. Detached workloads, unfinished
+side-effect replay and server-account binding remain outside these checks.
