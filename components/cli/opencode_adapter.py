@@ -13,6 +13,11 @@ import sys
 import tempfile
 from urllib.parse import urlsplit
 
+if __package__:
+    from .instructions import snapshot
+else:
+    from instructions import snapshot
+
 
 VERSION = "2.0.27"
 
@@ -77,7 +82,7 @@ def coding_turn(command, *, input, env, cwd, timeout, cancelled=None):
             stream.close()
 
 
-def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None):
+def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=()):
     """Use a disposable profile; the gateway remains responsible for authorization."""
     if os.name != "posix":
         raise ValueError("This prototype currently supports macOS and Linux.")
@@ -103,6 +108,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
     directory = str(Path(directory).expanduser().resolve(strict=True))
     if not Path(directory).is_dir():
         raise ValueError("The working directory must be a directory.")
+    instruction_snapshot = snapshot(directory, instructions) if instructions else None
     with tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary:
         profile = Path(temporary)
         environment = {
@@ -128,10 +134,18 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             "model": "keeplane/" + model,
             "share": "disabled", "snapshots": False,
         }
+        if instruction_snapshot:
+            config["plugins"] = [{
+                "package": str(Path(__file__).with_name("instruction_plugin").resolve()),
+                "options": instruction_snapshot,
+            }]
+        configuration = json.dumps(config, ensure_ascii=False)
+        if len(configuration.encode("utf-8")) > 120 * 1024:
+            raise ValueError("Serialized runtime configuration exceeds 120 KiB; choose smaller instruction files.")
         # The credential is absent from configuration, process arguments and disk files.
         environment.update({
             "KEEPLANE_RUNTIME_GRANT": grant,
-            "OPENCODE_CONFIG_CONTENT": json.dumps(config),
+            "OPENCODE_CONFIG_CONTENT": configuration,
             "OPENCODE_CONFIG_PROJECT_DISABLE": "1",
             "OPENCODE_DISABLE_MODELS_FETCH": "1",
             "OPENCODE_DISABLE_FFF": "1",
@@ -173,6 +187,8 @@ def main():
     parser.add_argument("--model", required=True, help="Model ID registered in that gateway")
     parser.add_argument("--directory", type=Path, default=Path.cwd())
     parser.add_argument("--timeout", type=float, default=300)
+    parser.add_argument("--instructions", action="append", default=[], type=Path,
+                        help="Reviewed UTF-8 instruction file directly in --directory; repeatable")
     parser.add_argument("prompt")
     args = parser.parse_args()
     grant = os.environ.pop("KEEPLANE_GATEWAY_GRANT", None)
@@ -183,7 +199,8 @@ def main():
             grant = getpass.getpass("Keeplane gateway credential: ")
         with termination_requested() as cancelled:
             result = run(args.runtime, args.directory, args.gateway, args.model,
-                         args.prompt, grant, args.timeout, cancelled=cancelled)
+                         args.prompt, grant, args.timeout, cancelled=cancelled,
+                         instructions=args.instructions)
     except subprocess.TimeoutExpired:
         print("Coding turn timed out; review any edits before retrying.", file=sys.stderr)
         return 124
