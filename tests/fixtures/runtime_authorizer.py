@@ -125,8 +125,8 @@ def serve():
         )
         token, project = identity.login(actor["username"], password), str(uuid.uuid4())
         DjangoProjectStore().register_use(actor["id"], project, "Native authorization")
-    classes.set_enabled(True)
     if not seeded:
+        classes.set_enabled(True)
         ProjectClass.objects.create(project_id=project, data_class_id="confidential")
     shared = os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
     if shared:
@@ -245,6 +245,11 @@ def command(action, arguments):
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_is_in_recovery()")
             return {"vendor": connection.vendor, "standby": cursor.fetchone()[0]}
+    elif action == "set_classes":
+        assert arguments in ("enabled", "disabled")
+        return stores()[3].set_enabled(arguments == "enabled")
+    elif action == "classes_enabled":
+        return stores()[3].enabled()
     elif action == "revoke":
         stores()[1].logout(credential["token"])
     elif action == "summary":

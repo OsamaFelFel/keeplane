@@ -20,6 +20,7 @@ key-delivery APIs.
 | Approval is withdrawn while A is disconnected | Neither path reaches a provider. A still rejects the withdrawn model after reconnecting. |
 | Copy A loses its authorizer | Its protected listener refuses work; copy B still answers allowed work. |
 | Recovery | Restoring A's link or replacing its authorizer restores allowed work at the same protected address. Bounded recovery statuses are retained. |
+| Class mode changes while A's authorizer is down | Recovery preserves the current mode instead of resetting it. |
 | Private listeners | A sibling client cannot reach either copy's raw model, management, stats, readiness, authorizer or provider port. |
 | Existing gateway configuration | Both copies preserve the unrelated native model and configuration. |
 
