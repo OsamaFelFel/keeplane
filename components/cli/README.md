@@ -31,10 +31,14 @@ python3 components/cli/opencode_adapter.py \
 Enter the gateway credential at the hidden prompt. Automation can supply
 `KEEPLANE_GATEWAY_GRANT` through its secret environment; never type the value
 into a command or commit it. HTTP is accepted only for a loopback test gateway.
+This prototype accepts credentials made of letters, digits, `.`, `_`, `~` and `-`.
 
 The adapter prints the runtime's JSON events when the turn ends. Review its edits and run the
 project's tests. A denied request or native error exits unsuccessfully; a timeout
-exits with 124; cancellation exits with 130. Both stop the runtime's process group.
+exits with 124; cancellation exits with 130. Both terminate the runtime's process
+group and bound cleanup without waiting for inherited output pipes to close.
+Children that create independent sessions are outside that cleanup boundary;
+this prototype does not sandbox or terminate detached workloads.
 `--timeout 600` gives a slow turn ten minutes. A failed turn can
 leave edits, so inspect the diff before retrying. There is no direct-provider fallback.
 
