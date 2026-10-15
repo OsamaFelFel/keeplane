@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { firstAdminPassword } from './credentials'
 import { expect, test, type Page } from '@playwright/test'
 
 const users = [
@@ -26,7 +26,7 @@ test('BR-01: local sign-in offers no SSO or self-registration', async ({ page })
 })
 
 test('BR-02: the live first admin can open Users but has no role action', async ({ page }) => {
-  const password = readFileSync('/private/tmp/keeplane-accounts-trial/first-admin-password', 'utf8').trim()
+  const password = firstAdminPassword()
   await page.goto('/app/')
   await page.getByLabel('Username').fill('first-admin')
   await page.getByLabel('Password').fill(password)

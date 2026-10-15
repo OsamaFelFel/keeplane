@@ -1,4 +1,4 @@
-name: Build and unit checks
+name: Build and application checks
 
 on:
   pull_request:
@@ -29,8 +29,17 @@ jobs:
           cache-dependency-path: components/admin-ui/web/package-lock.json
       - run: npm ci
       - run: npm run build
-      - run: npm run test:unit
+      - name: Run UI unit tests
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-results/frontend"
+          npm run test:unit -- --reporter=default --reporter=json --outputFile="$GITHUB_WORKSPACE/test-results/frontend/unit.json"
       - run: npm run lint
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: frontend-${{ github.sha }}
+          path: test-results/frontend/
+          retention-days: 30
 
   backend:
     runs-on: ubuntu-24.04
@@ -56,6 +65,65 @@ jobs:
           .venv/bin/python tests/e2e/test_management_retry.py
           .venv/bin/python tests/e2e/test_gateway_preflight_read_retry.py
           .venv/bin/python tests/unit/test_browser_csrf.py
+          .venv/bin/python tests/unit/test_local_startup.py
+          .venv/bin/python tests/unit/test_reporting.py
+
+  local-application:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      KEEPLANE_RUNTIME_DIR: ${{ github.workspace }}/.keeplane/local
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: |
+            components/admin-ui/web/package-lock.json
+            tests/browser/package-lock.json
+      - name: Start with the documented command
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          python3 deploy/local/up.py | tee test-results/startup-default.log
+      - name: Check a command-line port override
+        env:
+          KEEPLANE_PORT: 3090
+        run: |
+          set -o pipefail
+          python3 deploy/local/up.py --port 3080 | tee test-results/startup-custom-port.log
+      - name: Install the browser tests
+        working-directory: tests/browser
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium --only-shell
+      - name: Exercise application behavior
+        working-directory: tests/browser
+        env:
+          KEEPLANE_BASE_URL: http://127.0.0.1:3080
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/test-results/browser/results.json
+        # Existing image baselines are macOS-specific; behavior runs on Linux.
+        run: npm test -- --workers=1 --grep-invert 'BR-03|MO-UI-01|DC-UI-01|AU-UI-03' --reporter=list,json
+      - name: Collect container diagnostics
+        if: failure()
+        run: docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" --profile qwen logs --no-color app gateway qwen > test-results/containers.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: local-application-${{ github.sha }}
+          path: |
+            test-results/
+            tests/browser/test-results/
+          retention-days: 30
+      - name: Stop the disposable application
+        if: always()
+        run: |
+          if [ -f "$KEEPLANE_RUNTIME_DIR/.env" ]; then
+            docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" --profile qwen down
+          fi
 
   postgres:
     runs-on: ubuntu-24.04
@@ -75,10 +143,10 @@ jobs:
       - name: Build the PostgreSQL API package from pinned driver source
         run: docker build --target postgres -t keeplane-preview:postgres-local -f components/control-plane/Dockerfile .
       - name: Verify accounts, transactions, replica behavior and restore
-        run: python3 tests/e2e/test_postgres_accounts.py --app-image keeplane-preview:postgres-local --output /tmp/keeplane-postgres-api.json
-      - name: Show the fixture result
+        run: python3 tests/e2e/test_postgres_accounts.py --app-image keeplane-preview:postgres-local --output test-results/postgres/api.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
-        run: |
-          if [ -f /tmp/keeplane-postgres-api.json ]; then
-            cat /tmp/keeplane-postgres-api.json
-          fi
+        with:
+          name: postgres-${{ github.sha }}
+          path: test-results/postgres/
+          retention-days: 30

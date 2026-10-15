@@ -4,6 +4,14 @@ This is the first running Open Source slice. Keeplane owns the screen and the
 small registration/call API; agentgateway owns model transport and its model
 registry. The test fixture is replaceable with a local Qwen runner.
 
+The local launcher builds the React application and supplies one browser port
+to Docker, browser-origin checks and startup verification. Pages load on demand;
+fonts are bundled under `components/admin-ui/web/public/fonts/` and served locally.
+Private host credentials are copied by the volume setup container into a
+restricted Docker volume, mounted read-only by the non-root application. This
+keeps host files private on Linux and Docker Desktop. Existing account, provider-key
+and gateway volumes are retained across starts.
+
 The optional [shared PostgreSQL backend](../guide/postgres-accounts.md) implements
 the same account, settings and Audit APIs. It is tested with two app processes;
 the review previews described below remain on SQLite.
@@ -32,7 +40,10 @@ and the final native-library package remain open.
 
 ```mermaid
 flowchart LR
-  Browser[Admin browser on port 3000 or 13000] --> App[Keeplane UI and model API]
+  Browser[Admin browser: configured local port or kind port 13000] --> App[Keeplane UI and model API]
+  Credentials[Private local credential files] --> Init[Volume setup]
+  Init --> Secrets[(Restricted app credential volume)]
+  Secrets --> App
   App -->|accounts and model management on loopback| Django[Django and DRF HTTP layer]
   Django --> Editions[Editions and one-time note preference]
   Django -->|first-admin session| Accounts[(Local account and session store)]

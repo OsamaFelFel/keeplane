@@ -12,10 +12,10 @@ documents describe the expected behavior in plain English.
 
 | Preview | Focused result | Evidence |
 | --- | --- | --- |
-| Docker | 3 of 3 suites; 23 cases passed | [Docker JSON](2026-10-10-django-settings-docker-focused.json) |
-| Managed kind | 2 of 2 suites; 20 cases passed | [kind JSON](2026-10-10-django-settings-kind-focused.json) |
+| Docker | 3 of 3 suites; 23 cases passed | [Docker JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-settings-docker-focused.json) |
+| Managed kind | 2 of 2 suites; 20 cases passed | [kind JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-settings-kind-focused.json) |
 
-The [full regression](2026-10-10-django-settings-full-regression.json) passed
+The [full regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-settings-full-regression.json) passed
 all 48 suites and all 290 case records on the final Docker and kind preview
 images. It included account sign-in, model management, gateway outage and
 failover, the customer-run gateway, key rotation, and both integrated journeys.

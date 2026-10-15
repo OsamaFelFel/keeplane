@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs'
+import { firstAdminPassword } from './credentials'
 import { expect, test } from '@playwright/test'
 
-const password = () => readFileSync('/private/tmp/keeplane-accounts-trial/first-admin-password', 'utf8').trim()
+const password = firstAdminPassword
 
 test('BSEC-01: React sign-in and POST sign-out work with live CSRF checks', async ({ page }) => {
   const logoutMethods: string[] = []

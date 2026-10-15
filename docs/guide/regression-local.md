@@ -1,56 +1,77 @@
-# Run the local Keeplane regression
+# Test Keeplane
 
-**Edition:** Open Source
+Choose the checks for the behavior you changed. Keep results in ignored
+`test-results/` directories and attach them to CI or the PR. Do not commit logs
+or generated run reports.
 
-Pull requests run the frontend build, UI unit tests and lint, plus isolated
-account, storage, read-retry and HTTPS CSRF cases in GitHub Actions. Actions are
-pinned to commits and use a read-only repository token. These quick checks
-complement the running-stack and browser regression below; they do not certify
-the Kubernetes gateway or a production release.
+## Automatic pull-request checks
 
-The PostgreSQL job also builds the real API/UI and runs the [two-copy account
-fixture](../../tests/e2e/postgres-accounts-cases.md), including shared throttling,
-atomic Audit failure, database/app restart, fresh-database restore and password
-rotation against the source-built PostgreSQL image package. Its gateway is a test API fixture; the running-stack suites still
-cover the supported trial gateway separately.
+GitHub Actions runs:
 
-The six [PostgreSQL chart checks](../../tests/e2e/postgres-deployment-cases.md)
-run in the default regression too. The separate deployment trial exercises both
-gateway modes with the actual gateway, verified database TLS, separate roles,
-two app copies, PVC restart and fresh-database restore on the isolated Calico
-cluster. It creates and removes its own namespace.
+- Frontend build, UI unit tests and lint.
+- Isolated account/storage tests and the launcher's HTTP/CSRF tests.
+- The documented Docker startup command, a custom-port restart, and browser
+  behavior checks on Linux. Existing macOS screenshot baselines are checked locally.
+- The PostgreSQL package/API fixture, including two-copy accounts, shared login
+  limits, atomic Audit, restart, fresh-database restore and password rotation.
 
-Keep the single protected Docker preview and isolated kind cluster running.
-The [local model](local-preview.md), [account](accounts-local.md), and
-[Kubernetes](kubernetes-local.md) guides show how to start each. The Docker
-startup command loads the real Qwen model before the run.
+Reports are uploaded even when a job fails and retained for 30 days. A passing
+job covers its selected checks; these jobs do not certify Kubernetes policies,
+real cloud subscriptions or a production release. Release evidence needs longer
+retention than routine PR artifacts.
 
-From the Open Source repository root:
+## Frontend and browser checks
+
+In `components/admin-ui/web/`, run:
 
 ```sh
-python3 tests/e2e/run_regression.py \
-  --output tests/e2e/runs/YYYY-MM-DD-full-regression.json
+npm run build
+npm run lint
+npm run test:unit
 ```
 
-Replace the filename with a new date and run label. The runner checks the
-isolated kind context and both preview health endpoints first. It then runs
-the [plain-English regression set](../../tests/e2e/regression-cases.md) in
-order, including the protected customer-run gateway app through a temporary
-loopback port-forward. The JSON result lists every suite, case verdict, duration, exit code,
-Git commit, and stack-lock checksum. It rejects a suite that silently omits
-an expected case. The command exits nonzero when any suite fails.
+With Keeplane running, in `tests/browser/`:
 
-The run writes individual suite reports to a temporary directory and leaves
-older versioned evidence alone. Review the new JSON and commit it with the
-component change when it is meaningful evidence. The local tests include
-fixed-answer mocks and a real Qwen runner; they do not test external model
-subscriptions or certify a release gateway.
+```sh
+npm ci
+npx playwright install chromium --only-shell
+npm test -- --workers=1
+```
 
-For a React UI change, also run `npm run build`, `npm run lint` and
-`npm run test:unit` from `components/admin-ui/web/`, then run `npm test` from
-`tests/browser/` for Docker and `KEEPLANE_BASE_URL=http://127.0.0.1:13000 npm test`
-for kind while both previews are running. The browser suite's
-[plain-English cases](../../tests/browser/users-cases.md) and checked-in
-1280px and 320px screenshots cover visual and keyboard behavior that HTTP
-tests cannot see. Install its headless browser with
-`npx playwright install chromium --only-shell` on a new workstation.
+For another address, set `KEEPLANE_BASE_URL`, for example
+`KEEPLANE_BASE_URL=http://127.0.0.1:3080 npm test -- --workers=1`.
+Set `KEEPLANE_RUNTIME_DIR` too if you chose a custom credential directory.
+Failure traces and screenshot differences go under `test-results/browser/`.
+Do not update an expected screenshot until you have reviewed the visible change.
+
+## Complete Docker and Kubernetes regression
+
+Start both the [local application](local-preview.md) and the isolated
+[Kubernetes installation](kubernetes-local.md). The full regression currently
+expects Docker on port 3000, kind on port 13000, and the isolated kind kubeconfig.
+Run from the repository root:
+
+```sh
+python3 tests/e2e/run_regression.py --output test-results/full-regression.json
+```
+
+Use a new filename per run. Individual suite reports and logs are kept beside
+that file in `full-regression-suites/`. The runner checks every expected case ID,
+returns a nonzero exit code on failure and restores the original data-class mode.
+Use `--suite NAME` for a focused run; it is not a full regression.
+
+The [case catalog](../../tests/e2e/regression-cases.md) lists the selected groups.
+The separate [PostgreSQL deployment cases](../../tests/e2e/postgres-deployment-cases.md)
+exercise verified TLS, database roles and both gateway modes on the isolated
+Calico cluster. Run those explicitly after deployment changes.
+
+## Results and history
+
+A PR summary states the tested commit, commands, pass/fail/unrun results and
+artifact links. Preserve failed runs as well as successful ones. Keep test code,
+reusable fixtures, case descriptions and deliberate visual baselines in Git.
+
+Earlier generated reports remain available in
+[the recorded source revision](https://github.com/OsamaFelFel/keeplane/tree/de0aba5f8052fbbec55a2060309812812f09588e/tests).
+Their removal from the current tree does not change the tests or turn a failed
+or unrun release gate into a pass.

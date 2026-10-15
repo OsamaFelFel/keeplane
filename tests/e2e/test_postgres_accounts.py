@@ -42,9 +42,17 @@ def main():
     def run(command, input_data=None, check=True):
         item = subprocess.run(command, input=input_data, capture_output=True, timeout=420)
         if check and item.returncode:
-            # No full command, environment, cookies, password or response bodies.
-            lines = (item.stderr + item.stdout).decode(errors="replace").splitlines()
+            # Keep enough context to diagnose CI failures, with fixture secrets removed.
+            detail = (item.stderr + item.stdout).decode(errors="replace")
+            for name in ("database", "first-admin-password", "original-password", "rotated", "signing"):
+                path = root / name
+                if path.is_file():
+                    detail = detail.replace(path.read_text().strip(), "[redacted]")
+            detail = re.sub(r"Bearer [A-Za-z0-9._-]+", "Bearer [redacted]", detail)
+            lines = detail.splitlines()
             result["failure_frames"] = [line.strip() for line in lines if re.match(r'\s*File "[^"\n]+", line \d+', line)]
+            result["failure_step"] = [part.replace(str(root), "<fixture>") for part in command]
+            result["failure_output_tail"] = lines[-40:]
             raise RuntimeError(command[0] + " returned " + str(item.returncode))
         return item
 

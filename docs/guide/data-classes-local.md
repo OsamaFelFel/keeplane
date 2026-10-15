@@ -26,7 +26,7 @@ python3 tests/e2e/test_data_classes.py
 python3 tests/e2e/test_data_classes_store.py
 ```
 
-The latest live suite records [HTTP evidence](../../tests/e2e/runs/2026-10-10-optional-data-classes-full-final.json).
+The latest live suite records [HTTP evidence](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-optional-data-classes-full-final.json).
 It creates and removes one trial class and one trial approval. It requires the
 `local-fixture` model to be present and unapproved before it starts, so it
 will refuse to overwrite your own approval. The isolated database suite checks

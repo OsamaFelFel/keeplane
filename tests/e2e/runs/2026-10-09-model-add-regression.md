@@ -1,6 +1,6 @@
 # Add model and full local regression — 9 October 2026
 
-The local `fix/effective-class-approvals` branch passed **111/111 checks** after the one-step local model registration and approval slice. All cases ran against pinned local Docker and kind components; no cloud subscription was used. The new [plain-English cases](../model-add-cases.md), [live JSON](2026-10-09-model-add.json), and verifier remain in Git so a future gateway replacement can rerun them.
+The local `fix/effective-class-approvals` branch passed **111/111 checks** after the one-step local model registration and approval slice. All cases ran against pinned local Docker and kind components; no cloud subscription was used. The new [plain-English cases](../model-add-cases.md), [live JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-add.json), and verifier remain in Git so a future gateway replacement can rerun them.
 
 | Check | Passed |
 | --- | ---: |

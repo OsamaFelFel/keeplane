@@ -9,7 +9,7 @@ definition.
 
 The [plain-English cases](../model-removal-cases.md),
 [live verifier](../test_model_removal.py), and
-[JSON result](2026-10-09-model-removal.json) are versioned. **7/7 live cases
+[JSON result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-removal.json) are versioned. **7/7 live cases
 passed** against the actual agentgateway and protected account preview.
 They include admin-action refusal, gateway deletion, preservation of an
 outside model, and refusal to delete a definition changed by another gateway
@@ -25,7 +25,7 @@ fixed before the recorded pass. The fixture uses the shipped UI files with
 fixed model responses, so this check covers dialog interaction and layout,
 while the live verifier covers gateway effects.
 
-The [full local regression manifest](2026-10-09-model-removal-regression.json)
+The [full local regression manifest](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-removal-regression.json)
 records **24/24 suites and 120 case records passing**, across Docker, kind,
 Qwen, gateway failover, accounts, data classes, audit, model registration,
 cloud listing, replacement, edit, runtime limits, and removal. The first

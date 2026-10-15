@@ -3,13 +3,13 @@
 The [plain-English case](../cases.md) LOCAL-24 checks that Add model shows the
 running context of local Qwen separately from the model's training limit. The
 same repeatable [runner-flow script](../test_runner_flow.py) ran against the
-[Docker preview](2026-10-09-runner-context.json) and the
-[kind preview](2026-10-09-runner-context-kind.json). Both runs passed all five
+[Docker preview](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-runner-context.json) and the
+[kind preview](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-runner-context-kind.json). Both runs passed all five
 cases: discovery, 4,096 active and 32,768 training tokens, registration and a
 generated answer, rejection of an unserved model, and rejection of a runner
 address outside the preview allowlist.
 An [isolated runner fixture](../test_runner_optional_context.py) with no
-`/props` endpoint also passed [LOCAL-25](2026-10-09-runner-optional-context.json):
+`/props` endpoint also passed [LOCAL-25](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-runner-optional-context.json):
 discovery returned its model and no invented context value.
 
 I also opened Add model in the Docker browser preview, entered

@@ -1,6 +1,6 @@
 # Optional data classes local trial — 2026-10-10
 
-**Edition:** Open Source local trial. Source branch: `feat/optional-data-classes`, based on `4783470`. The full run began at 01:50 UTC while the source was uncommitted, then finished at 01:55 UTC. Its [JSON report](2026-10-10-optional-data-classes-full-final.json) records the source branch, stack lock and each case. No product-owned file or constitution was changed.
+**Edition:** Open Source local trial. Source branch: `feat/optional-data-classes`, based on `4783470`. The full run began at 01:50 UTC while the source was uncommitted, then finished at 01:55 UTC. Its [JSON report](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-optional-data-classes-full-final.json) records the source branch, stack lock and each case. No product-owned file or constitution was changed.
 
 ## What works now
 
@@ -11,8 +11,8 @@
 
 | Check | Outcome |
 | --- | --- |
-| [Full regression](2026-10-10-optional-data-classes-full-final.json) | 32/32 suites, 169/169 case records passed across Docker, kind, real Qwen, accounts, models and Audit. The runner restored the original off mode. |
-| [Focused run after final Docker restart](2026-10-10-optional-data-classes-focused-final.json) | 4/4 suites, 21/21 case records passed: storage, Audit, live Data Classes and model registration. The Audit storage suite ran four internal checks. |
+| [Full regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-optional-data-classes-full-final.json) | 32/32 suites, 169/169 case records passed across Docker, kind, real Qwen, accounts, models and Audit. The runner restored the original off mode. |
+| [Focused run after final Docker restart](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-optional-data-classes-focused-final.json) | 4/4 suites, 21/21 case records passed: storage, Audit, live Data Classes and model registration. The Audit storage suite ran four internal checks. |
 | [Plain-English class cases](../data-classes-cases.md) | CLASS-00 and CLASS-10 verify off mode and no implicit approval; CLASS-09 verifies on/off/on retention. All 11 live class cases passed. |
 | [Browser cases](../../browser/data-classes-cases.md) | 9/9 total Chromium cases passed, including the three new Data Classes and Models controls cases. [Off](../../browser/data-classes.spec.ts-snapshots/data-classes-off-1280-darwin.png) and [on](../../browser/data-classes.spec.ts-snapshots/data-classes-on-1280-darwin.png) desktop screenshots are versioned; the 320px page has no document-wide horizontal scroll. |
 | Kind Models smoke | After redeployment, Chromium saw `local-fixture` and an enabled Add model button at `127.0.0.1:13000` with no Data Classes API. |

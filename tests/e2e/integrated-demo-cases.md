@@ -3,7 +3,7 @@
 Run `python3 deploy/local/up.py`, then `python3 tests/e2e/test_integrated_demo.py`.
 The test uses the same protected port 3000 API that the supplied admin screen
 uses. It leaves `demo-qwen` available for a human walkthrough. Its observation
-report is [versioned here](runs/2026-10-09-integrated-demo.json).
+report is [versioned here](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-integrated-demo.json).
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |

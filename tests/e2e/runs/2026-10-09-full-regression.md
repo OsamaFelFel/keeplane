@@ -3,7 +3,7 @@
 **Edition:** Open Source. The new [runner](../run_regression.py) ran from clean
 local commit `1de1102a613f` against the Docker preview, protected account
 preview, and isolated `kind-keeplane` cluster. Its
-[machine result](2026-10-09-full-regression.json) records the commands, Git
+[machine result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-full-regression.json) records the commands, Git
 commit, stack-lock checksum, case IDs, verdicts, and timings.
 
 **Result: 24/24 suites passed, 120/120 case records passed.** The runner found

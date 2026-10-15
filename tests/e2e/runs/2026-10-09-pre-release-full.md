@@ -6,9 +6,9 @@
 
 **Environment:** protected Docker preview and local kind cluster on 9 October 2026
 
-The [current plain-English account cases](../accounts-cases.md) passed **15/15** in the [focused run](2026-10-09-edition-boundary-accounts.json). Admin requests to the former Team API and web paths returned 404. The live navigation had no Team link. The Editions preference showed the line once for an admin, hid it on the second visit, stayed off after a switch change, and reset once when re-enabled. There is no old-trial-data migration case.
+The [current plain-English account cases](../accounts-cases.md) passed **15/15** in the [focused run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-edition-boundary-accounts.json). Admin requests to the former Team API and web paths returned 404. The live navigation had no Team link. The Editions preference showed the line once for an admin, hid it on the second visit, stayed off after a switch change, and reset once when re-enabled. There is no old-trial-data migration case.
 
-The [full regression result](2026-10-09-pre-release-full.json) records a clean worktree at that code revision: **29/29 suites and 150/150 case records passed**. It covered accounts, models, gateway failures, audit, Docker and kind journeys, including a real local Qwen call. No suite failed or was skipped. Reproduce the complete run with:
+The [full regression result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-pre-release-full.json) records a clean worktree at that code revision: **29/29 suites and 150/150 case records passed**. It covered accounts, models, gateway failures, audit, Docker and kind journeys, including a real local Qwen call. No suite failed or was skipped. Reproduce the complete run with:
 
 ```sh
 python3 tests/e2e/run_regression.py --output /private/tmp/keeplane-regression.json

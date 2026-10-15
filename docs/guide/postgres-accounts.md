@@ -1,7 +1,5 @@
 # Shared PostgreSQL accounts and settings
 
-**Edition:** Open Source; Enterprise uses the same base identity and storage contract.
-
 Keeplane can run its existing API against PostgreSQL. UUID accounts, native
 Django sessions, sign-in budgets, account operation IDs, Editions preferences,
 model approvals, data classes and Audit records share one database. The Docker

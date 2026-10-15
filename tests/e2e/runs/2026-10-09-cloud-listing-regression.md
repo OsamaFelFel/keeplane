@@ -3,13 +3,13 @@
 The protected Docker preview now recognizes native OpenAI and Anthropic
 gateway models as Cloud. It keeps models added outside Keeplane unapproved
 until setup. The [plain-English cases](../cloud-listing-cases.md),
-[live result](2026-10-09-cloud-listing.json), and
+[live result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-cloud-listing.json), and
 [verifier](../test_cloud_listing.py) are versioned with this change. The
 OpenAI model used a local fixed-answer upstream and no provider key; this is
 not evidence of a live cloud account.
 
 The complete local regression passed **115/115 cases across 23 suites** after
-correcting one test invocation. The [run manifest](2026-10-09-cloud-listing-regression.json)
+correcting one test invocation. The [run manifest](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-cloud-listing-regression.json)
 records each suite command, environment override, exit status, duration, and
 the correction. It includes Docker and kind model flows, Qwen, gateway
 failover, supplied-gateway mode, account roles, data classes, model setup,

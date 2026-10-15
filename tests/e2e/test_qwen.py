@@ -37,7 +37,8 @@ def main():
         if current and not current.get("approved"):
             post("/api/models/local-qwen/setup", {"key_choice": "none",
                                                   "approved_classes": ["Public"]})
-    status, result = post("/api/ask", {"model": "local-qwen", "prompt": "Write a Python function that adds two integers. Return code only."})
+    # This case verifies real-model transport, not coding quality or throughput.
+    status, result = post("/api/ask", {"model": "local-qwen", "prompt": "Reply with READY only."})
     answer = result.get("answer", "")
     passed = created == 200 and status == 200 and bool(answer.strip()) and answer != "mock answer"
     listed_status, catalog = get("/api/models")

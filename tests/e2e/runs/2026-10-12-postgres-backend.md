@@ -12,24 +12,24 @@ sessions. The review previews remain SQLite.
 
 ## Results
 
-- [Final PostgreSQL fixture](2026-10-12-postgres-api-verified.json): **15/15
+- [Final PostgreSQL fixture](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-verified.json): **15/15
   integration groups pass**, including all 29 original account/CSRF cases,
   ASCII username rules, project-count/removal guards and atomic rollback of
   class names, model approvals and their Audit records. The fixture is removed.
-- [Host-user fixture repeat](2026-10-12-postgres-api-host-user.json): **15/15
+- [Host-user fixture repeat](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-host-user.json): **15/15
   groups pass** with app processes matching the invoking host UID/GID; fixture
   resources and private temporary files are removed successfully.
 
-- [Default-preview full regression](2026-10-12-postgres-backend-full-regression.json):
+- [Default-preview full regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-backend-full-regression.json):
   **55/55 suites and 332/332 case records pass** against the rebuilt Docker/kind
   previews. Their SQLite and real trial gateway paths remain working.
 
-- [Offline-cache fixture](2026-10-12-postgres-api-final.json): **13/13 integration
+- [Offline-cache fixture](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-final.json): **13/13 integration
   groups pass**, including all **21 existing account and eight CSRF cases**.
-- [CI-style download repeat](2026-10-12-postgres-api-download.json): the same
+- [CI-style download repeat](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-download.json): the same
   **13/13 groups pass** with official PyPI downloads checked against committed
   SHA-256 pins, followed by offline installation with hash enforcement.
-- [ASCII account comparison](2026-10-12-postgres-api-ascii.json): **14/14 groups
+- [ASCII account comparison](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-ascii.json): **14/14 groups
   pass**, adding explicit C collation, case-insensitive ASCII uniqueness/sign-in
   and rejection of Unicode lookalikes that could otherwise create a different
   password-attempt bucket. Native password checks retain Django's hash upgrade
@@ -57,16 +57,16 @@ evidence.
 
 ## Retained failures and corrections
 
-[Initial run](2026-10-12-postgres-api.json): migration checks imported the URL
+[Initial run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api.json): migration checks imported the URL
 configuration, which bootstrapped accounts before their tables existed. Store
 resolution is now lazy; migrations and configuration checks work on a clean
 database without application-table queries during URL loading.
 
-[Second run](2026-10-12-postgres-api-repeat.json): the 21-case account suite exited
+[Second run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-repeat.json): the 21-case account suite exited
 successfully, but the fixture tried to parse its human stdout as JSON. It now
 reads that suite's saved JSON report.
 
-[Third run](2026-10-12-postgres-api-third.json): the first 12 groups passed; the
+[Third run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-12-postgres-api-third.json): the first 12 groups passed; the
 rotation assertion accidentally reread the updated password file as its old
 password. The fixture now preserves the original credential separately for that
 check. Both complete repeats pass all 13 groups. All failed fixtures were also

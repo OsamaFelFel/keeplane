@@ -6,7 +6,7 @@ catalog volume; the original model preview at port 3000 remained running.
 
 `python3 tests/e2e/test_model_approval.py` followed the
 [plain-English cases](../model-approval-cases.md): **10 passed, 0 failed,
-approval removed after the run**. The [JSON report](2026-10-09-model-approval.json)
+approval removed after the run**. The [JSON report](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-approval.json)
 records each HTTP observation. The approval survived a restart of the account
 app. Removing it left the model visible in the gateway and made Keeplane refuse
 the next call. A dynamically registered model kept its approval and answered

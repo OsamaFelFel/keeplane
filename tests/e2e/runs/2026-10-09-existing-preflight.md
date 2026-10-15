@@ -11,16 +11,16 @@ missing probe model makes the check fail. A fresh Helm install with a wrong
 version failed before any Keeplane app Deployment existed; its temporary
 namespace and release were removed.
 
-The [targeted run](2026-10-09-existing-preflight-targeted.json) passed six
+The [targeted run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-existing-preflight-targeted.json) passed six
 cases: four preflight cases and two post-install gateway-outage cases. The
-first [full regression](2026-10-09-existing-preflight-regression.json) passed
+first [full regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-existing-preflight-regression.json) passed
 25/26 suites and 125/126 case records. K8S-09 failed because its test used
 `kubectl exec deployment/...` immediately after a rollout and could select
 the old pod, which still pointed at the working gateway. The app readiness
 case K8S-08 passed. The test now waits until the Service endpoint points to
 the new pod and checks that pod's `GATEWAY_URL` before probing the Service.
-The [outage recheck](2026-10-09-existing-preflight-outage-recheck.json)
-passed 2/2 cases, and the [final full regression](2026-10-09-existing-preflight-regression-final.json)
+The [outage recheck](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-existing-preflight-outage-recheck.json)
+passed 2/2 cases, and the [final full regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-existing-preflight-regression-final.json)
 passed **26/26 suites and 126/126 case records**. Afterward, the Docker
 preview returned 200, the protected preview redirected to sign-in (302),
 the managed kind preview returned 200, and the existing-gateway app had one

@@ -6,7 +6,7 @@ before the run. The original port 3000 preview kept running.
 
 `python3 tests/e2e/test_model_edit.py` followed the
 [plain-English cases](../model-edit-cases.md): **5 passed, 0 failed, trial
-approval removed**. The [JSON report](2026-10-09-model-edit.json) records the
+approval removed**. The [JSON report](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-edit.json) records the
 HTTP observations. Editing approval from Public to Internal succeeded after
 the live model check. An unknown class and a write without the admin action
 header were refused without changing the approval. Removing Keeplane's setup

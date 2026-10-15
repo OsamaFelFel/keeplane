@@ -15,10 +15,10 @@ unapproved gateway model cannot be used through Keeplane.
 
 | Preview | Focused result | Evidence |
 | --- | --- | --- |
-| Docker | 2 of 2 suites; 16 cases passed | [Docker JSON](2026-10-10-django-ask-docker-focused.json) |
-| Managed kind and customer-run gateway | 3 of 3 suites; 20 cases passed | [kind JSON](2026-10-10-django-ask-kind-focused.json) |
+| Docker | 2 of 2 suites; 16 cases passed | [Docker JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-ask-docker-focused.json) |
+| Managed kind and customer-run gateway | 3 of 3 suites; 20 cases passed | [kind JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-ask-kind-focused.json) |
 
-The [full Docker and kind regression](2026-10-10-django-ask-full-regression.json)
+The [full Docker and kind regression](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-django-ask-full-regression.json)
 passed all 48 suites and all 290 case records. It covered the current chart,
 image parity, accounts, Data Classes, Audit, model registration and cleanup,
 gateway outage and failover, key rotation, the customer-run gateway, Qwen

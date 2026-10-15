@@ -9,13 +9,13 @@ gateway and installs no gateway of its own.
 
 | Run | Result | Evidence |
 | --- | --- | --- |
-| Managed kind model registration and transport | 7 passed | [JSON](2026-10-08-supplied-gateway-local.json) |
-| kind replica failure, recovery, app-only mode and separate catalogs | 6 passed | [JSON](2026-10-08-supplied-gateway-kind.json) |
-| Docker model registration and transport | 7 passed | [JSON](2026-10-08-supplied-gateway-docker.json) |
-| Docker guarded endpoint transport | 4 passed | [JSON](2026-10-08-supplied-gateway-guarded.json) |
-| Real Qwen route on Docker and kind | 2 passed each | [Docker](2026-10-08-supplied-gateway-qwen-docker.json), [kind](2026-10-08-supplied-gateway-qwen-kind.json) |
-| Qwen context and output-limit regression on Docker and kind | 2 passed each | [Docker](2026-10-08-supplied-gateway-runtime-docker.json), [kind](2026-10-08-supplied-gateway-runtime-kind.json) |
-| Pinned component lock against running Docker, kind and Helm | 4 passed | [JSON](2026-10-08-stack-lock.json) |
+| Managed kind model registration and transport | 7 passed | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-local.json) |
+| kind replica failure, recovery, app-only mode and separate catalogs | 6 passed | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-kind.json) |
+| Docker model registration and transport | 7 passed | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-docker.json) |
+| Docker guarded endpoint transport | 4 passed | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-guarded.json) |
+| Real Qwen route on Docker and kind | 2 passed each | [Docker](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-qwen-docker.json), [kind](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-qwen-kind.json) |
+| Qwen context and output-limit regression on Docker and kind | 2 passed each | [Docker](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-runtime-docker.json), [kind](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-supplied-gateway-runtime-kind.json) |
+| Pinned component lock against running Docker, kind and Helm | 4 passed | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-stack-lock.json) |
 
 All 36 automated checks passed. `customer-fixture` answered through the
 app-only install. Its model was absent from the managed gateway, while

@@ -1,6 +1,6 @@
 # Gateway database password in Kubernetes
 
-**Edition:** Open Source. Enterprise uses the same gateway credential mechanism.
+Enterprise uses the same gateway credential mechanism.
 
 The pinned agentgateway standalone chart can read the database password from a Kubernetes Secret. Keep an environment placeholder in the PostgreSQL URL and use the chart's `extraEnv` to load the password. The [Docker, Helm and isolated kind cases](../../tests/e2e/runs/2026-10-10-gateway-secret-binding.md) verify this with chart v1.6.0.
 

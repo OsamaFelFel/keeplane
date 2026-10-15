@@ -11,7 +11,7 @@ accounts, routing and CLI specs.
 | LOCAL-04 | Register the fixed test fixture as `second-local` with upstream ID `mock-local` through the preview API; approve Public in the protected preview. | It appears in the list and answers a question through the gateway. |
 | LOCAL-05 | Ask for a model that was not registered. | Keeplane or the gateway rejects the call; no answer is shown. |
 | LOCAL-06 | Restart the gateway after adding `second-local`. | The registered model remains and still answers. |
-| LOCAL-07 | Start the optional Qwen runner, register it from Keeplane, and ask a short coding question. | A generated answer comes through Keeplane and the gateway; the recorded model is `local-qwen`. |
+| LOCAL-07 | Start the optional Qwen runner, register it from Keeplane, and ask it to reply READY. | A generated answer comes through Keeplane and the gateway; the recorded model is `local-qwen`. This is a transport check, not a coding-quality benchmark. |
 | LOCAL-08 | Inspect the preview diagnostic API and a fixture's source. | The diagnostic API reports the running gateway version for compatibility checks; the admin UI does not show it. The fixture is identified as a fixed answer test source. |
 | LOCAL-09 | Inspect `local-qwen` after a real model call. | Keeplane identifies it as a real local Qwen model served by llama.cpp, with the correct upstream model ID. |
 | LOCAL-10 | Open Add model and compare the runner address and model dropdown with the design canvas. | The dialog is 560px wide at desktop size. Its input and dropdown controls share a 44px height. Keyboard focus is visible. |

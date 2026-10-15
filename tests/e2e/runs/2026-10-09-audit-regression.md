@@ -10,13 +10,13 @@ trial records remain in the local volume, as an append-only audit should.
 
 | Check | Cases passed | Evidence |
 | --- | ---: | --- |
-| Authenticated Audit page, switches, settings records, search, persistence and developer denial | 9/9 | [Audit JSON](2026-10-09-audit.json) and [plain-English cases](../audit-cases.md) |
+| Authenticated Audit page, switches, settings records, search, persistence and developer denial | 9/9 | [Audit JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-audit.json) and [plain-English cases](../audit-cases.md) |
 | Fresh-store options, atomic settings records, literal search and paging | 3/3 | `python3 tests/e2e/test_audit_store.py` |
-| Model approval | 10/10 | [JSON](2026-10-09-model-approval.json) |
-| Data classes | 8/8 | [JSON](2026-10-09-data-classes.json) |
-| Accounts and roles | 13/13 | [JSON](2026-10-09-accounts.json) |
-| Live model replacement and rollback | 5/5 | [JSON](2026-10-09-model-replacement.json) |
-| Model edit | 5/5 | [JSON](2026-10-09-model-edit.json) |
+| Model approval | 10/10 | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-approval.json) |
+| Data classes | 8/8 | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-data-classes.json) |
+| Accounts and roles | 13/13 | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-accounts.json) |
+| Live model replacement and rollback | 5/5 | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-replacement.json) |
+| Model edit | 5/5 | [JSON](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-model-edit.json) |
 | Original model preview, Docker and kind | 7/7 each | `test_local.py` with ports 3000 and 13000 |
 | Real Qwen, Docker and kind | 2/2 each | `test_qwen.py` with ports 3000 and 13000 |
 | Guarded local endpoint | 4/4 | `test_guarded_endpoint.py` inside the app container |

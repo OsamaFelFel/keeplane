@@ -82,7 +82,7 @@ output filename:
 
 ```sh
 python3 tests/e2e/test_existing_gateway_browser.py \
-  --output tests/browser/runs/YYYY-MM-DD-existing-browser.json
+  --output test-results/browser/YYYY-MM-DD-existing-browser.json
 ```
 
 Shared cloud-provider keys are not proven in this mode: the supplied gateway

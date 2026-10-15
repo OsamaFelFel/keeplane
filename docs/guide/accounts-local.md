@@ -1,40 +1,50 @@
-# Try Open Source accounts and Editions locally
+# Accounts and sign-in
 
-The optional [PostgreSQL account backend](postgres-accounts.md) implements the
-same API with shared sessions, settings and Audit. This guide describes the
-SQLite review preview.
+Start Keeplane using the [local setup guide](local-preview.md). Open the printed
+address and sign in as `first-admin`, using the printed password-file location.
+Open **Users** to manage accounts.
 
-**Edition:** Open Source. Start the [protected Docker preview](local-preview.md) with `python3 deploy/local/up.py`, then open [Users](http://127.0.0.1:3000/users). Sign in as `first-admin` using the generated password in `/private/tmp/keeplane-accounts-trial/first-admin-password`. The file stays on your machine and outside Git.
+## Create an account or change its role
 
-An admin can create username and password accounts with either the **Admin** or **Developer** role, search and page through Users, change roles, and sign out. The first admin appears as an infrastructure-managed break-glass account and cannot be changed in Users. A developer can sign in and sees a simple developer page, but cannot use admin APIs. There is no self-sign-up. The React Create user form uses an operation ID so a repeated request creates the account at most once; after a timeout, **Check** queries that operation.
+Choose **Create user**, enter a username and password, and choose Admin or
+Developer. Developer is selected by default. Search and paging help find an
+existing user; **Change role** updates their access.
 
-The break-glass password comes from the mounted file. Changing that file and restarting the app updates the password and invalidates its previous sessions. Keep the file private and out of Git. React's account API now uses Django and DRF inside the app container; the account store remains a SQLite development trial. OpenID Connect sign-in is not yet connected, and Keycloak is not installed by this preview.
+If creation takes more than ten seconds, the dialog offers **Check**. Use it to
+find whether the account was created before retrying. A repeated request creates
+at most one account. There is no self-sign-up.
 
-After five unsuccessful sign-in attempts for the same username within a minute,
-the preview asks you to wait. The API returns 429 with a `Retry-After` delay in
-seconds. Changing username casing or restarting the app does not reset the
-limit. A successful sign-in clears earlier failures. Infrastructure rotation of
-the break-glass password also clears that account's limit. Malformed account
-requests return 400 rather than changing an account or issuing a session.
+Developers see a page explaining that the web application is for admins. They
+cannot open admin APIs. Single sign-on is not connected yet.
 
-Sign-in and all browser changes now require Django's CSRF token and cookie.
-The UI obtains a fresh masked token before each change; successful sign-in
-rotates it. Sign out sends a protected POST request. Following a GET link to
-`/sign-out` does not end a session. If a token is rejected, reload Keeplane and
-try again; the UI does not repeat a write automatically. Cookies are marked
-Secure when the configured public origin uses HTTPS.
+## The infrastructure admin
 
-The [Editions page](http://127.0.0.1:3000/editions) lists the Release 1 Open Source and Enterprise scope. The Enterprise feature note appears once for each admin on Users and links to Editions. An admin can turn that note off or back on from Editions; turning it back on permits one more view. “How to get Enterprise” is plain text until a destination is provided.
+The first admin is marked as managed by infrastructure. Users cannot edit,
+remove or change its role through the UI. Each successful sign-in is recorded in
+Audit; that record cannot be switched off.
 
-Team screens and API routes are absent from Open Source.
+Its password comes from the credential file printed at startup. To rotate it,
+update that file and restart Keeplane using the same local setup command and
+credential directory. Rotation preserves the account and revokes older sessions.
+Keep the file private and outside Git.
 
-The [plain-English API cases](../../tests/e2e/accounts-cases.md) cover accounts, role changes, create retries, route denial and Editions. The [full regression](regression-local.md) includes them. The [browser cases](../../tests/browser/users-cases.md) check the real first-admin sign-in, desktop and 320px layouts, keyboard focus, local assets, role changes and the no-answer flow. Run them from `tests/browser/` with `npm ci`, `npx playwright install chromium --only-shell`, and `npm test`. The [UI unit case](../../tests/unit/ui/cases.md) checks validation without writing an account.
+## Sign-in failures and sign-out
 
-The Docker preview is not a production identity system. Shared PostgreSQL
-identity, backup, replica behavior and the complete secure session deployment
-still need implementation and verification.
+After five unsuccessful attempts for one username within a minute, wait for the
+delay shown on screen. Changing username casing or restarting the application
+keeps the limit. If storage is unavailable, the UI explains that separately.
 
-The [live security browser cases](../../tests/browser/security-cases.md) verify
-both React and static sign-in/sign-out, and a real Editions change followed by
-restoration. The [API security cases](../../tests/e2e/csrf-cases.md) check rejected
-requests before any mutation and the HTTPS cookie/origin rules.
+Use **Sign out** to end a session. If a browser security token is rejected, reload
+Keeplane and try again; the UI does not repeat a write automatically.
+
+The **Editions** page explains feature availability and lets an admin switch the
+one-time Enterprise feature note off or on.
+
+## Current installation
+
+The local application uses SQLite. The optional [PostgreSQL backend](postgres-accounts.md)
+has integration tests for shared sessions, accounts, settings, Audit and recovery;
+production operations and local-preview cutover remain work.
+
+See the [account cases](../../tests/e2e/accounts-cases.md) and
+[test guide](regression-local.md) for verification commands.

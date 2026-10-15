@@ -19,13 +19,13 @@ python3 tests/e2e/test_local.py
 python3 tests/e2e/test_qwen.py
 ```
 
-The [guarded endpoint result](2026-10-08-guarded-endpoint.json) passed four
+The [guarded endpoint result](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-guarded-endpoint.json) passed four
 cases. Direct requests with no key and a wrong key returned HTTP 401. Keeplane
 registered `guarded-qwen` in the gateway with the disposable test key, listed
 the source without returning the key to the browser, and received nonempty
 generated text through the gateway and endpoint. Repeating the registration
-was idempotent; conflicting settings returned HTTP 409. The [existing local](2026-10-08-guarded-regression-local.json)
-and [real Qwen](2026-10-08-guarded-regression-qwen.json) suites passed 7/7
+was idempotent; conflicting settings returned HTTP 409. The [existing local](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-guarded-regression-local.json)
+and [real Qwen](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-08-guarded-regression-qwen.json) suites passed 7/7
 and 2/2 cases after the change.
 
 In the browser, Add model offered **Guarded endpoint trial · real Qwen**.
