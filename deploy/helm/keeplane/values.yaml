@@ -1,4 +1,5 @@
 app:
+  # PostgreSQL deployments require repository@sha256:<digest>; local trials may use a tag.
   image: keeplane-preview:local
   pullPolicy: IfNotPresent
   imagePullSecrets: []

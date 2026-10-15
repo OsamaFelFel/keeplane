@@ -83,8 +83,16 @@ and review-preview cutover remain release work.
 
 ## Install the chart against an operated database
 
-Use [the example values](../../deploy/postgres/values.example.yaml). Provision a
-private database owned by a migration role and a separate app login. Neither
+Use [the example values](../../deploy/postgres/values.example.yaml). Set
+`app.image` to your packaged PostgreSQL image's registry reference and immutable
+manifest digest, such as `registry.example.test/keeplane@sha256:<64 hex characters>`.
+Use the digest reported by your registry after publishing the image; the local
+Docker image ID is not the registry manifest digest. Helm refuses tags in
+PostgreSQL mode. App copies, migration Jobs and supplied-gateway preflight use
+that same image. Make it available from the customer's internal registry before
+closing install-time registry access. Local SQLite trials can still use tags.
+
+Provision a private database owned by a migration role and a separate app login. Neither
 role needs superuser, database creation or role creation permission. Revoke
 `PUBLIC` database access and schema creation. Grant the app only `CONNECT` on
 this database, `USAGE` on its schema, and table `SELECT, INSERT, UPDATE, DELETE`
