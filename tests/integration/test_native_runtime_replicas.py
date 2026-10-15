@@ -289,9 +289,12 @@ def test_native_replicas_use_current_primary_policy(tmp_path, report_file, exist
         assert probe("a") in (403, 503)
         assert not fixture("a", "summary")["calls"]
         assert probe("b") == 200
+        fixture("b", "set_classes", "disabled")
         dc("up", "-d", "--force-recreate", "--no-deps", "fixture-a")
         ready("a")
         recover("authorizer_replacement")
+        assert all(fixture(side, "classes_enabled") is False for side in ("a", "b"))
+        fixture("b", "set_classes", "enabled")
         assert {
             side: fixture(side, "resource_revision") for side in ("a", "b")
         } == revisions
