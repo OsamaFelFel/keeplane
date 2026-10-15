@@ -41,3 +41,9 @@ class RuntimeSessionAuthentication(BaseAuthentication):
 
     def authenticate_header(self, request):
         return "Bearer"
+
+
+def runtime_bearer_only(view):
+    """Mark explicit header-authenticated views for the browser CSRF boundary."""
+    view.runtime_bearer_only = True
+    return view

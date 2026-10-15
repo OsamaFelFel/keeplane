@@ -46,3 +46,12 @@ flowchart LR
 Header authentication follows [DRF's custom authentication contract](https://www.django-rest-framework.org/api-guide/authentication/#custom-authentication).
 [Isolated HTTP cases](../../tests/integration/runtime-catalog-cases.md) cover
 revocation, class restrictions, unknown contexts and outages.
+
+## Revoke a test session
+
+Send `DELETE /api/runtime/session` with the same Bearer credential and an empty
+body. Success returns 204. Reusing that credential returns 401; other sessions
+remain valid. The route accepts no account ID and never authenticates cookies.
+It needs no CSRF cookie because authorization comes only from the explicit
+header. Browser sign-in, account changes and browser sign-out keep their normal
+[Django CSRF protection](https://docs.djangoproject.com/en/5.2/ref/csrf/).
