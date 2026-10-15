@@ -114,3 +114,24 @@ provide the transport. These fixture checks do not install production isolation
 or policy publication, cover every route/fallback/replica, or select a release
 gateway. [The test cases](../../tests/integration/native-runtime-authorization-cases.md)
 list prerequisites and the command.
+
+The [fallback check](../../tests/integration/native-runtime-fallback-cases.md)
+attaches selected-model checks to each candidate section of a fixed native
+failover backend. A retry can reach the next provider only when its current
+class, approval and shared key allow it. This is test wiring, not product routing
+or production policy publication.
+
+The [two-copy check](../../tests/integration/native-runtime-replica-cases.md)
+uses one PostgreSQL primary for both authorizers. It checks withdrawal on each
+serving path and isolates one copy's database link or authorizer without changing
+the other copy. This remains a disposable Docker capability trial.
+
+```mermaid
+flowchart LR
+  Client --> A[Gateway A and private authorizer]
+  Client --> B[Gateway B and private authorizer]
+  A --> Primary[Shared Keeplane PostgreSQL primary]
+  B --> Primary
+  A --> MockA[Private mock A]
+  B --> MockB[Private mock B]
+```
