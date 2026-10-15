@@ -9,7 +9,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location("local_up", Path(__file__).resolve().parents[2] / "deploy/local/up.py")
+spec = importlib.util.spec_from_file_location(
+    "local_up", Path(__file__).resolve().parents[2] / "deploy/local/up.py"
+)
 up = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(up)
 
@@ -46,18 +48,24 @@ class StartupCheck(unittest.TestCase):
                         self.reply(401, {})
                         return
                     case.health_calls += 1
-                    self.reply(503 if case.health_calls == 1 else 200,
-                               {"gateway": "ready"})
+                    self.reply(
+                        503 if case.health_calls == 1 else 200, {"gateway": "ready"}
+                    )
 
             def do_POST(self):
                 token = self.headers.get("X-CSRFToken")
-                valid = (token and "csrftoken=" + token in self.headers.get("Cookie", "")
-                         and self.headers.get("Origin") == case.base)
+                valid = (
+                    token
+                    and "csrftoken=" + token in self.headers.get("Cookie", "")
+                    and self.headers.get("Origin") == case.base
+                )
                 if not valid or case.refuse:
                     self.reply(403, {"code": "csrf_failed"})
                     return
                 if self.path == "/api/session":
-                    body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                    body = json.loads(
+                        self.rfile.read(int(self.headers["Content-Length"]))
+                    )
                     case.assertEqual(body["password"], "fixture-password")
                     case.events.append("sign-in")
                     self.reply(200, {}, "session=live")
@@ -103,7 +111,10 @@ class StartupCheck(unittest.TestCase):
         self.assertEqual(self.events, [])
 
     def test_gateway_timeout_still_revokes_the_check_session(self):
-        with patch.object(up.time, "monotonic", side_effect=[0, 0, 10]), patch.object(up.time, "sleep"):
+        with (
+            patch.object(up.time, "monotonic", side_effect=[0, 0, 10]),
+            patch.object(up.time, "sleep"),
+        ):
             with self.assertRaisesRegex(RuntimeError, "HTTP 503"):
                 up.wait_preview(self.base, timeout=1)
         self.assertEqual(self.events, ["sign-in", "sign-out"])
@@ -112,14 +123,23 @@ class StartupCheck(unittest.TestCase):
         model = self.runtime / "fixture-model.gguf"
         model.write_bytes(b"fixture model")
         directory = self.runtime / "new/state/local"
-        with patch.object(up, "MODEL", model), patch.object(up, "RUNTIME", directory), \
-                patch.object(up, "EXPECTED_MODEL_SHA256", up.hashlib.sha256(model.read_bytes()).hexdigest()):
+        with (
+            patch.object(up, "MODEL", model),
+            patch.object(up, "RUNTIME", directory),
+            patch.object(
+                up,
+                "EXPECTED_MODEL_SHA256",
+                up.hashlib.sha256(model.read_bytes()).hexdigest(),
+            ),
+        ):
             up.prepare(port=3080, context_size=8192)
             password = (directory / "first-admin-password").read_bytes()
             up.prepare(port=3080, context_size=8192)
         self.assertEqual((directory / "first-admin-password").read_bytes(), password)
         self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
-        self.assertEqual((directory / "first-admin-password").stat().st_mode & 0o777, 0o600)
+        self.assertEqual(
+            (directory / "first-admin-password").stat().st_mode & 0o777, 0o600
+        )
         self.assertIn("KEEPLANE_PORT=3080\n", (directory / ".env").read_text())
         self.assertIn("QWEN_CONTEXT_TOKENS=8192\n", (directory / ".env").read_text())
 

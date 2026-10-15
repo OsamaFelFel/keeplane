@@ -2,7 +2,7 @@
 
 **Edition:** Open Source; the browser contract also applies to Enterprise.
 
-Run `python3 tests/e2e/test_csrf.py` against either protected preview using
+Run `.venv/bin/python -m pytest tests/e2e/test_csrf.py -m live` against either protected preview using
 `KEEPLANE_BASE_URL`. The full regression includes both addresses. Cookies and
 tokens stay in memory and do not appear in evidence.
 

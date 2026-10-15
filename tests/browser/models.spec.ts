@@ -98,3 +98,37 @@ test('MO-UI-04: removing an outside setup leaves its gateway model listed', asyn
   await expect(page.getByRole('row', { name: /outside-model/ })).toContainText('Added outside Keeplane')
   await expect(page.getByRole('status')).toContainText('The gateway model remains.')
 })
+
+test('MO-UI-05 MODEL-01 EDIT-01: setup and editing retain class choices after a refused save', async ({ page }) => {
+  const model: Model = { id: 'outside-model', provider: 'Local runner', kind: 'real-local', approved: false,
+    key_choice: 'none', approved_classes: [], owned_by_keeplane: false }
+  await mockModels(page, [model])
+  await page.route('**/api/data-classes', route => route.fulfill({ json: {
+    enabled: true, classes: [{ name: 'Public' }, { name: 'Internal' }],
+  } }))
+  let refuse = true
+  await page.route('**/api/models/outside-model/setup', route => {
+    expect(route.request().method()).toBe('POST')
+    if (refuse) return route.fulfill({ status: 503, json: { error: 'The gateway did not answer.' } })
+    model.approved = true
+    model.approved_classes = route.request().postDataJSON().approved_classes
+    return route.fulfill({ json: { model_id: model.id, approved_classes: model.approved_classes } })
+  })
+  await page.goto('/app/models')
+  await page.getByRole('row', { name: /outside-model/ }).getByRole('button', { name: 'Set up', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Set up outside-model' })
+  await dialog.getByRole('checkbox', { name: 'Public', exact: true }).check()
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('The gateway did not answer.')
+  await expect(dialog.getByRole('checkbox', { name: 'Public', exact: true })).toBeChecked()
+  refuse = false
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await page.getByRole('row', { name: /outside-model/ }).getByRole('button', { name: 'Edit', exact: true }).click()
+  const edit = page.getByRole('dialog', { name: 'Edit outside-model' })
+  await expect(edit.getByRole('checkbox', { name: 'Public', exact: true })).toBeChecked()
+  await edit.getByRole('checkbox', { name: 'Internal', exact: true }).check()
+  await edit.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(edit).not.toBeVisible()
+  await expect(page.getByRole('row', { name: /outside-model/ })).toContainText('Public, Internal')
+})

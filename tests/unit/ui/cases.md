@@ -1,6 +1,6 @@
 # React UI unit cases
 
-Run `npm run test:unit` from `components/admin-ui/web/`. Vitest discovers test
+Run `npm run test:unit` from `components/admin-ui/`. Vitest discovers test
 files in this top-level `tests/unit/ui/` directory; component source has no
 colocated tests.
 

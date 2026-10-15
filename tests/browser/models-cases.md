@@ -8,3 +8,5 @@ These cases use the product team's Models, Add model and Edit model designs. The
 | MO-UI-02 | Find a model on a local runner and add it while data classes are off. | The active context is shown, no class is requested, and the model appears in the table. |
 | MO-UI-03 | Try to add a shared cloud key to a customer-run gateway that lacks key delivery. | The clear error appears in the Add dialog; the model and key entries stay in place for review. |
 | MO-UI-04 | Remove Keeplane setup for a model the customer put in the gateway. | Its gateway entry remains listed as added outside Keeplane and receives no Keeplane work. |
+
+MO-UI-05 covers MODEL-01/EDIT-01 dialog behavior: set up an outside model, retain its class choices after a refused save, retry, edit its approvals and see the updated row. The Python API suites verify storage and authorization separately.

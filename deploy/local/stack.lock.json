@@ -25,7 +25,9 @@
     "Django": "5.2.18",
     "djangorestframework": "3.18.3",
     "asgiref": "3.12.1",
-    "sqlparse": "0.6.0"
+    "sqlparse": "0.6.0",
+    "gunicorn": "26.2.0",
+    "packaging": "26.1"
   },
   "model": {
     "path": "models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",

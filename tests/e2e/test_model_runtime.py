@@ -12,9 +12,13 @@ import subprocess
 import sys
 
 
-KUBECONFIG = os.environ.get("KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig")
-PROMPT = "Write the integers from 1 to 500, separated by commas. Output only the integers."
-PROBE = r'''
+KUBECONFIG = os.environ.get(
+    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
+)
+PROMPT = (
+    "Write the integers from 1 to 500, separated by commas. Output only the integers."
+)
+PROBE = r"""
 import json
 import os
 import sys
@@ -23,6 +27,7 @@ from urllib.request import Request, urlopen
 
 gateway = sys.argv[1]
 prompt = sys.argv[2]
+request_timeout = float(sys.argv[3])
 runner = "http://qwen:8080"
 
 def get(path):
@@ -38,8 +43,8 @@ def completion(url, model):
         key = Path(os.environ["GATEWAY_RUNTIME_KEY_FILE"]).read_text().strip()
         request.add_header("Authorization", "Bearer " + key)
     # The case checks the output limit, not latency. Shared local CPU can take
-    # over two minutes to emit 256 tokens while Docker and kind run together.
-    with urlopen(request, timeout=300) as response:
+    # several minutes to emit 256 tokens while Docker and kind run together.
+    with urlopen(request, timeout=request_timeout) as response:
         result = json.load(response)
     choice = result["choices"][0]
     return {"completion_tokens": result["usage"]["completion_tokens"],
@@ -58,50 +63,135 @@ print(json.dumps({
     "direct": completion(runner, "qwen2.5-coder:0.5b"),
     "through_gateway": completion(gateway, "local-qwen"),
 }))
-'''
+"""
 
 
-def main():
+def run_cases():
     parser = argparse.ArgumentParser()
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--docker", action="store_true")
     target.add_argument("--kind", action="store_true")
+    parser.add_argument(
+        "--request-timeout",
+        type=int,
+        default=600,
+        help="Seconds per generated reply; this case asserts limits, not latency",
+    )
     args = parser.parse_args()
+    if args.request_timeout < 1:
+        parser.error("--request-timeout must be positive")
+
+    from tests.support.client import Browser, RUNTIME
+
+    browser = Browser()
+    browser.login("first-admin", (RUNTIME / "first-admin-password").read_text().strip())
+    status, classes, _ = browser.fetch("/api/data-classes")
+    assert status == 200
+    payload = {"name": "local-qwen", "source": "qwen", "model": "qwen2.5-coder:0.5b"}
+    if classes["enabled"]:
+        payload["approved_classes"] = ["Public"]
+    assert browser.fetch("/api/models", payload, method="POST")[0] == 200
 
     if args.kind:
         context = subprocess.check_output(
-            ["kubectl", "--kubeconfig", KUBECONFIG, "config", "current-context"], text=True
+            ["kubectl", "--kubeconfig", KUBECONFIG, "config", "current-context"],
+            text=True,
         ).strip()
         if context != "kind-keeplane":
-            raise SystemExit(f"Refusing Kubernetes context {context!r}; expected kind-keeplane")
-        command = ["kubectl", "--kubeconfig", KUBECONFIG, "-n", "keeplane", "exec",
-                   "deploy/keeplane-app", "--", "python", "-c", PROBE,
-                   "http://keeplane:4000", PROMPT]
+            raise SystemExit(
+                f"Refusing Kubernetes context {context!r}; expected kind-keeplane"
+            )
+        command = [
+            "kubectl",
+            "--kubeconfig",
+            KUBECONFIG,
+            "-n",
+            "keeplane",
+            "exec",
+            "deploy/keeplane-app",
+            "--",
+            "python",
+            "-c",
+            PROBE,
+            "http://keeplane:4000",
+            PROMPT,
+            str(args.request_timeout),
+        ]
     else:
-        command = ["docker", "compose", "--profile", "qwen", "exec", "-T", "app",
-                   "python", "-c", PROBE, "http://gateway:4000", PROMPT]
+        command = [
+            "docker",
+            "compose",
+            "--profile",
+            "qwen",
+            "exec",
+            "-T",
+            "app",
+            "python",
+            "-c",
+            PROBE,
+            "http://gateway:4000",
+            PROMPT,
+            str(args.request_timeout),
+        ]
 
-    observed = json.loads(subprocess.check_output(command, text=True, timeout=660))
-    runtime_ok = (observed["model"] == "qwen2.5-coder:0.5b"
-                  and observed["active_context"] == 4096
-                  and observed["training_context"] == 32768
-                  and abs(observed["temperature"] - 0.8) < 0.001
-                  and abs(observed["top_p"] - 0.95) < 0.001)
-    limit_ok = all(observed[path]["completion_tokens"] == 256
-                   and observed[path]["finish_reason"] == "length"
-                   for path in ("direct", "through_gateway"))
-    result = {"suite": "Keeplane model runtime", "environment": "kind" if args.kind else "docker",
-              "results": [
-                  {"case": "LOCAL-19", "verdict": "pass" if runtime_ok else "fail",
-                   "observed": {key: observed[key] for key in ("model", "active_context",
-                               "training_context", "temperature", "top_p",
-                               "props_default_max_tokens")}},
-                  {"case": "LOCAL-20", "verdict": "pass" if limit_ok else "fail",
-                   "observed": {key: observed[key] for key in ("direct", "through_gateway")}},
-              ]}
+    observed = json.loads(
+        subprocess.check_output(
+            command, text=True, timeout=2 * args.request_timeout + 60
+        )
+    )
+    runtime_ok = (
+        observed["model"] == "qwen2.5-coder:0.5b"
+        and observed["active_context"] == 4096
+        and observed["training_context"] == 32768
+        and abs(observed["temperature"] - 0.8) < 0.001
+        and abs(observed["top_p"] - 0.95) < 0.001
+    )
+    limit_ok = all(
+        observed[path]["completion_tokens"] == 256
+        and observed[path]["finish_reason"] == "length"
+        for path in ("direct", "through_gateway")
+    )
+    result = {
+        "suite": "Keeplane model runtime",
+        "environment": "kind" if args.kind else "docker",
+        "request_timeout_seconds": args.request_timeout,
+        "results": [
+            {
+                "case": "LOCAL-19",
+                "verdict": "pass" if runtime_ok else "fail",
+                "observed": {
+                    key: observed[key]
+                    for key in (
+                        "model",
+                        "active_context",
+                        "training_context",
+                        "temperature",
+                        "top_p",
+                        "props_default_max_tokens",
+                    )
+                },
+            },
+            {
+                "case": "LOCAL-20",
+                "verdict": "pass" if limit_ok else "fail",
+                "observed": {
+                    key: observed[key] for key in ("direct", "through_gateway")
+                },
+            },
+        ],
+    }
     print(json.dumps(result, indent=2))
     return 0 if runtime_ok and limit_ok else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_cases())
+
+
+def test_model_runtime(monkeypatch, report_file, request):
+    arguments = [
+        __file__,
+        "--kind" if "13000" in os.environ.get("KEEPLANE_BASE_URL", "") else "--docker",
+    ]
+    monkeypatch.setattr("sys.argv", arguments)
+    assert run_cases() in (None, 0)

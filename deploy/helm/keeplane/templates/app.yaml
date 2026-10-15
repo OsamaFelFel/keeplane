@@ -39,6 +39,36 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.app.localTrial.enabled }}
+      initContainers:
+        - name: migrate-local-database
+          image: {{ .Values.app.image | quote }}
+          imagePullPolicy: {{ .Values.app.pullPolicy }}
+          command:
+            - sh
+            - -ec
+            - |
+              python -c 'from pathlib import Path; import secrets; p=Path("/state/django-secret-key"); p.exists() or p.write_text(secrets.token_urlsafe(64)+"\n"); p.chmod(0o600)'
+              python /app/manage.py migrate --noinput
+              python /app/manage.py import_preview
+              python /app/manage.py bootstrap
+          env:
+            - name: FIRST_ADMIN_PASSWORD_FILE
+              value: /run/keeplane-secrets/first-admin-password
+          volumeMounts:
+            - name: state
+              mountPath: /state
+            - name: first-admin
+              mountPath: /run/keeplane-secrets
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      {{- end }}
       containers:
         - name: app
           image: {{ .Values.app.image | quote }}
@@ -76,10 +106,6 @@ spec:
               value: /run/gateway-keys/admin-key
             {{- end }}
             {{- if .Values.app.localTrial.enabled }}
-            - name: ACCOUNT_DB
-              value: /state/accounts.sqlite3
-            - name: MODEL_APPROVAL_DB
-              value: /state/model-approvals.sqlite3
             - name: FIRST_ADMIN_PASSWORD_FILE
               value: /run/keeplane-secrets/first-admin-password
             - name: PUBLIC_ORIGIN

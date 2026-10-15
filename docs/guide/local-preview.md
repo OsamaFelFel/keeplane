@@ -24,7 +24,7 @@ python3 deploy/local/up.py
 ```
 
 The command installs the locked frontend dependencies, builds the application,
-starts Docker and checks sign-in and the gateway. The first run takes longer
+runs Django database migrations, starts Docker and checks sign-in and the gateway. The first run takes longer
 because it downloads dependencies and the demo model. Success looks like:
 
 ```text
@@ -40,7 +40,9 @@ file and sign in as `first-admin`.
 
 New installations keep private credentials under `.keeplane/local/`, which Git
 ignores. Earlier installations reuse `/private/tmp/keeplane-accounts-trial/`
-when it exists. Accounts and registered models live in Docker volumes. Preserve
+when it exists. Accounts and registered models live in Docker volumes. Existing preview records
+are imported into Django once; sign in again after this update. The original
+database files are kept. Preserve
 both the credential files and the volumes when keeping an installation.
 
 ## Configuration

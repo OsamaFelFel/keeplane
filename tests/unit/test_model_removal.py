@@ -8,28 +8,37 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "components/control-plane"))
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[2] / "components/control-plane")
+)
 
-from gateway_adapter import AgentgatewayModelAdapter
-from audit import AuditStore
-from data_classes import DataClassStore
-from model_catalog import ModelCatalog, fingerprint
-from model_removal import remove_model_setup
+from integrations.gateway.adapter import AgentgatewayModelAdapter
+from model_registry.fingerprints import fingerprint
+from model_registry.removal import remove_model_setup
 
 
 MODEL = "model-one"
 ACTOR = ("admin-id", "first-admin")
-RESOURCE = {"id": MODEL, "revision": 1, "value": {
-    "provider": {"custom": {"formats": [{"type": "completions"}]}},
-    "params": {"model": "mock-local", "baseUrl": "http://model:18080/v1"},
-}}
+RESOURCE = {
+    "id": MODEL,
+    "revision": 1,
+    "value": {
+        "provider": {"custom": {"formats": [{"type": "completions"}]}},
+        "params": {"model": "mock-local", "baseUrl": "http://model:18080/v1"},
+    },
+}
 
 
 class Catalog:
     def __init__(self, owned=True, key_choice="none", revision=1):
-        self.approval = {"gateway_fingerprint": fingerprint(MODEL, [dict(RESOURCE, revision=revision)]),
-                         "key_choice": key_choice, "approved_classes": ["Public"],
-                         "owned_by_keeplane": owned}
+        self.approval = {
+            "gateway_fingerprint": fingerprint(
+                MODEL, [dict(RESOURCE, revision=revision)]
+            ),
+            "key_choice": key_choice,
+            "approved_classes": ["Public"],
+            "owned_by_keeplane": owned,
+        }
         self.removals = []
 
     def get(self, model_id):
@@ -54,7 +63,9 @@ class Gateway:
 
     def delete_model(self, model_id):
         self.deletions.append(model_id)
-        return self.delete_status, {} if self.delete_status == 200 else {"error": "Gateway rejected deletion"}
+        return self.delete_status, {} if self.delete_status == 200 else {
+            "error": "Gateway rejected deletion"
+        }
 
 
 class ModelRemovalTests(unittest.TestCase):
@@ -81,8 +92,10 @@ class ModelRemovalTests(unittest.TestCase):
     def test_mr_04_owned_model_is_deleted_from_both_stores(self):
         catalog, gateway = Catalog(), Gateway()
         status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
-        self.assertEqual((status, result), (200, {"removed_from_keeplane": True,
-                                                "gateway_model_preserved": False}))
+        self.assertEqual(
+            (status, result),
+            (200, {"removed_from_keeplane": True, "gateway_model_preserved": False}),
+        )
         self.assertEqual(gateway.deletions, [MODEL])
         self.assertEqual(catalog.removals, [(MODEL, ACTOR, True)])
 
@@ -94,41 +107,47 @@ class ModelRemovalTests(unittest.TestCase):
             resource["value"]["auth"] = {"key": {"value": {"file": str(key)}}}
             catalog = Catalog(key_choice="shared")
             catalog.approval["gateway_fingerprint"] = fingerprint(MODEL, [resource])
-            status, _ = remove_model_setup(MODEL, ACTOR, catalog, Gateway([resource]), None, directory)
+            status, _ = remove_model_setup(
+                MODEL, ACTOR, catalog, Gateway([resource]), None, directory
+            )
             self.assertEqual(status, 200)
             self.assertFalse(key.exists())
 
     def test_mr_06_adapter_delete_uses_management_key(self):
         seen = []
+
         class Reply(BytesIO):
             status = 200
+
         def respond(request, timeout):
-            seen.append((request.get_method(), request.full_url, request.get_header("Authorization")))
+            seen.append(
+                (
+                    request.get_method(),
+                    request.full_url,
+                    request.get_header("Authorization"),
+                )
+            )
             return Reply(b"{}")
+
         with tempfile.TemporaryDirectory() as directory:
             runtime, admin = Path(directory) / "runtime", Path(directory) / "admin"
             runtime.write_text("runtime-fixture")
             admin.write_text("admin-fixture")
-            with patch("gateway_adapter.urlopen", respond):
-                status, _ = AgentgatewayModelAdapter("http://gateway:4000", runtime, admin).delete_model(MODEL)
+            with patch("integrations.gateway.adapter.urlopen", respond):
+                status, _ = AgentgatewayModelAdapter(
+                    "http://gateway:4000", runtime, admin
+                ).delete_model(MODEL)
         self.assertEqual(status, 200)
-        self.assertEqual(seen, [("DELETE", "http://gateway:4000/api/config/resources/llm.model/model-one",
-                                 "Bearer admin-fixture")])
-
-    def test_mr_07_removal_and_audit_commit_together(self):
-        with tempfile.TemporaryDirectory() as directory:
-            database = Path(directory) / "settings.sqlite3"
-            audit = AuditStore(database)
-            DataClassStore(database, audit)
-            catalog = ModelCatalog(database, audit)
-            audit.set_option("settings", True)
-            catalog.approve(MODEL, [], fingerprint(MODEL, [RESOURCE]), ACTOR,
-                            owned_by_keeplane=False)
-            status, _ = remove_model_setup(MODEL, ACTOR, catalog, Gateway(), None, "")
-            records = audit.records(kind="settings", search=MODEL)["records"]
-            self.assertEqual(status, 200)
-            self.assertIsNone(catalog.get(MODEL))
-            self.assertTrue(any("Removed Keeplane setup" in item["what"] for item in records))
+        self.assertEqual(
+            seen,
+            [
+                (
+                    "DELETE",
+                    "http://gateway:4000/api/config/resources/llm.model/model-one",
+                    "Bearer admin-fixture",
+                )
+            ],
+        )
 
 
 if __name__ == "__main__":

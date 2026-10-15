@@ -1,0 +1,41 @@
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { api, ApiError } from '@/app/api'
+
+export function SignInPage({ onSignedIn }: { onSignedIn: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [ssoConnected, setSsoConnected] = useState(false)
+  useEffect(() => { api<{ sso_connected: boolean }>('/api/auth-options').then(result => setSsoConnected(result.sso_connected)).catch(() => {}) }, [])
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true); setError('')
+    const fields = Object.fromEntries(new FormData(event.currentTarget))
+    try {
+      await api('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) })
+      onSignedIn()
+    } catch (cause) {
+      setError(cause instanceof ApiError && cause.status === 401
+        ? 'The username or password is wrong.'
+        : cause instanceof ApiError ? cause.message : 'Keeplane could not sign you in. Try again.')
+    }
+    finally { setBusy(false) }
+  }
+  return <main className="flex min-h-svh items-center justify-center p-4">
+    <Card className="w-full max-w-[400px] rounded-[10px] border-border bg-card p-8 shadow-none">
+      <CardHeader className="p-0 pb-6"><h1 className="text-[24px] font-semibold">Sign in to Keeplane</h1></CardHeader>
+      <CardContent className="p-0"><form onSubmit={submit} className="grid gap-5">
+        <div><Label htmlFor="username" className="keeplane-field-label">Username</Label><Input id="username" name="username" autoComplete="username" required /></div>
+        <div><Label htmlFor="password" className="keeplane-field-label">Password</Label><Input id="password" name="password" type="password" autoComplete="current-password" required /></div>
+        {error && <Alert><AlertDescription>{error}</AlertDescription></Alert>}
+        <Button type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Button>
+        {ssoConnected && <a className="text-[15px] underline" href="/api/oidc/start">Sign in with single sign-on</a>}
+      </form></CardContent>
+    </Card>
+  </main>
+}

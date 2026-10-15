@@ -7,12 +7,12 @@ curl -fL https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v
 shasum -a 256 /private/tmp/keeplane-ingress-nginx-kind-v1.15.1.yaml
 kubectl --kubeconfig /private/tmp/keeplane-netpol-kubeconfig apply -f /private/tmp/keeplane-ingress-nginx-kind-v1.15.1.yaml
 kubectl --kubeconfig /private/tmp/keeplane-netpol-kubeconfig -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=240s
-python3 tests/e2e/test_chart_ingress.py --output test-results/<new-result>.json
+.venv/bin/python -m pytest tests/e2e/test_chart_ingress.py -m live --output test-results/<new-result>.json
 ```
 
 Stop and inspect the manifest if its hash differs. The verifier refuses any context other than `kind-keeplane-netpol`, generates a one-day self-signed certificate in a temporary directory, and removes its fixture namespace and port-forward afterward.
 
-The [fixture](ingress/workloads.yaml) runs a pinned Python app that answers `app:<path>` and a separate gateway marker that answers `gateway:<path>`. The verifier installs the actual rendered Keeplane Ingress in the test namespace.
+The [fixture](../fixtures/ingress/workloads.yaml) runs a pinned Python app that answers `app:<path>` and a separate gateway marker that answers `gateway:<path>`. The verifier installs the actual rendered Keeplane Ingress in the test namespace.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |

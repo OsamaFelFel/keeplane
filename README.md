@@ -37,4 +37,4 @@ and [contribution guide](CONTRIBUTING.md). The local application is for developm
 production installation and gateway-policy acceptance remain in progress.
 
 Keeplane is licensed under [Apache 2.0](LICENSE). Bundled fonts retain their
-[original license](components/admin-ui/web/public/fonts/LICENSE.txt).
+[original license](components/admin-ui/public/fonts/LICENSE.txt).

@@ -13,7 +13,7 @@ app on loopback while tests run; no gateway port is published.
 | EXIST-04 | Attempt to add a cloud model with a shared provider key while the gateway runs in another namespace. | Keeplane explains that key delivery is unsupported in this trial before creating a key file or gateway model. Existing models remain usable. |
 
 [K8S-05, K8S-17 and K8S-06](kubernetes-cases.md) check Helm resources,
-authenticated setup and catalog separation. [PKG-07](chart-package-cases.md)
+authenticated setup and catalog separation. [PKG-07](../integration/chart-package-cases.md)
 checks the protected existing-mode render. The React browser suite runs with
 the port-forward on port 13001. Shared provider-key delivery and project-class
 bypass resistance are not covered by these cases.

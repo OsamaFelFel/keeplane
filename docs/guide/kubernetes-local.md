@@ -28,17 +28,17 @@ repository root:
 
 ```sh
 deploy/local/kind-up.sh
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_local.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_qwen.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_runner_flow.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_accounts.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_data_classes.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_audit.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_cloud_add.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_key_rotation.py
-python3 tests/e2e/test_model_runtime.py --kind
-python3 tests/e2e/test_kind.py
-python3 tests/e2e/test_stack_lock.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_local.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_qwen.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_runner_flow.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_accounts.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_data_classes.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_audit.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_cloud_add.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_key_rotation.py
+.venv/bin/python -m pytest tests/e2e/test_model_runtime.py --kind
+.venv/bin/python -m pytest tests/e2e/test_kind.py
+.venv/bin/python -m pytest tests/e2e/test_stack_lock.py
 ```
 
 The setup script pulls pinned images and the first run requires registry
@@ -71,7 +71,7 @@ while the gateway is unavailable. `/health` still reports gateway dependency
 health. This lets the Models page load its gateway warning and Try again control
 instead of removing the admin UI from the Service. The isolated
 [gateway-down cases](../../tests/e2e/kubernetes-cases.md) and
-[run](../../tests/e2e/runs/2026-10-09-gateway-down.md) verify this behavior.
+[run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-09-gateway-down.md) verify this behavior.
 
 The checked-in chart dependency and lock file pin the upstream chart to
 `v1.6.0`. The gateway and fixture container images are also pinned by digest.
@@ -82,28 +82,28 @@ still use a test password and must not be reused as release values.
 Keeplane's chart validates the gateway mode and protected local key Secret,
 supports private app image-pull credentials and resource requests, and keeps
 Kubernetes service-account tokens out of the app and preflight pods. The
-[packaging cases and live run](../../tests/e2e/runs/2026-10-10-chart-hardening.md)
+[packaging cases and live run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-chart-hardening.md)
 record the tested behavior.
 An optional managed-gateway ingress NetworkPolicy has passed selector checks
 in a separate Calico kind fixture. It remains disabled in this kindnet preview.
-The [plain-English cases and result](../../tests/e2e/runs/2026-10-10-gateway-alternate-and-network.md)
+The [plain-English cases and result](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-gateway-alternate-and-network.md)
 also show that a pod allowed to adopt the trusted app label can pass the policy;
 production namespace permissions must prevent that.
 The chart also has an optional TLS Ingress to the Keeplane app Service only. It
 requires an ingress class, hostname and existing TLS Secret, and refuses a
 simultaneous app NodePort. Managed and supplied-gateway renders pass the
-[edge packaging case](../../tests/e2e/chart-package-cases.md); no gateway
+[edge packaging case](../../tests/integration/chart-package-cases.md); no gateway
 management route is configured in that Ingress. It is off in the previews.
-An [isolated live ingress fixture](../../tests/e2e/runs/2026-10-10-chart-ingress-live.md)
+An [isolated live ingress fixture](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-chart-ingress-live.md)
 verified the TLS host, HTTP redirect and app-only route with ingress-nginx.
-A later [full-chart Calico trial](../../tests/e2e/runs/2026-10-10-full-product-edge.md)
+A later [full-chart Calico trial](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-full-product-edge.md)
 passed HTTPS sign-in, identity and model listing through the actual app and
 blocked an unrelated pod from calling its managed gateway. These options are
 still off in this everyday kindnet preview. Customer controller behavior,
 certificate renewal and the project-bound runtime route still need release tests.
-The [two-replica repeat](../../tests/e2e/runs/2026-10-10-full-product-two-replica.md)
+The [two-replica repeat](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-full-product-two-replica.md)
 also passed a fixture model answer after one managed gateway pod was removed.
-The [customer-run gateway trial](../../tests/e2e/runs/2026-10-10-full-existing-edge.md)
+The [customer-run gateway trial](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-full-existing-edge.md)
 passed HTTPS sign-in, Keeplane model registration and an answer through a
 separately installed gateway while Calico blocked an unrelated pod. Its customer
 policy also passed when applied before installation preflight; the preflight
@@ -119,7 +119,7 @@ restricted to trusted operators. The example covers only gateway ingress on
 port 4000; it does not set egress or protect other customer services.
 The chart is an integration trial, not a production installation. The local
 gateway now rejects direct calls without a runtime or management key, as the
-[bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
+[bypass recheck](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
 Release work remains for durable PostgreSQL, secret handling, full-product
 network policy, project and class policy, production image clearance, node
 failure and upgrade testing.
@@ -129,11 +129,11 @@ check compares those entries with the running Docker and kind installations;
 it is not yet a customer release compatibility manifest.
 
 The test procedures are in [Kubernetes cases](../../tests/e2e/kubernetes-cases.md),
-with the [initial install run](../../tests/e2e/runs/2026-10-08-kind.md) and
-[real Qwen browser run](../../tests/e2e/runs/2026-10-08-qwen-kind-ui.md).
-The [separate supplied gateway run](../../tests/e2e/runs/2026-10-08-existing-gateway-registration.md)
+with the [initial install run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-08-kind.md) and
+[real Qwen browser run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-08-qwen-kind-ui.md).
+The [separate supplied gateway run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-08-existing-gateway-registration.md)
 records registration and catalog isolation in existing-gateway mode.
-The [S8 runner flow run](../../tests/e2e/runs/2026-10-08-s8-runner-flow.md)
+The [S8 runner flow run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-08-s8-runner-flow.md)
 records live Add model checks in Docker and both kind modes.
 
 ## Inspect the running trial

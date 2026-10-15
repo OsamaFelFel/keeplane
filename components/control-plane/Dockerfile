@@ -2,13 +2,13 @@ FROM python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d9
 
 COPY components/control-plane/requirements-account-api.txt /tmp/requirements-account-api.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-account-api.txt
-COPY components/control-plane/*.py /app/
-COPY components/control-plane/django_api/ /app/django_api/
+COPY components/control-plane/ /app/
 COPY components/admin-ui/ /ui/
 RUN mkdir -p /run/keeplane-secrets /gateway-config
+WORKDIR /app
 
 USER 65532:65532
-CMD ["python", "/app/server.py"]
+CMD ["gunicorn", "--config", "config/gunicorn.conf.py", "config.wsgi:application"]
 
 # Optional shared-database package. The default target remains the preview.
 FROM python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a AS postgres-build

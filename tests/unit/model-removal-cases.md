@@ -1,6 +1,6 @@
 # Model removal backend cases
 
-Run `python3 tests/unit/test_model_removal.py`. The existing
+Run `.venv/bin/python -m pytest tests/unit/test_model_removal.py`. The existing
 [live removal cases](../e2e/model-removal-cases.md) test the same behavior
 through the protected Docker and kind previews.
 

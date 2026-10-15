@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { api } from '../../../components/admin-ui/web/src/app/api'
+import { api } from '../../../components/admin-ui/src/app/api'
 
 afterEach(() => vi.unstubAllGlobals())
 const response = (body: object, status = 200) => ({ ok: status < 400, status, json: async () => body })

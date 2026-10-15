@@ -62,7 +62,7 @@ gateway configuration; a non-fixture model may charge for the inference call.
 The [K8S-10–13 cases](../../tests/e2e/kubernetes-cases.md) record a passing
 install and deliberately refused inputs. The [gateway-outage case](../../tests/e2e/kubernetes-cases.md)
 starts with a valid install, then simulates an outage and confirms the app UI
-stays available. The [versioned run](../../tests/e2e/runs/2026-10-09-existing-preflight.md)
+stays available. The [versioned run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-09-existing-preflight.md)
 includes the final full regression and the corrected rollout test.
 The trial's `app.runnerUrls` setting allows the Add model form to reach a
 specified local runner; it is separate from `gateway.url`. The local app now
@@ -81,7 +81,7 @@ To repeat the React browser suite through a temporary port-forward, use a new
 output filename:
 
 ```sh
-python3 tests/e2e/test_existing_gateway_browser.py \
+.venv/bin/python -m pytest tests/e2e/test_existing_gateway_browser.py \
   --output test-results/browser/YYYY-MM-DD-existing-browser.json
 ```
 

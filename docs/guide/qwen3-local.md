@@ -16,7 +16,7 @@ git -C ../llama.cpp-keeplane-preview checkout 3d65c90d04d337e88f2b1f7f0061f40a53
 cmake -S ../llama.cpp-keeplane-preview -B ../llama.cpp-keeplane-preview/build-keeplane \
   -DGGML_METAL=OFF -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=Apple
 cmake --build ../llama.cpp-keeplane-preview/build-keeplane --target llama-server -j 6
-python3 scripts/run_local_qwen3.py \
+python3 deploy/local/run_qwen3.py \
   --runner-binary ../llama.cpp-keeplane-preview/build-keeplane/bin/llama-server \
   --model-file models/qwen3-4b-instruct-2507-q4_k_m.gguf
 ```

@@ -35,5 +35,5 @@
 `test_local_identity.py` runs ACCT-21 and ACCT-22 without a Docker stack. The HTTP suite does not prove visual layout. Compare Users and Editions in a browser with the supplied canvas. Team behavior is absent from Open Source.
 
 `test_account_security.py` runs ACCT-24–ACCT-27 against either preview, using
-disposable accounts. The [isolated limit cases](../unit/login-limits-cases.md)
+disposable accounts. The [isolated limit cases](../integration/login-limits-cases.md)
 also cover concurrency, restart, expiry, credential rotation and storage failure.

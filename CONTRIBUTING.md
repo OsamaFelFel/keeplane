@@ -16,7 +16,7 @@ focused on one behavior and explain the problem and resulting behavior in the PR
 ## Check your change
 
 For frontend changes, run `npm run build`, `npm run lint` and `npm run test:unit`
-in `components/admin-ui/web/`. Run the applicable Python and browser suites too.
+in `components/admin-ui/`. Run the applicable Python and browser suites too.
 The [test guide](docs/guide/regression-local.md) explains running-stack and
 Kubernetes coverage and which checks run automatically.
 

@@ -8,8 +8,8 @@ provider's live service.
 
 The fixture key is created under `/private/tmp/keeplane-accounts-trial` and is
 never committed or printed by the verifier. Run `python3 deploy/local/up.py`
-before `python3 tests/e2e/test_cloud_add.py`. The suite writes its JSON result
-to `tests/e2e/runs/2026-10-09-cloud-add.json`.
+before `.venv/bin/python -m pytest tests/e2e/test_cloud_add.py -m live`. The suite writes its JSON result
+to `test-results/2026-10-09-cloud-add.json`.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |

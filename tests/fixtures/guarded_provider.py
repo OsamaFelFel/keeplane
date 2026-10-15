@@ -34,18 +34,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/v1/chat/completions":
             return self.reply(404, {"error": "Not found"})
-        if not hmac.compare_digest(self.headers.get("Authorization", ""), f"Bearer {KEY}"):
+        if not hmac.compare_digest(
+            self.headers.get("Authorization", ""), f"Bearer {KEY}"
+        ):
             return self.reply(401, {"error": "Invalid provider key"})
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size < 1 or size > 64 * 1024:
                 return self.reply(400, {"error": "Invalid request size"})
             payload = self.rfile.read(size)
-            request = Request(UPSTREAM, data=payload, headers={"Content-Type": "application/json"})
+            request = Request(
+                UPSTREAM, data=payload, headers={"Content-Type": "application/json"}
+            )
             with urlopen(request, timeout=120) as response:
                 body = response.read()
                 self.send_response(response.status)
-                self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
+                self.send_header(
+                    "Content-Type",
+                    response.headers.get("Content-Type", "application/json"),
+                )
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)

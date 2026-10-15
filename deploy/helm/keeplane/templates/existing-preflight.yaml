@@ -27,7 +27,7 @@ spec:
         - name: preflight
           image: {{ .Values.app.image | quote }}
           imagePullPolicy: {{ .Values.app.pullPolicy }}
-          command: ["python", "/app/gateway_preflight.py"]
+          command: ["python", "-m", "integrations.gateway.preflight"]
           env:
             - name: GATEWAY_URL
               value: {{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}
