@@ -39,6 +39,16 @@ try:
         if len(raw) > 65536:
             raise RuntimeError("Disposable protocol response is too large")
         status = response.status
+        if options.get("observe_credentials"):
+            print(
+                json.dumps(
+                    {
+                        "status": status,
+                        "authorization_returned": "Authorization" in response.headers,
+                    }
+                )
+            )
+            raise SystemExit(0)
         if options.get("observe_protocol"):
             print(
                 json.dumps(
@@ -53,4 +63,14 @@ try:
 except HTTPError as error:
     error.read()
     status = error.code
+    if options.get("observe_credentials"):
+        print(
+            json.dumps(
+                {
+                    "status": status,
+                    "authorization_returned": "Authorization" in error.headers,
+                }
+            )
+        )
+        raise SystemExit(0)
 print(json.dumps(status))

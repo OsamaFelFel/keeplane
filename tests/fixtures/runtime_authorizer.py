@@ -53,6 +53,7 @@ class Model(BaseHTTPRequestHandler):
     requires_key = False
     fail_private = False
     protocol = False
+    actor_keys = False
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -64,9 +65,22 @@ class Model(BaseHTTPRequestHandler):
             else ""
         )
         key_matches = self.requires_key and authorization == "Bearer " + expected
+        actor_developer_forwarded = False
+        if self.actor_keys:
+            from runtime_actor_keys import STRIP_HEADERS, provider_identity
+
+            actor, actor_developer_forwarded = provider_identity(STATE, authorization)
+            key_matches = actor is not None
+            append("provider_actor", actor)
+            append(
+                "forged_headers", any(name in self.headers for name in STRIP_HEADERS)
+            )
         append("provider_key_used", key_matches)
         token = json.loads((STATE / "credential").read_text())["token"]
-        append("developer_key_forwarded", token in authorization)
+        append(
+            "developer_key_forwarded",
+            token in authorization or actor_developer_forwarded,
+        )
         append(
             "credential_headers",
             {
@@ -142,8 +156,10 @@ def serve():
         ProjectClass.objects.create(project_id=project, data_class_id="confidential")
     shared = os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
     fallback = os.environ.get("FIXTURE_NATIVE_FALLBACK") == "1"
+    actor_keys = os.environ.get("FIXTURE_NATIVE_ACTOR_KEYS") == "1"
     Model.fail_private = fallback
     Model.protocol = os.environ.get("FIXTURE_NATIVE_PROTOCOL") == "1"
+    Model.actor_keys = actor_keys
     if shared:
         Model.requires_key = True
     definitions = [
@@ -185,6 +201,14 @@ def serve():
                     )
                 }
             definition["requestHeaders"]["remove"].remove("authorization")
+    if actor_keys:
+        from runtime_actor_keys import STRIP_HEADERS, seed
+
+        seed(STATE, identity, token, project)
+        Model.requires_key = True
+        for definition in definitions:
+            definition["requestHeaders"]["remove"].remove("authorization")
+            definition["requestHeaders"]["remove"].extend(STRIP_HEADERS)
     reuse = False
     if os.environ.get("FIXTURE_REUSE_NATIVE_DEFINITIONS") == "1":
         status, current = MODEL_GATEWAY.resources()
@@ -238,6 +262,10 @@ def serve():
     credential.write_text(json.dumps({"token": token, "project": project}))
     credential.chmod(0o600)
     application = get_wsgi_application()
+    if actor_keys:
+        from runtime_actor_keys import wrap
+
+        application = wrap(application, STATE)
 
     def recorded(environ, start_response):
         raw = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
@@ -320,7 +348,16 @@ def command(action, arguments):
             "provider_key_used": rows("provider_key_used"),
             "developer_key_forwarded": rows("developer_key_forwarded"),
             "tool_result_seen": rows("tool_result_seen"),
+            "provider_actor": rows("provider_actor"),
+            "forged_headers": rows("forged_headers"),
         }
+    elif action in ("actor_key_remove", "actor_key_replace", "actor_id"):
+        from runtime_actor_keys import actors, change_key
+
+        assert arguments in ("a", "b")
+        if action == "actor_id":
+            return actors(STATE)[arguments]["actor_id"]
+        change_key(STATE, arguments, remove=action == "actor_key_remove")
     elif action in ("resource_revision", "publish_shared"):
         status, body = MODEL_GATEWAY.resources()
         assert status == 200
@@ -376,6 +413,8 @@ def command(action, arguments):
             "provider_key_used",
             "developer_key_forwarded",
             "tool_result_seen",
+            "provider_actor",
+            "forged_headers",
         ):
             (STATE / name).unlink(missing_ok=True)
 
