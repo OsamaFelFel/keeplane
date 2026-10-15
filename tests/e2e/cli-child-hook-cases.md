@@ -32,3 +32,30 @@ conversation into the child. Only unsigned synthetic Chat Completions and one
 foreground child are covered. Explicit child-model overrides, deeper/background
 children, permissions, metadata, compaction and production credentials remain
 separate checks. No production plugin, sign-in or init behavior changes.
+
+## Explicit instruction channel
+
+A separate optional control appends one explicit text value through the public
+`context` hook while project configuration remains disabled. The text is supplied
+by the fixture's plugin options; no repository files are discovered or imported.
+Both parent and child must receive it, while native repository AGENTS text stays
+absent. Other request values, model identity and the original credential remain
+checked at the actual synthetic backend.
+
+A repository config attempts to replace that provider's address and credential.
+Its trap must receive zero protected requests. A separate positive control loads
+only that repository provider with discovery enabled, proving the config is
+valid and the trap can observe its synthetic credential. This control is not a
+permitted adapter mode.
+
+Use the same disposable network-disabled container and pinned binary:
+
+```sh
+KEEPLANE_OPENCODE_V2_BIN=/runtime/opencode-v2 \
+  python tests/e2e/test_cli_child_hooks_native.py instructions
+```
+
+This proves a narrow public instruction channel, not automatic preservation of
+repository guidance. Source selection, nested precedence, file updates, saved
+instruction state and untrusted-content handling need separate work. The current
+adapter remains unchanged, including its AGENTS limitation.
