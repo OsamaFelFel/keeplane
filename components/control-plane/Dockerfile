@@ -28,8 +28,12 @@ COPY components/control-plane/package_postgres.py /tmp/package_postgres.py
 RUN apk add --no-cache libpq=18.6-r0 \
     && pip install --no-index --no-deps --no-cache-dir /wheels/*.whl \
     && python /tmp/package_postgres.py inventory \
-    && rm -r /wheels /tmp/package_postgres.py
+    && rm -r /wheels /tmp/package_postgres.py \
+    && python /app/remove_runtime_installers.py
 ENV PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
 
 FROM core AS preview
+USER 0
+RUN python /app/remove_runtime_installers.py
+USER 65532:65532

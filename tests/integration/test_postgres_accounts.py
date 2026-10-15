@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 POSTGRES = (
     "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 )
+PYTHON_BUILD = (
+    "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a"
+)
 
 
 def run_cases():
@@ -149,15 +152,16 @@ def run_cases():
                 "This tests the packaged native driver; complete base-image source/notice work remains."
             )
         (build / "Dockerfile").write_text(
-            "FROM "
-            + base_image
-            + "\nUSER 0\n"
-            + (
+            (
                 ""
                 if args.app_image
-                else "COPY wheels /wheels/\n"
+                else "FROM " + PYTHON_BUILD + " AS driver\nCOPY wheels /wheels/\n"
                 "RUN pip install --no-index --find-links /wheels --require-hashes --no-deps --target /deps -r /wheels/trial-requirements.txt\n"
             )
+            + "FROM "
+            + base_image
+            + "\nUSER 0\n"
+            + ("" if args.app_image else "COPY --from=driver /deps /deps\n")
             + "COPY app /app/\nCOPY tests /tests/\nCOPY fixture.py /fixture.py\n"
             "COPY fixture-config.yaml /fixture-config.yaml\nENV PYTHONPATH=/deps:/app:/\n"
         )
@@ -328,7 +332,7 @@ def run_cases():
                         "0",
                         "-v",
                         str(build / "wheels") + ":/wheels",
-                        "keeplane-preview:kind-local",
+                        PYTHON_BUILD,
                         "pip",
                         "--isolated",
                         "download",
