@@ -133,7 +133,11 @@ def run_cases():
         shutil.copyfile(
             ROOT / "tests/fixtures/postgres_gateway.py", build / "fixture.py"
         )
+        # These synthetic inputs become root-owned COPY files in the image.
+        # Keep them readable by the app even when the caller uses umask 077.
+        (build / "fixture.py").chmod(0o644)
         (build / "fixture-config.yaml").write_text("fixture: postgres-api\n")
+        (build / "fixture-config.yaml").chmod(0o644)
         source = hashlib.sha256()
         for path in sorted((build / "app").rglob("*.py")):
             source.update(
@@ -173,7 +177,9 @@ def run_cases():
             + "\nUSER 0\n"
             + ("" if args.app_image else "COPY --from=driver /deps /deps\n")
             + "COPY app /app/\nCOPY tests /tests/\nCOPY fixture.py /fixture.py\n"
-            "COPY fixture-config.yaml /fixture-config.yaml\nENV PYTHONPATH=/deps:/app:/\n"
+            "COPY fixture-config.yaml /fixture-config.yaml\n"
+            # Source-only fixture trees must be traversable by non-root workers.
+            "RUN chmod -R a+rX /app /tests\nENV PYTHONPATH=/deps:/app:/\n"
         )
         environment = {
             "KEEPLANE_DATABASE_HOST": "database",
@@ -280,6 +286,19 @@ def run_cases():
                 action,
             )
             return json.loads(output.stdout)
+
+        def owner_key_suite():
+            output = dc(
+                "exec", "-T", "--user", "0", "app-a", "python",
+                "/tests/fixtures/postgres_owner_keys.py",
+            )
+            observed = json.loads(output.stdout)
+            assert [item["case"] for item in observed["cases"]] == [
+                "PGKEY-01", "PGKEY-02", "PGKEY-03", "PGKEY-04"
+            ]
+            assert all(item["verdict"] == "pass" for item in observed["cases"])
+            assert observed["fixture_records_and_files_removed"]
+            return observed
 
         def record(identifier, action):
             result["failed_case"] = identifier
@@ -462,6 +481,7 @@ def run_cases():
             record("PGAPI-13", lambda: probe("rotation"))
             record("PGAPI-14", lambda: probe("ascii-usernames"))
             record("PGAPI-15", lambda: probe("class-invariants"))
+            record("PGAPI-18", owner_key_suite)
             result["completed"] = True
         except Exception as error:
             result["fixture_error"] = type(error).__name__ + ": " + str(error)
