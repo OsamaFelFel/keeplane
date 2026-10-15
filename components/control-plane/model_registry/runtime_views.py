@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
+from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from projects.access import organization_project_access
@@ -52,5 +53,5 @@ def session(request):
     """Revoke only the exact credential authenticated for this request."""
     if request.body:
         return Response({"error": "Send an empty logout request"}, status=400)
-    IDENTITY.logout(request.auth)
+    RuntimeIdentity(IDENTITY).logout(request.auth)
     return Response(status=204)
