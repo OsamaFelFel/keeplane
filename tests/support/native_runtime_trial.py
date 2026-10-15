@@ -23,6 +23,7 @@ def native_runtime_trial(
     protocol=False,
     actor_keys=False,
     definition_binding=False,
+    definition_fallback=False,
 ):
     project = "keeplane-native-" + uuid.uuid4().hex[:10]
     trial = tmp_path / "trial"
@@ -87,6 +88,8 @@ def native_runtime_trial(
                 + ":/runtime_actor_keys.py:ro",
                 str(ROOT / "tests/fixtures/runtime_definition_binding.py")
                 + ":/runtime_definition_binding.py:ro",
+                str(ROOT / "tests/fixtures/runtime_fallback_binding.py")
+                + ":/runtime_fallback_binding.py:ro",
             ],
             "environment": {
                 "PYTHONPATH": "/app",
@@ -102,6 +105,7 @@ def native_runtime_trial(
                 "FIXTURE_SHARED_PROVIDER_KEY": "0" if actor_keys else "1",
                 "FIXTURE_NATIVE_ACTOR_KEYS": "1" if actor_keys else "0",
                 "FIXTURE_DEFINITION_BINDING": "1" if definition_binding else "0",
+                "FIXTURE_DEFINITION_FALLBACK": "1" if definition_fallback else "0",
                 "FIXTURE_NATIVE_FALLBACK": "1" if fallback else "0",
                 "FIXTURE_NATIVE_PROTOCOL": "1" if protocol else "0",
                 "FIXTURE_PROVIDER_KEY_NAME": names[0],
@@ -120,6 +124,7 @@ def native_runtime_trial(
     }
     if definition_binding:
         assert actor_keys
+        assert not definition_fallback or fallback
         stale = config(existing, values["admin"])
         stale["gateways"]["default"]["port"] = 4001
         for key, port in (
