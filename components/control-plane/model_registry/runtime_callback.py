@@ -2,11 +2,12 @@
 
 import hmac
 import json
+import os
 import re
 from pathlib import Path
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
-from common.api import IDENTITY
+from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from django.conf import settings
 from django.views.decorators.cache import never_cache
@@ -21,6 +22,7 @@ from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .policy import ModelPolicyUnavailable
+from .provider_keys import DjangoSharedKeyAvailability
 from .runtime_views import model_policy
 
 
@@ -78,6 +80,9 @@ def authorize(request):
         result = DjangoModelAuthorization(
             IDENTITY, model_policy(), project_access=organization_project_access
         ).authorize(request.auth, body["project_id"], body["model_id"])
+        DjangoSharedKeyAvailability(
+            MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")
+        ).require_available(result["model_id"])
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
     except (ModelPolicyUnavailable, StorageUnavailable):
