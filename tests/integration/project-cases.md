@@ -9,3 +9,13 @@
 - Missing, unknown or disabled accounts cannot create project records.
 - Invalid IDs and blank, oversized or control-character names create nothing.
 - If writing usage fails, the project registration rolls back too.
+
+## Admin listing
+
+- A signed-in admin can search project names and page through results in a
+  stable order. Repeated use shows one account once, without private account fields.
+- A developer or anonymous caller cannot read the organization's project usage.
+- Class names reflect current definitions. Class fields disappear while classes
+  are off; stored assignments remain intact.
+- Invalid or oversized page/search requests fail clearly. Storage failure gives
+  an unavailable response without exposing database details.
