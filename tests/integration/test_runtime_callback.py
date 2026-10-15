@@ -99,6 +99,16 @@ def test_result_contains_only_canonical_actor_project_model(callback):
     )
 
 
+def test_personal_setup_is_not_yet_admitted_to_dispatch(callback):
+    callback.stores.catalog.approve(
+        "private", ["Confidential"], fingerprint("private", callback.resources),
+        key_choice="personal",
+    )
+    response = send(callback)
+    assert response.status_code == 503
+    assert response.json() == {"error": "Gateway authorization is unavailable"}
+
+
 @pytest.mark.parametrize("key", ["", "incorrect" * 8, "é" * 32, "a" * 257])
 def test_workload_identity_is_required_and_never_reflected(callback, key):
     response = send(callback, HTTP_X_KEEPLANE_GATEWAY_CREDENTIAL=key)
