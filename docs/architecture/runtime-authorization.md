@@ -40,6 +40,20 @@ Responses are not cached. Replacing the key file withdraws the old gateway
 credential on the next request. No credential, request body or key filename is
 included in errors. Keep both credentials out of URLs and logs.
 
+Before allowing a shared-key model, the callback also checks that its current
+approved definition refers to a readable Keeplane-managed key inside the existing
+`PROVIDER_KEY_DIR`. Missing, unreadable, malformed or changed definitions return
+503. It reads no arbitrary resource-supplied file or symlink and returns no key.
+Keyless models need no key directory. The catalog still describes setup/class
+eligibility; it does not promise a usable provider key or healthy provider.
+The check keeps storage's 12–512 character limit and accepted padding/UTF-8;
+blank contents and control bytes that cannot form an HTTP credential are invalid.
+
+This check prevents native last-known configuration from continuing after a
+managed key file disappears. It does not verify that the provider still accepts
+the key or implement rotation readback, customer key delivery, developer-owned
+keys or encryption. Those remain separate work.
+
 ```mermaid
 flowchart LR
   Gateway[Gateway integration] --> Identity[Developer session and private gateway key]

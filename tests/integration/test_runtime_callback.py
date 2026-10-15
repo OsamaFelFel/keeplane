@@ -62,6 +62,8 @@ def callback(domain_services, tmp_path, monkeypatch):
             state=state,
             key=key,
             key_file=path,
+            resources=resources,
+            gateway=gateway,
         )
 
 
@@ -245,3 +247,51 @@ def test_bounded_and_malformed_metadata_is_rejected(callback):
         ).status_code
         == 415
     )
+
+
+def test_final_decision_requires_current_managed_shared_key(
+    callback, tmp_path, monkeypatch
+):
+    root = tmp_path / "managed-keys"
+    root.mkdir(mode=0o700)
+    path = root / ("key-" + uuid.uuid4().hex)
+    path.write_text("synthetic-shared-provider-key")
+    path.chmod(0o600)
+    callback.resources[0]["value"] = {"auth": {"key": {"value": {"file": str(path)}}}}
+    callback.stores.catalog.approve(
+        "private",
+        ["Confidential"],
+        fingerprint("private", callback.resources),
+        key_choice="shared",
+    )
+    monkeypatch.setenv("PROVIDER_KEY_DIR", str(root))
+    monkeypatch.setattr(runtime_callback, "MODEL_GATEWAY", callback.gateway)
+    assert send(callback).status_code == 200
+    path.unlink()
+    response = send(callback)
+    assert response.status_code == 503
+    assert response.json() == {"error": "Gateway authorization is unavailable"}
+    assert str(path) not in response.content.decode()
+    # Catalog eligibility remains setup/class policy, not a key-health claim.
+    assert DjangoModelPolicy(callback.gateway).eligible_model_ids(callback.project) == {
+        "private"
+    }
+
+
+def test_shared_key_definition_change_is_unavailable(callback, tmp_path, monkeypatch):
+    callback.stores.catalog.approve(
+        "private",
+        ["Confidential"],
+        fingerprint("private", callback.resources),
+        key_choice="shared",
+    )
+    monkeypatch.setattr(runtime_callback, "MODEL_GATEWAY", callback.gateway)
+    callback.resources[0]["revision"] += 1
+    # A concurrent definition change cannot make the final shared-key check trust it.
+    from model_registry.policy import ModelPolicyUnavailable
+    from model_registry.provider_keys import DjangoSharedKeyAvailability
+
+    with pytest.raises(ModelPolicyUnavailable):
+        DjangoSharedKeyAvailability(callback.gateway, str(tmp_path)).require_available(
+            "private"
+        )
