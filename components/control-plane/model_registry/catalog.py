@@ -1,8 +1,9 @@
 """Only Keeplane approvals live here; the gateway remains the model registry."""
 
-from data_classes.models import DataClass
-from .models import ModelApproval
 from common.storage import settings_change, storage_service
+from data_classes.models import DataClass
+
+from .models import ModelApproval, ProviderKeyChoice
 
 
 @storage_service
@@ -31,7 +32,7 @@ class DjangoModelCatalog:
         owned_by_keeplane=False,
         key_choice="none",
     ):
-        if key_choice not in ("none", "shared"):
+        if key_choice not in ProviderKeyChoice.values:
             raise ValueError("Choose a supported provider key option")
         if (
             not isinstance(classes, list)
