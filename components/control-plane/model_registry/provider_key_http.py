@@ -11,12 +11,17 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+def valid_personal_key(value):
+    return (
+        isinstance(value, str)
+        and 12 <= len(value) <= 512
+        and all(33 <= ord(char) <= 126 for char in value)
+    )
+
+
 def check(config):
     provider, key = config["provider"], config["key"]
-    key.encode("ascii")
-    if not 12 <= len(key) <= 512 or any(
-        ord(char) < 33 or ord(char) > 126 for char in key
-    ):
+    if not valid_personal_key(key):
         return 2
     body = {
         "model": config["model"],
