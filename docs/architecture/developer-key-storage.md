@@ -5,6 +5,8 @@ account and model. `put(model_id, value)` adds or replaces it; `remove(model_id)
 withdraws it; `status(model_id)` reports `added` or `missing` and
 `cleanup_pending`. Results contain no key, filename or other account's state.
 This service has no HTTP route, CLI command or inference integration.
+An [internal resolver](developer-key-resolution.md) gives a trusted server caller
+the active key after checking its current validation binding and private file.
 
 The caller must supply the [server validator](provider-key-validation.md). It
 returns an owner/model-bound `VerifiedProviderKey` after checking the current

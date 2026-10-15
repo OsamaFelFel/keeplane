@@ -11,6 +11,7 @@ from integrations.gateway.keys import KEY_NAME, remove, save
 from .key_validation import ProviderKeyRefused, VerifiedProviderKey
 from .models import DeveloperProviderKey
 from .provider_keys import managed_key_available
+from .resolved_keys import read_private_key
 
 
 class DeveloperKeyError(Exception):
@@ -76,6 +77,32 @@ class DjangoDeveloperKeyStore:
         model_id = self._model(model_id)
         row = DeveloperProviderKey.objects.filter(owner_id=self.owner_id, model_id=model_id).first()
         return self._status(model_id, row)
+
+    def resolve(self, model_id, *, expected_definition_fingerprint):
+        """Resolve only for a trusted server caller; this is no dispatch permit."""
+        try:
+            model_id = self._model(model_id)
+            digest = expected_definition_fingerprint
+            if (
+                not isinstance(digest, str) or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+            ):
+                raise ValueError
+            # The same owner lock orders put/remove/account withdrawal. Reject
+            # outer transactions so this method completes its own read decision.
+            with transaction.atomic(durable=True):
+                owner = self._owner(lock=True)
+                self.validate_key.require_current(
+                    VerifiedProviderKey(str(owner.pk), model_id, digest)
+                )
+                row = DeveloperProviderKey.objects.select_for_update().filter(
+                    owner=owner, model_id=model_id, validation_fingerprint=digest
+                ).first()
+                if not row or not row.key_name:
+                    raise ValueError
+                return read_private_key(self.directory, row.key_name)
+        except Exception:  # noqa: BLE001 -- credential boundary hides all underlying failures
+            raise StorageUnavailable("Provider key is unavailable") from None
 
     def _finish(self, model_id):
         try:
