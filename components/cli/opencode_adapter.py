@@ -1,6 +1,7 @@
 """Run one experimental local coding turn through a protected gateway."""
 
 import argparse
+from contextlib import contextmanager
 import getpass
 import json
 import os
@@ -16,14 +17,47 @@ from urllib.parse import urlsplit
 VERSION = "2.0.27"
 
 
-def coding_turn(command, *, input, env, cwd, timeout):
+class Cancelled(KeyboardInterrupt):
+    """SIGTERM requested termination of the active coding turn."""
+
+
+class Termination:
+    requested = False
+    active = False
+
+    def request(self, *_):
+        self.requested = True
+        if self.active:
+            raise Cancelled
+
+
+@contextmanager
+def termination_requested():
+    cancelled = Termination()
+    previous = signal.signal(signal.SIGTERM, cancelled.request)
+    try:
+        yield cancelled
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def coding_turn(command, *, input, env, cwd, timeout, cancelled=None):
+    if cancelled is not None and cancelled.requested:
+        raise Cancelled
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, text=True, env=env, cwd=cwd,
                                start_new_session=True)
     try:
         try:
+            if cancelled is not None:
+                # Defer a signal during Popen until we own its process.
+                cancelled.active = True
+                if cancelled.requested:
+                    raise Cancelled
             output, errors = process.communicate(input, timeout=timeout)
         except (subprocess.TimeoutExpired, KeyboardInterrupt):
+            if cancelled is not None:
+                cancelled.active = False
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -37,11 +71,13 @@ def coding_turn(command, *, input, env, cwd, timeout):
             raise
         return subprocess.CompletedProcess(command, process.returncode, output, errors)
     finally:
+        if cancelled is not None:
+            cancelled.active = False
         for stream in (process.stdin, process.stdout, process.stderr):
             stream.close()
 
 
-def run(binary, directory, gateway, model, prompt, grant, timeout=300):
+def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None):
     """Use a disposable profile; the gateway remains responsible for authorization."""
     if os.name != "posix":
         raise ValueError("This prototype currently supports macOS and Linux.")
@@ -115,6 +151,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300):
              "--model", "keeplane/" + model],
             input=prompt, env=environment, cwd=directory,
             timeout=timeout,
+            cancelled=cancelled,
         )
         result.stdout = result.stdout.replace(grant, "[redacted]")
         result.stderr = result.stderr.replace(grant, "[redacted]")
@@ -144,11 +181,15 @@ def main():
             if not sys.stdin.isatty():
                 parser.error("Set KEEPLANE_GATEWAY_GRANT for a noninteractive invocation.")
             grant = getpass.getpass("Keeplane gateway credential: ")
-        result = run(args.runtime, args.directory, args.gateway, args.model,
-                     args.prompt, grant, args.timeout)
+        with termination_requested() as cancelled:
+            result = run(args.runtime, args.directory, args.gateway, args.model,
+                         args.prompt, grant, args.timeout, cancelled=cancelled)
     except subprocess.TimeoutExpired:
         print("Coding turn timed out; review any edits before retrying.", file=sys.stderr)
         return 124
+    except Cancelled:
+        print("Coding turn terminated; review any edits before retrying.", file=sys.stderr)
+        return 143
     except KeyboardInterrupt:
         print("Coding turn cancelled; review any edits before retrying.", file=sys.stderr)
         return 130
