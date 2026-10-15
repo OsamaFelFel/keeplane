@@ -4,7 +4,9 @@ from common import web
 urlpatterns = [
     path("", include("accounts.urls")),
     path("", include("model_registry.urls")),
+    path("", include("model_registry.runtime_urls")),
     path("", include("data_classes.urls")),
+    path("", include("projects.urls")),
     path("", include("audit.urls")),
     path("api/status", web.gateway_status),
     path("health", web.gateway_health),

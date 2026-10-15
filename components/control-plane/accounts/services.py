@@ -126,13 +126,17 @@ class DjangoIdentity:
             token = request.session.session_key
         return token
 
-    def session(self, token):
+    def authenticated_user(self, token):
         if not token or not isinstance(token, str) or len(token) > 200:
             return None
         request = HttpRequest()
         request.session = SessionStore(session_key=token)
         user = get_user(request)
-        return user_dict(user) if user.is_authenticated and user.is_active else None
+        return user if user.is_authenticated and user.is_active else None
+
+    def session(self, token):
+        user = self.authenticated_user(token)
+        return user_dict(user) if user else None
 
     def logout(self, token):
         if token and isinstance(token, str) and len(token) <= 200:
