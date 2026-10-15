@@ -8,6 +8,10 @@ class Handler(BaseHTTPRequestHandler):
     calls = []
     grant = "synthetic-cli-grant"
     target = None
+    required_instruction = None
+    instruction_checks = 0
+    instruction_children = 0
+    forbidden_instruction = None
 
     def log_message(self, *args):
         pass
@@ -21,10 +25,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         tools = {tool["function"]["name"] for tool in body.get("tools", [])}
+        child = bool(self.headers.get("x-opencode-parent-session-id"))
+        if tools and self.required_instruction:
+            rule, digest = self.required_instruction
+            system = json.dumps([row for row in body["messages"] if row.get("role") == "system"])
+            assert rule in system and digest in system
+            assert f"SHA-256 {digest})\\n{rule}" in system
+            assert "NESTED_INSTRUCTION_MUST_NOT_APPLY" not in json.dumps(body)
+            assert not self.forbidden_instruction or self.forbidden_instruction not in json.dumps(body)
+            type(self).instruction_checks += 1
+            type(self).instruction_children += int(child)
         completed = sum(message.get("role") == "tool" for message in body["messages"])
         message = {"role": "assistant", "content": "The addition function is fixed."}
         finish = "stop"
-        if tools and completed < 2:
+        if tools and completed < (1 if child else 2):
             name = "read" if completed == 0 else "edit"
             arguments = {"path": str(self.target)}
             if completed:
@@ -35,6 +49,15 @@ class Handler(BaseHTTPRequestHandler):
             }]}
             finish = "tool_calls"
             self.calls.append(name)
+        elif tools and self.required_instruction and not child and completed == 2:
+            arguments = {"agent": "explore", "description": "Check the addition file",
+                         "prompt": "Read " + str(self.target) + " and acknowledge without edits.", "background": False}
+            message = {"role": "assistant", "content": None, "tool_calls": [{
+                "id": "call_child", "type": "function",
+                "function": {"name": "subagent", "arguments": json.dumps(arguments)},
+            }]}
+            finish = "tool_calls"
+            self.calls.append("subagent")
         choice = {"index": 0, "message": message, "finish_reason": finish}
         if body.get("stream"):
             choice = {"index": 0, "delta": message, "finish_reason": finish}
@@ -51,7 +74,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-def start(target):
+def start(target, required_instruction=None):
     Handler.target = target
     Handler.calls = []
+    Handler.required_instruction = required_instruction
+    Handler.instruction_checks = 0
+    Handler.instruction_children = 0
+    Handler.forbidden_instruction = None
     return ThreadingHTTPServer(("127.0.0.1", 0), Handler)
