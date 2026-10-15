@@ -65,7 +65,7 @@ def test_redirect_is_not_followed(server):
 @pytest.mark.parametrize("payload", [b"not JSON", b"[]", b'{"project_id":"different","models":[]}',
     b'{"project_id":"same","models":[{"id":"a","key":"SECRET"}]}'])
 def test_invalid_catalog_is_rejected(server, payload):
-    server.payload = payload
+    server.payload = payload.replace(b'"same"', json.dumps(server.project).encode())
     with pytest.raises(ConnectionError, match="invalid model catalog"):
         models(server.url, server.project, "synthetic-session")
 
