@@ -14,6 +14,8 @@ flowchart LR
   App --> Audit[Audit]
   Accounts --> DB[(Django database)]
   Models --> DB
+  Eligibility[Internal project model eligibility] --> DB
+  Eligibility --> Adapter
   Classes --> DB
   Audit --> DB
   Models --> Adapter[Gateway adapter]
@@ -47,9 +49,22 @@ The local launcher builds React, prepares private credentials, runs database
 migrations in a separate startup service, imports existing local preview data
 once, and starts Gunicorn. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
-Serving workers do not migrate schemas. The packaged app and public UI remain
-root-owned and readable by the app user, even when the build inputs have private
-file permissions. The app user cannot change those files.
+Serving workers do not migrate schemas. PostgreSQL chart installs require one
+immutable app image reference for the serving copies, migration Job and
+supplied-gateway preflight; local SQLite trial images may use tags.
+
+The packaged app and public UI remain root-owned and readable by the app user,
+even when the build inputs have private file permissions. The app user cannot
+change those files.
+
+Readiness compares the database's migration history with the app's
+known migrations. The graph is cached per worker; each probe makes one read
+query. Pending migrations or unavailable storage keep the copy out of service,
+while liveness stays independent so it can recover without restarting.
+
+The local app and gateway read `/gateway-config/local.yaml` from the same
+read-only directory bind. Git can replace that file atomically without leaving
+a container attached to an old file mount.
 
 Existing preview account, approval, class and Audit files remain unchanged.
 Their data is imported into the Django database; old sessions require a fresh
@@ -72,6 +87,16 @@ Only explicit application and asset routes are served. Gateway management,
 provider credentials and databases remain internal. Model registration confirms
 component readback; gateway calls and database commits are separate operations,
 so partial failures and uncertain outcomes must remain visible.
+
+## Project model eligibility
+
+`model_registry.policy.DjangoModelPolicy` reads the stored project class, class
+mode and model approvals on each query. It includes a model only while its
+current gateway definition matches the approved definition. Class and approval
+reads share the existing settings-writer lock; incomplete policy fails closed.
+The caller must first authenticate the developer and authorize project access.
+There is no runtime endpoint yet, and this query does not verify provider keys
+or enforce the final routed destination. [Isolated cases](../../tests/integration/model-policy-cases.md) cover its behavior.
 
 ## Current limits
 
