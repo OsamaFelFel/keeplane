@@ -10,6 +10,7 @@ The fixture disables networking for the running container.
   Also give one actual app file mode 0666 to check that its write access is removed.
 - The image runs as UID 65532, loads its actual Gunicorn configuration and reads
   the compiled UI, fonts and app files. Public files remain owned by root and
-  cannot be changed by the application user.
+  cannot be changed by the application user, even with a writable container
+  filesystem. The check does not rely on a read-only mount hiding bad modes.
 - Remove the disposable container, build context and image after success or
   failure. Keep diagnostics outside Git and leave existing previews unchanged.

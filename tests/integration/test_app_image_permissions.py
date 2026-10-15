@@ -57,6 +57,7 @@ assert os.getuid()==65532
 paths=[p for root in ('/app','/ui') for p in Path(root).rglob('*') if p.is_file()]
 assert paths and all(os.access(p,os.R_OK) for p in paths)
 assert all(p.stat().st_uid==0 and not os.access(p,os.W_OK) for p in paths)
+assert all(p.stat().st_mode & 0o022 == 0 for p in paths)
 assert Path('/ui/dist/index.html').read_text().startswith('<!doctype html>')
 fonts=list(Path('/ui/dist/fonts').rglob('*'))
 assert any(p.is_file() for p in fonts)
@@ -64,7 +65,7 @@ runpy.run_path('/app/config/gunicorn.conf.py')
 print(json.dumps({'uid':os.getuid(),'public_files_readable':len(paths),'root_owned_and_not_writable':True,'compiled_ui_and_fonts_readable':True,'app_config_loaded':True}))
 '''
             report["probe"] = json.loads(run(
-                "docker", "run", "--rm", "--network=none", "--read-only",
+                "docker", "run", "--rm", "--network=none",
                 "--cap-drop=ALL", image, "python", "-c", probe,
             ).stdout)
             report["completed"] = True
