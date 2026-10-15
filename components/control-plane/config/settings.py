@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "accounts",
     "model_registry",
     "data_classes",
+    "projects",
     "audit",
 ]
 MIDDLEWARE = [
