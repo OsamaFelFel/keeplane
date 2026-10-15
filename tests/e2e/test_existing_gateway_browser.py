@@ -1,5 +1,7 @@
 """Run the React browser cases through the protected customer-run gateway app."""
 
+import pytest
+
 import argparse
 import json
 import os
@@ -7,13 +9,13 @@ from pathlib import Path
 import subprocess
 import sys
 
-from kind_port_forward import BASE, existing_app
+from tests.support.kind_port_forward import BASE, existing_app
 
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def main():
+def run_cases():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -25,14 +27,43 @@ def main():
     environment["KEEPLANE_BASE_URL"] = BASE
     with existing_app(), report.open("w") as output:
         result = subprocess.run(
-            ["./node_modules/.bin/playwright", "test", "--reporter=json", "--workers=1"],
-            cwd=ROOT / "tests/browser", env=environment, stdout=output, timeout=120)
+            [
+                "./node_modules/.bin/playwright",
+                "test",
+                "--reporter=json",
+                "--workers=1",
+            ],
+            cwd=ROOT / "tests/browser",
+            env=environment,
+            stdout=output,
+            timeout=120,
+        )
     stats = json.loads(report.read_text())["stats"]
-    print(json.dumps({"expected": stats["expected"], "unexpected": stats["unexpected"],
-                      "flaky": stats["flaky"], "exit_code": result.returncode,
-                      "report": str(report)}, indent=2))
-    return int(result.returncode != 0 or stats["unexpected"] != 0 or stats["flaky"] != 0)
+    print(
+        json.dumps(
+            {
+                "expected": stats["expected"],
+                "unexpected": stats["unexpected"],
+                "flaky": stats["flaky"],
+                "exit_code": result.returncode,
+                "report": str(report),
+            },
+            indent=2,
+        )
+    )
+    return int(
+        result.returncode != 0 or stats["unexpected"] != 0 or stats["flaky"] != 0
+    )
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_cases())
+
+
+def test_existing_gateway_browser(monkeypatch, report_file, request):
+    arguments = [__file__, "--output", str(report_file)]
+    monkeypatch.setattr("sys.argv", arguments)
+    assert run_cases() in (None, 0)
+
+
+pytestmark = [pytest.mark.kubernetes]

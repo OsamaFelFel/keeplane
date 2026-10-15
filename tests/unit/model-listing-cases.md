@@ -1,6 +1,6 @@
 # Model listing backend cases
 
-Run `python3 tests/unit/test_model_listing.py`. These cases check the new
+Run `.venv/bin/python -m pytest tests/unit/test_model_listing.py`. These cases check the new
 Django Models listing use case without a running stack; the existing E2E cases
 check the protected API against the live gateway.
 

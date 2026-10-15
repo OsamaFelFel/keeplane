@@ -30,7 +30,7 @@ the supplied gateway.
 | K8S-14 | Make each model-list and management read fail once, then return a valid answer. | The read-only preflight retries each once and accepts the compatible gateway without changing its configuration. |
 | K8S-15 | Keep the model-management read unavailable after the retry. | Preflight refuses the install; it does not infer compatibility from the model list alone. |
 | K8S-16 | Refuse the model-management read with HTTP 401. | Preflight refuses immediately and does not retry an authorization failure. |
-| K8S-09 | Through that temporary Service, request the admin page, app readiness, dependency health and model list. | The page and app readiness answer 200, while dependency health and the model list report 503. The page contains the gateway-unavailable notice and Try again control. |
+| K8S-09 | Sign in through the temporary Service with CSRF protection, then request the React Models application, app readiness, dependency health and model list. | Sign-in, the application bundle and app readiness answer 200; dependency health and the authenticated model list report 503. MO-UI-04 checks the visible gateway warning and Try again control in the browser. |
 | K8S-UI-01 | Open the temporary gateway-down app in a browser after the page loads. | The gateway warning and Try again are visible, Add model is disabled, and the table says Models unavailable. |
 | MGMT-01 | Replay the observed gateway management read returning HTTP 500 once, then HTTP 200. | Keeplane retries only the read and returns the successful model list. |
 | MGMT-02 | Replay a gateway management read that keeps returning HTTP 500. | Keeplane stops after three reads and reports the failure; it does not retry a write. |

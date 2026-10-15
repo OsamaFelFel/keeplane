@@ -2,7 +2,7 @@
 
 Enterprise uses the same gateway credential mechanism.
 
-The pinned agentgateway standalone chart can read the database password from a Kubernetes Secret. Keep an environment placeholder in the PostgreSQL URL and use the chart's `extraEnv` to load the password. The [Docker, Helm and isolated kind cases](../../tests/e2e/runs/2026-10-10-gateway-secret-binding.md) verify this with chart v1.6.0.
+The pinned agentgateway standalone chart can read the database password from a Kubernetes Secret. Keep an environment placeholder in the PostgreSQL URL and use the chart's `extraEnv` to load the password. The [Docker, Helm and isolated kind cases](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-gateway-secret-binding.md) verify this with chart v1.6.0.
 
 Prepare a Secret in the Keeplane namespace from an operator-controlled file:
 
@@ -37,6 +37,6 @@ Keep these files across setup runs. Losing a file is not a request to rotate the
 
 Older previews used a literal database password. The setup script refuses to replace that legacy fixture automatically. To migrate a preview worth keeping, stop its gateway replicas, save a private `pg_dump --clean --if-exists` backup, create its password Secret, replace the database fixture, restore the backup with `psql -v ON_ERROR_STOP=1`, and upgrade its gateway using the new values. Repeat for the separate supplied gateway. Verify the saved model catalog and actual model calls before discarding backups. A customer database needs its own approved backup and maintenance procedure.
 
-The [rotation and recovery cases](../../tests/e2e/gateway-secret-cases.md) install the actual wrapper chart with two replicas in a disposable kind namespace. They check missing-Secret refusal, startup, registration, password rotation and catalog recovery from a database backup. The [12 October results](../../tests/e2e/runs/2026-10-12-database-secrets.md) also record the running-preview migration and TLS checks in both gateway modes.
+The [rotation and recovery cases](../../tests/e2e/gateway-secret-cases.md) install the actual wrapper chart with two replicas in a disposable kind namespace. They check missing-Secret refusal, startup, registration, password rotation and catalog recovery from a database backup. The [12 October results](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-12-database-secrets.md) also record the running-preview migration and TLS checks in both gateway modes.
 
 This documents a local credential-delivery and recovery path. A release still needs durable PostgreSQL, Secret access controls, storage encryption policy, production backup and rotation procedures, image/license clearance and full replica policy evidence.

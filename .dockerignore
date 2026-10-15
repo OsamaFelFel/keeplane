@@ -7,3 +7,8 @@ deploy
 **/__pycache__
 **/*.pyc
 **/.DS_Store
+
+.venv
+.keeplane
+test-results
+playwright-report

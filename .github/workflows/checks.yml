@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: components/admin-ui/web
+        working-directory: components/admin-ui
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: 22.22.2
           cache: npm
-          cache-dependency-path: components/admin-ui/web/package-lock.json
+          cache-dependency-path: components/admin-ui/package-lock.json
       - run: npm ci
       - run: npm run build
       - name: Run UI unit tests
@@ -50,23 +50,26 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Install the pinned account API dependencies
+      - name: Install Python test dependencies
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install -r components/control-plane/requirements-account-api.txt
-      - name: Run isolated account and persistence cases
+          .venv/bin/pip install -r tests/requirements.txt
+      - name: Install the pinned Helm tool for chart checks
         run: |
-          .venv/bin/python tests/e2e/test_local_identity.py
-          .venv/bin/python tests/unit/test_login_limits.py
-          .venv/bin/python tests/e2e/test_break_glass_audit_store.py
-          .venv/bin/python tests/e2e/test_model_catalog.py
-          .venv/bin/python tests/e2e/test_data_classes_store.py
-          .venv/bin/python tests/e2e/test_audit_store.py
-          .venv/bin/python tests/e2e/test_management_retry.py
-          .venv/bin/python tests/e2e/test_gateway_preflight_read_retry.py
-          .venv/bin/python tests/unit/test_browser_csrf.py
-          .venv/bin/python tests/unit/test_local_startup.py
-          .venv/bin/python tests/unit/test_reporting.py
+          curl --fail --location --output /tmp/helm.tar.gz https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz
+          echo "a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496  /tmp/helm.tar.gz" | sha256sum --check
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          echo "KEEPLANE_HELM_BIN=/tmp/linux-amd64/helm" >> "$GITHUB_ENV"
+      - name: Discover and run unit and integration checks
+        run: .venv/bin/python -m pytest tests/unit tests/integration --junitxml=test-results/backend/junit.xml
+      - name: Check Python source
+        run: .venv/bin/ruff check components/control-plane --select F,E9
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: backend-${{ github.sha }}
+          path: test-results/
+          retention-days: 30
 
   local-application:
     runs-on: ubuntu-24.04
@@ -82,7 +85,7 @@ jobs:
           node-version: 22.22.2
           cache: npm
           cache-dependency-path: |
-            components/admin-ui/web/package-lock.json
+            components/admin-ui/package-lock.json
             tests/browser/package-lock.json
       - name: Start with the documented command
         run: |
@@ -109,7 +112,7 @@ jobs:
         run: npm test -- --workers=1 --grep-invert 'BR-03|MO-UI-01|DC-UI-01|AU-UI-03' --reporter=list,json
       - name: Collect container diagnostics
         if: failure()
-        run: docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" --profile qwen logs --no-color app gateway qwen > test-results/containers.log
+        run: docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" --profile qwen logs --no-color account-volume-init app-migrate app gateway qwen > test-results/containers.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -136,14 +139,20 @@ jobs:
         with:
           node-version: 22.22.2
           cache: npm
-          cache-dependency-path: components/admin-ui/web/package-lock.json
+          cache-dependency-path: components/admin-ui/package-lock.json
       - name: Build the real admin UI for account page checks
-        working-directory: components/admin-ui/web
+        working-directory: components/admin-ui
         run: npm ci && npm run build
       - name: Build the PostgreSQL API package from pinned driver source
         run: docker build --target postgres -t keeplane-preview:postgres-local -f components/control-plane/Dockerfile .
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
       - name: Verify accounts, transactions, replica behavior and restore
-        run: python3 tests/e2e/test_postgres_accounts.py --app-image keeplane-preview:postgres-local --output test-results/postgres/api.json
+        env:
+          KEEPLANE_TEST_REPORT_DIR: test-results/postgres/cases
+        run: .venv/bin/python -m pytest tests/integration/test_postgres_accounts.py -m live --app-image keeplane-preview:postgres-local --junitxml=test-results/postgres/junit.xml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

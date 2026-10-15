@@ -8,4 +8,4 @@ These cases use a real Chromium browser and the locally built React UI. The netw
 | DC-UI-02 | Open an on-mode Data Classes screen, add Restricted, and leave the available model unchecked. | Restricted appears with no approved model; the UI does not approve a model by default. |
 | DC-UI-03 | Open Models and routing while data classes are off, then open Add model and Set up model. | The approval column and both class selection fields are hidden. |
 
-The live API and storage cases are in [Data Classes cases](../e2e/cases.md) and [the 005-01 run](../e2e/runs/2026-10-10-optional-data-classes.md).
+The live API and storage cases are in [Data Classes cases](../e2e/data-classes-cases.md) and [the 005-01 run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-optional-data-classes.md).

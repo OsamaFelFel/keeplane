@@ -3,7 +3,7 @@
 Keeplane can run its existing API against PostgreSQL. UUID accounts, native
 Django sessions, sign-in budgets, account operation IDs, Editions preferences,
 model approvals, data classes and Audit records share one database. The Docker
-and kind review previews still use SQLite. The chart has an explicit PostgreSQL
+and kind review previews use the same Django ORM services with SQLite. The chart has an explicit PostgreSQL
 integration mode. Production database operations and the release package remain
 in progress.
 

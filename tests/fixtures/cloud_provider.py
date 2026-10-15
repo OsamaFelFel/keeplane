@@ -47,7 +47,9 @@ class Handler(BaseHTTPRequestHandler):
             expected = KEY_FILE.read_text().strip()
         except (ValueError, OSError):
             return self.reply(503, {"error": "Fixture unavailable"})
-        bearer = hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + expected)
+        bearer = hmac.compare_digest(
+            self.headers.get("Authorization", ""), "Bearer " + expected
+        )
         anthropic = hmac.compare_digest(self.headers.get("x-api-key", ""), expected)
         if not (bearer or anthropic):
             return self.reply(401, {"error": "Provider key refused"})
@@ -55,17 +57,42 @@ class Handler(BaseHTTPRequestHandler):
         with self.lock:
             type(self).count += 1
         if self.path == "/v1/messages":
-            return self.reply(200, {"id": "msg_cloud_fixture", "type": "message", "role": "assistant",
-                                    "model": model,
-                                    "content": [{"type": "text", "text": "mock cloud answer"}],
-                                    "stop_reason": "end_turn", "stop_sequence": None,
-                                    "usage": {"input_tokens": 2, "output_tokens": 3}})
-        return self.reply(200, {"id": "cloud-fixture", "object": "chat.completion", "model": model,
-                                "choices": [{"index": 0, "message": {
-                                    "role": "assistant", "content": "mock cloud answer"},
-                                    "finish_reason": "stop"}],
-                                "usage": {"prompt_tokens": 2, "completion_tokens": 3,
-                                          "total_tokens": 5}})
+            return self.reply(
+                200,
+                {
+                    "id": "msg_cloud_fixture",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": model,
+                    "content": [{"type": "text", "text": "mock cloud answer"}],
+                    "stop_reason": "end_turn",
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 2, "output_tokens": 3},
+                },
+            )
+        return self.reply(
+            200,
+            {
+                "id": "cloud-fixture",
+                "object": "chat.completion",
+                "model": model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "mock cloud answer",
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 2,
+                    "completion_tokens": 3,
+                    "total_tokens": 5,
+                },
+            },
+        )
 
     def log_message(self, _format, *_args):
         pass

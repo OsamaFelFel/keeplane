@@ -5,16 +5,19 @@ import os
 import sys
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from protected_preview import login_if_protected
+from tests.support.protected_preview import login_if_protected
 
 
 BASE = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:3000")
-PROTECTED = login_if_protected(BASE)
+PROTECTED = False
 
 
 def post(path, body):
-    request = Request(BASE + path, data=json.dumps(body).encode(),
-                      headers={"Content-Type": "application/json"})
+    request = Request(
+        BASE + path,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
     try:
         with urlopen(request, timeout=180) as response:
             return response.status, json.load(response)
@@ -27,35 +30,94 @@ def get(path):
         return response.status, json.load(response)
 
 
-def main():
-    created, _ = post("/api/models", {"name": "local-qwen", "source": "qwen",
-                                      "model": "qwen2.5-coder:0.5b",
-                                      **({"approved_classes": ["Public"]} if PROTECTED else {})})
+def run_cases():
+    global PROTECTED
+    PROTECTED = login_if_protected(BASE)
+    created, _ = post(
+        "/api/models",
+        {
+            "name": "local-qwen",
+            "source": "qwen",
+            "model": "qwen2.5-coder:0.5b",
+            **({"approved_classes": ["Public"]} if PROTECTED else {}),
+        },
+    )
     if PROTECTED:
         _, before = get("/api/models")
-        current = next((item for item in before.get("models", []) if item.get("id") == "local-qwen"), {})
+        current = next(
+            (
+                item
+                for item in before.get("models", [])
+                if item.get("id") == "local-qwen"
+            ),
+            {},
+        )
         if current and not current.get("approved"):
-            post("/api/models/local-qwen/setup", {"key_choice": "none",
-                                                  "approved_classes": ["Public"]})
+            post(
+                "/api/models/local-qwen/setup",
+                {"key_choice": "none", "approved_classes": ["Public"]},
+            )
     # This case verifies real-model transport, not coding quality or throughput.
-    status, result = post("/api/ask", {"model": "local-qwen", "prompt": "Reply with READY only."})
+    status, result = post(
+        "/api/ask", {"model": "local-qwen", "prompt": "Reply with READY only."}
+    )
     answer = result.get("answer", "")
-    passed = created == 200 and status == 200 and bool(answer.strip()) and answer != "mock answer"
+    passed = (
+        created == 200
+        and status == 200
+        and bool(answer.strip())
+        and answer != "mock answer"
+    )
     listed_status, catalog = get("/api/models")
-    qwen = next((item for item in catalog.get("models", []) if item.get("id") == "local-qwen"), {})
-    identified = (listed_status == 200 and qwen.get("kind") == "real-local"
-                  and qwen.get("provider") == "Qwen Coder via llama.cpp"
-                  and qwen.get("upstream_model") == "qwen2.5-coder:0.5b")
-    print(json.dumps({"suite": "Keeplane real local model", "results": [
-        {"case": "LOCAL-07", "verdict": "pass" if passed else "fail",
-         "observed": {"register_status": created, "answer_status": status,
-                      "model": result.get("model"), "answer_excerpt": answer[:400],
-                      "error": result.get("error")}},
-        {"case": "LOCAL-09", "verdict": "pass" if identified else "fail",
-         "observed": {"model": qwen}},
-    ]}, indent=2))
+    qwen = next(
+        (item for item in catalog.get("models", []) if item.get("id") == "local-qwen"),
+        {},
+    )
+    identified = (
+        listed_status == 200
+        and qwen.get("kind") == "real-local"
+        and qwen.get("provider") == "Qwen Coder via llama.cpp"
+        and qwen.get("upstream_model") == "qwen2.5-coder:0.5b"
+    )
+    print(
+        json.dumps(
+            {
+                "suite": "Keeplane real local model",
+                "results": [
+                    {
+                        "case": "LOCAL-07",
+                        "verdict": "pass" if passed else "fail",
+                        "observed": {
+                            "register_status": created,
+                            "answer_status": status,
+                            "model": result.get("model"),
+                            "answer_excerpt": answer[:400],
+                            "error": result.get("error"),
+                        },
+                    },
+                    {
+                        "case": "LOCAL-09",
+                        "verdict": "pass" if identified else "fail",
+                        "observed": {"model": qwen},
+                    },
+                ],
+            },
+            indent=2,
+        )
+    )
     return 0 if passed and identified else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_cases())
+
+
+def test_qwen(monkeypatch, report_file, request, capsys):
+    arguments = [__file__]
+    monkeypatch.setattr("sys.argv", arguments)
+    assert run_cases() in (None, 0)
+    from tests.support.cases import verify_cases
+
+    output = capsys.readouterr()
+    print(output.out, end="")
+    verify_cases(__file__, output.out, globals().get("REPORT", report_file))

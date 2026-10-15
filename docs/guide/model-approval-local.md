@@ -40,14 +40,14 @@ Run the [plain-English cases](../../tests/e2e/model-approval-cases.md) and the
 recorded checks:
 
 ```sh
-python3 tests/e2e/test_local.py
-python3 tests/e2e/test_model_approval.py
-python3 tests/e2e/test_model_edit.py
-python3 tests/e2e/test_model_replacement.py
-python3 tests/e2e/test_model_removal.py
-python3 tests/e2e/test_cloud_listing.py
-python3 tests/e2e/test_model_catalog.py
-python3 tests/e2e/test_accounts.py
+.venv/bin/python -m pytest tests/e2e/test_local.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_approval.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_edit.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_replacement.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_removal.py -m live
+.venv/bin/python -m pytest tests/e2e/test_cloud_listing.py -m live
+.venv/bin/python -m pytest tests/integration/test_model_catalog.py
+.venv/bin/python -m pytest tests/e2e/test_accounts.py -m live
 ```
 
 The model approval test removes its trial approval at the end. Its
@@ -61,6 +61,6 @@ same name, and verify that Keeplane blocks it until a new approval. The runner
 deletes its own gateway resource afterward.
 The [model removal cases](../../tests/e2e/model-removal-cases.md) check both
 removal paths and the changed-definition refusal; the
-[recorded run](../../tests/e2e/runs/2026-10-09-model-removal.md) includes the
+[recorded run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-09-model-removal.md) includes the
 full local regression. Removal of models referenced by future routing rules
 still needs a separate guard when those rules exist.

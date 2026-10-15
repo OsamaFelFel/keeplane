@@ -1,192 +1,80 @@
-# Local model preview architecture
+# Application architecture
 
-This is the first running Open Source slice. Keeplane owns the screen and the
-small registration/call API; agentgateway owns model transport and its model
-registry. The test fixture is replaceable with a local Qwen runner.
-
-The local launcher builds the React application and supplies one browser port
-to Docker, browser-origin checks and startup verification. Pages load on demand;
-fonts are bundled under `components/admin-ui/web/public/fonts/` and served locally.
-Private host credentials are copied by the volume setup container into a
-restricted Docker volume, mounted read-only by the non-root application. This
-keeps host files private on Linux and Docker Desktop. Existing account, provider-key
-and gateway volumes are retained across starts.
-
-The optional [shared PostgreSQL backend](../guide/postgres-accounts.md) implements
-the same account, settings and Audit APIs. It is tested with two app processes;
-the review previews described below remain on SQLite.
+Keeplane has one React admin application and one Django/DRF API served by
+Gunicorn. The gateway registers models and carries model traffic. Django owns
+accounts, approvals, data-class settings and Audit.
 
 ```mermaid
 flowchart LR
-  Browser[Browser] --> Edge[Keeplane edge]
-  Edge --> API[Django API]
-  Edge -->|current session for protected assets| Identity[Django identity port]
-  API --> Identity
-  API --> Settings[Settings and model approval ports]
-  API --> Audit[Audit port]
-  Identity -->|session and mandatory record in one transaction| DB[(Shared PostgreSQL)]
-  Settings -->|change and enabled record in one transaction| DB
+  Browser[Admin browser] --> App[Gunicorn and Django]
+  App --> UI[React application and local assets]
+  App --> Accounts[Accounts and database sessions]
+  App --> Models[Model setup and approvals]
+  App --> Classes[Data classes]
+  App --> Audit[Audit]
+  Accounts --> DB[(Django database)]
+  Models --> DB
+  Classes --> DB
   Audit --> DB
-  API -->|versioned adapter| Gateway[Gateway model API]
+  Models --> Adapter[Gateway adapter]
+  Adapter --> Gateway[Managed or customer-run gateway]
+  Gateway --> Cloud[Cloud provider]
+  Gateway --> Runner[Local runner]
 ```
 
-PostgreSQL mode uses Django password/session machinery, UUID users and a shared
-signing secret. Row locks serialize account retry IDs and login budgets; one
-settings row orders class/approval changes across replicas. Serving processes
-do not migrate. Database errors produce unavailable responses rather than a
-fallback store. The [integration cases](../../tests/e2e/postgres-accounts-cases.md)
-cover two-copy behavior, Audit failure, outage and restore. Production deployment
-and the final native-library package remain open.
+## Code layout
 
-```mermaid
-flowchart LR
-  Browser[Admin browser: configured local port or kind port 13000] --> App[Keeplane UI and model API]
-  Credentials[Private local credential files] --> Init[Volume setup]
-  Init --> Secrets[(Restricted app credential volume)]
-  Secrets --> App
-  App -->|accounts and model management on loopback| Django[Django and DRF HTTP layer]
-  Django --> Editions[Editions and one-time note preference]
-  Django -->|first-admin session| Accounts[(Local account and session store)]
-  Django -->|same transaction, mandatory sign-in record| Audit[(Local Audit store)]
-  Django -->|registration, listing and verification; separate runtime and admin keys| Gateway[agentgateway]
-  Django -->|model approvals| Settings[(Local settings store)]
-  Django -->|Data Classes and Audit| Settings
-  Django -->|Ask approval check| Settings
-  Django -->|Ask via runtime key| Gateway
-  DBSecret[Namespaced database password Secret in kind] -->|environment| Gateway
-  DBSecret -->|initial database password| Postgres[(Disposable kind PostgreSQL)]
-  Gateway -->|model catalog in kind| Postgres
-  Gateway --> Fixture[Local test model]
-  Gateway --> Qwen[Local Qwen runner]
-  Gateway -->|shared key file| Cloud[Authenticated cloud-format fixture]
-  Gateway -->|disposable test key| Guarded[Guarded endpoint fixture]
-  Guarded -. optional .-> Qwen
-```
+- `components/admin-ui/src/app/`: shell and API client.
+- `components/admin-ui/src/features/`: screens and dialogs grouped by feature.
+- `components/control-plane/config/`: Django settings, URLs and WSGI/ASGI entry points.
+- `accounts/`, `model_registry/`, `data_classes/`, `audit/`: each area's models,
+  migrations, services, views and URLs.
+- `common/`: shared request protection, storage errors and application assembly.
+- `integrations/`: gateway and runner adapters. HTTP views call use cases;
+  adapters handle component-specific requests.
 
-Only Keeplane is published on loopback. The gateway management API and model
-endpoints stay on the private Compose network and require separate keys. The
-gateway stores registrations in a Docker volume so a restart does not erase
-them. Docker runs one gateway replica and kind runs two. Project-bound and
-final-destination policy enforcement need later work.
-The cloud-format fixture accepts OpenAI and Anthropic request shapes and runs
-in both Docker and kind. The kind copy gets its expected key from a local
-Kubernetes Secret; Keeplane's chosen key stays in its private provider-key
-volume and the gateway reads it through a file reference. This fixture is not
-a real cloud subscription.
+There is no second HTML application, custom HTTP server or custom SQLite store.
+The adapter's provider transport stays in the adopted gateway.
 
-The guarded endpoint accepts only its fixed test key and forwards chat requests
-to Qwen. Keeplane registers that key through the gateway management API, and
-its model-list API omits the key. The fixture runs on Docker's private network
-and does not represent production secret storage or external-provider TLS.
+## Storage and startup
 
-## Protected Open Source local trials
+The local Docker and kind installations use Django ORM with one SQLite database
+per installation. PostgreSQL mode uses the same models and services, shared
+sessions and transaction boundaries across application copies. SQLite mode
+supports one application process; shared deployments require PostgreSQL.
 
-The Docker app on port 3000 and the managed kind app on port 13000 each have a
-local SQLite account store. Each checks a
-revocable session cookie before serving the admin UI and APIs. The
-account database also reserves a shared one-minute sign-in budget before password
-verification. Five failed attempts exhaust a username's budget; casing changes
-and app restarts keep it. Successful sign-in clears the budget in the session
-transaction. Expired budgets are pruned, and unavailable storage refuses sign-in.
-This local guard is not the release PostgreSQL or distributed rate-limit design. The
-account store owns the first admin, users, roles and Editions note preferences; model
-approvals and audit records stay in their separate local tables. A first-admin
-session and its mandatory Audit record commit together; an Audit write failure
-refuses the sign-in. The app
-uses its gateway through a private network. Existing gateway and
-account volumes are reused when the stack starts again. A fresh account store
-has no Team tables or Team API.
-Data classes start off in a fresh settings store. The React Data Classes page
-turns them on, creating starter definitions once. Turning them off leaves
-definitions and approvals stored but removes class controls from the admin UI.
-Model setup remains a separate record, including when a model has no class
-approval. This trial has no project-class enforcement yet.
-Protected account, Data Classes, Audit, Ask, and Models management requests
-now pass through an internal Django and DRF HTTP layer. Model management
-includes runner discovery, Add, Set up, shared-key rotation, listing, and
-removal. The model use case joins gateway
-readback to Keeplane's small approval catalog through an agentgateway adapter
-with separate runtime and management credentials;
-gateway transport and its model registry remain in agentgateway. The existing
-local account use cases still own the SQLite trial store. Model removal keeps
-customer-added gateway definitions and removes owned definitions only after
-checking their revision. Ask checks Keeplane approval and the current gateway
-definition before passing the request through the gateway. The earlier Python
-server still serves the UI, exposes health, and proxies protected routes to
-Django on loopback. Its model write, Ask, Data Classes, and Audit handlers have
-been removed.
+The local launcher builds React, prepares private credentials, runs database
+migrations in a separate startup service, imports existing local preview data
+once, and starts Gunicorn. Kind uses an init container for the local database.
+PostgreSQL deployments use the separate migration Job and restricted runtime role.
+Serving workers do not migrate schemas.
 
-All browser mutations, including anonymous sign-in, pass Django's CSRF
-middleware. The small middleware adapter applies Django's checks to DRF's
-normally exempt views because the trial still uses its existing account store.
-The edge forwards the token, Cookie, Origin and Referer, and sets the internal
-scheme from deployment configuration. Client-supplied proxy scheme headers
-are not trusted. Public origins and explicit aliases are configured in Django;
-the internal host stays on loopback.
+Existing preview account, approval, class and Audit files remain unchanged.
+Their data is imported into the Django database; old sessions require a fresh
+sign-in. Imported password hashes are upgraded by Django when a user signs in.
+New accounts use Django's normal password hasher. The signing secret persists
+across restarts and must be shared by PostgreSQL application copies.
 
-```mermaid
-sequenceDiagram
-  participant Browser
-  participant Edge as Keeplane edge
-  participant Django
-  Browser->>Edge: GET /api/auth-options
-  Edge->>Django: Read token bootstrap
-  Django-->>Browser: Masked token + HttpOnly Strict cookie, no-store
-  Browser->>Edge: POST, PUT or DELETE + token + cookie
-  Edge->>Django: Forward browser headers + configured scheme
-  Django->>Django: Check cookie/token and Origin or HTTPS Referer
-  alt Rejected
-    Django-->>Browser: 403 before the action
-  else Accepted
-    Django->>Django: Authenticate and authorize the action
-    Django-->>Browser: Action result; rotate CSRF token on successful sign-in
-  end
-```
+## Browser and component boundaries
 
-Sign out requires POST and clears the server-side session and browser cookie.
-Neither browser client automatically retries a write after a refusal or a lost
-response. HTTPS deployments set Secure on the CSRF and session cookies.
-The internal Django listener binds to container loopback; only Keeplane
-port 3000 (Docker) or 13000 (kind) is published. If the account listener fails,
-the public account and model management routes return 503 rather than using an
-older handler. Model writes have a longer proxy timeout so gateway answer
-verification and shared-key rotation can finish.
-The default previews keep the SQLite store. The optional PostgreSQL deployment
-uses the same API with Django ORM records and native database sessions:
+All administration APIs authenticate the current session and role on the server.
+The infrastructure admin is configured outside the UI. Its successful sign-in
+and mandatory Audit record commit together. Rotation revokes its old sessions.
 
-```mermaid
-flowchart LR
-  Browser -->|HTTPS| Ingress
-  Ingress --> App1[App copy 1]
-  Ingress --> App2[App copy 2]
-  App1 -->|TLS, restricted role| DB[(Operated PostgreSQL)]
-  App2 -->|TLS, restricted role| DB
-  Migration[One-off Helm migration Job] -->|TLS, separate DDL role| DB
-  App1 --> Gateway
-  App2 --> Gateway
-  Gateway --> Model
-```
+Django CSRF checks protect anonymous sign-in and every browser mutation.
+Sign-out requires POST. The browser receives a masked token from
+`/api/auth-options`; the CSRF cookie is HttpOnly and SameSite Strict. The public
+origin and HTTPS scheme come from deployment configuration, not client headers.
 
-Migration credentials are excluded from app pods. Database loss removes app
-readiness while preserving process liveness for recovery. The optional image
-keeps source and notice records for its replaceable PostgreSQL drivers. See the
-[PostgreSQL guide](../guide/postgres-accounts.md) for configuration and remaining
-production operations.
-The Docker and managed kind trials use the same local account API and React
-screens. They have separate account, audit and approval stores; a change in one
-preview does not appear in the other. The kind trial stores its SQLite files
-and provider-key files in local PersistentVolumeClaims and mounts the gateway's
-file-owned fixture configuration for approval verification. Both trials read
-the same first-admin password file on the developer machine. Neither trial
-installs Keycloak or an SSO proxy. The kind trial storage and password Secret
-are local integration fixtures, not the approved PostgreSQL release identity
-design. Optional OpenID Connect sign-in remains later Open Source work behind
-the Keeplane account contract.
+Only explicit application and asset routes are served. Gateway management,
+provider credentials and databases remain internal. Model registration confirms
+component readback; gateway calls and database commits are separate operations,
+so partial failures and uncertain outcomes must remain visible.
 
-The `keeplane-existing` kind installation now runs the same protected app with
-its own trial PVCs and first-admin Secret. A short-lived loopback port-forward
-can show it on port 13001. Its gateway is installed independently in the
-`supplied-gateway` namespace; Keeplane does not create another gateway there.
-The no-key model setup path and unrelated-model rejection have live evidence.
-The gateway cannot read the app's provider-key PVC across namespaces, so
-shared provider-key delivery remains an unproven release contract for this mode.
+## Current limits
+
+The admin application is reviewable. The developer CLI, smart routing,
+project-class enforcement, final-destination authorization and complete Audit
+producers remain unfinished. `/api/ask` is a development transport check.
+A working local or Kubernetes trial does not establish production readiness
+or select the release gateway.

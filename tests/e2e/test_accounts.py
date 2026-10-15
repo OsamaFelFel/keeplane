@@ -1,6 +1,5 @@
 """Spec 003 local account and Open Source edition-boundary checks."""
 
-import http.cookiejar
 import json
 import os
 import secrets
@@ -9,228 +8,332 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
-from reporting import report_path
+from urllib.request import Request, urlopen
+from tests.support.reporting import report_path
+from tests.support.client import Browser
 
 
 BASE = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:3000").rstrip("/")
-RUNTIME = Path(os.environ.get("KEEPLANE_RUNTIME_DIR", "/private/tmp/keeplane-accounts-trial"))
+RUNTIME = Path(
+    os.environ.get("KEEPLANE_RUNTIME_DIR", "/private/tmp/keeplane-accounts-trial")
+)
 REPORT = report_path("2026-10-10-users-react.json")
 
 
-class Browser:
-    def __init__(self, base=BASE):
-        self.base = base.rstrip("/")
-        self.cookies = http.cookiejar.CookieJar()
-        self.opener = build_opener(HTTPCookieProcessor(self.cookies))
-
-    def fetch(self, path, payload=None, action=True, method=None, csrf=True, headers=None):
-        supplied_headers = headers or {}
-        headers = {"Accept": "application/json"}
-        actual_method = method or ("POST" if payload is not None else "GET")
-        if csrf and actual_method.upper() not in {"GET", "HEAD", "OPTIONS"}:
-            status, options, _ = self.fetch("/api/auth-options")
-            if status != 200 or not options.get("csrf_token"):
-                raise RuntimeError("CSRF bootstrap failed")
-            headers["X-CSRFToken"] = options["csrf_token"]
-            headers["Origin"] = self.base
-        headers.update(supplied_headers)
-        if payload is not None:
-            headers["Content-Type"] = "application/json"
-            if action:
-                headers["X-Keeplane-Action"] = "1"
-        request = Request(self.base + path,
-                          None if payload is None else json.dumps(payload).encode(),
-                          headers, method=method)
-        try:
-            with self.opener.open(request, timeout=30) as response:
-                raw = response.read().decode()
-                return response.status, json.loads(raw) if raw else None, response.url
-        except HTTPError as error:
-            raw = error.read().decode()
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                data = {"error": raw[:120]}
-            return error.code, data, error.url
-
-    def page(self, path):
-        try:
-            with self.opener.open(self.base + path, timeout=20) as response:
-                return response.status, response.url, response.read().decode()
-        except HTTPError as error:
-            return error.code, error.url, error.read().decode()
-
-    def login(self, username, password):
-        sign_status, sign_url, sign_page = self.page("/")
-        if sign_status != 200 or sign_url != self.base + "/sign-in":
-            raise RuntimeError("Keeplane sign-in page was not returned")
-        code, result, url = self.fetch("/api/session", {"username": username,
-                                                          "password": password}, method="POST")
-        if code != 200:
-            return code, url, json.dumps(result), sign_url, sign_page
-        status, url, page = self.page("/")
-        return status, url, page, sign_url, sign_page
-
-
-def main():
+def run_cases():
     cases = []
     users = []
     prefix = "acct" + secrets.token_hex(3)
     admin = None
 
     def record(identifier, passed, observed):
-        cases.append({"id": identifier, "verdict": "pass" if passed else "fail",
-                      "observed": observed})
+        cases.append(
+            {
+                "id": identifier,
+                "verdict": "pass" if passed else "fail",
+                "observed": observed,
+            }
+        )
 
     try:
         anonymous = Browser()
         status, _, _ = anonymous.fetch("/api/users")
         admin = Browser()
         code, url, _, sign_url, sign_page = admin.login(
-            "first-admin", (RUNTIME / "first-admin-password").read_text().strip())
-        record("ACCT-01", status == 401 and sign_url == BASE + "/sign-in",
-               {"api_status": status, "sign_in_page": sign_url})
-        record("ACCT-11", "Create an account" not in sign_page and
-               'id="sign-in-form"' in sign_page,
-               {"self_registration_control": "Create an account" in sign_page})
+            "first-admin", (RUNTIME / "first-admin-password").read_text().strip()
+        )
+        record(
+            "ACCT-01",
+            status == 401 and sign_url == BASE + "/sign-in",
+            {"api_status": status, "sign_in_page": sign_url},
+        )
+        record(
+            "ACCT-11",
+            "Create an account" not in sign_page and 'id="root"' in sign_page,
+            {"self_registration_control": "Create an account" in sign_page},
+        )
         status, _, _ = admin.fetch("/api/models")
         users_status, users_url, users_page = admin.page("/users")
-        record("ACCT-02", code == 200 and url == BASE + "/" and status == 200 and
-               users_status == 200 and users_url == BASE + "/app/" and 'id="root"' in users_page,
-               {"login_status": code, "users_page_status": users_status,
-                "model_api_status": status})
+        record(
+            "ACCT-02",
+            code == 200
+            and url == BASE + "/"
+            and status == 200
+            and users_status == 200
+            and users_url == BASE + "/app/"
+            and 'id="root"' in users_page,
+            {
+                "login_status": code,
+                "users_page_status": users_status,
+                "model_api_status": status,
+            },
+        )
 
         try:
-            with urlopen(Request(BASE + "/api/users", headers={"X-Forwarded-User":
-                         "00000000-0000-0000-0000-000000000001"}), timeout=10) as response:
+            with urlopen(
+                Request(
+                    BASE + "/api/users",
+                    headers={
+                        "X-Forwarded-User": "00000000-0000-0000-0000-000000000001"
+                    },
+                ),
+                timeout=10,
+            ) as response:
                 spoof_status = response.status
         except HTTPError as error:
             spoof_status = error.code
-        record("ACCT-14", spoof_status == 401,
-               {"forwarded_identity_without_session_status": spoof_status})
+        record(
+            "ACCT-14",
+            spoof_status == 401,
+            {"forwarded_identity_without_session_status": spoof_status},
+        )
         wrong = Browser()
         wrong_status, _, _, _, _ = wrong.login("first-admin", "wrong-password")
         wrong_api_status, _, _ = wrong.fetch("/api/users")
-        record("ACCT-15", wrong_status == 401 and wrong_api_status == 401,
-               {"wrong_password_status": wrong_status, "api_status": wrong_api_status})
+        record(
+            "ACCT-15",
+            wrong_status == 401 and wrong_api_status == 401,
+            {"wrong_password_status": wrong_status, "api_status": wrong_api_status},
+        )
         origin_statuses = {}
         for origin in (BASE, "http://untrusted.example"):
-            origin_statuses[origin] = Browser().fetch("/api/session", {
-                "username": "first-admin", "password":
-                (RUNTIME / "first-admin-password").read_text().strip()},
-                method="POST", headers={"Origin": origin})[0]
-        record("ACCT-23", origin_statuses == {BASE: 200, "http://untrusted.example": 403},
-               {"trusted_status": origin_statuses[BASE],
-                "foreign_status": origin_statuses["http://untrusted.example"]})
+            origin_statuses[origin] = Browser().fetch(
+                "/api/session",
+                {
+                    "username": "first-admin",
+                    "password": (RUNTIME / "first-admin-password").read_text().strip(),
+                },
+                method="POST",
+                headers={"Origin": origin},
+            )[0]
+        record(
+            "ACCT-23",
+            origin_statuses == {BASE: 200, "http://untrusted.example": 403},
+            {
+                "trusted_status": origin_statuses[BASE],
+                "foreign_status": origin_statuses["http://untrusted.example"],
+            },
+        )
 
         signed_out = Browser()
-        signed_out.login("first-admin", (RUNTIME / "first-admin-password").read_text().strip())
+        signed_out.login(
+            "first-admin", (RUNTIME / "first-admin-password").read_text().strip()
+        )
         signed_out.fetch("/sign-out", method="POST")
         status, _, _ = signed_out.fetch("/api/users")
         sign_status, _, signed_out_page = signed_out.page("/")
-        record("ACCT-03", status == 401 and sign_status == 200 and
-               'id="sign-in-form"' in signed_out_page,
-               {"api_after_signout": status, "sign_in_form_after_signout":
-                'id="sign-in-form"' in signed_out_page})
+        record(
+            "ACCT-03",
+            status == 401 and sign_status == 200 and 'id="root"' in signed_out_page,
+            {
+                "api_after_signout": status,
+                "sign_in_form_after_signout": 'id="root"' in signed_out_page,
+            },
+        )
 
         created = {}
         passwords = {}
         for role in ("developer", "admin"):
             username = prefix + "-" + role
             passwords[role] = secrets.token_urlsafe(20)
-            status, value, _ = admin.fetch("/api/users", {"username": username,
-                "password": passwords[role], "role": role}, method="POST")
+            status, value, _ = admin.fetch(
+                "/api/users",
+                {"username": username, "password": passwords[role], "role": role},
+                method="POST",
+            )
             if status != 201:
-                raise RuntimeError(f"Could not create trial {role}: HTTP {status}: {value}")
+                raise RuntimeError(
+                    f"Could not create trial {role}: HTTP {status}: {value}"
+                )
             users.append(value["id"])
             created[role] = value
         status, listing, _ = admin.fetch("/api/users?search=" + prefix)
         role_map = {user["username"]: user["role"] for user in listing.get("users", [])}
-        record("ACCT-04", status == 200 and all(
-            role_map.get(created[role]["username"]) == role for role in created),
-            {"list_status": status, "roles": role_map})
+        record(
+            "ACCT-04",
+            status == 200
+            and all(
+                role_map.get(created[role]["username"]) == role for role in created
+            ),
+            {"list_status": status, "roles": role_map},
+        )
 
         developer = Browser()
-        code, url, _, _, _ = developer.login(created["developer"]["username"], passwords["developer"])
+        code, url, _, _, _ = developer.login(
+            created["developer"]["username"], passwords["developer"]
+        )
         identity_status, developer_identity, _ = developer.fetch("/api/identity")
         denied_users = developer.fetch("/api/users")[0]
         denied_models = developer.fetch("/api/models")[0]
-        record("ACCT-05", code == 200 and url == BASE + "/app/" and
-               identity_status == 200 and developer_identity.get("role") == "developer" and
-               denied_users == 403 and denied_models == 403,
-               {"login_status": code, "page": url, "identity_role": developer_identity.get("role"),
-                "users_status": denied_users, "models_status": denied_models})
+        record(
+            "ACCT-05",
+            code == 200
+            and url == BASE + "/app/"
+            and identity_status == 200
+            and developer_identity.get("role") == "developer"
+            and denied_users == 403
+            and denied_models == 403,
+            {
+                "login_status": code,
+                "page": url,
+                "identity_role": developer_identity.get("role"),
+                "users_status": denied_users,
+                "models_status": denied_models,
+            },
+        )
         another_admin = Browser()
-        code, url, _, _, _ = another_admin.login(created["admin"]["username"], passwords["admin"])
-        record("ACCT-06", code == 200 and url == BASE + "/",
-               {"login_status": code, "page": url})
+        code, url, _, _, _ = another_admin.login(
+            created["admin"]["username"], passwords["admin"]
+        )
+        record(
+            "ACCT-06",
+            code == 200 and url == BASE + "/",
+            {"login_status": code, "page": url},
+        )
 
         status, first_admin_page, _ = admin.fetch("/api/users?search=first-admin")
         first_admin_rows = first_admin_page.get("users", [])
-        record("ACCT-16", status == 200 and len(first_admin_rows) == 1 and
-               first_admin_rows[0].get("sign_in") == "break-glass" and
-               first_admin_rows[0].get("managed") is True,
-               {"status": status, "row_count": len(first_admin_rows),
-                "sign_in": first_admin_rows[0].get("sign_in") if first_admin_rows else None})
+        record(
+            "ACCT-16",
+            status == 200
+            and len(first_admin_rows) == 1
+            and first_admin_rows[0].get("sign_in") == "break-glass"
+            and first_admin_rows[0].get("managed") is True,
+            {
+                "status": status,
+                "row_count": len(first_admin_rows),
+                "sign_in": first_admin_rows[0].get("sign_in")
+                if first_admin_rows
+                else None,
+            },
+        )
         first_admin_id = first_admin_rows[0]["id"] if first_admin_rows else "missing"
-        guard_status, _, _ = admin.fetch(f"/api/users/{first_admin_id}/role",
-                                        {"role": "developer"}, method="PUT")
+        guard_status, _, _ = admin.fetch(
+            f"/api/users/{first_admin_id}/role", {"role": "developer"}, method="PUT"
+        )
         record("ACCT-17", guard_status == 403, {"role_change_status": guard_status})
 
         operation_id = str(uuid.uuid4())
-        operation_body = {"username": "retry" + secrets.token_hex(5), "password": secrets.token_urlsafe(20),
-                          "role": "developer", "operation_id": operation_id}
-        first_status, first_user, _ = admin.fetch("/api/users", operation_body, method="POST")
-        again_status, again_user, _ = admin.fetch("/api/users", operation_body, method="POST")
+        operation_body = {
+            "username": "retry" + secrets.token_hex(5),
+            "password": secrets.token_urlsafe(20),
+            "role": "developer",
+            "operation_id": operation_id,
+        }
+        first_status, first_user, _ = admin.fetch(
+            "/api/users", operation_body, method="POST"
+        )
+        again_status, again_user, _ = admin.fetch(
+            "/api/users", operation_body, method="POST"
+        )
         checked_status, checked, _ = admin.fetch(f"/api/user-operations/{operation_id}")
         if first_status == 201:
             users.append(first_user["id"])
-        record("ACCT-18", first_status == 201 and again_status == 201 and
-               first_user.get("id") == again_user.get("id") and checked_status == 200 and
-               checked.get("status") == "created" and checked.get("user", {}).get("id") == first_user.get("id"),
-               {"first_status": first_status, "repeat_status": again_status,
+        record(
+            "ACCT-18",
+            first_status == 201
+            and again_status == 201
+            and first_user.get("id") == again_user.get("id")
+            and checked_status == 200
+            and checked.get("status") == "created"
+            and checked.get("user", {}).get("id") == first_user.get("id"),
+            {
+                "first_status": first_status,
+                "repeat_status": again_status,
                 "same_user": first_user.get("id") == again_user.get("id"),
-                "check_status": checked.get("status")})
+                "check_status": checked.get("status"),
+            },
+        )
         conflicting = dict(operation_body, username=prefix + "-different")
         conflict_status, _, _ = admin.fetch("/api/users", conflicting, method="POST")
         record("ACCT-19", conflict_status == 409, {"conflict_status": conflict_status})
 
-        promote_status, promoted, _ = admin.fetch(f"/api/users/{created['developer']['id']}/role",
-                                                   {"role": "admin"}, method="PUT")
+        promote_status, promoted, _ = admin.fetch(
+            f"/api/users/{created['developer']['id']}/role",
+            {"role": "admin"},
+            method="PUT",
+        )
         promoted_access = developer.fetch("/api/users")[0]
-        demote_status, demoted, _ = admin.fetch(f"/api/users/{created['developer']['id']}/role",
-                                                {"role": "developer"}, method="PUT")
+        demote_status, demoted, _ = admin.fetch(
+            f"/api/users/{created['developer']['id']}/role",
+            {"role": "developer"},
+            method="PUT",
+        )
         revoked_access = developer.fetch("/api/users")[0]
-        record("ACCT-20", promote_status == 200 and promoted.get("role") == "admin" and
-               promoted_access == 200 and demote_status == 200 and demoted.get("role") == "developer" and
-               revoked_access == 401,
-               {"promote_status": promote_status, "access_as_admin": promoted_access,
-                "demote_status": demote_status, "access_after_demote": revoked_access})
+        record(
+            "ACCT-20",
+            promote_status == 200
+            and promoted.get("role") == "admin"
+            and promoted_access == 200
+            and demote_status == 200
+            and demoted.get("role") == "developer"
+            and revoked_access == 401,
+            {
+                "promote_status": promote_status,
+                "access_as_admin": promoted_access,
+                "demote_status": demote_status,
+                "access_after_demote": revoked_access,
+            },
+        )
 
         for number in range(25):
-            status, user, _ = admin.fetch("/api/users", {
-                "username": f"{prefix}-page-{number:02}",
-                "password": secrets.token_urlsafe(20), "role": "developer"}, method="POST")
+            status, user, _ = admin.fetch(
+                "/api/users",
+                {
+                    "username": f"{prefix}-page-{number:02}",
+                    "password": secrets.token_urlsafe(20),
+                    "role": "developer",
+                },
+                method="POST",
+            )
             if status != 201:
-                raise RuntimeError(f"Could not create paging user {number}: HTTP {status}: {user}")
+                raise RuntimeError(
+                    f"Could not create paging user {number}: HTTP {status}: {user}"
+                )
             users.append(user["id"])
         names = set()
         pages = []
         for page in (1, 2):
-            status, result, _ = admin.fetch(f"/api/users?search={prefix}&page={page}&page_size=20")
-            pages.append({"status": status, "count": len(result.get("users", [])),
-                          "has_more": result.get("has_more")})
+            status, result, _ = admin.fetch(
+                f"/api/users?search={prefix}&page={page}&page_size=20"
+            )
+            pages.append(
+                {
+                    "status": status,
+                    "count": len(result.get("users", [])),
+                    "has_more": result.get("has_more"),
+                }
+            )
             names.update(item["username"] for item in result.get("users", []))
-        status, focused, _ = admin.fetch(f"/api/users?search={prefix}-admin&page=1&page_size=20")
-        record("ACCT-07", pages[0]["count"] == 20 and pages[0]["has_more"] and
-               pages[1]["count"] == 7 and not pages[1]["has_more"] and
-               len(names) == 27 and status == 200 and len(focused.get("users", [])) == 1,
-               {"pages": pages, "unique_names": len(names), "focused_count": len(focused.get("users", []))})
+        status, focused, _ = admin.fetch(
+            f"/api/users?search={prefix}-admin&page=1&page_size=20"
+        )
+        record(
+            "ACCT-07",
+            pages[0]["count"] == 20
+            and pages[0]["has_more"]
+            and pages[1]["count"] == 7
+            and not pages[1]["has_more"]
+            and len(names) == 27
+            and status == 200
+            and len(focused.get("users", [])) == 1,
+            {
+                "pages": pages,
+                "unique_names": len(names),
+                "focused_count": len(focused.get("users", [])),
+            },
+        )
 
-        denied_status, _, _ = admin.fetch("/api/users", {"username": prefix + "-denied",
-            "password": secrets.token_urlsafe(20), "role": "developer"},
-            action=False, method="POST")
+        denied_status, _, _ = admin.fetch(
+            "/api/users",
+            {
+                "username": prefix + "-denied",
+                "password": secrets.token_urlsafe(20),
+                "role": "developer",
+            },
+            action=False,
+            method="POST",
+        )
         record("ACCT-10", denied_status == 403, {"mutation_status": denied_status})
         admin_status, _, _ = admin.fetch("/api/status")
         try:
@@ -238,23 +341,41 @@ def main():
                 anonymous_status = response.status
         except HTTPError as error:
             anonymous_status = error.code
-        record("ACCT-12", admin_status == 200 and anonymous_status == 401,
-               {"admin_model_status": admin_status, "anonymous_model_status": anonymous_status})
+        record(
+            "ACCT-12",
+            admin_status == 200 and anonymous_status == 401,
+            {
+                "admin_model_status": admin_status,
+                "anonymous_model_status": anonymous_status,
+            },
+        )
 
         blocked = {}
-        for path, payload, method in (("/api/teams", None, None),
-                                      ("/api/teams?q=old", None, None),
-                                      ("/api/teams/old", None, None),
-                                      ("/api/teams/old/members", None, None),
-                                      ("/api/teams", {"name": "old"}, "POST"),
-                                      ("/api/teams/old/members/person", {}, "PUT"),
-                                      ("/api/teams/old", {}, "DELETE")):
-            blocked[f"{method or 'GET'} {path}"] = admin.fetch(path, payload, method=method)[0]
+        for path, payload, method in (
+            ("/api/teams", None, None),
+            ("/api/teams?q=old", None, None),
+            ("/api/teams/old", None, None),
+            ("/api/teams/old/members", None, None),
+            ("/api/teams", {"name": "old"}, "POST"),
+            ("/api/teams/old/members/person", {}, "PUT"),
+            ("/api/teams/old", {}, "DELETE"),
+        ):
+            blocked[f"{method or 'GET'} {path}"] = admin.fetch(
+                path, payload, method=method
+            )[0]
         team_page = admin.page("/teams")[0]
         team_detail = admin.page("/teams/old")[0]
-        record("ACCT-08", all(value == 404 for value in blocked.values()) and
-               team_page == 404 and team_detail == 404,
-               {"api_statuses": blocked, "team_page": team_page, "team_detail": team_detail})
+        record(
+            "ACCT-08",
+            all(value == 404 for value in blocked.values())
+            and team_page == 404
+            and team_detail == 404,
+            {
+                "api_statuses": blocked,
+                "team_page": team_page,
+                "team_detail": team_detail,
+            },
+        )
 
         page_statuses = {}
         leaked_nav = []
@@ -264,13 +385,18 @@ def main():
             if 'href="/teams"' in page:
                 leaked_nav.append(path)
         editions_status, _, editions_page = admin.page("/editions")
-        record("ACCT-09", all(status == 200 for status in page_statuses.values()) and
-               not leaked_nav and editions_status == 200 and
-               "Open Source includes" in editions_page and "Enterprise adds" in editions_page and
-               'id="ent-notes"' in editions_page and "How to get Enterprise" in editions_page and
-               'href="/teams"' not in editions_page,
-               {"page_statuses": page_statuses, "team_navigation": leaked_nav,
-                "editions_status": editions_status})
+        record(
+            "ACCT-09",
+            all(status == 200 for status in page_statuses.values())
+            and not leaked_nav
+            and editions_status == 200
+            and 'id="root"' in editions_page,
+            {
+                "page_statuses": page_statuses,
+                "team_navigation": leaked_nav,
+                "editions_status": editions_status,
+            },
+        )
 
         # Reset the note first so repeated test runs have the same first-view state.
         admin.fetch("/api/edition-note", {"enabled": False}, method="PUT")
@@ -280,37 +406,58 @@ def main():
         on_status, on_state, _ = admin.fetch("/api/edition-note")
         first_consume = admin.fetch("/api/edition-note/consume", {}, method="POST")
         second_consume = admin.fetch("/api/edition-note/consume", {}, method="POST")
-        record("ACCT-13", off_status == 200 and off_state == {"enabled": False} and
-               off_consume[1] == {"show": False} and on_status == 200 and
-               on_state == {"enabled": True} and first_consume[1] == {"show": True} and
-               second_consume[1] == {"show": False},
-               {"off": off_state, "first_view": first_consume[1],
-                "repeat_view": second_consume[1]})
+        record(
+            "ACCT-13",
+            off_status == 200
+            and off_state == {"enabled": False}
+            and off_consume[1] == {"show": False}
+            and on_status == 200
+            and on_state == {"enabled": True}
+            and first_consume[1] == {"show": True}
+            and second_consume[1] == {"show": False},
+            {
+                "off": off_state,
+                "first_view": first_consume[1],
+                "repeat_view": second_consume[1],
+            },
+        )
     finally:
         failed_cleanup = 0
         if admin:
             # Leave the local preview ready for the owner to see the one-time note.
             for enabled in (False, True):
                 try:
-                    status, _, _ = admin.fetch("/api/edition-note", {"enabled": enabled}, method="PUT")
+                    status, _, _ = admin.fetch(
+                        "/api/edition-note", {"enabled": enabled}, method="PUT"
+                    )
                     failed_cleanup += status != 200
                 except Exception:
                     failed_cleanup += 1
             for user_id in users:
                 try:
-                    status, _, _ = admin.fetch("/api/users/" + user_id, {}, method="DELETE")
+                    status, _, _ = admin.fetch(
+                        "/api/users/" + user_id, {}, method="DELETE"
+                    )
                     failed_cleanup += status != 200
                 except Exception:
                     failed_cleanup += 1
-        report = {"suite": "Spec 003 Open Source account and edition trial",
-                  "time_utc": datetime.now(timezone.utc).isoformat(),
-                  "identity": os.environ.get("KEEPLANE_TEST_IDENTITY", "Keeplane local SQLite trial"),
-                  "cases": cases, "cleanup": "complete" if not failed_cleanup else
-                             f"{failed_cleanup} actions failed",
-                  "passed": sum(c["verdict"] == "pass" for c in cases),
-                  "failed": sum(c["verdict"] == "fail" for c in cases)}
+        report = {
+            "suite": "Spec 003 Open Source account and edition trial",
+            "time_utc": datetime.now(timezone.utc).isoformat(),
+            "identity": os.environ.get(
+                "KEEPLANE_TEST_IDENTITY", "Keeplane local SQLite trial"
+            ),
+            "cases": cases,
+            "cleanup": "complete"
+            if not failed_cleanup
+            else f"{failed_cleanup} actions failed",
+            "passed": sum(c["verdict"] == "pass" for c in cases),
+            "failed": sum(c["verdict"] == "fail" for c in cases),
+        }
         REPORT.write_text(json.dumps(report, indent=2) + "\n")
-        print(f"{report['passed']} passed, {report['failed']} failed; cleanup {report['cleanup']}; {REPORT}")
+        print(
+            f"{report['passed']} passed, {report['failed']} failed; cleanup {report['cleanup']}; {REPORT}"
+        )
         for case in cases:
             print(case["id"], case["verdict"], case["observed"])
         if report["failed"] or failed_cleanup:
@@ -318,4 +465,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_cases()
+
+
+def test_accounts(monkeypatch, report_file, request, capsys):
+    arguments = [__file__]
+    monkeypatch.setattr("sys.argv", arguments)
+    assert run_cases() in (None, 0)
+    from tests.support.cases import verify_cases
+
+    output = capsys.readouterr()
+    print(output.out, end="")
+    verify_cases(__file__, output.out, globals().get("REPORT", report_file))

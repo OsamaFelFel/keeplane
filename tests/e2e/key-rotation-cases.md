@@ -6,7 +6,7 @@ temporarily changes the mock's expected key and restores it before exiting;
 neither key value is printed or committed.
 
 Run `python3 deploy/local/up.py` and then
-`python3 tests/e2e/test_key_rotation.py`. Its JSON result is saved in `runs/`.
+`.venv/bin/python -m pytest tests/e2e/test_key_rotation.py -m live`. Its JSON result is saved under `test-results/`.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |

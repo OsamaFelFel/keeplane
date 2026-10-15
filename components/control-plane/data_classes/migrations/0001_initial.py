@@ -1,0 +1,74 @@
+"""Adopt the tables created by accounts.0001 without recreating them."""
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+    initial = True
+
+    dependencies = [("accounts", "0001_initial")]
+
+    operations = [
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.CreateModel(
+                    name="DataClass",
+                    fields=[
+                        (
+                            "id",
+                            models.CharField(
+                                max_length=64, primary_key=True, serialize=False
+                            ),
+                        ),
+                        ("name", models.CharField(max_length=80, unique=True)),
+                        ("position", models.PositiveIntegerField()),
+                    ],
+                    options={
+                        "db_table": "accounts_dataclass",
+                    },
+                ),
+                migrations.CreateModel(
+                    name="ProjectClass",
+                    fields=[
+                        (
+                            "project_id",
+                            models.CharField(
+                                max_length=64, primary_key=True, serialize=False
+                            ),
+                        ),
+                        (
+                            "data_class",
+                            models.ForeignKey(
+                                on_delete=django.db.models.deletion.PROTECT,
+                                to="data_classes.dataclass",
+                            ),
+                        ),
+                    ],
+                    options={
+                        "db_table": "accounts_projectclass",
+                    },
+                ),
+                migrations.CreateModel(
+                    name="Settings",
+                    fields=[
+                        (
+                            "id",
+                            models.PositiveSmallIntegerField(
+                                default=1, primary_key=True, serialize=False
+                            ),
+                        ),
+                        ("classes_enabled", models.BooleanField(default=False)),
+                    ],
+                    options={
+                        "db_table": "accounts_settings",
+                        "constraints": [
+                            models.CheckConstraint(
+                                condition=models.Q(("id", 1)), name="settings_singleton"
+                            )
+                        ],
+                    },
+                ),
+            ]
+        )
+    ]

@@ -18,7 +18,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 REPO = Path(__file__).resolve().parents[2]
 LEGACY_RUNTIME = Path("/private/tmp/keeplane-accounts-trial")
 RUNTIME = LEGACY_RUNTIME if LEGACY_RUNTIME.is_dir() else REPO / ".keeplane/local"
-ADMIN_UI = REPO / "components/admin-ui/web"
+ADMIN_UI = REPO / "components/admin-ui"
 MODEL = REPO / "models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
 EXPECTED_MODEL_SHA256 = "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32"
 MODEL_URL = ("https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/"

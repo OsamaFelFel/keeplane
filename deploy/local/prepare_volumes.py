@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import secrets
 from pathlib import Path
 
 
@@ -10,11 +11,16 @@ def prepare():
         directory = Path(name)
         for path in (directory, *directory.rglob("*")):
             os.chown(path, 65532, 65532)
-    secrets = Path("/secrets")
-    secrets.chmod(0o700)
-    os.chown(secrets, 65532, 65532)
+    signing_key = Path("/state/django-secret-key")
+    if not signing_key.exists():
+        signing_key.write_text(secrets.token_urlsafe(64) + "\n")
+    signing_key.chmod(0o600)
+    os.chown(signing_key, 65532, 65532)
+    private_secrets = Path("/secrets")
+    private_secrets.chmod(0o700)
+    os.chown(private_secrets, 65532, 65532)
     for name in ("first-admin-password", "gateway-runtime-key", "gateway-admin-key"):
-        destination = secrets / name
+        destination = private_secrets / name
         shutil.copyfile(Path("/host-secrets") / name, destination)
         destination.chmod(0o600)
         os.chown(destination, 65532, 65532)

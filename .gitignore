@@ -5,6 +5,5 @@ __pycache__/
 .keeplane/
 test-results/
 playwright-report/
-tests/e2e/runs/*.json
-tests/browser/runs/*.json
-tests/unit/runs/*.txt
+
+.venv/

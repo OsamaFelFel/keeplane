@@ -16,17 +16,7 @@ and routing references remain separate work.
 | REMOVE-07 | Open the admin page. | It serves the removal dialog and ownership-aware UI script. |
 | REMOVE-08 | Enable settings Audit, remove an owned model, then inspect its records. | The removal records first-admin and the gateway deletion; the prior Audit setting is restored. |
 
-Visual interaction checks use `python3 tests/e2e/ui_fixture_server.py` and
-`http://127.0.0.1:14210/`. This loopback fixture serves the actual admin UI
-with one Keeplane-owned and one outside model; it never writes to the gateway.
-
-| Case | Plain-English action | Expected result |
-| --- | --- | --- |
-| REMOVE-UI-01 | Edit `keeplane-visual-trial` and choose Remove model. | The confirmation names the model, says it will be removed from the gateway, and has **Remove model** and **Cancel** actions. |
-| REMOVE-UI-02 | Cancel that confirmation and open it again. | The same complete confirmation appears without a script error. |
-| REMOVE-UI-03 | Edit `outside-visual-trial` and choose Remove Keeplane setup. | The confirmation says the model stays in the gateway and its action is **Remove setup**. |
-
-The ownership rule is deliberately conservative: models registered outside
-Keeplane remain outside models. Removal of a model referenced by future complexity or
-persona routing is not yet implemented because those routing settings do not
-exist in the local preview.
+Visual interaction is covered by MO-UI-04 in `tests/browser/models.spec.ts`,
+which opens the real React dialog and verifies that removing an outside setup
+keeps its gateway model. REMOVE-07 checks that the application bundle is served;
+it does not claim to execute the dialog.

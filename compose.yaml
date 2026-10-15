@@ -84,20 +84,33 @@ services:
       - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/cloud-provider-key:/run/secrets/cloud-provider-key:ro
     restart: unless-stopped
 
+  app-migrate:
+    build:
+      context: .
+      dockerfile: components/control-plane/Dockerfile
+    image: keeplane-preview:docker-local
+    command: ["sh", "-ec", "python manage.py migrate --noinput && python manage.py import_preview && python manage.py bootstrap"]
+    environment:
+      FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
+    depends_on:
+      account-volume-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./components/control-plane:/app:ro
+      - account-data:/state
+      - app-secrets:/run/secrets:ro
+
   app:
     build:
       context: .
       dockerfile: components/control-plane/Dockerfile
     image: keeplane-preview:docker-local
-    command: ["python", "/app/server.py"]
     environment:
       GATEWAY_URL: http://gateway:4000
       PREVIEW_PROVIDER_KEY: keeplane-disposable-trial-key
       PREVIEW_RUNNER_URLS: http://qwen:8080,http://host.docker.internal:14424
-      ACCOUNT_DB: /state/accounts.sqlite3
       FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
       PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
-      MODEL_APPROVAL_DB: /state/model-approvals.sqlite3
       GATEWAY_FILE_CONFIG: /gateway-config/local.yaml
       PROVIDER_KEY_DIR: /provider-keys
       GATEWAY_RUNTIME_KEY_FILE: /run/secrets/gateway-runtime-key
@@ -108,6 +121,8 @@ services:
       gateway:
         condition: service_started
       account-volume-init:
+        condition: service_completed_successfully
+      app-migrate:
         condition: service_completed_successfully
     volumes:
       - ./components/control-plane:/app:ro

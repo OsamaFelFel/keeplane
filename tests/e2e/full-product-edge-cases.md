@@ -1,6 +1,6 @@
 # Full Keeplane chart on a local enforcing CNI
 
-Edition: Open Source. Run `python3 tests/e2e/test_full_product_edge.py --output <new JSON path>` against the separate `kind-keeplane-netpol` cluster with Calico and the disposable ingress-nginx controller. The script creates and removes its own namespace. Its model and PostgreSQL fixtures are local test inputs; this is not a production installation. It never touches the main Docker or kind previews.
+Edition: Open Source. Run `.venv/bin/python -m pytest tests/e2e/test_full_product_edge.py -m live` against the separate `kind-keeplane-netpol` cluster with Calico and the disposable ingress-nginx controller. The script creates and removes its own namespace. Its model and PostgreSQL fixtures are local test inputs; this is not a production installation. It never touches the main Docker or kind previews.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |

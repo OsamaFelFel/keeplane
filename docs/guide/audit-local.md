@@ -27,10 +27,10 @@ redaction and shared-state deployment
 remain to be designed and tested before a customer release.
 
 The reusable [plain-English cases](../../tests/e2e/audit-cases.md) run with
-`python3 tests/e2e/test_audit.py`; the isolated store check runs with
-`python3 tests/e2e/test_audit_store.py`. The [mandatory sign-in cases](../../tests/e2e/audit-cases.md#always-on-break-glass-sign-ins)
+`.venv/bin/python -m pytest tests/e2e/test_audit.py -m live`; the isolated store check runs with
+`.venv/bin/python -m pytest tests/integration/test_audit_store.py`. The [mandatory sign-in cases](../../tests/e2e/audit-cases.md#always-on-break-glass-sign-ins)
 run in both an isolated store and the Docker preview. The dated JSON run under
-`tests/e2e/runs/` records the observed statuses. The live test leaves its
+`test-results/` records the observed statuses. The live test leaves its
 clearly named trial audit records in the local volume because audit records
 are append-only; it removes temporary data classes and restores the switches.
 The Audit screen now uses the same React shell and shadcn components as Users

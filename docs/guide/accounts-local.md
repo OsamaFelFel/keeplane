@@ -42,7 +42,8 @@ one-time Enterprise feature note off or on.
 
 ## Current installation
 
-The local application uses SQLite. The optional [PostgreSQL backend](postgres-accounts.md)
+All account and session storage uses Django. The single-process local application
+uses SQLite through Django ORM. The optional [PostgreSQL backend](postgres-accounts.md)
 has integration tests for shared sessions, accounts, settings, Audit and recovery;
 production operations and local-preview cutover remain work.
 

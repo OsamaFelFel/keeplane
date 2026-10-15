@@ -17,7 +17,7 @@ test('BSEC-01: React sign-in and POST sign-out work with live CSRF checks', asyn
   expect(logoutMethods).toEqual(['POST'])
 })
 
-test('BSEC-02: static sign-in, Editions changes and sign-out work with live CSRF checks', async ({ page }) => {
+test('BSEC-02: unified sign-in, Editions changes and sign-out work with live CSRF checks', async ({ page }) => {
   const logoutMethods: string[] = []
   page.on('request', request => { if (new URL(request.url()).pathname === '/sign-out') logoutMethods.push(request.method()) })
   await page.goto('/sign-in')
@@ -38,7 +38,7 @@ test('BSEC-02: static sign-in, Editions changes and sign-out work with live CSRF
     await expect(control).toBeEnabled()
     expect((await (await page.request.get('/api/edition-note')).json()).enabled).toBe(original)
   }
-  await page.getByRole('link', { name: 'Sign out', exact: true }).click()
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await expect(page).toHaveURL(/\/sign-in$/)
   expect((await page.request.get('/api/identity')).status()).toBe(401)
   expect(logoutMethods).toEqual(['POST'])

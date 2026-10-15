@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { createRef } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { CreateUserDialog } from '../../../components/admin-ui/web/src/features/users/CreateUserDialog'
+import { CreateUserDialog } from '../../../components/admin-ui/src/features/users/CreateUserDialog'
 
 afterEach(() => {
   cleanup()

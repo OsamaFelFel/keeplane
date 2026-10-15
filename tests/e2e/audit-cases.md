@@ -1,7 +1,7 @@
 # Audit local preview cases
 
-Run `python3 tests/e2e/test_audit.py` with the protected Docker preview up. The
-script writes a dated JSON result in `tests/e2e/runs/`. The authenticated cases
+Run `.venv/bin/python -m pytest tests/e2e/test_audit.py -m live` with the protected Docker preview up. The
+script writes a dated JSON result in `test-results/`. The authenticated cases
 use a temporary data class and clean it up; the test turns recording off again.
 
 | Case | Plain-English action | Expected observation |
@@ -18,9 +18,9 @@ use a temporary data class and clean it up; the test turns recording off again.
 
 ## Always-on break-glass sign-ins
 
-Run `python3 tests/e2e/test_break_glass_audit_store.py` for the isolated
+Run `.venv/bin/python -m pytest tests/integration/test_break_glass_audit_store.py` for the isolated
 transaction and storage-failure cases, and
-`python3 tests/e2e/test_break_glass_audit.py` against the protected Docker
+`.venv/bin/python -m pytest tests/e2e/test_break_glass_audit.py -m live` against the protected Docker
 preview. Neither test saves a password, session token or provider key in its
 result.
 

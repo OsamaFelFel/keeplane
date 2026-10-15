@@ -57,10 +57,10 @@ for name in ("gateway-db-password", "supplied-gateway-db-password"):
         with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as stream:
             stream.write(secrets.token_urlsafe(32))
 PY
-if [ ! -d components/admin-ui/web/node_modules ]; then
-  (cd components/admin-ui/web && npm ci)
+if [ ! -d components/admin-ui/node_modules ]; then
+  (cd components/admin-ui && npm ci)
 fi
-(cd components/admin-ui/web && npm run build)
+(cd components/admin-ui && npm run build)
 docker pull "$PYTHON_IMAGE"
 docker pull "$POSTGRES_IMAGE"
 docker pull "$GATEWAY_IMAGE"
