@@ -7,6 +7,7 @@ The fixture disables networking for the running container.
 
 - Package the actual app and UI with directories set to 0700 and files to 0600, keeping the
   dependency requirements at 0644 so the existing install layer can be reused.
+  Also give one actual app file mode 0666 to check that its write access is removed.
 - The image runs as UID 65532, loads its actual Gunicorn configuration and reads
   the compiled UI, fonts and app files. Public files remain owned by root and
   cannot be changed by the application user.

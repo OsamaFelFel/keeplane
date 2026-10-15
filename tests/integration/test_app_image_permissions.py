@@ -18,7 +18,7 @@ def test_app_image_permissions(report_file):
     assert (ROOT / "components/admin-ui/dist/index.html").is_file(), "Build the admin UI first"
     image = "keeplane-image-permissions-" + uuid.uuid4().hex[:12] + ":test"
     report = {"completed": False, "image_removed": False,
-              "runtime_network": "none", "build_dependencies": "cached pinned layers or declared install registry access", "input_file_mode": "0600", "input_directory_mode": "0700"}
+              "permissive_input_file": "common/errors.py (0666)", "runtime_network": "none", "build_dependencies": "cached pinned layers or declared install registry access", "input_file_mode": "0600", "input_directory_mode": "0700"}
 
     def run(*command, check=True):
         item = subprocess.run(command, cwd=ROOT, capture_output=True, timeout=180)
@@ -44,6 +44,8 @@ def test_app_image_permissions(report_file):
                             context / "components/admin-ui/dist")
             for path in context.rglob("*"):
                 path.chmod(0o700 if path.is_dir() else 0o600)
+            # A permissive builder must not make packaged code writable either.
+            (context / "components/control-plane/common/errors.py").chmod(0o666)
             # Preserve the dependency cache; this fixture tests copied application files.
             (context / "components/control-plane/requirements-account-api.txt").chmod(0o644)
             shutil.copyfile(ROOT / "components/control-plane/Dockerfile", context / "Dockerfile")
