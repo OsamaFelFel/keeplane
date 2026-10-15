@@ -96,7 +96,8 @@ def test_current_account_and_hashed_storage(oauth):
     assert oauth.client.get("/api/identity").status_code == 401
 
 
-def test_oauth_catalog_rechecks_current_project_and_model_policy(oauth, monkeypatch):
+@pytest.fixture
+def project_policy(oauth, monkeypatch):
     from data_classes.models import ProjectClass
     from model_registry.fingerprints import fingerprint
     from model_registry.policy import DjangoModelPolicy
@@ -118,14 +119,72 @@ def test_oauth_catalog_rechecks_current_project_and_model_policy(oauth, monkeypa
     monkeypatch.setattr(
         runtime_views, "model_policy", lambda: DjangoModelPolicy(gateway)
     )
+    return SimpleNamespace(
+        project=project, resources=resources, gateway=gateway, state=state
+    )
+
+
+def test_oauth_catalog_rechecks_current_project_and_model_policy(oauth, project_policy):
     issued = oauth.issue()
     headers = {"HTTP_AUTHORIZATION": "Bearer " + issued.raw}
-    path = f"/api/runtime/projects/{project}/models"
+    path = f"/api/runtime/projects/{project_policy.project}/models"
     assert oauth.client.get(path, **headers).json()["models"] == [{"id": "private"}]
-    resources[0]["revision"] = 2
+    project_policy.resources[0]["revision"] = 2
     assert oauth.client.get(path, **headers).json()["models"] == []
-    state.status = 503
+    project_policy.state.status = 503
     assert oauth.client.get(path, **headers).status_code == 503
+
+
+def test_oauth_project_registration_derives_current_account(oauth):
+    from projects.models import ProjectUse
+
+    issued = oauth.issue()
+    project = str(uuid.uuid4())
+    response = oauth.client.post(
+        "/api/runtime/projects",
+        data={"project_id": project, "name": "CLI OAuth"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION="Bearer " + issued.raw,
+    )
+    assert response.status_code == 200
+    assert ProjectUse.objects.get(project_id=project).user_id == oauth.owner.pk
+
+
+def test_gateway_callback_uses_same_current_oauth_identity(
+    oauth, project_policy, monkeypatch, tmp_path
+):
+    from model_registry import runtime_callback
+
+    issued = oauth.issue()
+    key = "synthetic-gateway-credential-" + "x" * 32
+    key_file = tmp_path / "gateway-key"
+    key_file.write_text(key)
+    monkeypatch.setattr(runtime_callback, "IDENTITY", oauth.native)
+    monkeypatch.setattr(runtime_callback, "model_policy", runtime_views.model_policy)
+    monkeypatch.setattr(runtime_callback, "MODEL_GATEWAY", project_policy.gateway)
+
+    def authorize():
+        return oauth.client.post(
+            "/internal/runtime/authorize",
+            data={"project_id": project_policy.project, "model_id": "private"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer " + issued.raw,
+            HTTP_X_KEEPLANE_GATEWAY_CREDENTIAL=key,
+        )
+
+    with override_settings(RUNTIME_AUTHORIZER_KEY_FILE=str(key_file)):
+        response = authorize()
+        assert response.status_code == 200
+        assert response.json() == {
+            "actor_id": str(oauth.owner.pk),
+            "project_id": project_policy.project,
+            "model_id": "private",
+        }
+        project_policy.resources[0]["revision"] = 2
+        assert authorize().status_code == 403
+        project_policy.resources[0]["revision"] = 1
+        revoke(oauth.owner)
+        assert authorize().status_code == 401
 
 
 @pytest.mark.parametrize(
