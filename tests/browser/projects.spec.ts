@@ -31,3 +31,42 @@ test('PRJ-UI-02: Projects contains and keyboard-scrolls its table at320px', asyn
   await expect(page.getByRole('link', { name: 'Projects', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
 })
+
+test('PRJ-UI-03: Set class saves once and returns focus to its row action', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 })
+  await page.route('**/api/data-classes', route => route.fulfill({ json: { enabled: true, classes: [{ id: 'public', name: 'Public' }, { id: 'confidential', name: 'Confidential' }] } }))
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { csrf_token: 'fixture-masked-token' } }))
+  let writes = 0
+  await page.route('**/api/projects/fixture-project/class', route => {
+    writes += 1
+    expect(route.request().postDataJSON()).toEqual({ class_id: 'public' })
+    return route.fulfill({ json: { id: 'fixture-project', name: 'Example', data_class: { id: 'public', name: 'Public' } } })
+  })
+  await page.getByRole('button', { name: 'Set class', exact: true }).click()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.getByLabel('Data class', { exact: true }).selectOption('public')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('cell', { name: 'Public', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Set class', exact: true })).toBeFocused()
+  expect(writes).toBe(1)
+})
+
+test('PRJ-UI-04: A lost response checks current state without repeating the write', async ({ page }) => {
+  await page.route('**/api/data-classes', route => route.fulfill({ json: { enabled: true, classes: [{ id: 'public', name: 'Public' }] } }))
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { csrf_token: 'fixture-masked-token' } }))
+  let writes = 0
+  await page.route('**/api/projects/fixture-project/class', route => {
+    if (route.request().method() === 'PUT') { writes += 1; return route.abort('connectionreset') }
+    return route.fulfill({ json: { id: 'fixture-project', name: 'Example', classes_enabled: true, data_class: { id: 'public', name: 'Public' } } })
+  })
+  await page.getByRole('button', { name: 'Set class', exact: true }).click()
+  await page.getByLabel('Data class', { exact: true }).selectOption('public')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Check', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Data class', { exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Check', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByRole('cell', { name: 'Public', exact: true })).toBeVisible()
+  expect(writes).toBe(1)
+})
