@@ -23,6 +23,7 @@ from common.stores import stores
 from data_classes.models import ProjectClass
 from django.core.management import call_command
 from django.core.wsgi import get_wsgi_application
+from django.db import connection
 from model_registry.fingerprints import fingerprint
 from projects.services import DjangoProjectStore
 
@@ -112,14 +113,21 @@ class Model(BaseHTTPRequestHandler):
 def serve():
     call_command("migrate", verbosity=0)
     _, identity, catalog, classes = stores()
-    password = "isolated-runtime-developer-password"
-    actor = identity.create_user(
-        {"username": "runtime-fixture", "password": password, "role": "developer"}
-    )
-    token, project = identity.login(actor["username"], password), str(uuid.uuid4())
-    DjangoProjectStore().register_use(actor["id"], project, "Native authorization")
-    classes.set_enabled(True)
-    ProjectClass.objects.create(project_id=project, data_class_id="confidential")
+    seed = Path(os.environ.get("FIXTURE_SESSION_FILE", "/trial/no-seed"))
+    seeded = seed.is_file()
+    if seeded:
+        credential = json.loads(seed.read_text())
+        token, project = credential["token"], credential["project"]
+    else:
+        password = "isolated-runtime-developer-password"
+        actor = identity.create_user(
+            {"username": "runtime-fixture", "password": password, "role": "developer"}
+        )
+        token, project = identity.login(actor["username"], password), str(uuid.uuid4())
+        DjangoProjectStore().register_use(actor["id"], project, "Native authorization")
+    if not seeded:
+        classes.set_enabled(True)
+        ProjectClass.objects.create(project_id=project, data_class_id="confidential")
     shared = os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
     if shared:
         Model.requires_key = True
@@ -151,23 +159,32 @@ def serve():
                 }
             }
             definition["requestHeaders"]["remove"].remove("authorization")
-    status, _ = MODEL_GATEWAY.request(
-        "/api/config/resources/llm.model",
-        {"resources": [{"value": model} for model in definitions]},
-        method="PUT",
-    )
-    if status != 200:
-        raise RuntimeError("Disposable native model registration failed")
+    reuse = False
+    if os.environ.get("FIXTURE_REUSE_NATIVE_DEFINITIONS") == "1":
+        status, current = MODEL_GATEWAY.resources()
+        reuse = status == 200 and all(
+            any(row.get("value") == model for row in current["resources"])
+            for model in definitions
+        )
+    if not reuse:
+        status, _ = MODEL_GATEWAY.request(
+            "/api/config/resources/llm.model",
+            {"resources": [{"value": model} for model in definitions]},
+            method="PUT",
+        )
+        if status != 200:
+            raise RuntimeError("Disposable native model registration failed")
     status, resource_body = MODEL_GATEWAY.resources()
     if status != 200:
         raise RuntimeError("Disposable native registry did not start")
-    for name, approved in (("private", ["Confidential"]), ("public", ["Public"])):
-        catalog.approve(
-            name,
-            approved,
-            fingerprint(name, resource_body["resources"]),
-            key_choice="shared" if shared else "none",
-        )
+    if not reuse:
+        for name, approved in (("private", ["Confidential"]), ("public", ["Public"])):
+            catalog.approve(
+                name,
+                approved,
+                fingerprint(name, resource_body["resources"]),
+                key_choice="shared" if shared else "none",
+            )
     credential = STATE / "credential"
     credential.write_text(json.dumps({"token": token, "project": project}))
     credential.chmod(0o600)
@@ -207,6 +224,32 @@ def command(action, arguments):
     credential = json.loads((STATE / "credential").read_text())
     if action == "withdraw":
         stores()[2].remove("private")
+    elif action == "restore_approval":
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        stores()[2].approve(
+            "private",
+            ["Confidential"],
+            fingerprint("private", body["resources"]),
+            key_choice="shared"
+            if os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
+            else "none",
+        )
+    elif action == "set_class":
+        assert arguments in ("public", "confidential")
+        ProjectClass.objects.filter(project_id=credential["project"]).update(
+            data_class_id=arguments
+        )
+    elif action == "database_state":
+        assert connection.vendor == "postgresql"
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_is_in_recovery()")
+            return {"vendor": connection.vendor, "standby": cursor.fetchone()[0]}
+    elif action == "set_classes":
+        assert arguments in ("enabled", "disabled")
+        return stores()[3].set_enabled(arguments == "enabled")
+    elif action == "classes_enabled":
+        return stores()[3].enabled()
     elif action == "revoke":
         stores()[1].logout(credential["token"])
     elif action == "summary":
