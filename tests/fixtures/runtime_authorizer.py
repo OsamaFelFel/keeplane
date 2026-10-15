@@ -243,16 +243,21 @@ def serve():
         raw = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
         environ["wsgi.input"] = io.BytesIO(raw)
         metadata = json.loads(raw)
+
         # Store only the metadata contract, never headers or prompt text.
-        append(
-            "decisions",
-            {
-                "keys": sorted(metadata),
-                "project_id": metadata.get("project_id"),
-                "model_id": metadata.get("model_id"),
-            },
-        )
-        return application(environ, start_response)
+        def record_response(status, headers, exc_info=None):
+            append(
+                "decisions",
+                {
+                    "keys": sorted(metadata),
+                    "project_id": metadata.get("project_id"),
+                    "model_id": metadata.get("model_id"),
+                    "status": int(status.split(" ", 1)[0]),
+                },
+            )
+            return start_response(status, headers, exc_info)
+
+        return application(environ, record_response)
 
     mock = ThreadingHTTPServer(("127.0.0.1", 18080), Model)
     threading.Thread(target=mock.serve_forever, daemon=True).start()
@@ -310,6 +315,27 @@ def command(action, arguments):
         )
     elif action == "withdraw_public":
         stores()[2].remove("public")
+    elif action == "active_fallback_models":
+        required = {"private", "public", "outside", "fallback"}
+        deadline = time.monotonic() + 10
+        attempts = 0
+        while True:
+            status, body = MODEL_GATEWAY.request("/v1/models", timeout=1)
+            models = (
+                sorted(row["id"] for row in body.get("data", []))
+                if status == 200 and isinstance(body, dict)
+                else []
+            )
+            attempts += 1
+            ready = required.issubset(models)
+            if ready or time.monotonic() >= deadline:
+                return {
+                    "ready": ready,
+                    "status": status,
+                    "model_ids": models,
+                    "attempts": attempts,
+                }
+            time.sleep(0.1)
     elif action == "revoke":
         stores()[1].logout(credential["token"])
     elif action == "summary":

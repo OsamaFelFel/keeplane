@@ -16,7 +16,12 @@ def fallback_config(existing, admin):
     for route in value["binds"][0]["listeners"][0]["routes"]:
         # This fixed test alias starts with private; no product alias approval is implied.
         route["policies"]["extAuthz"] = external_authorization('"private"')
-        route["policies"]["retry"] = {"attempts": 1, "codes": [503]}
+        # Native health eviction is asynchronous; an immediate retry can reuse Private.
+        route["policies"]["retry"] = {
+            "attempts": 1,
+            "codes": [503],
+            "backoff": "500ms",
+        }
     for name in ("private", "public"):
         value["policies"].append(
             {
@@ -43,9 +48,20 @@ def fallback_config(existing, admin):
 def test_native_fallback_checks_each_selected_model(
     tmp_path, report_file, existing, case
 ):
+    report = {"existing": existing, "case": case, "passed": False}
+
+    def save_report():
+        report_file.write_text(json.dumps(report, indent=2) + "\n")
+
+    save_report()
     with native_runtime_trial(
         tmp_path, existing, fallback_config, fallback=True
     ) as trial:
+        # Management writes complete before their asynchronous runtime publication.
+        # Listing active IDs does not consume the deliberate Private 503.
+        report["active_models"] = trial.call("active_fallback_models")
+        save_report()
+        assert report["active_models"]["ready"]
         if case != "class":
             trial.call("allow_public")
         if case == "approval":
@@ -63,6 +79,18 @@ def test_native_fallback_checks_each_selected_model(
             }
         )
         observed = trial.call("summary")
+        report.update(
+            {
+                "status": status,
+                "selected_models": [row["model_id"] for row in observed["decisions"]],
+                "decision_statuses": [row["status"] for row in observed["decisions"]],
+                "provider_contacts": observed["calls"],
+                "provider_key_used": observed["provider_key_used"],
+                "developer_key_forwarded": observed["developer_key_forwarded"],
+                "credential_headers": observed["credential_headers"],
+            }
+        )
+        save_report()
         expected_calls = (
             ["mock-private", "mock-public"] if case == "allowed" else ["mock-private"]
         )
@@ -92,19 +120,5 @@ def test_native_fallback_checks_each_selected_model(
             trial.before["existing_preserved"]
             and trial.before["existing_listed"] is existing
         )
-        report_file.write_text(
-            json.dumps(
-                {
-                    "existing": existing,
-                    "case": case,
-                    "status": status,
-                    "selected_models": [
-                        row["model_id"] for row in observed["decisions"]
-                    ],
-                    "provider_contacts": observed["calls"],
-                    "server_key_only": True,
-                },
-                indent=2,
-            )
-            + "\n"
-        )
+        report.update({"passed": True, "server_key_only": True})
+        save_report()
