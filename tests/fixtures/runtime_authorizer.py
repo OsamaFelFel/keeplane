@@ -52,6 +52,7 @@ class Silent(WSGIRequestHandler):
 class Model(BaseHTTPRequestHandler):
     requires_key = False
     fail_private = False
+    protocol = False
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -86,6 +87,11 @@ class Model(BaseHTTPRequestHandler):
             self.send_response(503)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if self.protocol:
+            from runtime_protocol import send_protocol_response
+
+            append("tool_result_seen", send_protocol_response(self, body))
             return
         data = json.dumps(
             {
@@ -137,6 +143,7 @@ def serve():
     shared = os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
     fallback = os.environ.get("FIXTURE_NATIVE_FALLBACK") == "1"
     Model.fail_private = fallback
+    Model.protocol = os.environ.get("FIXTURE_NATIVE_PROTOCOL") == "1"
     if shared:
         Model.requires_key = True
     definitions = [
@@ -338,6 +345,7 @@ def command(action, arguments):
             "credential_headers": rows("credential_headers"),
             "provider_key_used": rows("provider_key_used"),
             "developer_key_forwarded": rows("developer_key_forwarded"),
+            "tool_result_seen": rows("tool_result_seen"),
         }
     elif action in ("resource_revision", "publish_shared"):
         status, body = MODEL_GATEWAY.resources()
@@ -393,6 +401,7 @@ def command(action, arguments):
             "credential_headers",
             "provider_key_used",
             "developer_key_forwarded",
+            "tool_result_seen",
         ):
             (STATE / name).unlink(missing_ok=True)
 

@@ -8,7 +8,7 @@ from tests.integration.test_native_runtime_authorization import (
     external_authorization,
     gateway_config,
 )
-from tests.support.native_fallback_trial import native_fallback_trial
+from tests.support.native_runtime_trial import native_runtime_trial
 
 
 def fallback_config(existing, admin):
@@ -54,7 +54,9 @@ def test_native_fallback_checks_each_selected_model(
         report_file.write_text(json.dumps(report, indent=2) + "\n")
 
     save_report()
-    with native_fallback_trial(tmp_path, existing, fallback_config) as trial:
+    with native_runtime_trial(
+        tmp_path, existing, fallback_config, fallback=True
+    ) as trial:
         # Management writes complete before their asynchronous runtime publication.
         # Listing active IDs does not consume the deliberate Private 503.
         report["active_models"] = trial.call("active_fallback_models")
