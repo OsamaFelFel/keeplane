@@ -55,6 +55,7 @@ class Model(BaseHTTPRequestHandler):
     protocol = False
     actor_keys = False
     bound_definition = False
+    fail_private_model = "mock-private"
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -74,7 +75,12 @@ class Model(BaseHTTPRequestHandler):
             key_matches = actor is not None
             append("provider_actor", actor)
             append(
-                "forged_headers", any(name in self.headers for name in STRIP_HEADERS)
+                "forged_headers",
+                any(name in self.headers for name in STRIP_HEADERS)
+                or (
+                    os.environ.get("FIXTURE_DEFINITION_FALLBACK") == "1"
+                    and "x-fixture-requested-alias" in self.headers
+                ),
             )
         if self.bound_definition:
             append(
@@ -103,7 +109,7 @@ class Model(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if self.fail_private and body["model"] == "mock-private":
+        if self.fail_private and body["model"] == self.fail_private_model:
             self.send_response(503)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -218,9 +224,21 @@ def serve():
     bound_definition = os.environ.get("FIXTURE_DEFINITION_BINDING") == "1"
     Model.bound_definition = bound_definition
     if bound_definition:
-        from runtime_definition_binding import configure
+        import importlib
 
-        configure(definitions)
+        definition_fallback = os.environ.get("FIXTURE_DEFINITION_FALLBACK") == "1"
+        binding_module = importlib.import_module(
+            "runtime_fallback_binding"
+            if definition_fallback
+            else "runtime_definition_binding"
+        )
+        if definition_fallback:
+            Model.fail_private_model = "mock-generation-b"
+            binding_module.configure(definitions, STATE)
+            for definition in definitions:
+                definition["health"]["eviction"]["duration"] = "600s"
+        else:
+            binding_module.configure(definitions)
     reuse = False
     if os.environ.get("FIXTURE_REUSE_NATIVE_DEFINITIONS") == "1":
         status, current = MODEL_GATEWAY.resources()
@@ -274,18 +292,14 @@ def serve():
     credential.write_text(json.dumps({"token": token, "project": project}))
     credential.chmod(0o600)
     if bound_definition:
-        from runtime_definition_binding import seed
-
-        seed(STATE, definitions)
+        binding_module.seed(STATE, definitions)
     application = get_wsgi_application()
     if actor_keys:
         from runtime_actor_keys import wrap
 
         application = wrap(application, STATE)
     if bound_definition:
-        from runtime_definition_binding import wrap
-
-        application = wrap(application, STATE)
+        application = binding_module.wrap(application, STATE)
 
     def recorded(environ, start_response):
         raw = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
@@ -319,6 +333,10 @@ def serve():
 
 def command(action, arguments):
     credential = json.loads((STATE / "credential").read_text())
+    if action.startswith("fallback_binding_"):
+        from runtime_fallback_binding import command as fallback_binding_command
+
+        return fallback_binding_command(STATE, action, arguments)
     if action.startswith("binding_"):
         from runtime_definition_binding import command as binding_command
 
