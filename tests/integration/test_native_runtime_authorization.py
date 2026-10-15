@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import subprocess
+import time
 import uuid
 from pathlib import Path
 
@@ -132,16 +133,24 @@ def gateway_config(existing, admin):
 @pytest.mark.live
 @pytest.mark.infrastructure
 @pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
-def test_native_metadata_and_selected_model_gate(tmp_path, existing):
+@pytest.mark.parametrize("shared", [False, True], ids=["no-key", "shared-key"])
+def test_native_metadata_and_selected_model_gate(
+    tmp_path, report_file, existing, shared
+):
     project = "keeplane-auth-" + uuid.uuid4().hex[:10]
     trial_dir = tmp_path / "trial"
     trial_dir.mkdir(mode=0o755)
     admin = secrets.token_urlsafe(32)
+    provider_key = secrets.token_urlsafe(32)
+    initial_key_name = "key-" + uuid.uuid4().hex
+    revision_key_name = "key-" + uuid.uuid4().hex
     for name, value in (
         ("admin", admin),
         ("gateway-key", secrets.token_urlsafe(32)),
         ("first-admin", secrets.token_urlsafe(32)),
         ("signing", secrets.token_urlsafe(64)),
+        (initial_key_name, provider_key),
+        ("provider-expected", provider_key),
     ):
         (trial_dir / name).write_text(value)
         (trial_dir / name).chmod(
@@ -198,6 +207,10 @@ def test_native_metadata_and_selected_model_gate(tmp_path, existing):
                 "GATEWAY_ADMIN_KEY_FILE": "/trial/admin",
                 "GATEWAY_RUNTIME_KEY_FILE": "/trial/admin",
                 "RUNTIME_AUTHORIZER_KEY_FILE": "/trial/gateway-key",
+                "FIXTURE_SHARED_PROVIDER_KEY": "1" if shared else "0",
+                "FIXTURE_PROVIDER_KEY_NAME": initial_key_name,
+                "FIXTURE_PROVIDER_NEXT_KEY_NAME": revision_key_name,
+                "PROVIDER_KEY_DIR": "/trial",
             },
         },
         "client": {
@@ -279,14 +292,13 @@ def test_native_metadata_and_selected_model_gate(tmp_path, existing):
         assert allowed["calls"] == ["mock-private"]
         assert allowed["credential_headers"] == [
             {
-                name: False
-                for name in (
-                    "Authorization",
-                    "X-Keeplane-Gateway-Credential",
-                    "X-Keeplane-Project-ID",
-                )
+                "Authorization": shared,
+                "X-Keeplane-Gateway-Credential": False,
+                "X-Keeplane-Project-ID": False,
             }
         ]
+        assert allowed["provider_key_used"] == [shared]
+        assert allowed["developer_key_forwarded"] == [False]
         assert [row["model_id"] for row in allowed["decisions"]] == [
             "private",
             "private",
@@ -325,6 +337,54 @@ def test_native_metadata_and_selected_model_gate(tmp_path, existing):
             for port in (4000, 15000, 15020, 15021, 8090, 18080)
         )
         assert isolation["5000"] == 404
+        if shared:
+            replacement = secrets.token_urlsafe(32)
+            key_file = trial_dir / initial_key_name
+            expected_file = trial_dir / "provider-expected"
+            initial_revision = fixture("resource_revision")
+            key_file.write_text(replacement)
+            expected_file.write_text(replacement)
+            diagnostic = {"existing": existing, "in_place": [], "api_revision": []}
+
+            def observe(stage):
+                fixture("reset")
+                for _ in range(3):
+                    status = fixture("probe")
+                    observed = fixture("summary")
+                    matched = bool(
+                        observed["provider_key_used"]
+                        and observed["provider_key_used"][-1]
+                    )
+                    stage.append({"status": status, "new_key_received": matched})
+                    if matched:
+                        break
+                    time.sleep(0.2)
+
+            observe(diagnostic["in_place"])
+            diagnostic["in_place_revision_unchanged"] = (
+                fixture("resource_revision") == initial_revision
+            )
+            # Use a different value and file so readback cannot pass on the old route.
+            revision_key = secrets.token_urlsafe(32)
+            active_key_file = trial_dir / revision_key_name
+            active_key_file.write_text(revision_key)
+            expected_file.write_text(revision_key)
+            diagnostic["readback"] = fixture("publish_shared")
+            assert diagnostic["readback"]["after"] > diagnostic["readback"]["before"]
+            assert diagnostic["readback"]["file_reference_matches"]
+            observe(diagnostic["api_revision"])
+            report_file.write_text(json.dumps(diagnostic, indent=2) + "\n")
+            fixture("reset")
+            # Deletion follows the rotation diagnostic, never confounding it.
+            active_key_file.unlink()
+            assert fixture("probe") in (403, 503)
+            assert not fixture("summary")["calls"]
+            active_key_file.write_text(revision_key)
+            active_key_file.chmod(0)
+            assert fixture("probe") in (403, 503)
+            assert not fixture("summary")["calls"]
+            active_key_file.chmod(0o644)
+            assert fixture("config")["existing_preserved"]
         fixture("withdraw")
         assert fixture("probe") == 403
         fixture("revoke")

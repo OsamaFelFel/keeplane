@@ -49,9 +49,21 @@ class Silent(WSGIRequestHandler):
 
 
 class Model(BaseHTTPRequestHandler):
+    requires_key = False
+
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         append("calls", body["model"])
+        authorization = self.headers.get("Authorization", "")
+        expected = (
+            Path("/trial/provider-expected").read_text().strip()
+            if self.requires_key
+            else ""
+        )
+        key_matches = self.requires_key and authorization == "Bearer " + expected
+        append("provider_key_used", key_matches)
+        token = json.loads((STATE / "credential").read_text())["token"]
+        append("developer_key_forwarded", token in authorization)
         append(
             "credential_headers",
             {
@@ -63,6 +75,11 @@ class Model(BaseHTTPRequestHandler):
                 )
             },
         )
+        if self.requires_key and not key_matches:
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         data = json.dumps(
             {
                 "id": "fixture",
@@ -103,6 +120,9 @@ def serve():
     DjangoProjectStore().register_use(actor["id"], project, "Native authorization")
     classes.set_enabled(True)
     ProjectClass.objects.create(project_id=project, data_class_id="confidential")
+    shared = os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
+    if shared:
+        Model.requires_key = True
     definitions = [
         {
             "id": name,
@@ -119,6 +139,18 @@ def serve():
         }
         for name in ("private", "public", "outside")
     ]
+    if shared:
+        for definition in definitions:
+            definition["auth"] = {
+                "key": {
+                    "value": {
+                        "file": str(
+                            Path("/trial") / os.environ["FIXTURE_PROVIDER_KEY_NAME"]
+                        )
+                    }
+                }
+            }
+            definition["requestHeaders"]["remove"].remove("authorization")
     status, _ = MODEL_GATEWAY.request(
         "/api/config/resources/llm.model",
         {"resources": [{"value": model} for model in definitions]},
@@ -130,7 +162,12 @@ def serve():
     if status != 200:
         raise RuntimeError("Disposable native registry did not start")
     for name, approved in (("private", ["Confidential"]), ("public", ["Public"])):
-        catalog.approve(name, approved, fingerprint(name, resource_body["resources"]))
+        catalog.approve(
+            name,
+            approved,
+            fingerprint(name, resource_body["resources"]),
+            key_choice="shared" if shared else "none",
+        )
     credential = STATE / "credential"
     credential.write_text(json.dumps({"token": token, "project": project}))
     credential.chmod(0o600)
@@ -177,6 +214,38 @@ def command(action, arguments):
             "calls": rows("calls"),
             "decisions": rows("decisions"),
             "credential_headers": rows("credential_headers"),
+            "provider_key_used": rows("provider_key_used"),
+            "developer_key_forwarded": rows("developer_key_forwarded"),
+        }
+    elif action in ("resource_revision", "publish_shared"):
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        previous = next(row for row in body["resources"] if row["id"] == "private")
+        if action == "resource_revision":
+            return previous["revision"]
+        definition = previous["value"]
+        target = str(Path("/trial") / os.environ["FIXTURE_PROVIDER_NEXT_KEY_NAME"])
+        definition["auth"]["key"]["value"] = {"file": target}
+        status, _ = MODEL_GATEWAY.request(
+            "/api/config/resources/llm.model/private",
+            {"value": definition},
+            method="PUT",
+        )
+        assert status == 200
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        current = next(row for row in body["resources"] if row["id"] == "private")
+        stores()[2].approve(
+            "private",
+            ["Confidential"],
+            fingerprint("private", body["resources"]),
+            key_choice="shared",
+        )
+        return {
+            "before": previous["revision"],
+            "after": current["revision"],
+            "file_reference_matches": current["value"]["auth"]["key"]["value"]
+            == {"file": target},
         }
     elif action == "config":
         status, body = MODEL_GATEWAY.request("/api/config")
@@ -196,7 +265,13 @@ def command(action, arguments):
             ),
         }
     elif action == "reset":
-        for name in ("calls", "decisions", "credential_headers"):
+        for name in (
+            "calls",
+            "decisions",
+            "credential_headers",
+            "provider_key_used",
+            "developer_key_forwarded",
+        ):
             (STATE / name).unlink(missing_ok=True)
 
 
