@@ -14,6 +14,8 @@ flowchart LR
   App --> Audit[Audit]
   Accounts --> DB[(Django database)]
   Models --> DB
+  Eligibility[Internal project model eligibility] --> DB
+  Eligibility --> Adapter
   Classes --> DB
   Audit --> DB
   Models --> Adapter[Gateway adapter]
@@ -70,6 +72,16 @@ Only explicit application and asset routes are served. Gateway management,
 provider credentials and databases remain internal. Model registration confirms
 component readback; gateway calls and database commits are separate operations,
 so partial failures and uncertain outcomes must remain visible.
+
+## Project model eligibility
+
+`model_registry.policy.DjangoModelPolicy` reads the stored project class, class
+mode and model approvals on each query. It includes a model only while its
+current gateway definition matches the approved definition. Class and approval
+reads share the existing settings-writer lock; incomplete policy fails closed.
+The caller must first authenticate the developer and authorize project access.
+There is no runtime endpoint yet, and this query does not verify provider keys
+or enforce the final routed destination. [Isolated cases](../../tests/integration/model-policy-cases.md) cover its behavior.
 
 ## Current limits
 
