@@ -28,9 +28,14 @@ the new file. A simultaneous unlink failure, or a process kill between file
 creation and commit, can leave an unreferenced file requiring operator recovery.
 There is no automatic orphan collector in this slice.
 
+Model approvals now recognize `personal` internally, with the same class and
+current-definition checks as other choices. This does not admit model work:
+public Add, editing those records, preview Ask and the runtime callback still
+refuse personal-key use. Other models remain available.
+
 Before public submission or dispatch, follow-up work must bind validation to the
-current provider definition (and recheck after edits), support the developer-key
-model choice, and handle refused keys and account removal. Currently ownership
+current provider definition (and recheck after edits), implement personal-key
+model setup, and handle refused keys and account removal. Currently ownership
 records prevent account deletion until their files and records are removed; the
 existing account-removal API does not perform that cleanup. Do not wire public
 admission until this prerequisite is resolved. There is no key-read API here.
