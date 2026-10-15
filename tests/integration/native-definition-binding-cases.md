@@ -12,6 +12,8 @@ any caller-supplied generation. Each selected native model resource contains an
 inline `Require` rule for its own generation; that rule runs before the final
 key callback. A stale selected resource therefore stops before receiving a key.
 The final callback rechecks current registry, approval and key binding.
+This single-model fixture accepts only `private`; a modified client cannot use
+the protected listener to reach an unrelated model preserved in native config.
 
 ```mermaid
 flowchart LR
@@ -31,6 +33,7 @@ definition fingerprint, and keeps management and direct listeners private.
 | Control | Expected result |
 | --- | --- |
 | Current B, with a forged old generation header | B answers using its bound key; the forged header is overwritten. |
+| Modified client selects an unrelated customer model | Denied at entry with zero key callbacks or provider calls. |
 | Stale A while approval/key target B | Denied before the final key callback and provider contact. |
 | Outside edit to B without renewed approval | Its changed fingerprint denies before key delivery. |
 | Publisher tries to reuse a generation | Rejected before changing native configuration or keys. |

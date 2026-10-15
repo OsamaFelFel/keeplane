@@ -1,5 +1,6 @@
 """Controlled publication generations, not native definition self-attestation."""
 
+import io
 import json
 import os
 import time
@@ -23,10 +24,13 @@ def generation(label):
 
 def rule(label):
     # Native model authorization also filters discovery; this GET never dispatches.
-    return (
-        '(request.method == "GET" && request.path == "/v1/models") || '
-        f'request.headers["{HEADER}"] == "{generation(label)}"'
-    )
+    match = f'request.headers["{HEADER}"] == "{generation(label)}"'
+    if os.environ.get("FIXTURE_DEFINITION_FALLBACK") == "1":
+        match = (
+            f'(size(request.headers["{HEADER}"]) <= 256 && '
+            f'json(request.headers["{HEADER}"])["private"] == "{generation(label)}")'
+        )
+    return '(request.method == "GET" && request.path == "/v1/models") || ' + match
 
 
 def configure(definitions):
@@ -178,6 +182,9 @@ def wrap(application, state):
         stage = environ["PATH_INFO"]
         if stage not in (ENTRY, SELECTED):
             return application(environ, start_response)
+        raw = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
+        environ["wsgi.input"] = io.BytesIO(raw)
+        requested = json.loads(raw).get("model_id")
         current = binding(state)
         status, body = MODEL_GATEWAY.resources()
         list_status, listing = MODEL_GATEWAY.models()
@@ -187,6 +194,7 @@ def wrap(application, state):
         approval = stores()[2].get("private")
         valid = (
             status == 200
+            and requested == "private"
             and approval
             and approval["gateway_fingerprint"] == current["fingerprint"]
             and fingerprint("private", body["resources"]) == current["fingerprint"]

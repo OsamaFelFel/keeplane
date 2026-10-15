@@ -49,12 +49,20 @@ def test_native_selected_generation_precedes_key_callback(
             > report["versions"]["stale_revision"]
         )
 
-        def probe(port, expected, contacts, callbacks, entry_status=200):
+        def probe(
+            port, expected, contacts, callbacks, entry_status=200, requested="private"
+        ):
             trial.call("reset")
             trial.call("binding_reset")
             result = trial.probe(
                 {
                     "port": port,
+                    "body": {
+                        "model": requested,
+                        "messages": [
+                            {"role": "user", "content": "synthetic definition check"}
+                        ],
+                    },
                     "headers": {
                         HEADER: trial.generation_a,
                         "X-API-Key": "client-provider-forgery",
@@ -69,6 +77,7 @@ def test_native_selected_generation_precedes_key_callback(
             report["requests"].append(
                 {
                     "serving_copy": "current-b" if port == 5000 else "stale-a",
+                    "requested_model": requested,
                     "status": result["status"],
                     "provider_contacts": observed["calls"],
                     "key_callbacks": len(key_calls),
@@ -113,6 +122,7 @@ def test_native_selected_generation_precedes_key_callback(
                 }
             ] * len(contacts)
 
+        probe(5000, 403, [], 0, entry_status=403, requested="customer-owned")
         probe(5000, 200, ["mock-generation-b"], 1)
         probe(5001, 403, [], 0)
         assert trial.call("binding_reject_reuse") is True
@@ -121,5 +131,5 @@ def test_native_selected_generation_precedes_key_callback(
         assert trial.call("config") == trial.before
         assert trial.before["existing_preserved"]
         assert trial.before["existing_listed"] is existing
-        report["passed"] = True
-        save()
+    report["passed"] = True
+    save()
