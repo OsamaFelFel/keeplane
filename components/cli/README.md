@@ -63,8 +63,34 @@ integration; this option does not flatten them into every request. Project
 provider settings, plugins, hooks and credential stores remain excluded. The
 [paired native control](../../tests/e2e/cli-child-hook-cases.md) explains why
 enabling all project configuration would be unsafe.
-The profile is removed when the invocation ends;
-sessions cannot yet be resumed. Built-in tool permission prompts remain enabled.
+The profile is removed when the invocation ends. To keep a completed session,
+add `--state-dir /absolute/private/keeplane-session` outside the repository.
+Its parent directory must already exist. Keeplane creates a private state
+directory or accepts an empty private one; existing vendor profiles and databases
+are refused. The runtime's JSON events contain the session ID. Repeat the same
+command with `--session SESSION_ID` and the same state directory to continue it.
+Supply a current gateway credential again; no saved credential authorizes resume.
+Repeat `--instructions` to use the current reviewed text.
+
+Only the runtime database is retained; HOME, configuration, caches and temporary
+files remain disposable. State is bound to the canonical working directory,
+gateway API, model and exact runtime version. Changed bindings, unsafe files or
+stored runtime credentials are refused. One owned lock serializes its use.
+Server-account binding awaits the browser sign-in integration: this is local
+OS-user history, not proof of a Keeplane account or project provenance.
+
+To remove all saved history from that state while keeping its binding and lock:
+
+```sh
+python3 components/cli/session_state.py --discard /absolute/private/keeplane-session
+```
+
+The next invocation can start a new session. An active state cannot be reset.
+Do not unlink its lock to bypass that check. If initial creation was interrupted
+and the state is rejected, inspect the owned directory and choose a fresh one.
+After an interrupted coding turn, review edits before continuing; this slice
+proves completed text/tool turns, not safe replay of unfinished side effects or
+attachments from discarded caches. Built-in tool permission prompts remain enabled.
 This is not a sandbox or proof of project provenance. Login, authorized-model
 discovery integration, native provider protocols, routing, migration apply and offline distribution
 remain separate work.
