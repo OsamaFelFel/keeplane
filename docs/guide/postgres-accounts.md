@@ -112,11 +112,13 @@ coordinate old-worker shutdown and backup before running it; automatic schema
 rollback is not supplied. Set `app.postgres.migration.enabled=false` only when
 an external migration process has already prepared the schema.
 
-`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` checks the
-shared settings table and returns 503 during database loss; `/health/app` keeps
-the process alive for recovery. Database failure does not trigger a liveness
-restart. SQLite trial mode requires one copy and cannot be combined with
-PostgreSQL.
+`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` returns 503
+when the database is unavailable or a migration known to this app is pending.
+Run the migration Job before admitting the new app copies. The probe only reads
+migration history; it never changes the schema. Extra migrations from a newer
+app version do not make an old worker unready. `/health/app` keeps the process
+alive for recovery, so database failure does not trigger a liveness restart.
+SQLite trial mode requires one copy and cannot be combined with PostgreSQL.
 
 Supply an existing provider-key PVC. Multiple nodes need a volume that supports
 the required shared reads/writes; the single-node test's RWO claim does not prove
