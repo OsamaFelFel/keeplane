@@ -45,7 +45,28 @@ uncertain write response. Class fields are omitted while classes are off.
 
 The React Projects screen uses the listing API for server-side search and
 paging. It hides class columns while classes are off and keeps the table inside
-a scrollable frame on narrow screens. CLI registration, project access checks
-are separate changes. The class dialog reads current definitions and sends one
+a scrollable frame on narrow screens. CLI registration is a separate change.
+The class dialog reads current definitions and sends one
 explicit assignment. A lost response disables editing until an admin checks the
 stored result; the same GET readback supports recovery without a repeated write.
+
+## Internal model authorization
+
+`DjangoModelAuthorization(identity, model_policy, project_access=...)` composes a
+current Django session, a registered project and current model eligibility.
+The required server access function receives canonical account and project IDs;
+only an explicit `True` allows the check to continue. Project usage never grants
+access, and admin status never bypasses model restrictions. A successful check
+returns only the account, project and model IDs.
+
+```mermaid
+flowchart LR
+  Session[Current Django session] --> Project[Registered project]
+  Project --> Access[Required server access policy]
+  Access --> Models[Current eligible models]
+  Models --> Decision[Account, project and model IDs]
+```
+
+There is no HTTP authorization endpoint or credential issuer yet. Deployment
+must still configure its project-access policy and enforce the decision at the
+final gateway destination. [Isolated cases](../../tests/integration/model-authorization-cases.md) cover this composition.

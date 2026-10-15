@@ -1,11 +1,11 @@
 # Spec 004 model approval trial cases
 
 Run against the protected Docker preview at `http://127.0.0.1:3000` after
-`deploy/local/up.py` and `test_local.py`. `local-fixture` is a
-file-owned gateway model, and `test_local.py` registers `second-local` through
-the gateway API. Both must be unapproved before the run. The runner is
-[`test_model_approval.py`](test_model_approval.py); it removes only approvals
-it creates and writes a JSON observation report.
+`deploy/local/up.py`. Enable data classes and leave the file-owned
+`local-fixture` model unapproved. The runner is
+[`test_model_approval.py`](test_model_approval.py); it creates a unique gateway
+model for the persistence check and removes that model and its approval afterward,
+including on failure. Existing models such as `second-local` are left untouched.
 
 | Case | Plain-English action | Expected result |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ it creates and writes a JSON observation report.
 | MODEL-06 | Ask the approved model to do work. | The model answers through Keeplane. |
 | MODEL-07 | Restart the Keeplane Docker app. | The approval remains and the model can still answer. |
 | MODEL-08 | Remove Keeplane's approval. | The model remains in the gateway, appears as outside again, and gets no Keeplane work. |
-| MODEL-09 | Approve a dynamically registered gateway model, restart the app, and ask it to work. | Its approval survives restart and the model answers. |
+| MODEL-09 | Create and approve a disposable gateway model, restart the app, and ask it to work. | Its approval survives restart and the model answers; its model and approval are cleaned up afterward. |
 | MODEL-10 | Try to register a gateway model without the admin action header. | The protected preview refuses the change. |
 
 The test uses a file-owned fixture, so it does not prove cloud provider keys,
