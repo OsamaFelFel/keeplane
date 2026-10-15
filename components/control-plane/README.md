@@ -24,3 +24,5 @@ use PostgreSQL. See [local setup](../../docs/guide/local-preview.md) and
 Python tests live in the repository's `tests/` tree and run through pytest.
 The one-time `import_preview` command preserves earlier local records without
 changing their original files. Serving workers never run schema migrations.
+The original Django migration is retained. Moving models between apps changes
+their migration state only, preserving existing PostgreSQL tables and records.

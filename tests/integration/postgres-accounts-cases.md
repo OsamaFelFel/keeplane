@@ -24,6 +24,7 @@ Existing previews are not reset.
 | PGAPI-13 | Exhaust the first-admin budget, update the shared password and restart one copy. Its UUID remains; new password works; old password and sessions fail on both copies. |
 | PGAPI-14 | ASCII case variants sign in and collide as duplicate names. Unicode lookalikes cannot alias an account or obtain a separate budget; the username column uses explicit C collation. |
 | PGAPI-15 | An in-use class reports its project count and cannot be removed. The last class and writes while disabled are protected. Turning the mode off and on retains existing definitions. |
+| PGAPI-16 | Start from the previous Django schema and populate all 12 record types. Move models into their domain apps without recreating tables; accounts, sessions, preferences, budgets, classes, approvals and Audit records remain intact. |
 
 Run `.venv/bin/python -m pytest tests/integration/test_postgres_accounts.py -m live`
 after building `keeplane-preview:kind-local`. GitHub Actions runs this fixture
@@ -32,7 +33,8 @@ SHA-256 requirements. An optional `--wheels <verified-wheel-directory>` uses an
 offline cache containing Psycopg 3.3.6 and its CPython 3.13 binary wheel. The
 runner installs offline with hash enforcement, records source/base-image hashes,
 and removes its own containers, volumes, network, temporary secret files and
-derived image. It never prints credentials or cookies. Earlier failed reports
-remain versioned. Binary-wheel testing does not select the release distribution.
+derived image. It never prints credentials or cookies. Failed reports remain in
+the ignored results directory or CI artifacts. Binary-wheel testing does not
+select the release distribution.
 
 Use `--app-image keeplane-preview:postgres-local` to test the source-built driver package. PGAPI-09 also requires readiness 503 and liveness 200 during database loss; recovery requires readiness 200. The default hash-verified binary-wheel fixture remains available for component comparison.

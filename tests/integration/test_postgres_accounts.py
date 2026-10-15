@@ -346,6 +346,19 @@ def run_cases():
                 )
             run(["docker", "build", "--network=none", "-t", image, str(build)])
             dc("up", "-d", "--wait", "--wait-timeout", "90", "database", "gateway")
+            record(
+                "PGAPI-16",
+                lambda: json.loads(
+                    dc(
+                        "run",
+                        "--rm",
+                        "--no-deps",
+                        "app-a",
+                        "python",
+                        "/tests/fixtures/migration_probe.py",
+                    ).stdout
+                ),
+            )
             dc(
                 "run",
                 "--rm",
