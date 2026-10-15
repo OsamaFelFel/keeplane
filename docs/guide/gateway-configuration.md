@@ -77,12 +77,10 @@ the first admin, sets up a no-key model and refuses work through an unrelated
 unapproved model. Its account and browser cases are versioned under `tests/`.
 Run the [plain-English existing-gateway cases](../../tests/e2e/existing-gateway-cases.md)
 with the full regression command in [the regression guide](regression-local.md).
-To repeat the React browser suite through a temporary port-forward, use a new
-output filename:
+To repeat the React browser suite through a temporary port-forward:
 
 ```sh
-.venv/bin/python -m pytest tests/e2e/test_existing_gateway_browser.py \
-  --output test-results/browser/YYYY-MM-DD-existing-browser.json
+.venv/bin/python -m pytest tests/e2e/test_existing_gateway_browser.py -m live
 ```
 
 Shared cloud-provider keys are not proven in this mode: the supplied gateway

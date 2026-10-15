@@ -28,17 +28,17 @@ repository root:
 
 ```sh
 deploy/local/kind-up.sh
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_local.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_qwen.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_runner_flow.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_accounts.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_data_classes.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_audit.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_cloud_add.py
-KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_key_rotation.py
-.venv/bin/python -m pytest tests/e2e/test_model_runtime.py --kind
-.venv/bin/python -m pytest tests/e2e/test_kind.py
-.venv/bin/python -m pytest tests/e2e/test_stack_lock.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_local.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_qwen.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_runner_flow.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_accounts.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_data_classes.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_audit.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_cloud_add.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_key_rotation.py -m live
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 .venv/bin/python -m pytest tests/e2e/test_model_runtime.py -m live
+.venv/bin/python -m pytest tests/e2e/test_kind.py -m live
+.venv/bin/python -m pytest tests/e2e/test_stack_lock.py -m live
 ```
 
 The setup script pulls pinned images and the first run requires registry

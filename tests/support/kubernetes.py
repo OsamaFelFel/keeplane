@@ -40,6 +40,20 @@ def kube(*args):
     return run("kubectl", "--kubeconfig", KUBECONFIG, *args).stdout.strip()
 
 
+def prepare_app_image():
+    """Use the current local app build in the disposable Calico cluster."""
+    if kube("config", "current-context") != "kind-keeplane-netpol":
+        raise RuntimeError("Refusing to load images outside kind-keeplane-netpol")
+    run(
+        "kind",
+        "load",
+        "docker-image",
+        "keeplane-preview:kind-local",
+        "--name",
+        "keeplane-netpol",
+    )
+
+
 def port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))

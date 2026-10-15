@@ -21,11 +21,10 @@ tokens stay in memory and do not appear in evidence.
 | HTTPS-CSRF-03 | Omit Origin and vary HTTPS Referer. | Missing, insecure or foreign Referer is rejected; trusted HTTPS Referer succeeds. |
 | HTTPS-CSRF-04 | Mark a browser view CSRF exempt as DRF does. | The browser middleware still checks the token and origin and returns the redacted JSON refusal. |
 
-Run the four isolated HTTPS checks in the pinned app container:
+Run the four isolated HTTPS checks without starting the application:
 
 ```sh
-docker compose --env-file /private/tmp/keeplane-accounts-trial/.env exec -T app \
-  python - < tests/unit/test_browser_csrf.py
+.venv/bin/python -m pytest tests/unit/test_browser_csrf.py
 ```
 
 The managed and existing-gateway TLS suites obtain tokens through the verified

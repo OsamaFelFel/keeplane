@@ -14,6 +14,8 @@ application; checks marked `live`, `kubernetes` or `optional` require explicit
 selection and the prerequisites in the [test guide](../docs/guide/regression-local.md).
 Readable cases stay beside their relevant suites. Fixtures contain test inputs;
 generated reports, logs and traces go under ignored `test-results/` or CI artifacts.
+Each pytest invocation gets a fresh `test-results/pytest/` subdirectory. Set
+`KEEPLANE_TEST_REPORT_DIR` to choose a fresh report directory explicitly.
 
 Use `tests/run_regression.py` for the full configured environments. Keep selected
 durable verification summaries under `docs/verification/`. Earlier run notes

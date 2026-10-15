@@ -9,4 +9,4 @@ Edition: Open Source. The full regression runs these checks against the protecte
 
 The full regression also runs the existing account, class, audit, local and cloud model-management cases in both previews, followed by the real local Qwen gateway journey. See `regression-cases.md` for the complete command. This is local functional parity, not shared state or production authorization evidence.
 
-Run the Chromium suite in `tests/browser/` on each address to check the visible React Users, Data Classes and Audit flows. The Audit and Users cases include a quick Next click after initial load so a search timer cannot reset the page. The browser run files are saved under `tests/browser/runs/`.
+Run the Chromium suite in `tests/browser/` on each address to check the visible React Users, Data Classes and Audit flows. The Audit and Users cases include a quick Next click after initial load so a search timer cannot reset the page. Browser output stays under ignored `test-results/` or in CI artifacts.

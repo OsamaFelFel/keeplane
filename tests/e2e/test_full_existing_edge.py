@@ -14,7 +14,16 @@ import uuid
 
 from tests.support.gateway_database_fixture import database_secret
 from tests.support.protected_preview import curl_csrf_headers
-from tests.support.kubernetes import HELM, HOST, KEYS, KUBECONFIG, PASSWORD, ROOT, port
+from tests.support.kubernetes import (
+    HELM,
+    HOST,
+    KEYS,
+    KUBECONFIG,
+    PASSWORD,
+    ROOT,
+    port,
+    prepare_app_image,
+)
 
 
 APP_NS = "keeplane-existing-edge-" + uuid.uuid4().hex[:8]
@@ -58,6 +67,7 @@ def run_cases():
         raise RuntimeError(
             "Refusing a Kubernetes context other than kind-keeplane-netpol"
         )
+    prepare_app_image()
     rows = []
     created = []
     forwarded = None

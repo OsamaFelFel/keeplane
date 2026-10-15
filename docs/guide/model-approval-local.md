@@ -40,14 +40,14 @@ Run the [plain-English cases](../../tests/e2e/model-approval-cases.md) and the
 recorded checks:
 
 ```sh
-.venv/bin/python -m pytest tests/e2e/test_local.py
-.venv/bin/python -m pytest tests/e2e/test_model_approval.py
-.venv/bin/python -m pytest tests/e2e/test_model_edit.py
-.venv/bin/python -m pytest tests/e2e/test_model_replacement.py
-.venv/bin/python -m pytest tests/e2e/test_model_removal.py
-.venv/bin/python -m pytest tests/e2e/test_cloud_listing.py
+.venv/bin/python -m pytest tests/e2e/test_local.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_approval.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_edit.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_replacement.py -m live
+.venv/bin/python -m pytest tests/e2e/test_model_removal.py -m live
+.venv/bin/python -m pytest tests/e2e/test_cloud_listing.py -m live
 .venv/bin/python -m pytest tests/integration/test_model_catalog.py
-.venv/bin/python -m pytest tests/e2e/test_accounts.py
+.venv/bin/python -m pytest tests/e2e/test_accounts.py -m live
 ```
 
 The model approval test removes its trial approval at the end. Its

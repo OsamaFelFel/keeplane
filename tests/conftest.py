@@ -2,6 +2,8 @@
 
 from pathlib import Path
 from types import SimpleNamespace
+from datetime import datetime, timezone
+import os
 import uuid
 import pytest
 
@@ -11,6 +13,18 @@ def pytest_addoption(parser):
         "--app-image",
         default=None,
         help="Packaged PostgreSQL application image for integration checks",
+    )
+
+
+def pytest_configure():
+    run_id = (
+        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        + "-"
+        + uuid.uuid4().hex[:8]
+    )
+    os.environ.setdefault(
+        "KEEPLANE_TEST_REPORT_DIR",
+        str(Path(__file__).resolve().parents[1] / "test-results/pytest" / run_id),
     )
 
 

@@ -66,6 +66,15 @@ def run_cases():
             "--from-file=runtime-key=" + str(KEY_DIR / "gateway-runtime-key"),
             "--from-file=admin-key=" + str(KEY_DIR / "gateway-admin-key"),
         )
+        kubectl(
+            "-n",
+            NAMESPACE,
+            "create",
+            "secret",
+            "generic",
+            "keeplane-first-admin",
+            "--from-file=first-admin-password=" + str(KEY_DIR / "first-admin-password"),
+        )
         stage = "helm install"
         run(
             HELM,
@@ -91,6 +100,12 @@ def run_cases():
             "app.image=keeplane-preview:kind-local",
             "--set",
             "app.pullPolicy=Never",
+            "--set",
+            "app.localTrial.enabled=true",
+            "--set",
+            "app.localTrial.firstAdminSecret=keeplane-first-admin",
+            "--set",
+            "app.localTrial.publicOrigin=http://keeplane-down-app:3000",
             "--wait",
             "--timeout",
             "120s",
@@ -174,19 +189,26 @@ def run_cases():
 
         # Request through the Service DNS, not the pod IP or localhost. This
         # would fail if readiness removed the app from the Service.
-        probe = """import json,urllib.request,urllib.error
+        probe = """import json,os,http.cookiejar,urllib.request,urllib.error
+from pathlib import Path
 base='http://keeplane-down-app:3000'
-out={}
-for path in ('/','/health/app','/health','/api/models'):
+opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+with opener.open(base+'/api/auth-options',timeout=10) as response:
+ token=json.load(response)['csrf_token']
+request=urllib.request.Request(base+'/api/session',
+ data=json.dumps({'username':'first-admin','password':Path(os.environ['FIRST_ADMIN_PASSWORD_FILE']).read_text().strip()}).encode(),
+ headers={'Content-Type':'application/json','X-CSRFToken':token,'Origin':base},method='POST')
+with opener.open(request,timeout=10) as response:
+ out={'sign-in':{'status':response.status}}
+for path in ('/app/models','/health/app','/health','/api/models'):
  try:
-  with urllib.request.urlopen(base+path,timeout=10) as response:
+  with opener.open(base+path,timeout=10) as response:
    status=response.status; body=response.read().decode()
  except urllib.error.HTTPError as error:
   status=error.code; body=error.read().decode()
  out[path]={'status':status}
- if path=='/':
-  out[path]['warning_present']='id=\"gateway-warning\"' in body
-  out[path]['try_again_present']='id=\"try-again\"' in body
+ if path=='/app/models':
+  out[path]['react_application_served']='id="root"' in body
 print(json.dumps(out))"""
         stage = "service HTTP probe"
         # Endpoint objects can update before the Service dataplane stops
@@ -225,8 +247,9 @@ print(json.dumps(out))"""
             attempts += 1
             passed = (
                 observed is not None
-                and observed["/"]
-                == {"status": 200, "warning_present": True, "try_again_present": True}
+                and observed["sign-in"]["status"] == 200
+                and observed["/app/models"]
+                == {"status": 200, "react_application_served": True}
                 and observed["/health/app"]["status"] == 200
                 and observed["/health"]["status"] == 503
                 and observed["/api/models"]["status"] == 503

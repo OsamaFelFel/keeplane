@@ -18,7 +18,7 @@ use a temporary data class and clean it up; the test turns recording off again.
 
 ## Always-on break-glass sign-ins
 
-Run `.venv/bin/python -m pytest tests/integration/test_break_glass_audit_store.py -m live` for the isolated
+Run `.venv/bin/python -m pytest tests/integration/test_break_glass_audit_store.py` for the isolated
 transaction and storage-failure cases, and
 `.venv/bin/python -m pytest tests/e2e/test_break_glass_audit.py -m live` against the protected Docker
 preview. Neither test saves a password, session token or provider key in its

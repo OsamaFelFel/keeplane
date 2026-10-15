@@ -14,7 +14,7 @@ the release policy contract. It does not select a release gateway.
 | GW-PROBE-06 | From the sibling workload, repeat the call as a stream, with a tool, through OpenAI Responses and through Anthropic Messages. | Every supported route refuses the missing credential before upstream dispatch. |
 | GW-PROBE-07 | Read the key-management and gateway-runtime APIs without a key. | Neither internal API returns configuration to the sibling workload. |
 
-Run `.venv/bin/python -m pytest tests/e2e/test_gateway_bypass_probe.py -m live --output <new JSON path>`
+Run `.venv/bin/python -m pytest tests/e2e/test_gateway_bypass_probe.py -m live`
 from the repository root. The script checks the isolated `kind-keeplane`
 context, uses no project or provider credential, and deletes its two test pods
 in a `finally` block. Its output records only statuses and fixture call counts,

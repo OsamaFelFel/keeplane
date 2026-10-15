@@ -60,19 +60,26 @@ def run_cases():
         environment["KEEPLANE_BASE_URL"] = BASE
         environment["KEEPLANE_TEST_REPORT_DIR"] = temporary
         accounts = subprocess.run(
-            [sys.executable, "tests/e2e/test_accounts.py"],
+            [sys.executable, "-m", "tests.e2e.test_accounts"],
             cwd=ROOT,
             env=environment,
             capture_output=True,
             text=True,
             timeout=180,
         )
+        password = (RUNTIME / "first-admin-password").read_text().strip()
+        for label, output in (("stdout", accounts.stdout), ("stderr", accounts.stderr)):
+            REPORT.with_suffix(".accounts." + label + ".txt").write_text(
+                output.replace(password, "[redacted]")
+            )
         account_report = Path(temporary) / "2026-10-10-users-react.json"
         account_cases = (
             json.loads(account_report.read_text())["cases"]
             if account_report.exists()
             else []
         )
+        if account_report.exists():
+            REPORT.with_suffix(".accounts.json").write_text(account_report.read_text())
         rows.append(
             case(
                 "EXIST-01",

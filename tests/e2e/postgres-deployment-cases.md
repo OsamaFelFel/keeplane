@@ -14,7 +14,7 @@ Run `.venv/bin/python -m pytest tests/integration/test_postgres_chart.py -m live
 | PGCHART-06 | An operator may disable the Job after arranging schema migrations separately. |
 
 Build with `docker build --target postgres -t keeplane-preview:postgres-local -f components/control-plane/Dockerfile .`, then run
-`.venv/bin/python -m pytest tests/e2e/test_postgres_deployment.py -m live --output NEW.json` against the
+`.venv/bin/python -m pytest tests/e2e/test_postgres_deployment.py -m live` against the
 isolated `kind-keeplane-netpol` cluster with its existing ingress controller:
 
 | Case | Expected behavior |

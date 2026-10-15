@@ -22,7 +22,7 @@ add that stale model to another class.
 Run the [plain-English cases](../../tests/e2e/data-classes-cases.md):
 
 ```sh
-.venv/bin/python -m pytest tests/e2e/test_data_classes.py
+.venv/bin/python -m pytest tests/e2e/test_data_classes.py -m live
 .venv/bin/python -m pytest tests/integration/test_data_classes_store.py
 ```
 

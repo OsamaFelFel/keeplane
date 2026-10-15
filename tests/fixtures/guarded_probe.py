@@ -1,4 +1,4 @@
-"""Run in the app container: docker compose exec -T app python - < tests/e2e/test_guarded_endpoint.py."""
+"""Run in the app container with Python stdin from this fixture file."""
 
 import json
 import os

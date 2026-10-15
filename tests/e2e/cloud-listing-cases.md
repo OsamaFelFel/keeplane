@@ -14,6 +14,6 @@ the gateway. They do not call a real cloud provider or store a provider key.
 4. Remove only these trial approvals and gateway resources. Existing models and
    the running previews remain available.
 
-The [live verifier](test_cloud_listing.py) saves a dated JSON result in `runs/`.
+The [live verifier](test_cloud_listing.py) saves a dated JSON result under `test-results/`.
 Shared and personal provider keys need separate evidence before those modes
 appear in the product UI.

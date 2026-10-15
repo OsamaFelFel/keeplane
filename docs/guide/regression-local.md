@@ -13,6 +13,8 @@ The default selection runs unit and integration checks without changing a live
 application. Chart checks also require Helm 3.19 or newer on PATH, or
 `KEEPLANE_HELM_BIN` pointing to Helm. Use `pytest tests/unit` for Python unit checks
 only and `pytest --collect-only` to inspect the selected tests.
+Reports use a new directory under `test-results/pytest/` for each invocation.
+Set `KEEPLANE_TEST_REPORT_DIR` to choose another fresh directory.
 
 ## Frontend and browser
 
@@ -45,6 +47,8 @@ kind journeys, deployment checks and both browser runs. Docker uses port 3000;
 kind uses port 13000. NetworkPolicy/TLS deployment checks additionally require
 the isolated Calico environment described by their case files. An unavailable
 required environment is a failure or an explicitly unrun group.
+The full-chart tests load the current `keeplane-preview:kind-local` image into
+that disposable cluster before installation, so an older cached build is not used.
 
 Use a fresh output filename. JUnit reports, case reports, stdout and stderr are
 retained beside it, including failures. Each browser run has its own trace and

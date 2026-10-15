@@ -12,7 +12,7 @@ curl -fL https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifest
 shasum -a 256 /private/tmp/keeplane-netpol-calico-v3.33.0.yaml
 kubectl --kubeconfig /private/tmp/keeplane-netpol-kubeconfig apply -f /private/tmp/keeplane-netpol-calico-v3.33.0.yaml
 kubectl --kubeconfig /private/tmp/keeplane-netpol-kubeconfig wait --for=condition=Ready node --all --timeout=300s
-.venv/bin/python -m pytest tests/e2e/test_network_policy.py -m live --output test-results/<new-result>.json
+.venv/bin/python -m pytest tests/e2e/test_network_policy.py -m live
 ```
 
 The Calico manifest in this run had SHA-256 `2de8f47595fb9c41b3f47d7b767a1f8e72ecf84057af834738ff12689a234da5`; stop if a future fetch differs and inspect the change before using it. Set `KEEPLANE_NETPOL_KUBECONFIG` if using another local path. This cluster is disposable; delete only `keeplane-netpol` after recording the result.
