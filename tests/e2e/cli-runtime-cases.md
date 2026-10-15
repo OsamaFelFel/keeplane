@@ -14,12 +14,18 @@
   native runtime reaches a stalled synthetic provider before cancellation; its
   process is gone and profile removed afterward. Detached workloads and SIGKILL
   remain outside cleanup guarantees.
+- **CLI-04:** Explicit instruction text and its exact content hash reach every
+  parent/child model request during a real native read/edit/delegate turn. A second
+  turn uses revised text without the old revision. Unselected nested guidance and
+  project provider overrides are excluded. Profiles contain no gateway credential;
+  invalid credentials still fail without tool calls. Unit cases reject unsafe
+  paths, invalid UTF-8 and per-file/total/source-count overflows.
 
-Run the isolated checks with `python -m pytest tests/unit/test_cli_adapter.py`.
+Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.
 For CLI-01, install the exact runtime separately and set
 `KEEPLANE_OPENCODE_V2_BIN=/absolute/path/to/opencode-v2`, then run
 `python -m pytest tests/e2e/test_cli_runtime.py -m live`.
-The fixture sends no outbound requests and uses only a synthetic credential.
+The same file includes CLI-04. The fixture sends no outbound requests and uses only a synthetic credential.
 Use the same binary with `tests/e2e/test_cli_cancellation_native.py` for CLI-03.
 Its temporary PID recorder needs an executable temporary directory; a Docker
 check can use disposable `--tmpfs /tmp:mode=1777,exec` with a read-only root and
