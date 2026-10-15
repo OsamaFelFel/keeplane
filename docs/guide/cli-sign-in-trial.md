@@ -8,6 +8,10 @@ A password change, disabled account or account removal withdraws access. CLI
 logout revokes its own access token and paired refresh token; other CLI sessions
 and the browser session keep working.
 
+`GET /api/runtime/session` returns the current account ID, username and role for
+an explicit bearer credential. The CLI can bind its local history to that account.
+`DELETE` on the same resource signs that credential out.
+
 ```mermaid
 flowchart LR
   CLI[CLI bearer credential] --> Resolver[Current account check]

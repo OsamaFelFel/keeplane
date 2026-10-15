@@ -92,6 +92,16 @@ def test_current_account_and_hashed_storage(oauth):
     assert oauth.identity.authenticated_user(issued.raw).pk == oauth.owner.pk
     User.objects.filter(pk=oauth.owner.pk).update(role="admin")
     assert oauth.identity.session(issued.raw)["role"] == "admin"
+    response = oauth.client.get(
+        "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + issued.raw
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(oauth.owner.pk),
+        "username": oauth.owner.username,
+        "role": "admin",
+    }
+    assert "no-store" in response["Cache-Control"]
     oauth.client.cookies["keeplane_session"] = issued.raw
     assert oauth.client.get("/api/identity").status_code == 401
 
@@ -258,6 +268,9 @@ def test_logout_is_explicit_and_revokes_paired_refresh_only(oauth):
     assert oauth.identity.session(first.raw) is None
     assert oauth.identity.session(second.raw) is not None
     assert oauth.native.session(browser) is not None
+    assert oauth.client.get(
+        "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + browser
+    ).json()["id"] == str(oauth.owner.pk)
     assert not CliCredentialBinding.objects.filter(
         checksum=refresh.token_checksum
     ).exists()

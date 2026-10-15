@@ -47,11 +47,19 @@ def project_models(request, project_id):
 
 @never_cache
 @runtime_bearer_only
-@api_view(["DELETE"])
+@api_view(["GET", "DELETE"])
 @authentication_classes([RuntimeSessionAuthentication])
 @permission_classes([IsAuthenticated])
 def session(request):
-    """Revoke only the exact credential authenticated for this request."""
+    """Return the current account or revoke this request's exact credential."""
+    if request.method == "GET":
+        return Response(
+            {
+                "id": str(request.user.pk),
+                "username": request.user.username,
+                "role": request.user.role,
+            }
+        )
     if request.body:
         return Response({"error": "Send an empty logout request"}, status=400)
     RuntimeIdentity(IDENTITY).logout(request.auth)
