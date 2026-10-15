@@ -17,6 +17,6 @@ generated reports, logs and traces go under ignored `test-results/` or CI artifa
 Each pytest invocation gets a fresh `test-results/pytest/` subdirectory. Set
 `KEEPLANE_TEST_REPORT_DIR` to choose a fresh report directory explicitly.
 
-Use `tests/run_regression.py` for the full configured environments. Keep selected
-durable verification summaries under `docs/verification/`. Earlier run notes
+Use `tests/run_regression.py` for the full configured environments. Test reports,
+logs and traces stay out of Git. Earlier run notes
 remain available at [their recorded commit](https://github.com/OsamaFelFel/keeplane/tree/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests).
