@@ -25,7 +25,12 @@ def checksum(value):
 
 
 def bind_issued_token(kind, value, owner_id, expected_auth_hash):
-    """Trusted issuer only: preserve the account state used to authorize issuance."""
+    """Trusted issuer only: preserve the password state used for authorization.
+
+    The issuer must lock the owner before rechecking the live authorizing
+    session/grant and retain that lock through issuance. This password hash
+    alone does not detect a global revoke or refresh-token rotation.
+    """
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError("Bind CLI credentials inside the issuance transaction")
     if (
