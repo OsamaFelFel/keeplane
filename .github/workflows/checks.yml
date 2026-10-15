@@ -31,6 +31,7 @@ jobs:
           cache-dependency-path: components/admin-ui/package-lock.json
       - run: npm ci
       - run: npm run build
+      - run: npm run test:notices
       - name: Run UI unit tests
         run: |
           mkdir -p "$GITHUB_WORKSPACE/test-results/frontend"
