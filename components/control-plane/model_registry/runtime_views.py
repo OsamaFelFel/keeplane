@@ -17,6 +17,7 @@ from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from projects.access import organization_project_access
+from projects.services import DjangoProjectStore, ProjectError
 from .policy import DjangoModelPolicy, ModelPolicyUnavailable
 
 
@@ -55,3 +56,21 @@ def session(request):
         return Response({"error": "Send an empty logout request"}, status=400)
     RuntimeIdentity(IDENTITY).logout(request.auth)
     return Response(status=204)
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["POST"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def register_project_use(request):
+    body = request.data
+    if not isinstance(body, dict) or set(body) != {"project_id", "name"}:
+        return Response({"error": "Send only a project ID and name"}, status=400)
+    try:
+        project = DjangoProjectStore().register_use(
+            str(request.user.pk), body["project_id"], body["name"]
+        )
+    except ProjectError as error:
+        return Response({"error": error.message}, status=error.status)
+    return Response({"project_id": project["id"], "name": project["name"]})

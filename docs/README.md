@@ -14,6 +14,7 @@
 | Preview an existing Claude, Codex or Qwen project setup | [CLI migration preview](guide/cli-migration-preview.md) |
 | Run tests and retain their results | [Testing](guide/regression-local.md) |
 | Read the experimental allowed-model catalog | [Runtime catalog](guide/runtime-catalog.md) |
+| Test internal gateway policy decisions | [Runtime authorization](architecture/runtime-authorization.md) |
 | Understand the components | [Architecture](architecture/local-preview.md) |
 
 Start with the guide for your task. These documents describe the current

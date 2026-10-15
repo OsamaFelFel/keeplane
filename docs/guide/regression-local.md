@@ -50,6 +50,13 @@ required environment is a failure or an explicitly unrun group.
 The full-chart tests load the current `keeplane-preview:kind-local` image into
 that disposable cluster before installation, so an older cached build is not used.
 
+Component checks include both packaged runtime images. Use `--preview-image` and
+`--app-image` for different preview and PostgreSQL builds. The runner resolves
+their local image IDs, records them and supplies both to the checks; a missing
+image stops the run before live tests begin.
+Keep a local tag on each source image. The PostgreSQL fixture builds through its
+own temporary tag pinned to the resolved ID, then removes that temporary tag.
+
 Use a fresh output filename. JUnit reports, case reports, stdout and stderr are
 retained beside it, including failures. Each browser run has its own trace and
 screenshot directory. The runner records the tested revision and original
@@ -64,6 +71,18 @@ not measure response speed. On slower CPUs, set
 `KEEPLANE_MODEL_REQUEST_TIMEOUT=1200` to allow more time per reply without changing
 those assertions. Optional native Qwen3 trials are selected separately
 with `pytest -m optional`.
+
+To check packaged runtime imports, retained notices, SQLite migrations and
+Gunicorn startup without a gateway, supply both image names:
+
+```sh
+KEEPLANE_RUNTIME_PREVIEW_IMAGE=keeplane-preview:kind-local \
+KEEPLANE_RUNTIME_POSTGRES_IMAGE=keeplane-preview:postgres-local \
+  .venv/bin/python -m pytest -m optional tests/integration/test_runtime_image.py
+```
+
+The PostgreSQL variant also imports its native driver and checks retained source
+archives. This check does not connect to a PostgreSQL server.
 
 ## CI and evidence
 
