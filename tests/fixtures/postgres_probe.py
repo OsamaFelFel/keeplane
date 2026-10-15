@@ -15,6 +15,7 @@ import django
 django.setup()
 from django.contrib.sessions.models import Session
 from django.db import connection, connections
+from django.db.migrations.recorder import MigrationRecorder
 from django.utils import timezone
 from accounts.models import LoginBudget, User
 from audit.models import AuditRecord
@@ -358,6 +359,23 @@ def check_rotation():
     }
 
 
+def schema_readiness():
+    row = MigrationRecorder.Migration.objects.filter(app="accounts").values().first()
+    assert row is not None
+    try:
+        MigrationRecorder.Migration.objects.filter(pk=row["id"]).delete()
+        for base in (A, B):
+            browser = Browser(base)
+            assert browser.fetch("/health/ready")[0] == 503
+            assert browser.fetch("/health/app")[0] == 200
+    finally:
+        MigrationRecorder.Migration.objects.create(**row)
+    for base in (A, B):
+        assert Browser(base).fetch("/health/ready")[0] == 200
+    return {"pending_schema_readiness": 503, "liveness": 200,
+            "recovered_without_restart": True}
+
+
 def outage():
     browser = load("durable-session")
     assert browser.fetch("/api/identity")[0] == 503
@@ -526,6 +544,7 @@ if __name__ == "__main__":
         "prepare-rotation": prepare_rotation,
         "rotation": check_rotation,
         "outage": outage,
+        "schema-readiness": schema_readiness,
         "recovery": recovery,
         "versions": versions,
         "ascii-usernames": ascii_usernames,

@@ -30,6 +30,8 @@ spec:
             - "4096"
             - -n
             - "256"
+            - --threads
+            - "4"
           ports:
             - containerPort: 8080
           startupProbe:

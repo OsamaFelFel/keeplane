@@ -83,8 +83,16 @@ and review-preview cutover remain release work.
 
 ## Install the chart against an operated database
 
-Use [the example values](../../deploy/postgres/values.example.yaml). Provision a
-private database owned by a migration role and a separate app login. Neither
+Use [the example values](../../deploy/postgres/values.example.yaml). Set
+`app.image` to your packaged PostgreSQL image's registry reference and immutable
+manifest digest, such as `registry.example.test/keeplane@sha256:<64 hex characters>`.
+Use the digest reported by your registry after publishing the image; the local
+Docker image ID is not the registry manifest digest. Helm refuses tags in
+PostgreSQL mode. App copies, migration Jobs and supplied-gateway preflight use
+that same image. Make it available from the customer's internal registry before
+closing install-time registry access. Local SQLite trials can still use tags.
+
+Provision a private database owned by a migration role and a separate app login. Neither
 role needs superuser, database creation or role creation permission. Revoke
 `PUBLIC` database access and schema creation. Grant the app only `CONNECT` on
 this database, `USAGE` on its schema, and table `SELECT, INSERT, UPDATE, DELETE`
@@ -112,11 +120,13 @@ coordinate old-worker shutdown and backup before running it; automatic schema
 rollback is not supplied. Set `app.postgres.migration.enabled=false` only when
 an external migration process has already prepared the schema.
 
-`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` checks the
-shared settings table and returns 503 during database loss; `/health/app` keeps
-the process alive for recovery. Database failure does not trigger a liveness
-restart. SQLite trial mode requires one copy and cannot be combined with
-PostgreSQL.
+`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` returns 503
+when the database is unavailable or a migration known to this app is pending.
+Run the migration Job before admitting the new app copies. The probe only reads
+migration history; it never changes the schema. Extra migrations from a newer
+app version do not make an old worker unready. `/health/app` keeps the process
+alive for recovery, so database failure does not trigger a liveness restart.
+SQLite trial mode requires one copy and cannot be combined with PostgreSQL.
 
 Supply an existing provider-key PVC. Multiple nodes need a volume that supports
 the required shared reads/writes; the single-node test's RWO claim does not prove
