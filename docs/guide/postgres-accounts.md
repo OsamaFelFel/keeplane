@@ -28,6 +28,11 @@ allow replacement of the drivers. Complete native/base-image source and notice
 inventory remains release work. See the [package records](../../components/control-plane/licenses/README.md)
 and [Psycopg installation choices](https://www.psycopg.org/psycopg3/docs/basic/install.html).
 
+The final `preview` and `postgres` images omit `pip` and `ensurepip`. Install
+dependencies while building an image, then rebuild to update them. Installer
+notices remain under `/usr/share/keeplane/licenses/pip-<version>/`. The pinned
+base layers still carry their original distribution obligations.
+
 Configure every app replica and the one-off migration process:
 
 | Setting | Value |
