@@ -50,6 +50,13 @@ required environment is a failure or an explicitly unrun group.
 The full-chart tests load the current `keeplane-preview:kind-local` image into
 that disposable cluster before installation, so an older cached build is not used.
 
+Component checks include both packaged runtime images. Use `--preview-image` and
+`--app-image` for different preview and PostgreSQL builds. The runner resolves
+their local image IDs, records them and supplies both to the checks; a missing
+image stops the run before live tests begin.
+Keep a local tag on each source image. The PostgreSQL fixture builds through its
+own temporary tag pinned to the resolved ID, then removes that temporary tag.
+
 Use a fresh output filename. JUnit reports, case reports, stdout and stderr are
 retained beside it, including failures. Each browser run has its own trace and
 screenshot directory. The runner records the tested revision and original
