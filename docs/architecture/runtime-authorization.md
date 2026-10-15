@@ -53,3 +53,42 @@ inspection, routing, fallback and final-destination enforcement still require a
 protected gateway integration. A local project ID does not prove content origin.
 [Isolated HTTP cases](../../tests/integration/runtime-callback-cases.md) cover
 the two credentials, withdrawal, denied contexts, malformed metadata and outages.
+
+## Try the native integration
+
+The [disposable native check](../../tests/integration/native-runtime-authorization-cases.md)
+connects this callback to the pinned gateway with real Django records and a mock
+provider. Its sibling client carries only a test developer session. The gateway
+adds its own file-backed credential and builds metadata from the requested
+`X-Keeplane-Project-ID` and model. This header is an experimental requested context,
+not proof of repository identity or a released CLI transport contract.
+
+The fixture checks at entry and again for the selected native model backend. A
+deliberate later rewrite to a denied model produces no provider call. Only the
+guarded chat listener is reachable from the client network; raw model, management
+and authorizer listeners bind to the gateway's private loopback namespace.
+An existing configuration keeps its unrelated model intact.
+
+```mermaid
+flowchart LR
+  Client --> Entry[Entry check]
+  Entry --> Selection[Native model selection]
+  Selection --> Selected[Selected model check]
+  Selected --> Strip[Remove client credentials and context]
+  Strip --> Mock[Mock model]
+  Entry -.-> Django[Current Django authorization]
+  Selected -.-> Django
+```
+
+The keyless fixture models remove developer authorization and Keeplane context
+headers after their final check. Native forwarding keeps those headers by
+default. A provider needing a key must instead receive its server-selected
+credential without forwarding the developer session; that integration remains
+separate work.
+
+Native [external authorization](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/external-authz/)
+and [file-backed backend credentials](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/backend-authn/key/)
+provide the transport. These fixture checks do not install production isolation
+or policy publication, cover every route/fallback/replica, or select a release
+gateway. [The test cases](../../tests/integration/native-runtime-authorization-cases.md)
+list prerequisites and the command.
