@@ -486,7 +486,7 @@ def run_cases():
             record(
                 rows,
                 "EXEDGE-05",
-                outside.stdout == "302",
+                outside.stdout == "404",
                 {"public_gateway_route_status": outside.stdout},
             )
         except Exception as error:
