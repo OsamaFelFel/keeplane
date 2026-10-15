@@ -2,7 +2,6 @@
 
 import json
 import secrets
-import subprocess
 import sys
 import time
 import uuid
@@ -13,10 +12,11 @@ from urllib.parse import urlencode
 
 from test_accounts import BASE, Browser, RUNTIME
 from reporting import report_path
+from restart_preview import restart_app
 
 
 REPO = Path(__file__).resolve().parents[2]
-REPORT = report_path("2026-10-09-audit.json")
+REPORT = report_path("2026-10-10-audit-developer.json")
 
 
 def main():
@@ -28,6 +28,7 @@ def main():
     cases = []
     cleanup_errors = []
     original_options = None
+    original_mode = None
 
     def record(identifier, passed, observed):
         cases.append({"id": identifier, "verdict": "pass" if passed else "fail",
@@ -55,12 +56,19 @@ def main():
     try:
         with browser.opener.open(BASE + "/audit", timeout=15) as response:
             page_status = response.status
+            page_url = response.url
             html = response.read().decode()
         original_options = options()
+        original_mode = browser.fetch("/api/data-classes")[1]["enabled"]
+        if not original_mode:
+            mode_status, _, _ = browser.fetch("/api/data-classes/mode",
+                                              {"enabled": True}, method="PUT")
+            if mode_status != 200:
+                raise RuntimeError("Could not enable data classes for Audit cases")
         baseline = records()["total"]
         identity_status, identity, _ = browser.fetch("/api/identity")
-        record("AUD-01", page_status == 200 and 'id="rec-settings"' in html and
-               'id="search-records"' in html and identity_status == 200 and
+        record("AUD-01", page_status == 200 and 'id="root"' in html and
+               page_url == BASE + "/app/audit" and identity_status == 200 and
                set(original_options) == {"settings", "held_requests", "model_answers"},
                {"page_status": page_status, "actor": identity.get("username"),
                 "original_options": original_options, "existing_records": baseline})
@@ -142,14 +150,16 @@ def main():
             developer_id = created["id"]
         developer = Browser()
         developer_status, developer_url, _, _, _ = developer.login(developer_name, developer_password)
+        developer_api_status, _, _ = developer.fetch("/api/audit/records")
         anonymous_status, _, _ = Browser().fetch("/api/audit/records")
-        record("AUD-09", create_status == 201 and developer_status == 403 and
-               "/api/session" in developer_url and anonymous_status == 401,
+        record("AUD-09", create_status == 201 and developer_status == 200 and
+               developer_url == BASE + "/app/" and developer_api_status == 403 and
+               anonymous_status == 401,
                {"create_status": create_status, "developer_login_status": developer_status,
+                "developer_api_status": developer_api_status,
                 "anonymous_api_status": anonymous_status})
 
-        subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                        "restart", "app"], check=True, cwd=REPO, capture_output=True, text=True)
+        restart_app(BASE)
         for _ in range(30):
             try:
                 persisted_options = options()
@@ -191,6 +201,14 @@ def main():
                             cleanup_errors.append(f"restoring {kind} raised {type(error).__name__}")
                         else:
                             time.sleep(1)
+        if original_mode is False:
+            try:
+                status, _, _ = browser.fetch("/api/data-classes/mode",
+                                              {"enabled": False}, method="PUT")
+                if status != 200:
+                    cleanup_errors.append(f"restoring class mode returned {status}")
+            except Exception as error:
+                cleanup_errors.append(f"restoring class mode raised {type(error).__name__}")
         report = {"suite": "Spec 006 Audit protected Docker preview",
                   "time_utc": datetime.now(timezone.utc).isoformat(),
                   "cases": cases, "cleanup": "complete" if not cleanup_errors else cleanup_errors,

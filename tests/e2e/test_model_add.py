@@ -18,6 +18,7 @@ def main():
     browser = Browser()
     browser.login("first-admin", (RUNTIME / "first-admin-password").read_text().strip())
     name = "keeplane-add-" + uuid.uuid4().hex[:10]
+    no_class_name = name + "-no-class"
     bad_name = name + "-no-answer"
     runner_name = name + "-runner"
     cases = []
@@ -36,12 +37,17 @@ def main():
                 "add_class_choices_present": 'id="add-class-choices"' in html})
 
         missing_status, missing, _ = browser.fetch("/api/models", {
-            "name": name, "model": "mock-local", "source": "fixture"}, method="POST")
+            "name": no_class_name, "model": "mock-local", "source": "fixture"}, method="POST")
+        _, after_missing, _ = browser.fetch("/api/models")
+        no_class_model = next((item for item in after_missing.get("models", [])
+                               if item["id"] == no_class_name), {})
         invalid_status, invalid, _ = browser.fetch("/api/models", {
             "name": name, "model": "mock-local", "source": "fixture",
             "approved_classes": ["Nonexistent"]}, method="POST")
         gateway_status, resources = gateway_call("GET", RESOURCE_PATH)
-        record("ADD-02", missing_status == 400 and invalid_status == 400 and
+        record("ADD-02", missing_status == 200 and missing.get("approved_classes") == [] and
+               no_class_model.get("approved") is True and no_class_model.get("approved_classes") == [] and
+               invalid_status == 400 and
                gateway_status == 200 and
                name not in {item.get("id") for item in resources.get("resources", [])},
                {"missing_http": missing_status, "invalid_http": invalid_status,
@@ -114,8 +120,12 @@ def main():
         runner_approval_status, _, _ = browser.fetch(f"/api/models/{runner_name}/setup", {}, method="DELETE")
         runner_gateway_status, _ = gateway_call("DELETE", RESOURCE_PATH + "/" + runner_name)
         gateway_call("DELETE", RESOURCE_PATH + "/" + bad_name)
+        no_class_approval_status, _, _ = browser.fetch(
+            f"/api/models/{no_class_name}/setup", {}, method="DELETE")
+        no_class_gateway_status, _ = gateway_call("DELETE", RESOURCE_PATH + "/" + no_class_name)
         record("ADD-08", approval_status in (200, 404) and gateway_status in (200, 404) and
-               runner_approval_status in (200, 404) and runner_gateway_status in (200, 404),
+               runner_approval_status in (200, 404) and runner_gateway_status in (200, 404) and
+               no_class_approval_status in (200, 404) and no_class_gateway_status in (200, 404),
                {"approval_delete_http": approval_status, "gateway_delete_http": gateway_status,
                 "runner_approval_delete_http": runner_approval_status,
                 "runner_gateway_delete_http": runner_gateway_status})

@@ -1,0 +1,12 @@
+# Trial values. A Kubernetes Secret named gateway-db-credentials would provide
+# the password in a real install; Helm renders only this placeholder.
+agentgateway-standalone:
+  database:
+    postgres:
+      url: postgresql://keeplane:${TRIAL_DB_PASSWORD}@db:5432/keeplane
+  extraEnv:
+    - name: TRIAL_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: gateway-db-credentials
+          key: password

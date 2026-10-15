@@ -7,7 +7,7 @@ form.addEventListener('submit', async (event) => {
   error.hidden = true;
   const fields = Object.fromEntries(new FormData(form));
   try {
-    const response = await fetch('/api/session', {
+    const response = await window.keeplaneFetch('/api/session', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(fields),

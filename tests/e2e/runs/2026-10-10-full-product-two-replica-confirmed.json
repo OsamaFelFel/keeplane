@@ -1,0 +1,73 @@
+{
+  "suite": "full Keeplane chart on enforcing Calico with TLS Ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "FULL-01",
+      "verdict": "pass",
+      "observed": {
+        "tls_verified": true,
+        "anonymous_root_status": 302
+      }
+    },
+    {
+      "case": "FULL-02",
+      "verdict": "pass",
+      "observed": {
+        "session_status": "200",
+        "identity_status": "200"
+      }
+    },
+    {
+      "case": "FULL-03",
+      "verdict": "pass",
+      "observed": {
+        "models_status": "200",
+        "curl_exit": 0
+      }
+    },
+    {
+      "case": "FULL-04",
+      "verdict": "pass",
+      "observed": {
+        "sibling_result": "URLError:TimeoutError"
+      }
+    },
+    {
+      "case": "FULL-05",
+      "verdict": "pass",
+      "observed": {
+        "gateway_policy_present": true
+      }
+    },
+    {
+      "case": "FULL-06",
+      "verdict": "pass",
+      "observed": {
+        "ready_gateway_replicas": 2
+      }
+    },
+    {
+      "case": "FULL-07",
+      "verdict": "pass",
+      "observed": {
+        "model_found": true,
+        "setup_status": "200",
+        "ask_status": "200",
+        "expected_answer": true
+      }
+    },
+    {
+      "case": "FULL-08",
+      "verdict": "pass",
+      "observed": {
+        "only_original_survivor_ready": true,
+        "ready_gateway_replicas": 1,
+        "ask_status": "200",
+        "expected_answer": true
+      }
+    }
+  ],
+  "production_release_approved": false
+}

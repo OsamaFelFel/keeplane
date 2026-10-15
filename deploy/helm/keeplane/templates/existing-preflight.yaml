@@ -8,10 +8,21 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 45
+  activeDeadlineSeconds: 90
   template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-gateway-preflight
     spec:
       restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: preflight
           image: {{ .Values.app.image | quote }}
@@ -24,6 +35,18 @@ spec:
               value: {{ required "gateway.expectedVersion is required in existing mode" .Values.gateway.expectedVersion | quote }}
             - name: GATEWAY_PREFLIGHT_MODEL
               value: {{ .Values.gateway.preflightModel | quote }}
+            {{- if .Values.gateway.keysSecret }}
+            - name: GATEWAY_RUNTIME_KEY_FILE
+              value: /run/gateway-keys/runtime-key
+            - name: GATEWAY_ADMIN_KEY_FILE
+              value: /run/gateway-keys/admin-key
+            {{- end }}
+          {{- if .Values.gateway.keysSecret }}
+          volumeMounts:
+            - name: gateway-keys
+              mountPath: /run/gateway-keys
+              readOnly: true
+          {{- end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
@@ -31,4 +54,14 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          {{- with .Values.app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if .Values.gateway.keysSecret }}
+      volumes:
+        - name: gateway-keys
+          secret:
+            secretName: {{ .Values.gateway.keysSecret | quote }}
+      {{- end }}
 {{- end }}

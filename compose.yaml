@@ -9,6 +9,14 @@ services:
     volumes:
       - gateway-data:/data
 
+  account-volume-init:
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    user: "0"
+    command: ["chown", "-R", "65532:65532", "/state", "/provider-keys"]
+    volumes:
+      - account-data:/state
+      - provider-keys:/provider-keys
+
   model:
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
     command: ["python", "/mock_model.py", "--port", "18080"]
@@ -24,6 +32,9 @@ services:
   gateway:
     image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
     command: ["-f", "/config.yaml"]
+    environment:
+      GATEWAY_RUNTIME_KEY_HASH: ${GATEWAY_RUNTIME_KEY_HASH}
+      GATEWAY_ADMIN_KEY_HASH: ${GATEWAY_ADMIN_KEY_HASH}
     depends_on:
       volume-init:
         condition: service_completed_successfully
@@ -71,7 +82,10 @@ services:
     restart: unless-stopped
 
   app:
-    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    build:
+      context: .
+      dockerfile: components/control-plane/Dockerfile
+    image: keeplane-preview:docker-local
     command: ["python", "/app/server.py"]
     environment:
       GATEWAY_URL: http://gateway:4000
@@ -83,14 +97,21 @@ services:
       MODEL_APPROVAL_DB: /state/model-approvals.sqlite3
       GATEWAY_FILE_CONFIG: /gateway-config/local.yaml
       PROVIDER_KEY_DIR: /provider-keys
+      GATEWAY_RUNTIME_KEY_FILE: /run/secrets/gateway-runtime-key
+      GATEWAY_ADMIN_KEY_FILE: /run/secrets/gateway-admin-key
       PREVIEW_OPENAI_BASE_URL: http://cloud-provider:18082/v1
       PREVIEW_ANTHROPIC_BASE_URL: http://cloud-provider:18082/v1
     depends_on:
-      - gateway
+      gateway:
+        condition: service_started
+      account-volume-init:
+        condition: service_completed_successfully
     volumes:
       - ./components/control-plane:/app:ro
       - ./components/admin-ui:/ui:ro
       - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/first-admin-password:/run/secrets/first-admin-password:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/gateway-runtime-key:/run/secrets/gateway-runtime-key:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/gateway-admin-key:/run/secrets/gateway-admin-key:ro
       - ./integrations/gateway/local.yaml:/gateway-config/local.yaml:ro
       - account-data:/state
       - provider-keys:/provider-keys

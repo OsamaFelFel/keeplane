@@ -1,7 +1,36 @@
 app:
   image: keeplane-preview:local
   pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  resources: {}
+  replicaCount: 1
   runnerUrls: "http://qwen:8080"
+  postgres:
+    enabled: false
+    host: ""
+    port: 5432
+    database: ""
+    user: ""
+    # Separate Secrets: app password, identity material, database CA certificate.
+    credentialsSecret: ""
+    identitySecret: ""
+    caSecret: ""
+    publicOrigin: ""
+    publicOriginAliases: ""
+    # Existing shared PVC; configure the gateway's read-only mount separately.
+    providerKeysClaim: ""
+    migration:
+      enabled: true
+      user: ""
+      credentialsSecret: ""
+  localTrial:
+    enabled: false
+    firstAdminSecret: ""
+    publicOrigin: ""
+    publicOriginAliases: ""
+    openAIBaseUrl: ""
+    anthropicBaseUrl: ""
+    storageSize: 1Gi
   service:
     type: ClusterIP
     nodePort: null
@@ -13,6 +42,20 @@ gateway:
   url: ""
   expectedVersion: "1.6.0"
   preflightModel: ""
+  keysSecret: ""
+
+networkPolicy:
+  # Requires a Kubernetes CNI that enforces NetworkPolicy. The local kindnet
+  # preview does not; keep disabled in that preview.
+  gatewayIngressEnabled: false
+
+ingress:
+  # Publishes only the Keeplane app Service; the gateway stays internal.
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecretName: ""
+  annotations: {}
 
 agentgateway-standalone:
   mode: database

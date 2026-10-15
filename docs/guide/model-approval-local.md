@@ -1,9 +1,9 @@
 # Try model approval in the local account preview
 
-Start the [protected account preview](accounts-local.md), then open
-[Models and routing](http://127.0.0.1:3000/). A model already present in the
+Start the [protected Docker preview](accounts-local.md) or [managed kind preview](kubernetes-local.md), then open Models and routing on [port 3000](http://127.0.0.1:3000/) or [port 13000](http://127.0.0.1:13000/). A model already present in the
 gateway appears as **Added outside Keeplane** with **Not set · gets no work**.
-Choose **Set up**, select its approved data classes, and save. Keeplane checks
+Choose **Set up** and save. If data classes are on, you can select its approved
+classes; when they are off, there is no class field. Keeplane checks
 that the model answers before it records approval. The local trial supports
 no-key models and Keeplane-managed shared keys for cloud-format models against
 a local authenticated fixture. Developer-owned keys remain future work.
@@ -15,7 +15,7 @@ and marks them unapproved until Keeplane setup. The
 to verify that outside models receive no work before setup and that a no-key
 OpenAI trial can answer after approval. They do not test a real cloud account.
 An approved outside model has **Edit** in the Models table. Editing its
-approved classes checks that it still answers before saving. **Remove
+approved classes while the mode is on checks that it still answers before saving. **Remove
 Keeplane setup** stops work through the protected Keeplane API but leaves the
 model registered in the customer gateway. The confirmation dialog states this
 effect.
@@ -27,13 +27,14 @@ protect the changed model. An admin can set up that definition again; Keeplane
 then treats it as an outside model and **Remove Keeplane setup** preserves it.
 Approvals saved before this ownership distinction also count as outside models.
 
-The protected preview stores approvals in a Docker volume, so restarting its app
-does not erase them. Approval is bound to the gateway model definition as well
+The Docker preview stores approvals in a Docker volume, and the managed kind
+preview uses its own PersistentVolumeClaim. Restarting either app does not erase
+its approvals. Approval is bound to the gateway model definition as well
 as its name. If the definition changes, Keeplane stops using it until an admin
 sets it up again. Removing an approval through the trial API leaves the model
 in the gateway. Only work sent through the protected Keeplane API is subject to
-this gate. The separate kind preview remains an integration trial and has not
-yet been given the Open Source account boundary.
+this gate. The managed kind preview has the same local account boundary; the
+customer-supplied gateway fixture remains a separate, unprotected trial.
 
 Run the [plain-English cases](../../tests/e2e/model-approval-cases.md) and the
 recorded checks:

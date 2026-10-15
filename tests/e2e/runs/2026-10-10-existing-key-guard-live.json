@@ -1,0 +1,138 @@
+{
+  "suite": "Protected existing-gateway local trial",
+  "cases": [
+    {
+      "case": "EXIST-01",
+      "verdict": "pass",
+      "observed": {
+        "account_case_count": 21,
+        "account_passed": 21,
+        "account_cases": [
+          {
+            "id": "ACCT-01",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-11",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-02",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-14",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-15",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-23",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-03",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-04",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-05",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-06",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-16",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-17",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-18",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-19",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-20",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-07",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-10",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-12",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-08",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-09",
+            "verdict": "pass"
+          },
+          {
+            "id": "ACCT-13",
+            "verdict": "pass"
+          }
+        ],
+        "account_exit": 0
+      }
+    },
+    {
+      "case": "EXIST-02",
+      "verdict": "pass",
+      "observed": {
+        "anonymous_status": 401,
+        "login_status": 200,
+        "models_status": 200,
+        "model_names": [
+          "customer-fixture",
+          "customer-managed",
+          "mock-local"
+        ],
+        "classes_status": 200,
+        "classes_enabled": false,
+        "audit_status": 200
+      }
+    },
+    {
+      "case": "EXIST-03",
+      "verdict": "pass",
+      "observed": {
+        "approved_status": 200,
+        "approved_answer": "mock answer",
+        "outside_status": 403
+      }
+    },
+    {
+      "case": "EXIST-04",
+      "verdict": "pass",
+      "observed": {
+        "rejected_status": 422,
+        "gateway_catalog_unchanged": true,
+        "key_files_unchanged": true,
+        "existing_answer_status": 200
+      }
+    }
+  ],
+  "passed": 4,
+  "failed": 0
+}

@@ -13,6 +13,7 @@ KUBECONFIG = os.environ.get("KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-k
 HELM = (os.environ.get("KEEPLANE_HELM_BIN") or shutil.which("helm") or
         "/private/tmp/keeplane-helm/darwin-amd64/helm")
 URL = "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000"
+KEY_DIR = Path("/private/tmp/keeplane-accounts-trial")
 
 
 def run(*args):
@@ -43,12 +44,7 @@ def main():
         raise SystemExit("Refusing a Kubernetes context other than kind-keeplane")
     install = run(HELM, "upgrade", "--install", "keeplane-existing", "deploy/helm/keeplane",
                   "--kubeconfig", KUBECONFIG, "--namespace", "keeplane-existing",
-                  "--set", "gateway.mode=existing", "--set", "gateway.install=false",
-                  "--set", "gateway.url=" + URL,
-                  "--set", "gateway.preflightModel=customer-fixture",
-                  "--set", "app.runnerUrls=http://model.supplied-gateway.svc.cluster.local:18080",
-                  "--set", "app.image=keeplane-preview:kind-local",
-                  "--set", "app.pullPolicy=Never", "--wait", "--timeout", "120s")
+                  "-f", "deploy/local/existing-values.yaml", "--wait", "--timeout", "120s")
     good_code, good = probe("1.6.0", "customer-fixture") if install.returncode == 0 else (1, {})
     results.append(record("K8S-10", install.returncode == 0 and good_code == 0 and
                           good.get("passed") is True and good.get("inference_checked") is True,
@@ -65,9 +61,16 @@ def main():
     created = run("kubectl", "--kubeconfig", KUBECONFIG, "create", "namespace", namespace)
     if created.returncode == 0:
         try:
+            secret = run("kubectl", "--kubeconfig", KUBECONFIG, "-n", namespace,
+                         "create", "secret", "generic", "keeplane-gateway-keys",
+                         "--from-file=runtime-key=" + str(KEY_DIR / "gateway-runtime-key"),
+                         "--from-file=admin-key=" + str(KEY_DIR / "gateway-admin-key"))
+            if secret.returncode != 0:
+                raise RuntimeError("Could not create disposable gateway key Secret")
             refused = run(HELM, "install", "keeplane-preflight", "deploy/helm/keeplane",
                           "--kubeconfig", KUBECONFIG, "--namespace", namespace,
                           "--set", "gateway.mode=existing", "--set", "gateway.install=false",
+                          "--set", "gateway.keysSecret=keeplane-gateway-keys",
                           "--set", "gateway.url=" + URL,
                           "--set", "gateway.expectedVersion=0.0.0",
                           "--set", "gateway.preflightModel=customer-fixture",

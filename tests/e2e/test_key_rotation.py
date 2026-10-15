@@ -1,14 +1,19 @@
-"""Live shared-key replacement regression against the protected Docker trial."""
+"""Live shared-key replacement regression against either protected preview."""
 
 import json
+import hashlib
+import os
 import secrets
+import subprocess
 import sys
+import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from reporting import report_path
-from test_accounts import Browser, RUNTIME
+from test_accounts import BASE, Browser, RUNTIME
 from test_cloud_add import key_files, resource
 
 
@@ -26,6 +31,55 @@ def main():
     cases = []
     cleanup_errors = []
     added = False
+
+    def provider_key(value):
+        if BASE == "http://127.0.0.1:3000":
+            fixture_file.write_text(value + "\n")
+            fixture_file.chmod(0o600)
+            return
+        if BASE != "http://127.0.0.1:13000":
+            raise RuntimeError("Refusing key rotation against an unknown preview")
+        prefix = ["kubectl", "--kubeconfig", os.environ.get(
+            "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig")]
+        context = subprocess.check_output(prefix + ["config", "current-context"], text=True).strip()
+        if context != "kind-keeplane":
+            raise RuntimeError("Refusing key rotation outside kind-keeplane")
+        with tempfile.TemporaryDirectory(prefix="keeplane-kind-provider-key-") as directory:
+            key_path = Path(directory) / "key"
+            key_path.write_text(value + "\n")
+            key_path.chmod(0o600)
+            manifest = subprocess.run(prefix + ["-n", "keeplane", "create", "secret", "generic",
+                                                "cloud-provider-key", "--from-file=key=" + str(key_path),
+                                                "--dry-run=client", "-o", "yaml"],
+                                      check=True, capture_output=True, text=True).stdout
+            subprocess.run(prefix + ["-n", "keeplane", "apply", "-f", "-"], input=manifest,
+                           check=True, capture_output=True, text=True)
+        # The fixture reads this Secret file for every call. Updating it in
+        # place avoids closing a connection that the gateway is using.
+        expected_digest = hashlib.sha256(value.encode()).hexdigest()
+        deadline = time.monotonic() + 120
+        while True:
+            pods = json.loads(subprocess.check_output(prefix + ["-n", "keeplane", "get",
+                "pods", "-l", "app=cloud-provider", "-o", "json"], text=True))["items"]
+            current = {pod["metadata"]["name"] for pod in pods
+                       if not pod["metadata"].get("deletionTimestamp") and
+                       any(condition.get("type") == "Ready" and condition.get("status") == "True"
+                           for condition in pod["status"].get("conditions", []))}
+            slices = json.loads(subprocess.check_output(prefix + ["-n", "keeplane", "get",
+                "endpointslice", "-l", "kubernetes.io/service-name=cloud-provider",
+                "-o", "json"], text=True))["items"]
+            ready = {endpoint.get("targetRef", {}).get("name") for item in slices
+                     for endpoint in item.get("endpoints", [])
+                     if endpoint.get("conditions", {}).get("ready") is True}
+            mounted_digest = subprocess.check_output(prefix + ["-n", "keeplane", "exec",
+                "deployment/cloud-provider", "--", "python", "-c",
+                "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('/run/provider-key/key').read_text().strip().encode()).hexdigest())"],
+                text=True).strip()
+            if len(current) == 1 and ready == current and mounted_digest == expected_digest:
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Cloud provider Service or mounted key did not converge after rotation")
+            time.sleep(0.3)
 
     def record(identifier, passed, observed):
         cases.append({"id": identifier, "verdict": "pass" if passed else "fail",
@@ -85,8 +139,7 @@ def main():
                {"empty_key_status": empty_status, "gateway_unchanged": after_empty == original_resource,
                 "classes": empty_result.get("approved_classes"), "answer_status": empty_ask_status})
 
-        fixture_file.write_text(new_key + "\n")
-        fixture_file.chmod(0o600)
+        provider_key(new_key)
         replace_status, replace_result = edit(["Confidential"], new_key)
         new_resource_status, new_resource = resource(name)
         new_path = (new_resource or {}).get("auth", {}).get("key", {}).get("value", {}).get("file")
@@ -101,6 +154,7 @@ def main():
                Path(old_path).name not in files_after and len(files_after - baseline) == 1 and
                new_ask_status == 200 and new_answer.get("answer") == "mock cloud answer",
                {"replace_status": replace_status,
+                "replace_error": replace_result.get("error", "")[:160],
                 "classes": listed.get("approved_classes") if listed else None,
                 "new_answer_status": new_ask_status,
                 "old_file_removed": bool(old_path and Path(old_path).name not in files_after),
@@ -125,9 +179,11 @@ def main():
                     cleanup_errors.append(f"model removal returned HTTP {status}")
             except Exception as error:
                 cleanup_errors.append(f"model removal raised {type(error).__name__}")
-        fixture_file.write_text(old_key + "\n")
-        fixture_file.chmod(0o600)
-        report = {"suite": "Protected Docker shared-key replacement",
+        try:
+            provider_key(old_key)
+        except Exception as error:
+            cleanup_errors.append("provider key restore raised " + type(error).__name__)
+        report = {"suite": "Protected preview shared-key replacement",
                   "time_utc": datetime.now(timezone.utc).isoformat(),
                   "gateway": "agentgateway local trial",
                   "provider_endpoint": "local authenticated mock",

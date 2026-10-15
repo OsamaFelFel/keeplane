@@ -56,8 +56,6 @@ class ModelCatalog:
         if row is None:
             return None
         classes = json.loads(row[1])
-        if not classes:
-            return None
         return {"key_choice": row[0], "approved_classes": classes,
                 "gateway_fingerprint": row[2], "owned_by_keeplane": bool(row[3])}
 
@@ -65,17 +63,17 @@ class ModelCatalog:
                 owned_by_keeplane=False, key_choice="none"):
         if key_choice not in ("none", "shared"):
             raise ValueError("Choose a supported provider key option")
-        if not isinstance(classes, list) or not classes or \
+        if not isinstance(classes, list) or \
                 any(not isinstance(item, str) for item in classes) or \
                 len(classes) != len(set(classes)):
-            raise ValueError("Choose one or more valid data classes")
+            raise ValueError("Choose valid data classes")
         if not gateway_fingerprint:
             raise ValueError("The gateway model definition could not be verified")
         with self._connect() as connection:
             known = [row[0] for row in connection.execute(
                 "SELECT name FROM data_classes ORDER BY position, name").fetchall()]
             if not set(classes).issubset(known):
-                raise ValueError("Choose one or more valid data classes")
+                raise ValueError("Choose valid data classes")
             ordered = [name for name in known if name in classes]
             previous = connection.execute("""SELECT approved_classes, gateway_fingerprint, owned_by_keeplane, key_choice
                 FROM approved_models WHERE model_id = ?""", (model_id,)).fetchone()

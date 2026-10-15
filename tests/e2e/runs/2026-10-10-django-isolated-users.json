@@ -1,0 +1,220 @@
+{
+  "suite": "Spec 003 Open Source account and edition trial",
+  "time_utc": "2026-10-10T03:29:15.681970+00:00",
+  "identity": "Keeplane local SQLite trial",
+  "cases": [
+    {
+      "id": "ACCT-01",
+      "verdict": "pass",
+      "observed": {
+        "api_status": 401,
+        "sign_in_page": "http://127.0.0.1:13001/sign-in"
+      }
+    },
+    {
+      "id": "ACCT-11",
+      "verdict": "pass",
+      "observed": {
+        "self_registration_control": false
+      }
+    },
+    {
+      "id": "ACCT-02",
+      "verdict": "pass",
+      "observed": {
+        "login_status": 200,
+        "users_page_status": 200,
+        "model_api_status": 200
+      }
+    },
+    {
+      "id": "ACCT-14",
+      "verdict": "pass",
+      "observed": {
+        "forwarded_identity_without_session_status": 401
+      }
+    },
+    {
+      "id": "ACCT-15",
+      "verdict": "pass",
+      "observed": {
+        "wrong_password_status": 401,
+        "api_status": 401
+      }
+    },
+    {
+      "id": "ACCT-23",
+      "verdict": "pass",
+      "observed": {
+        "trusted_status": 200,
+        "foreign_status": 403
+      }
+    },
+    {
+      "id": "ACCT-03",
+      "verdict": "pass",
+      "observed": {
+        "api_after_signout": 401,
+        "sign_in_form_after_signout": true
+      }
+    },
+    {
+      "id": "ACCT-04",
+      "verdict": "pass",
+      "observed": {
+        "list_status": 200,
+        "roles": {
+          "acctd36f90-admin": "admin",
+          "acctd36f90-developer": "developer"
+        }
+      }
+    },
+    {
+      "id": "ACCT-05",
+      "verdict": "pass",
+      "observed": {
+        "login_status": 200,
+        "page": "http://127.0.0.1:13001/app/",
+        "identity_role": "developer",
+        "users_status": 403,
+        "models_status": 403
+      }
+    },
+    {
+      "id": "ACCT-06",
+      "verdict": "pass",
+      "observed": {
+        "login_status": 200,
+        "page": "http://127.0.0.1:13001/"
+      }
+    },
+    {
+      "id": "ACCT-16",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "row_count": 1,
+        "sign_in": "break-glass"
+      }
+    },
+    {
+      "id": "ACCT-17",
+      "verdict": "pass",
+      "observed": {
+        "role_change_status": 403
+      }
+    },
+    {
+      "id": "ACCT-18",
+      "verdict": "pass",
+      "observed": {
+        "first_status": 201,
+        "repeat_status": 201,
+        "same_user": true,
+        "check_status": "created"
+      }
+    },
+    {
+      "id": "ACCT-19",
+      "verdict": "pass",
+      "observed": {
+        "conflict_status": 409
+      }
+    },
+    {
+      "id": "ACCT-20",
+      "verdict": "pass",
+      "observed": {
+        "promote_status": 200,
+        "access_as_admin": 200,
+        "demote_status": 200,
+        "access_after_demote": 401
+      }
+    },
+    {
+      "id": "ACCT-07",
+      "verdict": "pass",
+      "observed": {
+        "pages": [
+          {
+            "status": 200,
+            "count": 20,
+            "has_more": true
+          },
+          {
+            "status": 200,
+            "count": 7,
+            "has_more": false
+          }
+        ],
+        "unique_names": 27,
+        "focused_count": 1
+      }
+    },
+    {
+      "id": "ACCT-10",
+      "verdict": "pass",
+      "observed": {
+        "mutation_status": 403
+      }
+    },
+    {
+      "id": "ACCT-12",
+      "verdict": "pass",
+      "observed": {
+        "admin_model_status": 200,
+        "anonymous_model_status": 401
+      }
+    },
+    {
+      "id": "ACCT-08",
+      "verdict": "pass",
+      "observed": {
+        "api_statuses": {
+          "GET /api/teams": 404,
+          "GET /api/teams?q=old": 404,
+          "GET /api/teams/old": 404,
+          "GET /api/teams/old/members": 404,
+          "POST /api/teams": 404,
+          "PUT /api/teams/old/members/person": 404,
+          "DELETE /api/teams/old": 404
+        },
+        "team_page": 404,
+        "team_detail": 404
+      }
+    },
+    {
+      "id": "ACCT-09",
+      "verdict": "pass",
+      "observed": {
+        "page_statuses": {
+          "/": 200,
+          "/users": 200,
+          "/data-classes": 200,
+          "/audit": 200,
+          "/editions": 200
+        },
+        "team_navigation": [],
+        "editions_status": 200
+      }
+    },
+    {
+      "id": "ACCT-13",
+      "verdict": "pass",
+      "observed": {
+        "off": {
+          "enabled": false
+        },
+        "first_view": {
+          "show": true
+        },
+        "repeat_view": {
+          "show": false
+        }
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 21,
+  "failed": 0
+}

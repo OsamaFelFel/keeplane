@@ -1,0 +1,29 @@
+# Pre-release integration with a separately operated PostgreSQL database.
+# Replace the image reference, hostnames, Secrets and PVC before use.
+app:
+  image: registry.example.test/keeplane@sha256:REPLACE_WITH_POSTGRES_IMAGE_DIGEST
+  replicaCount: 2
+  postgres:
+    enabled: true
+    host: postgres.database.svc.cluster.local
+    database: keeplane
+    user: keeplane_app
+    credentialsSecret: keeplane-app-db
+    identitySecret: keeplane-identity
+    caSecret: keeplane-database-ca
+    providerKeysClaim: keeplane-provider-keys
+    migration:
+      user: keeplane_migrate
+      credentialsSecret: keeplane-migration-db
+
+ingress:
+  enabled: true
+  className: nginx
+  host: keeplane.example.test
+  tlsSecretName: keeplane-tls
+
+gateway:
+  mode: existing
+  install: false
+  url: http://customer-gateway.gateway.svc.cluster.local:4000
+  keysSecret: keeplane-gateway-keys

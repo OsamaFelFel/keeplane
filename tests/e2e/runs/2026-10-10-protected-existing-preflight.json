@@ -1,0 +1,51 @@
+{
+  "results": [
+    {
+      "case": "K8S-10",
+      "verdict": "pass",
+      "observed": {
+        "helm_exit": 0,
+        "probe": {
+          "passed": true,
+          "message": "Existing gateway passed compatibility checks",
+          "expected_version": "1.6.0",
+          "inference_checked": true
+        }
+      }
+    },
+    {
+      "case": "K8S-11",
+      "verdict": "pass",
+      "observed": {
+        "exit": 1,
+        "probe": {
+          "passed": false,
+          "message": "Gateway version differs from the pinned integration version",
+          "expected_version": "0.0.0",
+          "inference_checked": true
+        }
+      }
+    },
+    {
+      "case": "K8S-12",
+      "verdict": "pass",
+      "observed": {
+        "exit": 1,
+        "probe": {
+          "passed": false,
+          "message": "Preflight model is absent from the gateway",
+          "expected_version": "1.6.0",
+          "inference_checked": true
+        }
+      }
+    },
+    {
+      "case": "K8S-13",
+      "verdict": "pass",
+      "observed": {
+        "helm_exit": 1,
+        "app_deployed": false
+      }
+    }
+  ]
+}

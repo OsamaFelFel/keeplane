@@ -1,0 +1,32 @@
+{
+  "suite": "Keeplane real local model",
+  "results": [
+    {
+      "case": "LOCAL-07",
+      "verdict": "pass",
+      "observed": {
+        "register_status": 200,
+        "answer_status": 200,
+        "model": "local-qwen",
+        "answer_excerpt": "```python\ndef add(a, b):\n    \"\"\"\n    Adds two integers and returns the result.\n    \n    Parameters:\n    a (int): The first integer to be added.\n    b (int): The second integer to be added.\n    \n    Returns:\n    int: The sum of the two integers.\n    \"\"\"\n",
+        "error": null
+      }
+    },
+    {
+      "case": "LOCAL-09",
+      "verdict": "pass",
+      "observed": {
+        "model": {
+          "id": "local-qwen",
+          "provider": "Qwen Coder via llama.cpp",
+          "kind": "real-local",
+          "upstream_model": "qwen2.5-coder:0.5b",
+          "approved": true,
+          "key_choice": "none",
+          "approved_classes": [],
+          "owned_by_keeplane": false
+        }
+      }
+    }
+  ]
+}

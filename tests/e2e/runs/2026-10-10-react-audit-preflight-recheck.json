@@ -1,0 +1,49 @@
+{
+  "started_utc": "2026-10-10T02:17:01.250917+00:00",
+  "git_head": "209dd88ec9daa7629b911b6b9f63d6cf7202fdd2",
+  "branch": "feat/react-audit",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "0b79e64e66897f37aed2dcc62ce62d75c10f9934dcfa547c8a9f67c4b1d0b5ec",
+  "selected_suites": [
+    "kind-existing-preflight"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "kind-existing-preflight",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_existing_gateway_preflight.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 14.7,
+      "cases": [
+        {
+          "id": "K8S-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-11",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-13",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": false,
+  "finished_utc": "2026-10-10T02:17:16.164114+00:00",
+  "suites_passed": 1,
+  "suites_total": 1,
+  "cases_reported": 4
+}

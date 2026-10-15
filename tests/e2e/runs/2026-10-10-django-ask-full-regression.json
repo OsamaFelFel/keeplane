@@ -1,0 +1,1948 @@
+{
+  "started_utc": "2026-10-10T09:53:59.034478+00:00",
+  "git_head": "fbaa30d36287720bb4b71caee172aecb1c217a3c",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "chart-package",
+    "catalog-store",
+    "data-class-store",
+    "audit-store",
+    "management-retry",
+    "existing-preflight-read-retry",
+    "local-identity",
+    "break-glass-store",
+    "stack-lock",
+    "preview-parity",
+    "docker-local",
+    "kind-local",
+    "docker-qwen",
+    "kind-qwen",
+    "guarded-endpoint",
+    "docker-runner",
+    "kind-runner",
+    "kind-failover",
+    "kind-gateway-down",
+    "kind-existing-preflight",
+    "kind-existing-protected",
+    "accounts",
+    "kind-accounts",
+    "data-classes",
+    "kind-data-classes",
+    "model-approval",
+    "kind-model-approval",
+    "model-edit",
+    "kind-model-edit",
+    "model-replacement",
+    "kind-model-replacement",
+    "audit",
+    "kind-audit",
+    "break-glass-audit",
+    "model-add",
+    "kind-model-add",
+    "cloud-listing",
+    "kind-cloud-listing",
+    "cloud-add",
+    "kind-cloud-add",
+    "key-rotation",
+    "kind-key-rotation",
+    "model-removal",
+    "kind-model-removal",
+    "docker-runtime",
+    "kind-runtime",
+    "integrated-demo",
+    "kind-integrated-demo"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "chart-package",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_chart_package.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.9,
+      "cases": [
+        {
+          "id": "PKG-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 7,
+      "passed": true
+    },
+    {
+      "suite": "catalog-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_catalog.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.1,
+      "cases": [
+        {
+          "id": "catalog-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "data-class-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.1,
+      "cases": [
+        {
+          "id": "data-class-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "audit-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 0.3,
+      "cases": [
+        {
+          "id": "audit-store",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 1,
+      "passed": true
+    },
+    {
+      "suite": "management-retry",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_management_retry.py"
+      ],
+      "environment": {
+        "PYTHONPATH": "components/control-plane"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.6,
+      "cases": [
+        {
+          "id": "MGMT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MGMT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MGMT-03",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    },
+    {
+      "suite": "existing-preflight-read-retry",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_gateway_preflight_read_retry.py"
+      ],
+      "environment": {
+        "PYTHONPATH": "components/control-plane"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.2,
+      "cases": [
+        {
+          "id": "K8S-14",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-15",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-16",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    },
+    {
+      "suite": "local-identity",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local_identity.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 2.0,
+      "cases": [
+        {
+          "id": "ACCT-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-22",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-store",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit_store.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.3,
+      "cases": [
+        {
+          "id": "BG-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    },
+    {
+      "suite": "stack-lock",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_stack_lock.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 4.1,
+      "cases": [
+        {
+          "id": "LOCK-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCK-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "preview-parity",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_preview_parity.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 2.4,
+      "cases": [
+        {
+          "id": "PARITY-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "PARITY-02",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "docker-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.1,
+      "cases": [
+        {
+          "id": "LOCAL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-11",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 7,
+      "passed": true
+    },
+    {
+      "suite": "kind-local",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_local.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.0,
+      "cases": [
+        {
+          "id": "LOCAL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-11",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 7,
+      "passed": true
+    },
+    {
+      "suite": "docker-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 5.0,
+      "cases": [
+        {
+          "id": "LOCAL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "kind-qwen",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_qwen.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 11.4,
+      "cases": [
+        {
+          "id": "LOCAL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "guarded-endpoint",
+      "command": [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "app",
+        "python",
+        "-"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.4,
+      "cases": [
+        {
+          "id": "LOCAL-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-13",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-14",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-15",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "docker-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:3000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.9,
+      "cases": [
+        {
+          "id": "LOCAL-23",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-24",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21-ADD",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-22",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "kind-runner",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_runner_flow.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 0.9,
+      "cases": [
+        {
+          "id": "LOCAL-23",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-24",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-21-ADD",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-22",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "kind-failover",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_kind.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 7.8,
+      "cases": [
+        {
+          "id": "K8S-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-17",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 8,
+      "passed": true
+    },
+    {
+      "suite": "kind-gateway-down",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_gateway_down.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 14.0,
+      "cases": [
+        {
+          "id": "K8S-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "kind-existing-preflight",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_existing_gateway_preflight.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 9.6,
+      "cases": [
+        {
+          "id": "K8S-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-11",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "K8S-13",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "kind-existing-protected",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_existing_gateway_live.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 34.8,
+      "cases": [
+        {
+          "id": "EXIST-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-04",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "accounts",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_accounts.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 18.7,
+      "cases": [
+        {
+          "id": "ACCT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-11",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-14",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-15",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-23",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-16",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-17",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-18",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-20",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-13",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 21,
+      "passed": true
+    },
+    {
+      "suite": "kind-accounts",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_accounts.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 18.2,
+      "cases": [
+        {
+          "id": "ACCT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-11",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-14",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-15",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-23",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-16",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-17",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-18",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-20",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-12",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "ACCT-13",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 21,
+      "passed": true
+    },
+    {
+      "suite": "data-classes",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 5.9,
+      "cases": [
+        {
+          "id": "CLASS-00",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 11,
+      "passed": true
+    },
+    {
+      "suite": "kind-data-classes",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_data_classes.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 8.8,
+      "cases": [
+        {
+          "id": "CLASS-00",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLASS-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 11,
+      "passed": true
+    },
+    {
+      "suite": "model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 9.6,
+      "cases": [
+        {
+          "id": "MODEL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 10,
+      "passed": true
+    },
+    {
+      "suite": "kind-model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 14.8,
+      "cases": [
+        {
+          "id": "MODEL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 10,
+      "passed": true
+    },
+    {
+      "suite": "model-edit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_edit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.0,
+      "cases": [
+        {
+          "id": "EDIT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "kind-model-edit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_edit.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.7,
+      "cases": [
+        {
+          "id": "EDIT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "EDIT-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "model-replacement",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_replacement.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 3.9,
+      "cases": [
+        {
+          "id": "REPLACE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "kind-model-replacement",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_replacement.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 3.9,
+      "cases": [
+        {
+          "id": "REPLACE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REPLACE-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.6,
+      "cases": [
+        {
+          "id": "AUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "kind-audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_audit.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 9.7,
+      "cases": [
+        {
+          "id": "AUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-09",
+          "verdict": "pass"
+        },
+        {
+          "id": "AUD-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "break-glass-audit",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_break_glass_audit.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.8,
+      "cases": [
+        {
+          "id": "BG-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "BG-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    },
+    {
+      "suite": "model-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_add.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 6.7,
+      "cases": [
+        {
+          "id": "ADD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-08",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 8,
+      "passed": true
+    },
+    {
+      "suite": "kind-model-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_add.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 4.9,
+      "cases": [
+        {
+          "id": "ADD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "ADD-08",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 8,
+      "passed": true
+    },
+    {
+      "suite": "cloud-listing",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_listing.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 2.1,
+      "cases": [
+        {
+          "id": "CLOUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-04",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "kind-cloud-listing",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_listing.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 2.2,
+      "cases": [
+        {
+          "id": "CLOUD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CLOUD-04",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 4,
+      "passed": true
+    },
+    {
+      "suite": "cloud-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_add.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 8.3,
+      "cases": [
+        {
+          "id": "CADD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "kind-cloud-add",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_cloud_add.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 9.5,
+      "cases": [
+        {
+          "id": "CADD-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "CADD-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 9,
+      "passed": true
+    },
+    {
+      "suite": "key-rotation",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_key_rotation.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 8.1,
+      "cases": [
+        {
+          "id": "ROT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "kind-key-rotation",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_key_rotation.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 135.1,
+      "cases": [
+        {
+          "id": "ROT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": true
+    },
+    {
+      "suite": "model-removal",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_removal.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 10.2,
+      "cases": [
+        {
+          "id": "REMOVE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 8,
+      "passed": true
+    },
+    {
+      "suite": "kind-model-removal",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_removal.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 8.7,
+      "cases": [
+        {
+          "id": "REMOVE-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "REMOVE-07",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 8,
+      "passed": true
+    },
+    {
+      "suite": "docker-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--docker"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 48.5,
+      "cases": [
+        {
+          "id": "LOCAL-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-20",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "kind-runtime",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_runtime.py",
+        "--kind"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 37.9,
+      "cases": [
+        {
+          "id": "LOCAL-19",
+          "verdict": "pass"
+        },
+        {
+          "id": "LOCAL-20",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 2,
+      "passed": true
+    },
+    {
+      "suite": "integrated-demo",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_integrated_demo.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.3,
+      "cases": [
+        {
+          "id": "DEMO-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    },
+    {
+      "suite": "kind-integrated-demo",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_integrated_demo.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 1.0,
+      "cases": [
+        {
+          "id": "DEMO-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "DEMO-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": [
+    false,
+    false
+  ],
+  "finished_utc": "2026-10-10T10:02:11.321228+00:00",
+  "suites_passed": 48,
+  "suites_total": 48,
+  "cases_reported": 290
+}

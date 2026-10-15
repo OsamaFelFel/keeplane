@@ -1,13 +1,30 @@
 # Run the Kubernetes integration trial locally
 
+**Edition:** Open Source
+
 This trial runs Keeplane at [http://127.0.0.1:13000](http://127.0.0.1:13000).
 The Docker preview remains available at [http://127.0.0.1:3000](http://127.0.0.1:3000).
+The protected app using the separately installed gateway can be reached on
+port 13001 through the temporary port-forward in the
+[gateway configuration guide](gateway-configuration.md).
+Sign in as `first-admin` with the password in
+`/private/tmp/keeplane-accounts-trial/first-admin-password`. The Users, Data
+Classes and Audit screens use the same React account flow as Docker. The kind
+and Docker previews keep separate accounts and model approvals; sign-in uses
+the same local password file. The kind setup keeps its account and approval
+files in two local PersistentVolumeClaims, and mounts a private Secret for the
+first-admin password. It also creates private gateway runtime and management
+keys in Secrets for the managed and supplied gateway trials. The same local
+authenticated cloud-provider fixture used in Docker runs in kind with its key
+in a separate Secret. It allows OpenAI- and Anthropic-shaped Add model trials
+without a paid subscription; it is not a real external model. Re-running the
+setup preserves those credentials and records.
 In the Models screen, choose **Add model**, enter `http://qwen:8080`, choose
 **Find models**, select `qwen2.5-coder:0.5b`, and add it. Keeplane checks the
 runner before registration. To test an answer, use the `/api/ask` example in
 the [local model guide](local-preview.md) with port `13000`.
 
-Install Docker, `kind`, `kubectl`, Helm and `rg`. Download the pinned Qwen model
+Install Docker, Node.js 22 or later, `kind`, `kubectl`, Helm and `rg`. Download the pinned Qwen model
 as described in the [local model guide](local-preview.md), then run from the
 repository root:
 
@@ -16,6 +33,11 @@ deploy/local/kind-up.sh
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_local.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_qwen.py
 KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_runner_flow.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_accounts.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_data_classes.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_audit.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_cloud_add.py
+KEEPLANE_BASE_URL=http://127.0.0.1:13000 python3 tests/e2e/test_key_rotation.py
 python3 tests/e2e/test_model_runtime.py --kind
 python3 tests/e2e/test_kind.py
 python3 tests/e2e/test_stack_lock.py
@@ -34,7 +56,12 @@ The managed install uses agentgateway's **official standalone Helm chart**,
 version `v1.6.0`, with two gateway replicas and PostgreSQL-backed model
 registration. Qwen is a real local model served by llama.cpp, while
 `local-fixture` returns a fixed test answer. The PostgreSQL Deployment in `deploy/local` is a disposable test
-fixture with a fixed test password and temporary storage. The app-only install
+fixture with temporary storage and a generated password read from a Secret. Each
+gateway database has its own password file and namespaced Secret; gateway values
+and ConfigMaps contain only a placeholder. Keep the password files across setup
+runs. Existing previews with the older literal password need the backup and
+migration steps in the [database Secret guide](gateway-database-secret.md).
+The protected app-only install
 in the `keeplane-existing` namespace points to a separately installed upstream
 agentgateway in `supplied-gateway`. That gateway has its own disposable
 PostgreSQL and a pre-existing fixture model. Keeplane installs no gateway into
@@ -50,9 +77,54 @@ instead of removing the admin UI from the Service. The isolated
 
 The checked-in chart dependency and lock file pin the upstream chart to
 `v1.6.0`. The gateway and fixture container images are also pinned by digest.
-The chart is an integration trial, not a production installation. Release
-work remains for durable PostgreSQL, secret handling, external network
-controls, production image clearance, node failure and upgrade testing.
+The pinned gateway's PostgreSQL password can be supplied through a Kubernetes
+Secret without putting it in its rendered ConfigMap; see the
+[tested Secret pattern](gateway-database-secret.md). The disposable local values
+still use a test password and must not be reused as release values.
+Keeplane's chart validates the gateway mode and protected local key Secret,
+supports private app image-pull credentials and resource requests, and keeps
+Kubernetes service-account tokens out of the app and preflight pods. The
+[packaging cases and live run](../../tests/e2e/runs/2026-10-10-chart-hardening.md)
+record the tested behavior.
+An optional managed-gateway ingress NetworkPolicy has passed selector checks
+in a separate Calico kind fixture. It remains disabled in this kindnet preview.
+The [plain-English cases and result](../../tests/e2e/runs/2026-10-10-gateway-alternate-and-network.md)
+also show that a pod allowed to adopt the trusted app label can pass the policy;
+production namespace permissions must prevent that.
+The chart also has an optional TLS Ingress to the Keeplane app Service only. It
+requires an ingress class, hostname and existing TLS Secret, and refuses a
+simultaneous app NodePort. Managed and supplied-gateway renders pass the
+[edge packaging case](../../tests/e2e/chart-package-cases.md); no gateway
+management route is configured in that Ingress. It is off in the previews.
+An [isolated live ingress fixture](../../tests/e2e/runs/2026-10-10-chart-ingress-live.md)
+verified the TLS host, HTTP redirect and app-only route with ingress-nginx.
+A later [full-chart Calico trial](../../tests/e2e/runs/2026-10-10-full-product-edge.md)
+passed HTTPS sign-in, identity and model listing through the actual app and
+blocked an unrelated pod from calling its managed gateway. These options are
+still off in this everyday kindnet preview. Customer controller behavior,
+certificate renewal and the project-bound runtime route still need release tests.
+The [two-replica repeat](../../tests/e2e/runs/2026-10-10-full-product-two-replica.md)
+also passed a fixture model answer after one managed gateway pod was removed.
+The [customer-run gateway trial](../../tests/e2e/runs/2026-10-10-full-existing-edge.md)
+passed HTTPS sign-in, Keeplane model registration and an answer through a
+separately installed gateway while Calico blocked an unrelated pod. Its customer
+policy also passed when applied before installation preflight; the preflight
+Job now has a stable label for that rule. Production namespace permissions must
+prevent untrusted pods from adopting the allowed labels.
+For a customer-run gateway, use the
+[customer-owned ingress policy example](../../deploy/examples/customer-gateway-ingress-policy.yaml):
+replace its four `${...}` values with the gateway and Keeplane namespaces and
+Helm release names, then apply it in the gateway namespace **before** installing
+Keeplane. Its two admitted pod labels match the app and preflight Job from the
+Keeplane chart. Keep pod creation and relabeling in the Keeplane namespace
+restricted to trusted operators. The example covers only gateway ingress on
+port 4000; it does not set egress or protect other customer services.
+The chart is an integration trial, not a production installation. The local
+gateway now rejects direct calls without a runtime or management key, as the
+[bypass recheck](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md) shows.
+Release work remains for durable PostgreSQL, secret handling, full-product
+network policy, project and class policy, production image clearance, node
+failure and upgrade testing.
 The exact trial images, chart versions, kind node and Qwen model checksum are
 recorded in [stack.lock.json](../../deploy/local/stack.lock.json). The lock
 check compares those entries with the running Docker and kind installations;
@@ -80,27 +152,18 @@ kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway g
 In the `keeplane-existing` app-only trial, the enabled runner address is
 `http://model.supplied-gateway.svc.cluster.local:18080`. Its model is
 `mock-local`, a fixed-answer fixture. The runner allowlist is configured by
-the chart's `app.runnerUrls` value; it is a preview safeguard while the admin
-page has no sign-in.
+the chart's `app.runnerUrls` value; it is a preview safeguard. The
+existing-gateway app has its own protected local account, Data Classes and
+Audit stores. It is not permanently exposed on the host. Its first-admin
+password matches the other local previews, but its records are separate.
+The local trial proves no-key model setup with the supplied gateway; it does
+not yet prove shared provider-key delivery across namespaces.
 
-Agentgateway's own management UI is available through a local port forward.
-Keep this command running in a terminal, then open
-[http://127.0.0.1:14000/ui/llm/models](http://127.0.0.1:14000/ui/llm/models).
-This trial UI has no sign-in, so the port forward binds only to loopback.
-
-```sh
-kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane \
-  port-forward service/keeplane 14000:4000 --address 127.0.0.1
-```
-
-To inspect the separate supplied gateway's `customer-fixture` catalog, run a
-second port forward and open
-[http://127.0.0.1:14001/ui/llm/models](http://127.0.0.1:14001/ui/llm/models).
-
-```sh
-kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway \
-  port-forward service/supplied-gateway 14001:4000 --address 127.0.0.1
-```
+The raw agentgateway UI and configuration API now require the private admin
+key. A plain browser port forward will return 401. Use Keeplane's Models and
+routing screen to inspect and manage models; the raw gateway UI needs a safe
+admin sign-in arrangement before we offer it again in this trial. A runtime
+key cannot open gateway management.
 
 To inspect Qwen's *effective* context and sampler defaults, read the running
 server. `/props` shows its active context and sampling defaults; `/v1/models`

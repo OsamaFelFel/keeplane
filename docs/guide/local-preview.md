@@ -1,6 +1,9 @@
 # Run Keeplane locally
 
-From the Open Source repository root, with Docker running:
+**Edition:** Open Source
+
+From the Open Source repository root, with Docker running and Node.js 22 or
+newer installed:
 
 ```sh
 python3 deploy/local/up.py
@@ -13,9 +16,19 @@ command keeps existing accounts, approvals, provider keys, and gateway models.
 The runner is small enough for a CPU demo; its output is not a quality target
 for the product.
 
+The script builds the React admin UI from its committed npm lockfile before
+starting Docker. Open the [Users screen](http://127.0.0.1:3000/users) to
+try the React, shadcn/ui and Tailwind implementation. Data Classes and Audit
+also use React, together with Models and routing.
+
 The first admin is `first-admin`. Read the generated password on your own
 machine with `cat /private/tmp/keeplane-accounts-trial/first-admin-password`.
 The file is private and must stay out of Git. The app listens only on loopback.
+The script also creates separate private gateway runtime and management keys.
+The gateway holds their hashes, while the app reads the keys from local files.
+Re-running the script preserves them. Direct gateway calls without a key are
+refused; the [versioned bypass checks](../../tests/e2e/runs/2026-10-10-gateway-key-rollout.md)
+record the result and its limits.
 
 ## Five-minute walkthrough
 
@@ -37,7 +50,9 @@ The model field reports the runner's active context when available. This
 preview uses 4,096 active tokens, while the underlying model reports a
 32,768-token training context. The active limit constrains live requests.
 Keeplane reads these values; it does not tune the model. The pinned runner
-stops at 256 output tokens by default, as checked in `LOCAL-20`.
+stops at 256 output tokens by default, as checked in `LOCAL-20`. The
+preview-only `/api/ask` demo requests at most 64 output tokens so a slow CPU
+runner can finish its smoke answer within the gateway timeout.
 
 `local-fixture` returns a fixed `mock answer` for transport checks. The guarded
 endpoint and cloud-provider containers are disposable integration fixtures;

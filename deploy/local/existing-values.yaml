@@ -1,0 +1,20 @@
+# Protected Keeplane app pointed at the separately installed gateway fixture.
+# The app keeps its own account/settings state; the supplied gateway keeps its
+# pre-existing model catalog in the supplied-gateway namespace.
+app:
+  image: keeplane-preview:kind-local
+  pullPolicy: Never
+  runnerUrls: http://model.supplied-gateway.svc.cluster.local:18080
+  localTrial:
+    enabled: true
+    firstAdminSecret: keeplane-first-admin
+    publicOrigin: http://127.0.0.1:13001
+    publicOriginAliases: http://localhost:13001
+
+gateway:
+  mode: existing
+  install: false
+  url: http://supplied-gateway.supplied-gateway.svc.cluster.local:4000
+  expectedVersion: "1.6.0"
+  preflightModel: customer-fixture
+  keysSecret: keeplane-gateway-keys

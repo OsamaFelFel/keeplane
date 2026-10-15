@@ -1,7 +1,6 @@
 """Live Spec 005 starter class regression for the protected Docker trial."""
 
 import json
-import subprocess
 import sys
 import time
 import uuid
@@ -11,6 +10,7 @@ from urllib.error import URLError
 
 from test_accounts import BASE, Browser, RUNTIME
 from reporting import report_path
+from restart_preview import restart_app
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -24,6 +24,7 @@ def main():
     name = "trial-" + uuid.uuid4().hex[:8]
     class_id = None
     approval_created = False
+    original_mode = None
     cases = []
     cleanup = "not run"
 
@@ -35,11 +36,33 @@ def main():
         status, result, _ = browser.fetch("/api/data-classes")
         return status, result.get("classes", [])
 
+    def mode(enabled):
+        return browser.fetch("/api/data-classes/mode", {"enabled": enabled}, method="PUT")
+
     def model():
         status, result, _ = browser.fetch("/api/models")
         return status, next((item for item in result.get("models", []) if item["id"] == MODEL), None)
 
     try:
+        original_mode = browser.fetch("/api/data-classes")[1]["enabled"]
+        off_status, _, _ = mode(False)
+        off_list_status, off_list, _ = browser.fetch("/api/data-classes")
+        off_add_status, _, _ = browser.fetch("/api/data-classes", {
+            "name": name, "approved_model_ids": []}, method="POST")
+        record("CLASS-00", off_status == 200 and off_list_status == 200 and
+               off_list == {"enabled": False, "classes": []} and off_add_status == 409,
+               {"mode_status": off_status, "listing": off_list, "add_while_off": off_add_status})
+        off_setup_status, _, _ = browser.fetch(f"/api/models/{MODEL}/setup", {
+            "key_choice": "none"}, method="POST")
+        _, off_model = model()
+        on_status, _, _ = mode(True)
+        _, on_model = model()
+        off_setup_removed, _, _ = browser.fetch(f"/api/models/{MODEL}/setup", {}, method="DELETE")
+        record("CLASS-10", off_setup_status == 200 and off_model["approved"] and
+               off_model["approved_classes"] == [] and on_model["approved"] and
+               on_model["approved_classes"] == [] and off_setup_removed == 200,
+               {"setup_while_off": off_setup_status, "approval_after_enable": on_model["approved_classes"],
+                "cleanup_status": off_setup_removed})
         status, initial = classes()
         with browser.opener.open(BASE + "/data-classes", timeout=15) as response:
             page_status = response.status
@@ -48,14 +71,23 @@ def main():
         if initial_model is None or initial_model["approved"]:
             raise RuntimeError("The fixture must be present and unapproved before this test")
         names = [item["name"] for item in initial]
-        record("CLASS-01", status == 200 and names[:3] == ["Public", "Internal", "Confidential"] and
-               page_status == 200 and 'id="class-dialog"' in page,
+        record("CLASS-01", on_status == 200 and status == 200 and
+               names[:3] == ["Public", "Internal", "Confidential"] and
+               page_status == 200 and 'id="root"' in page,
                {"status": status, "starter_names": names[:3], "page_status": page_status})
 
         setup_status, _, _ = browser.fetch(f"/api/models/{MODEL}/setup", {
             "key_choice": "none", "approved_classes": ["Public"]}, method="POST")
         if setup_status == 200:
             approval_created = True
+        mode(False)
+        _, setup_while_off = model()
+        mode(True)
+        _, setup_again = model()
+        record("CLASS-09", setup_status == 200 and setup_while_off["approved"] and
+               setup_again["approved_classes"] == ["Public"],
+               {"setup_while_off": setup_while_off["approved"],
+                "approval_after_reenable": setup_again["approved_classes"]})
         add_status, added, _ = browser.fetch("/api/data-classes", {
             "name": name, "approved_model_ids": [MODEL]}, method="POST")
         if add_status == 201:
@@ -88,8 +120,7 @@ def main():
                {"status": edit_status, "renamed_in_classes": renamed in [item["name"] for item in listing],
                 "renamed_on_model": renamed in configured["approved_classes"]})
 
-        subprocess.run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-                        "restart", "app"], check=True, cwd=REPO, capture_output=True, text=True)
+        restart_app(BASE)
         for _ in range(30):
             try:
                 status, listing = classes()
@@ -119,6 +150,7 @@ def main():
                 "remaining_approval": configured["approved_classes"]})
     finally:
         failures = []
+        mode(True)
         if class_id:
             try:
                 status, _, _ = browser.fetch(f"/api/data-classes/{class_id}", {}, method="DELETE")
@@ -133,6 +165,11 @@ def main():
                     failures.append(f"model approval removal returned {status}")
             except Exception as error:
                 failures.append(f"model approval removal raised {type(error).__name__}")
+        if original_mode is not None:
+            try:
+                mode(original_mode)
+            except Exception as error:
+                failures.append(f"mode restore raised {type(error).__name__}")
         cleanup = "complete" if not failures else "; ".join(failures)
         report = {"suite": "Spec 005 starter data-class Docker trial",
                   "time_utc": datetime.now(timezone.utc).isoformat(),

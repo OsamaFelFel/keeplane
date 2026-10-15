@@ -1,0 +1,12 @@
+test_mr_01_outside_setup_never_deletes_gateway_resource (__main__.ModelRemovalTests) ... ok
+test_mr_02_changed_owned_resource_is_preserved (__main__.ModelRemovalTests) ... ok
+test_mr_03_gateway_failure_retains_approval (__main__.ModelRemovalTests) ... ok
+test_mr_04_owned_model_is_deleted_from_both_stores (__main__.ModelRemovalTests) ... ok
+test_mr_05_shared_key_is_removed_after_gateway_confirmation (__main__.ModelRemovalTests) ... ok
+test_mr_06_adapter_delete_uses_management_key (__main__.ModelRemovalTests) ... ok
+test_mr_07_removal_and_audit_commit_together (__main__.ModelRemovalTests) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.042s
+
+OK

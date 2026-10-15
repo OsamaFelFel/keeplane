@@ -44,6 +44,16 @@ def file_sha256(path):
     return digest.hexdigest()
 
 
+def packages(*prefix):
+    names = sorted(LOCK["python_packages"])
+    script = ("import json,importlib.metadata as m;names=" + repr(names) +
+              ";print(json.dumps({n:{'version':m.version(n),'license':"
+              "m.metadata(n).get('License-Expression') or m.metadata(n).get('License') or "
+              "next((c for c in m.metadata(n).get_all('Classifier',[]) if c.startswith('License ::')), '')} "
+              "for n in names}))")
+    return json.loads(output(*prefix, "python", "-c", script))
+
+
 def main():
     context = kubectl("config", "current-context")
     if context != "kind-keeplane":
@@ -62,7 +72,12 @@ def main():
         "supplied_gateway": image("supplied-gateway", "supplied-gateway"),
         "qwen": image("keeplane", "qwen"),
         "postgres": image("keeplane", "postgres"),
+        "managed_app": image("keeplane", "keeplane-app"),
+        "existing_app": image("keeplane-existing", "keeplane-existing-app"),
     }
+    docker_packages = packages("docker", "exec", "keeplane-local-app-1")
+    kind_packages = packages("kubectl", "--kubeconfig", KUBECONFIG, "-n", "keeplane",
+                             "exec", "deploy/keeplane-app", "--")
     releases = {(item["namespace"], item["name"]): item["chart"] for item in
                 json.loads(output(HELM, "list", "--kubeconfig", KUBECONFIG, "-A", "-o", "json"))}
     versions = {"docker": status("http://127.0.0.1:3000"),
@@ -73,11 +88,13 @@ def main():
          {"model_sha256": digest, "kind_node_image": node}),
         ("LOCK-02", observed_docker == {"gateway": images["agentgateway"],
                                         "qwen": images["llama_cpp"],
-                                        "app": images["python_fixture"]}, observed_docker),
+                                        "app": images["app_docker"]}, observed_docker),
         ("LOCK-03", observed_kind == {"managed_gateway": images["agentgateway"],
                                       "supplied_gateway": images["agentgateway"],
                                       "qwen": images["llama_cpp"],
-                                      "postgres": images["postgres"]}
+                                      "postgres": images["postgres"],
+                                      "managed_app": images["app_kind"],
+                                      "existing_app": images["app_kind"]}
          and releases.get(("keeplane", "keeplane")) == LOCK["charts"]["keeplane"]
          and releases.get(("keeplane-existing", "keeplane-existing")) == LOCK["charts"]["keeplane"]
          and releases.get(("supplied-gateway", "supplied-gateway")) == LOCK["charts"]["agentgateway"],
@@ -86,6 +103,15 @@ def main():
            ("supplied-gateway", "supplied-gateway"))}}),
         ("LOCK-04", all(version == LOCK["runtime"]["agentgateway"] for version in versions.values()),
          versions),
+        ("LOCK-05", all(
+            observed == LOCK["python_packages"] and all("BSD" in item["license"] for item in rows.values())
+            for rows in (docker_packages, kind_packages)
+            for observed in ({name: item["version"] for name, item in rows.items()},)
+        ) and sorted(line for line in
+                     (ROOT / "components/control-plane/requirements-account-api.txt").read_text().splitlines()
+                     if line and not line.startswith("#")) == sorted(
+                         name + "==" + version for name, version in LOCK["python_packages"].items()),
+         {"docker": docker_packages, "kind": kind_packages}),
     ]
     print(json.dumps({"suite": "Keeplane local stack lock", "lock": "deploy/local/stack.lock.json",
                       "results": [{"case": case, "verdict": "pass" if okay else "fail",

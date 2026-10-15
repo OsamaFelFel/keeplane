@@ -9,7 +9,17 @@ gateways:
     port: 4000
 ui:
   gateways: default
+  policies:
+    apiKey:
+      mode: strict
+      keys:
+        - keyHash: ${GATEWAY_ADMIN_KEY_HASH}
 llm:
+  policies:
+    apiKey:
+      mode: strict
+      keys:
+        - keyHash: ${GATEWAY_RUNTIME_KEY_HASH}
   models:
     - name: local-fixture
       provider:

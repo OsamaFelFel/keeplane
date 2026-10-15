@@ -1,0 +1,84 @@
+name: Build and unit checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: components/admin-ui/web
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:unit
+      - run: npm run lint
+
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: components/control-plane
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install the pinned account API dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r components/control-plane/requirements-account-api.txt
+      - name: Run isolated account and persistence cases
+        run: |
+          .venv/bin/python tests/e2e/test_local_identity.py
+          .venv/bin/python tests/unit/test_login_limits.py
+          .venv/bin/python tests/e2e/test_break_glass_audit_store.py
+          .venv/bin/python tests/e2e/test_model_catalog.py
+          .venv/bin/python tests/e2e/test_data_classes_store.py
+          .venv/bin/python tests/e2e/test_audit_store.py
+          .venv/bin/python tests/e2e/test_management_retry.py
+          .venv/bin/python tests/e2e/test_gateway_preflight_read_retry.py
+          .venv/bin/python tests/unit/test_browser_csrf.py
+
+  postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/web/package-lock.json
+      - name: Build the real admin UI for account page checks
+        working-directory: components/admin-ui/web
+        run: npm ci && npm run build
+      - name: Build the PostgreSQL API package from pinned driver source
+        run: docker build --target postgres -t keeplane-preview:postgres-local -f components/control-plane/Dockerfile .
+      - name: Verify accounts, transactions, replica behavior and restore
+        run: python3 tests/e2e/test_postgres_accounts.py --app-image keeplane-preview:postgres-local --output /tmp/keeplane-postgres-api.json
+      - name: Show the fixture result
+        if: always()
+        run: |
+          if [ -f /tmp/keeplane-postgres-api.json ]; then
+            cat /tmp/keeplane-postgres-api.json
+          fi

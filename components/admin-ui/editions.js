@@ -2,7 +2,7 @@ const switchControl = document.querySelector('#ent-notes');
 const notice = document.querySelector('#editions-notice');
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {...options, headers: {'Accept': 'application/json', ...options.headers}});
+  const response = await window.keeplaneFetch(path, {...options, headers: {'Accept': 'application/json', ...options.headers}});
   if (response.status === 401) {
     window.location.assign('/');
     throw new Error('Sign in again');

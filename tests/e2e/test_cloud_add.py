@@ -1,33 +1,25 @@
 """Live cloud registration and key lifecycle trial; reports no key values."""
 
 import json
-import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 
 from reporting import report_path
 from test_accounts import Browser, RUNTIME
-from test_model_replacement import gateway_call
+from test_model_replacement import app_exec, gateway_call
 
 
 REPORT = report_path("2026-10-09-cloud-add.json")
 RESOURCE_PATH = "/api/config/resources/llm.model"
-CONTAINER = "keeplane-local-app-1"
-
-
 def key_files():
     script = "import json, pathlib; print(json.dumps(sorted(p.name for p in pathlib.Path('/provider-keys').glob('key-*'))))"
-    result = subprocess.run(["docker", "exec", CONTAINER, "python", "-c", script],
-                            check=True, capture_output=True, text=True, timeout=15)
-    return set(json.loads(result.stdout))
+    return set(json.loads(app_exec("python", "-c", script)))
 
 
 def key_metadata(path):
     script = "import json, os, sys; s=os.stat(sys.argv[1]); print(json.dumps({'uid':s.st_uid,'mode':oct(s.st_mode & 0o777)}))"
-    result = subprocess.run(["docker", "exec", CONTAINER, "python", "-c", script, path],
-                            check=True, capture_output=True, text=True, timeout=15)
-    return json.loads(result.stdout)
+    return json.loads(app_exec("python", "-c", script, path))
 
 
 def resource(name):

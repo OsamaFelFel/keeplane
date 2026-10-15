@@ -1,9 +1,24 @@
+{{- if and .Values.app.localTrial.enabled (not .Values.gateway.keysSecret) }}
+{{- fail "app.localTrial requires gateway.keysSecret" }}
+{{- end }}
+{{- if and .Values.app.postgres.enabled .Values.app.localTrial.enabled }}
+{{- fail "app.postgres and app.localTrial are mutually exclusive" }}
+{{- end }}
+{{- if and .Values.app.localTrial.enabled (ne (int .Values.app.replicaCount) 1) }}
+{{- fail "SQLite localTrial requires exactly one app replica" }}
+{{- end }}
+{{- if .Values.app.postgres.enabled }}
+{{- if not .Values.gateway.keysSecret }}{{ fail "app.postgres requires gateway.keysSecret" }}{{- end }}
+{{- if and (not .Values.ingress.enabled) (not (hasPrefix "https://" .Values.app.postgres.publicOrigin)) }}
+{{- fail "app.postgres.publicOrigin must use HTTPS" }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-app
 spec:
-  replicas: 1
+  replicas: {{ .Values.app.replicaCount }}
   selector:
     matchLabels:
       app: {{ .Release.Name }}-app
@@ -12,6 +27,18 @@ spec:
       labels:
         app: {{ .Release.Name }}-app
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled }}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      {{- end }}
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: app
           image: {{ .Values.app.image | quote }}
@@ -21,25 +48,164 @@ spec:
           env:
             - name: GATEWAY_URL
               value: {{ if eq .Values.gateway.mode "managed" }}{{ if not .Values.gateway.install }}{{ fail "gateway.install must be true in managed mode" }}{{ end }}{{ printf "http://%s:4000" .Release.Name | quote }}{{ else if eq .Values.gateway.mode "existing" }}{{ if .Values.gateway.install }}{{ fail "gateway.install must be false in existing mode" }}{{ end }}{{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}{{ else }}{{ fail "gateway.mode must be managed or existing" }}{{ end }}
+            - name: GATEWAY_MODE
+              value: {{ .Values.gateway.mode | quote }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
+            {{- if .Values.app.postgres.enabled }}
+            {{- include "keeplane.postgres.env" . | nindent 12 }}
+            - name: KEEPLANE_DATABASE_USER
+              value: {{ required "app.postgres.user is required" .Values.app.postgres.user | quote }}
+            - name: FIRST_ADMIN_PASSWORD_FILE
+              value: /run/keeplane-identity/first-admin-password
+            - name: PUBLIC_ORIGIN
+              value: {{ if .Values.ingress.enabled }}{{ printf "https://%s" (required "ingress.host is required" .Values.ingress.host) | quote }}{{ else }}{{ .Values.app.postgres.publicOrigin | quote }}{{ end }}
+            - name: PUBLIC_ORIGIN_ALIASES
+              value: {{ .Values.app.postgres.publicOriginAliases | quote }}
+            - name: PROVIDER_KEY_DIR
+              value: /provider-keys
+            {{- if eq .Values.gateway.mode "managed" }}
+            - name: GATEWAY_FILE_CONFIG
+              value: /gateway-config/config.yaml
+            {{- end }}
+            {{- end }}
+            {{- if .Values.gateway.keysSecret }}
+            - name: GATEWAY_RUNTIME_KEY_FILE
+              value: /run/gateway-keys/runtime-key
+            - name: GATEWAY_ADMIN_KEY_FILE
+              value: /run/gateway-keys/admin-key
+            {{- end }}
+            {{- if .Values.app.localTrial.enabled }}
+            - name: ACCOUNT_DB
+              value: /state/accounts.sqlite3
+            - name: MODEL_APPROVAL_DB
+              value: /state/model-approvals.sqlite3
+            - name: FIRST_ADMIN_PASSWORD_FILE
+              value: /run/keeplane-secrets/first-admin-password
+            - name: PUBLIC_ORIGIN
+              value: {{ if .Values.ingress.enabled }}{{ printf "https://%s" (required "ingress.host is required when ingress is enabled" .Values.ingress.host) | quote }}{{ else }}{{ required "app.localTrial.publicOrigin is required" .Values.app.localTrial.publicOrigin | quote }}{{ end }}
+            - name: PUBLIC_ORIGIN_ALIASES
+              value: {{ .Values.app.localTrial.publicOriginAliases | quote }}
+            - name: PROVIDER_KEY_DIR
+              value: /provider-keys
+            {{- if .Values.app.localTrial.openAIBaseUrl }}
+            - name: PREVIEW_OPENAI_BASE_URL
+              value: {{ .Values.app.localTrial.openAIBaseUrl | quote }}
+            {{- end }}
+            {{- if .Values.app.localTrial.anthropicBaseUrl }}
+            - name: PREVIEW_ANTHROPIC_BASE_URL
+              value: {{ .Values.app.localTrial.anthropicBaseUrl | quote }}
+            {{- end }}
+            {{- if eq .Values.gateway.mode "managed" }}
+            - name: GATEWAY_FILE_CONFIG
+              value: /gateway-config/config.yaml
+            {{- end }}
+            {{- end }}
+          {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled }}
+          volumeMounts:
+            {{- if .Values.gateway.keysSecret }}
+            - name: gateway-keys
+              mountPath: /run/gateway-keys
+              readOnly: true
+            {{- end }}
+            {{- if .Values.app.postgres.enabled }}
+            {{- include "keeplane.postgres.mounts" . | nindent 12 }}
+            - name: provider-keys
+              mountPath: /provider-keys
+            {{- if eq .Values.gateway.mode "managed" }}
+            - name: gateway-config
+              mountPath: /gateway-config
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- if .Values.app.localTrial.enabled }}
+            - name: state
+              mountPath: /state
+            - name: provider-keys
+              mountPath: /provider-keys
+            - name: first-admin
+              mountPath: /run/keeplane-secrets
+              readOnly: true
+            {{- if eq .Values.gateway.mode "managed" }}
+            - name: gateway-config
+              mountPath: /gateway-config
+              readOnly: true
+            {{- end }}
+            {{- end }}
+          {{- end }}
           readinessProbe:
             httpGet:
-              path: /health/app
+              path: {{ if .Values.app.postgres.enabled }}/health/ready{{ else }}/health/app{{ end }}
               port: 3000
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health/app
               port: 3000
             periodSeconds: 20
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
+            runAsGroup: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          {{- with .Values.app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled }}
+      volumes:
+        {{- if .Values.app.postgres.enabled }}
+        {{- include "keeplane.postgres.ca" . | nindent 8 }}
+        - name: database-credentials
+          secret:
+            secretName: {{ required "app.postgres.credentialsSecret is required" .Values.app.postgres.credentialsSecret | quote }}
+            defaultMode: 0440
+            items:
+              - key: password
+                path: password
+        - name: identity
+          secret:
+            secretName: {{ required "app.postgres.identitySecret is required" .Values.app.postgres.identitySecret | quote }}
+            defaultMode: 0440
+            items:
+              - key: signing-secret
+                path: signing-secret
+              - key: first-admin-password
+                path: first-admin-password
+        - name: provider-keys
+          persistentVolumeClaim:
+            claimName: {{ required "app.postgres.providerKeysClaim is required" .Values.app.postgres.providerKeysClaim | quote }}
+        {{- if eq .Values.gateway.mode "managed" }}
+        - name: gateway-config
+          configMap:
+            name: {{ .Release.Name }}-config
+        {{- end }}
+        {{- end }}
+        {{- if .Values.gateway.keysSecret }}
+        - name: gateway-keys
+          secret:
+            secretName: {{ .Values.gateway.keysSecret | quote }}
+        {{- end }}
+        {{- if .Values.app.localTrial.enabled }}
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-state
+        - name: provider-keys
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-provider-keys
+        - name: first-admin
+          secret:
+            secretName: {{ required "app.localTrial.firstAdminSecret is required" .Values.app.localTrial.firstAdminSecret }}
+        {{- if eq .Values.gateway.mode "managed" }}
+        - name: gateway-config
+          configMap:
+            name: {{ .Release.Name }}-config
+        {{- end }}
+        {{- end }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

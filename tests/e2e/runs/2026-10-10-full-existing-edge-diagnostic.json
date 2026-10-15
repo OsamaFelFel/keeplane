@@ -1,0 +1,53 @@
+{
+  "suite": "customer-run gateway behind TLS and enforcing Calico",
+  "context": "kind-keeplane-netpol",
+  "namespaces_removed": true,
+  "results": [
+    {
+      "case": "EXEDGE-01",
+      "verdict": "pass",
+      "observed": {
+        "app_deployments": [
+          "keeplane-app"
+        ],
+        "gateway_preflight_passed": true
+      }
+    },
+    {
+      "case": "EXEDGE-02",
+      "verdict": "pass",
+      "observed": {
+        "tls_verified": true,
+        "anonymous_status": "302",
+        "session_status": "200",
+        "identity_status": "200"
+      }
+    },
+    {
+      "case": "EXEDGE-03",
+      "verdict": "fail",
+      "observed": {
+        "app_gateway_probe": "HTTP:401",
+        "setup_status": "503",
+        "setup_error": "The gateway model definition could not be verified",
+        "ask_status": "403",
+        "expected_answer": false
+      }
+    },
+    {
+      "case": "EXEDGE-04",
+      "verdict": "pass",
+      "observed": {
+        "sibling_result": "URLError:TimeoutError"
+      }
+    },
+    {
+      "case": "EXEDGE-05",
+      "verdict": "pass",
+      "observed": {
+        "public_gateway_route_status": "302"
+      }
+    }
+  ],
+  "production_release_approved": false
+}

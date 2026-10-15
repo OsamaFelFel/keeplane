@@ -7,6 +7,8 @@
     "llama_cpp": "ghcr.io/ggml-org/llama.cpp@sha256:33868c035b21dc63f7c60b7438774283fd99215bc319114eb03de5df4ce7cd6b",
     "postgres": "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
     "python_fixture": "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a",
+    "app_docker": "keeplane-preview:docker-local",
+    "app_kind": "keeplane-preview:kind-local",
     "kind_node": "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
   },
   "charts": {
@@ -18,6 +20,12 @@
     "qwen_alias": "qwen2.5-coder:0.5b",
     "qwen_context_tokens": 4096,
     "qwen_output_tokens": 256
+  },
+  "python_packages": {
+    "Django": "5.2.18",
+    "djangorestframework": "3.18.3",
+    "asgiref": "3.12.1",
+    "sqlparse": "0.6.0"
   },
   "model": {
     "path": "models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",

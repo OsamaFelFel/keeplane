@@ -1,0 +1,55 @@
+{
+  "started_utc": "2026-10-10T05:45:58.726360+00:00",
+  "git_head": "e94ff338a8f9f5da3b0a05b500f839bf0a05e9d1",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "chart-package"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "chart-package",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_chart_package.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 1.9,
+      "cases": [
+        {
+          "id": "PKG-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "PKG-06",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 6,
+      "passed": true
+    }
+  ],
+  "finished_utc": "2026-10-10T05:46:00.801999+00:00",
+  "suites_passed": 1,
+  "suites_total": 1,
+  "cases_reported": 6
+}

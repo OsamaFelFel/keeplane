@@ -1,0 +1,46 @@
+{
+  "suite": "full Keeplane chart on enforcing Calico with TLS Ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "FULL-01",
+      "verdict": "pass",
+      "observed": {
+        "tls_verified": true,
+        "anonymous_root_status": 302
+      }
+    },
+    {
+      "case": "FULL-02",
+      "verdict": "pass",
+      "observed": {
+        "session_status": "200",
+        "identity_status": "200"
+      }
+    },
+    {
+      "case": "FULL-03",
+      "verdict": "pass",
+      "observed": {
+        "models_status": "200",
+        "curl_exit": 0
+      }
+    },
+    {
+      "case": "FULL-04",
+      "verdict": "pass",
+      "observed": {
+        "sibling_result": "URLError"
+      }
+    },
+    {
+      "case": "FULL-05",
+      "verdict": "pass",
+      "observed": {
+        "gateway_policy_present": true
+      }
+    }
+  ],
+  "production_release_approved": false
+}

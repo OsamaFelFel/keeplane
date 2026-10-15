@@ -1,0 +1,42 @@
+{
+  "suite": "Keeplane local Helm packaging",
+  "results": [
+    {
+      "case": "PKG-01",
+      "verdict": "pass",
+      "observed": {
+        "lint_exit": 0,
+        "render_exit": 0,
+        "app_present": true
+      }
+    },
+    {
+      "case": "PKG-02",
+      "verdict": "pass",
+      "observed": {
+        "render_exit": 0,
+        "app_present": true,
+        "preflight_present": true
+      }
+    },
+    {
+      "case": "PKG-03",
+      "verdict": "pass",
+      "observed": {
+        "render_exit": 0,
+        "app_settings": true,
+        "preflight_settings": true
+      }
+    },
+    {
+      "case": "PKG-04",
+      "verdict": "pass",
+      "observed": {
+        "missing_url_exit": 1,
+        "conflicting_mode_exit": 1,
+        "missing_key_secret_exit": 1
+      }
+    }
+  ],
+  "release_package_approved": false
+}

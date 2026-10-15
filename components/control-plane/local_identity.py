@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 SESSION_SECONDS = 8 * 60 * 60
+LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 60
 USERNAME_PATTERN = re.compile(r"[A-Za-z0-9._-]{3,64}\Z")
 
 
@@ -23,6 +25,17 @@ class IdentityError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
+
+
+class LoginThrottled(IdentityError):
+    def __init__(self, retry_after):
+        super().__init__(429, "Too many sign-in attempts. Wait a minute and try again.")
+        self.retry_after = retry_after
+
+
+def login_bucket(username):
+    # Match SQLite's case-insensitive ASCII usernames without storing their text.
+    return hashlib.sha256(username.lower().encode()).hexdigest()
 
 
 def pagination(query):
@@ -46,12 +59,33 @@ def password_hash(password, salt=None, parallelism=5):
 DUMMY_HASH = password_hash("not-a-real-account", b"KeeplaneDummy123")
 
 
+def password_matches(password, stored):
+    if not stored.startswith("scrypt$"):
+        raise IdentityError(503, "Account hash settings need review")
+    _, cost, parallelism, salt, expected = stored.split("$", 4)
+    if cost != "16384" or parallelism != "5":
+        raise IdentityError(503, "Account hash settings need review")
+    actual = password_hash(password, bytes.fromhex(salt)).rsplit("$", 1)[1]
+    return hmac.compare_digest(actual, expected)
+
+
+def public_user(row):
+    user = dict(row)
+    user["managed"] = user["username"] == "first-admin"
+    user["sign_in"] = "break-glass" if user["managed"] else "local"
+    return user
+
+
 class LocalIdentity:
-    def __init__(self, database, first_admin_password_file):
+    def __init__(self, database, first_admin_password_file, audit):
+        if audit is None:
+            raise RuntimeError("An audit store is required for break-glass sign-in")
         self.database = database
+        self.audit = audit
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
-            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA journal_mode=DELETE")
+            db.execute("PRAGMA synchronous=FULL")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY, username TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -68,13 +102,32 @@ class LocalIdentity:
                     enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
                     seen INTEGER NOT NULL DEFAULT 0 CHECK (seen IN (0, 1))
                 );
+                CREATE TABLE IF NOT EXISTS user_operations (
+                    id TEXT PRIMARY KEY,
+                    actor_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    bucket TEXT PRIMARY KEY,
+                    attempts INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS login_attempts_expiry
+                    ON login_attempts(expires_at);
             """)
-            if not db.execute("SELECT 1 FROM users LIMIT 1").fetchone():
-                password = Path(first_admin_password_file).read_text().strip()
-                if len(password) < 12:
-                    raise RuntimeError("First-admin password must be at least 12 characters")
+            password = Path(first_admin_password_file).read_text().strip()
+            if len(password) < 12:
+                raise RuntimeError("First-admin password must be at least 12 characters")
+            first_admin = db.execute("SELECT * FROM users WHERE username=?", ("first-admin",)).fetchone()
+            if not first_admin:
                 db.execute("INSERT INTO users VALUES (?, ?, ?, ?)",
                            (str(uuid.uuid4()), "first-admin", password_hash(password), "admin"))
+            elif not password_matches(password, first_admin["password_hash"]) or first_admin["role"] != "admin":
+                db.execute("UPDATE users SET password_hash=?, role='admin' WHERE id=?",
+                           (password_hash(password), first_admin["id"]))
+                db.execute("DELETE FROM sessions WHERE user_id=?", (first_admin["id"],))
+                db.execute("DELETE FROM login_attempts WHERE bucket=?",
+                           (login_bucket("first-admin"),))
 
     @contextmanager
     def connect(self):
@@ -90,28 +143,48 @@ class LocalIdentity:
         finally:
             db.close()
 
+    def reserve_login(self, username):
+        now = int(time.time())
+        bucket = login_bucket(username)
+        with self.connect() as db:
+            # Reserve before the costly password check so concurrent workers
+            # share the same budget, including after an app restart.
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM login_attempts WHERE expires_at<=?", (now,))
+            row = db.execute("SELECT attempts, expires_at FROM login_attempts WHERE bucket=?",
+                             (bucket,)).fetchone()
+            if row and row["attempts"] >= LOGIN_ATTEMPTS:
+                raise LoginThrottled(max(1, row["expires_at"] - now))
+            db.execute("""INSERT INTO login_attempts VALUES (?, 1, ?)
+                          ON CONFLICT(bucket) DO UPDATE SET attempts=attempts+1""",
+                       (bucket, now + LOGIN_WINDOW_SECONDS))
+
     def login(self, username, password):
         if not isinstance(username, str) or not isinstance(password, str):
             raise IdentityError(401, "Invalid username or password")
-        with self.connect() as db:
-            user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-            stored = user["password_hash"] if user else DUMMY_HASH
-            if not stored.startswith("scrypt$"):
-                raise IdentityError(503, "Account hash settings need review")
-            _, cost, parallelism, salt, expected = stored.split("$", 4)
-            if cost != "16384" or parallelism != "5":
-                raise IdentityError(503, "Account hash settings need review")
-            actual = password_hash(password, bytes.fromhex(salt)).rsplit("$", 1)[1]
-            if not user or not hmac.compare_digest(actual, expected):
-                raise IdentityError(401, "Invalid username or password")
-            if user["role"] != "admin":
-                raise IdentityError(403, "This account cannot use the admin UI")
-            token = secrets.token_urlsafe(32)
-            digest = hashlib.sha256(token.encode()).hexdigest()
-            db.execute("DELETE FROM sessions WHERE expires_at <= ?", (int(time.time()),))
-            db.execute("INSERT INTO sessions VALUES (?, ?, ?)",
-                       (digest, user["id"], int(time.time()) + SESSION_SECONDS))
-            return token
+        try:
+            self.reserve_login(username)
+            with self.connect() as db:
+                user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+                stored = user["password_hash"] if user else DUMMY_HASH
+                if not password_matches(password, stored) or not user:
+                    raise IdentityError(401, "Invalid username or password")
+                if user["username"] == "first-admin":
+                    db.execute("ATTACH DATABASE ? AS audit_store", (str(self.audit.path),))
+                    if db.execute("PRAGMA audit_store.journal_mode").fetchone()[0] != "delete":
+                        raise IdentityError(503, "Sign-in storage needs operator repair")
+                    db.execute("PRAGMA audit_store.synchronous=FULL")
+                    db.execute("BEGIN IMMEDIATE")
+                    self.audit.record_break_glass_in_transaction(db, user["id"], user["username"])
+                token = secrets.token_urlsafe(32)
+                digest = hashlib.sha256(token.encode()).hexdigest()
+                db.execute("DELETE FROM sessions WHERE expires_at <= ?", (int(time.time()),))
+                db.execute("INSERT INTO sessions VALUES (?, ?, ?)",
+                           (digest, user["id"], int(time.time()) + SESSION_SECONDS))
+                db.execute("DELETE FROM login_attempts WHERE bucket=?", (login_bucket(username),))
+                return token
+        except sqlite3.Error as error:
+            raise IdentityError(503, "Sign-in storage is unavailable; contact your operator") from error
 
     def session(self, token):
         if not token or len(token) > 200:
@@ -136,14 +209,16 @@ class LocalIdentity:
         if len(search) > 80:
             raise IdentityError(400, "Search is too long")
         with self.connect() as db:
+            total = db.execute("""SELECT count(*) FROM users
+                                  WHERE instr(lower(username), lower(?)) > 0""", (search,)).fetchone()[0]
             found = db.execute("""SELECT id, username, role FROM users
                                   WHERE instr(lower(username), lower(?)) > 0
                                   ORDER BY lower(username), id LIMIT ? OFFSET ?""",
                                (search, size + 1, (page - 1) * size)).fetchall()
-        return {"users": [dict(row) for row in found[:size]], "page": page,
-                "page_size": size, "has_more": len(found) > size}
+        return {"users": [public_user(row) for row in found[:size]], "page": page,
+                "page_size": size, "total": total, "has_more": len(found) > size}
 
-    def create_user(self, body):
+    def create_user(self, body, actor_id=None):
         username, password, role = body.get("username"), body.get("password"), body.get("role")
         if not isinstance(username, str) or not USERNAME_PATTERN.fullmatch(username):
             raise IdentityError(400, "Username must be 3–64 letters, numbers, dots, dashes or underscores")
@@ -151,14 +226,62 @@ class LocalIdentity:
             raise IdentityError(400, "Password must be 12–256 characters")
         if role not in ("admin", "developer"):
             raise IdentityError(400, "Choose admin or developer")
+        operation_id = body.get("operation_id")
+        if operation_id is not None:
+            try:
+                operation_id = str(uuid.UUID(operation_id))
+            except (ValueError, TypeError, AttributeError):
+                raise IdentityError(400, "Operation ID must be a UUID")
+            if not actor_id:
+                raise IdentityError(400, "Operation needs a signed-in admin")
         user = {"id": str(uuid.uuid4()), "username": username, "role": role}
         try:
             with self.connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                if operation_id:
+                    prior = db.execute("""SELECT user_operations.actor_id, users.id, users.username,
+                                          users.role, users.password_hash FROM user_operations
+                                          JOIN users ON users.id=user_operations.user_id
+                                          WHERE user_operations.id=?""", (operation_id,)).fetchone()
+                    if prior:
+                        if prior["actor_id"] != actor_id or prior["username"].lower() != username.lower() \
+                                or prior["role"] != role or not password_matches(password, prior["password_hash"]):
+                            raise IdentityError(409, "Operation ID belongs to a different request")
+                        return public_user({key: prior[key] for key in ("id", "username", "role")})
                 db.execute("INSERT INTO users VALUES (?, ?, ?, ?)",
                            (user["id"], username, password_hash(password), role))
+                if operation_id:
+                    db.execute("INSERT INTO user_operations VALUES (?, ?, ?)",
+                               (operation_id, actor_id, user["id"]))
         except sqlite3.IntegrityError:
             raise IdentityError(409, "That name already exists")
-        return user
+        return public_user(user)
+
+    def user_operation(self, operation_id, actor_id):
+        try:
+            operation_id = str(uuid.UUID(operation_id))
+        except (ValueError, TypeError, AttributeError):
+            raise IdentityError(400, "Operation ID must be a UUID")
+        with self.connect() as db:
+            row = db.execute("""SELECT users.id, users.username, users.role FROM user_operations
+                                JOIN users ON users.id=user_operations.user_id
+                                WHERE user_operations.id=? AND user_operations.actor_id=?""",
+                             (operation_id, actor_id)).fetchone()
+        return {"status": "created", "user": public_user(row)} if row else {"status": "not_found"}
+
+    def change_role(self, user_id, role):
+        if role not in ("admin", "developer"):
+            raise IdentityError(400, "Choose admin or developer")
+        with self.connect() as db:
+            row = db.execute("SELECT id, username, role FROM users WHERE id=?", (user_id,)).fetchone()
+            if not row:
+                raise IdentityError(404, "Account not found")
+            if row["username"] == "first-admin":
+                raise IdentityError(403, "The first admin's role is managed at infrastructure level")
+            db.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
+            if role != "admin":
+                db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        return public_user({"id": user_id, "username": row["username"], "role": role})
 
     def delete_user(self, user_id):
         with self.connect() as db:

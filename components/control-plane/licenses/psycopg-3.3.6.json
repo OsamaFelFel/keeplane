@@ -1,0 +1,22 @@
+{
+  "component": "psycopg",
+  "version": "3.3.6",
+  "scope": "Optional pure-Python PostgreSQL driver; not included in the default preview image",
+  "license_expression": "LGPL-3.0-only",
+  "license_file": "psycopg-3.3.6.txt",
+  "requires_python": ">=3.10",
+  "metadata_source": "https://pypi.org/pypi/psycopg/3.3.6/json",
+  "distribution": {
+    "url": "https://files.pythonhosted.org/packages/4e/de/748bd7609c71cae5d737f0ba9192f19329f70180ecda8fff3cac02c5abe3/psycopg-3.3.6-py3-none-any.whl",
+    "sha256": "a1db9f7148b06a28606767efaca51fa6f9398c5c0a3810519be69d7000bdb631"
+  },
+  "corresponding_source": {
+    "url": "https://files.pythonhosted.org/packages/76/26/3ea4ca5eaea1c0debcdf7ee7c1613fbe721dc27a03c461c0817ffd8a0601/psycopg-3.3.6.tar.gz",
+    "sha256": "c081f2250df751a943036e42db6df4571c66cd0aabe8291a7a506512b12007d2"
+  },
+  "advisories_at_2026_10_12": [],
+  "limits": [
+    "A separately installed libpq and its transitive native libraries need their own exact source/notice inventory.",
+    "The disposable binary wheel in integration tests is not covered by this pure-Python package record."
+  ]
+}

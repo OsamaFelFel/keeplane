@@ -1,0 +1,31 @@
+# Apply in the customer gateway namespace before installing Keeplane.
+# Replace the four named template values. Namespace RBAC must prevent untrusted actors from
+# creating or relabeling pods with the admitted Keeplane labels.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keeplane-customer-gateway-ingress
+  namespace: ${GATEWAY_NAMESPACE}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: ${GATEWAY_RELEASE}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ${KEEPLANE_NAMESPACE}
+          podSelector:
+            matchLabels:
+              app: ${KEEPLANE_RELEASE}-app
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ${KEEPLANE_NAMESPACE}
+          podSelector:
+            matchLabels:
+              app: ${KEEPLANE_RELEASE}-gateway-preflight
+      ports:
+        - protocol: TCP
+          port: 4000

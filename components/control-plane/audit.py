@@ -10,6 +10,8 @@ from pathlib import Path
 
 
 KINDS = ("settings", "held_requests", "model_answers")
+BREAK_GLASS_KIND = "break_glass_sign_ins"
+RECORD_KINDS = (*KINDS, BREAK_GLASS_KIND)
 
 
 class AuditError(Exception):
@@ -24,6 +26,10 @@ class AuditStore:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
+            # SQLite can commit the attached account and audit files atomically
+            # only when neither file uses WAL.
+            connection.execute("PRAGMA journal_mode=DELETE")
+            connection.execute("PRAGMA synchronous=FULL")
             connection.execute("""CREATE TABLE IF NOT EXISTS audit_options (
                 kind TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))
             )""")
@@ -73,8 +79,16 @@ class AuditStore:
         with self._connect() as connection:
             return self.record_in_transaction(connection, kind, actor_id, actor_name, description)
 
+    def record_break_glass_in_transaction(self, connection, actor_id, actor_name):
+        """Write an unswitchable event through the sign-in transaction's attachment."""
+        connection.execute("""INSERT INTO audit_store.audit_records
+            (kind, happened_at, actor_id, actor_name, description)
+            VALUES (?, ?, ?, ?, ?)""",
+            (BREAK_GLASS_KIND, datetime.now(timezone.utc).isoformat(timespec="seconds"),
+             actor_id, actor_name, "Break-glass admin signed in."))
+
     def records(self, kind="all", search="", page=1, page_size=25):
-        if kind != "all" and kind not in KINDS:
+        if kind != "all" and kind not in RECORD_KINDS:
             raise AuditError(400, "Choose a valid record kind")
         if not isinstance(search, str) or len(search) > 80:
             raise AuditError(400, "Search must be at most 80 characters")

@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    environment:
+      POSTGRES_USER: keeplane
+      POSTGRES_PASSWORD: fixture-only
+      POSTGRES_DB: keeplane
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keeplane -d keeplane"]
+      interval: 2s
+      retries: 30
+  gateway:
+    image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+    environment:
+      TRIAL_DB_PASSWORD: fixture-only
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+    command: ["-f", "/config.yaml"]
+    depends_on:
+      db:
+        condition: service_healthy

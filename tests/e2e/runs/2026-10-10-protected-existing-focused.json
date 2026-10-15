@@ -1,0 +1,48 @@
+{
+  "started_utc": "2026-10-10T06:55:28.570709+00:00",
+  "git_head": "eaa51087b40f0b3a53fd7a20c898c889daaab068",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "kind-existing-protected"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "kind-existing-protected",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_existing_gateway_live.py"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "duration_seconds": 32.1,
+      "cases": [
+        {
+          "id": "EXIST-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "EXIST-03",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 3,
+      "passed": true
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": [
+    false,
+    false
+  ],
+  "finished_utc": "2026-10-10T06:56:00.929713+00:00",
+  "suites_passed": 1,
+  "suites_total": 1,
+  "cases_reported": 3
+}

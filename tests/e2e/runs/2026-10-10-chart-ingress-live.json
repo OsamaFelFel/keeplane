@@ -1,0 +1,16 @@
+{
+  "suite": "isolated app-only TLS ingress",
+  "context": "kind-keeplane-netpol",
+  "namespace_removed": true,
+  "results": [
+    {
+      "case": "EDGE-TRIAL",
+      "verdict": "fail",
+      "observed": {
+        "error": "RuntimeError",
+        "detail": "curl failed: ble to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the web page ment"
+      }
+    }
+  ],
+  "release_edge_approved": false
+}

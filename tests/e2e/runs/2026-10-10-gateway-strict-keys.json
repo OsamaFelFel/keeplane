@@ -1,0 +1,21 @@
+{
+  "trial": "isolated strict runtime and UI keys",
+  "image": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+  "observations": {
+    "sibling_without_credentials": {
+      "model_list_status": 401,
+      "management_read_status": 401,
+      "direct_chat_status": 401,
+      "forged_chat_status": 401,
+      "upstream_calls_added": 0,
+      "model": "local-fixture"
+    },
+    "runtime_key_model_list": 200,
+    "runtime_key_chat": 200,
+    "runtime_key_management": 401,
+    "admin_key_management": 200,
+    "admin_key_chat": 401
+  },
+  "trial_passes": true,
+  "release_policy_passes": false
+}

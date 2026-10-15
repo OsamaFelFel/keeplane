@@ -1,0 +1,112 @@
+{
+  "suite": "Spec 005 starter data-class Docker trial",
+  "time_utc": "2026-10-10T03:41:42.554476+00:00",
+  "cases": [
+    {
+      "id": "CLASS-00",
+      "verdict": "pass",
+      "observed": {
+        "mode_status": 200,
+        "listing": {
+          "enabled": false,
+          "classes": []
+        },
+        "add_while_off": 409
+      }
+    },
+    {
+      "id": "CLASS-10",
+      "verdict": "pass",
+      "observed": {
+        "setup_while_off": 200,
+        "approval_after_enable": [],
+        "cleanup_status": 200
+      }
+    },
+    {
+      "id": "CLASS-01",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "starter_names": [
+          "Public",
+          "Internal",
+          "Confidential"
+        ],
+        "page_status": 200
+      }
+    },
+    {
+      "id": "CLASS-09",
+      "verdict": "pass",
+      "observed": {
+        "setup_while_off": true,
+        "approval_after_reenable": [
+          "Public"
+        ]
+      }
+    },
+    {
+      "id": "CLASS-02",
+      "verdict": "pass",
+      "observed": {
+        "setup_status": 200,
+        "add_status": 201,
+        "class_has_model": true,
+        "model_has_class": true
+      }
+    },
+    {
+      "id": "CLASS-03",
+      "verdict": "pass",
+      "observed": {
+        "status": 409
+      }
+    },
+    {
+      "id": "CLASS-04",
+      "verdict": "pass",
+      "observed": {
+        "status": 400
+      }
+    },
+    {
+      "id": "CLASS-05",
+      "verdict": "pass",
+      "observed": {
+        "status": 200,
+        "renamed_in_classes": true,
+        "renamed_on_model": true
+      }
+    },
+    {
+      "id": "CLASS-06",
+      "verdict": "pass",
+      "observed": {
+        "persisted_class": true,
+        "persisted_model_approval": true
+      }
+    },
+    {
+      "id": "CLASS-08",
+      "verdict": "pass",
+      "observed": {
+        "status": 403
+      }
+    },
+    {
+      "id": "CLASS-07",
+      "verdict": "pass",
+      "observed": {
+        "remove_status": 200,
+        "class_absent": true,
+        "remaining_approval": [
+          "Public"
+        ]
+      }
+    }
+  ],
+  "cleanup": "complete",
+  "passed": 11,
+  "failed": 0
+}

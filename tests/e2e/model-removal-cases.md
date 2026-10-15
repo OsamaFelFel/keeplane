@@ -14,6 +14,7 @@ and routing references remain separate work.
 | REMOVE-05 | Change a Keeplane-owned model directly in the gateway, then try to remove it through Keeplane. | Keeplane refuses to delete the changed gateway definition. The old approval permits no work. |
 | REMOVE-06 | Set up that changed model again, then remove its setup. | Its ownership has become unproven, so Keeplane removes only its approval and preserves the gateway definition. |
 | REMOVE-07 | Open the admin page. | It serves the removal dialog and ownership-aware UI script. |
+| REMOVE-08 | Enable settings Audit, remove an owned model, then inspect its records. | The removal records first-admin and the gateway deletion; the prior Audit setting is restored. |
 
 Visual interaction checks use `python3 tests/e2e/ui_fixture_server.py` and
 `http://127.0.0.1:14210/`. This loopback fixture serves the actual admin UI

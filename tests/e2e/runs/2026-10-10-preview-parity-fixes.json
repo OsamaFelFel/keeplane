@@ -1,0 +1,124 @@
+{
+  "started_utc": "2026-10-10T05:51:21.624952+00:00",
+  "git_head": "e94ff338a8f9f5da3b0a05b500f839bf0a05e9d1",
+  "branch": "feat/gateway-bypass-trials",
+  "working_tree_dirty": true,
+  "stack_lock_sha256": "84237dadaa907ae88ebb7b71f551e53701595ce94101df0f90069d9413a31d69",
+  "selected_suites": [
+    "kind-model-approval",
+    "kind-key-rotation"
+  ],
+  "completed": true,
+  "results": [
+    {
+      "suite": "kind-model-approval",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_model_approval.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 0,
+      "duration_seconds": 14.6,
+      "cases": [
+        {
+          "id": "MODEL-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-10",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-04",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-05",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-06",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-07",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-08",
+          "verdict": "pass"
+        },
+        {
+          "id": "MODEL-09",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 10,
+      "passed": true
+    },
+    {
+      "suite": "kind-key-rotation",
+      "command": [
+        "/usr/local/opt/python@3.9/bin/python3.9",
+        "tests/e2e/test_key_rotation.py"
+      ],
+      "environment": {
+        "KEEPLANE_BASE_URL": "http://127.0.0.1:13000"
+      },
+      "exit_code": 1,
+      "duration_seconds": 21.1,
+      "cases": [
+        {
+          "id": "ROT-01",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-02",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-03",
+          "verdict": "pass"
+        },
+        {
+          "id": "ROT-04",
+          "verdict": "fail",
+          "observed": {
+            "replace_status": 503,
+            "classes": [
+              "Internal"
+            ],
+            "new_answer_status": 200,
+            "old_file_removed": false,
+            "new_key_files": 1
+          }
+        },
+        {
+          "id": "ROT-05",
+          "verdict": "pass"
+        }
+      ],
+      "expected_case_count": 5,
+      "passed": false
+    }
+  ],
+  "data_classes_mode_restored": true,
+  "data_classes_initial_mode": [
+    false,
+    false
+  ],
+  "finished_utc": "2026-10-10T05:51:57.457598+00:00",
+  "suites_passed": 1,
+  "suites_total": 2,
+  "cases_reported": 15
+}
