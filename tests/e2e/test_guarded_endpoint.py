@@ -19,6 +19,12 @@ def test_guarded_provider_transport():
     )
     assert result.returncode == 0, result.stderr + result.stdout
     report = json.loads(result.stdout)
+    assert {case.get("id", case.get("case")) for case in report["results"]} == {
+        "LOCAL-12",
+        "LOCAL-13",
+        "LOCAL-14",
+        "LOCAL-15",
+    }
     assert all(case["verdict"] == "pass" for case in report["results"])
 
 

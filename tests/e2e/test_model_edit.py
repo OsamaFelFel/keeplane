@@ -156,7 +156,12 @@ if __name__ == "__main__":
     run_cases()
 
 
-def test_model_edit(monkeypatch, report_file, request):
+def test_model_edit(monkeypatch, report_file, request, capsys):
     arguments = [__file__]
     monkeypatch.setattr("sys.argv", arguments)
     assert run_cases() in (None, 0)
+    from tests.support.cases import verify_cases
+
+    output = capsys.readouterr()
+    print(output.out, end="")
+    verify_cases(__file__, output.out, globals().get("REPORT", report_file))

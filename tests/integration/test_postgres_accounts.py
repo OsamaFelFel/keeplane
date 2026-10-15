@@ -478,12 +478,17 @@ if __name__ == "__main__":
     raise SystemExit(run_cases())
 
 
-def test_postgres_accounts(monkeypatch, report_file, request):
+def test_postgres_accounts(monkeypatch, report_file, request, capsys):
     arguments = [__file__, "--output", str(report_file)]
     if request.config.getoption("--app-image"):
         arguments += ["--app-image", request.config.getoption("--app-image")]
     monkeypatch.setattr("sys.argv", arguments)
     assert run_cases() in (None, 0)
+    from tests.support.cases import verify_cases
+
+    output = capsys.readouterr()
+    print(output.out, end="")
+    verify_cases(__file__, output.out, report_file)
 
 
 pytestmark = [pytest.mark.live]
