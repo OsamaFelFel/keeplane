@@ -47,7 +47,12 @@ is restored when the CLI's coding invocation ends. SIGKILL cannot run cleanup.
 leave edits, so inspect the diff before retrying. There is no direct-provider fallback.
 
 Each turn uses a temporary profile and excludes existing runtime configuration,
-credentials and extensions. The profile is removed when the invocation ends;
+credentials and extensions. On this pinned runtime, its project-configuration
+isolation flag also suppresses repository `AGENTS.md` instructions. Existing
+repository guidance is therefore not preserved by this prototype yet. The
+[paired native control](../../tests/e2e/cli-child-hook-cases.md) records this
+limit; enabling arbitrary project configuration is not an acceptable remedy.
+The profile is removed when the invocation ends;
 sessions cannot yet be resumed. Built-in tool permission prompts remain enabled.
 This is not a sandbox or proof of project provenance. Login, authorized-model
 discovery, native provider protocols, routing, migration and offline distribution
