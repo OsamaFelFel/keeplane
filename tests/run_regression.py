@@ -104,6 +104,7 @@ def main():
         ),
         "selected_groups": selected,
         "groups": [],
+        "preview_state_before": [],
     }
     previews = []
 
@@ -162,6 +163,7 @@ def main():
                 "--",
                 "--workers=1",
                 "--reporter=list,json",
+                "--output=" + str(directory / name / "artifacts"),
             ],
             {
                 "KEEPLANE_BASE_URL": base,
@@ -188,7 +190,10 @@ def main():
             status, state, _ = browser.fetch("/api/data-classes")
             if status != 200:
                 raise RuntimeError("Could not read data-class mode at " + base)
-            previews.append((browser, state["enabled"]))
+            preview = {"base": base, "classes_enabled": state["enabled"]}
+            previews.append(preview)
+            result["preview_state_before"].append(preview)
+            output.write_text(json.dumps(result, indent=2) + "\n")
             if (
                 browser.fetch(
                     "/api/data-classes/mode", {"enabled": True}, method="PUT"
@@ -196,6 +201,39 @@ def main():
                 != 200
             ):
                 raise RuntimeError("Could not prepare data-class checks at " + base)
+            if (base.endswith(":3000") and "docker" in selected) or (
+                base.endswith(":13000") and "kind" in selected
+            ):
+                status, listing, _ = browser.fetch("/api/models")
+                fixture = next(
+                    (
+                        item
+                        for item in listing.get("models", [])
+                        if item["id"] == "local-fixture"
+                    ),
+                    None,
+                )
+                if (
+                    status != 200
+                    or not fixture
+                    or fixture["kind"] != "fixture"
+                    or fixture["owned_by_keeplane"]
+                ):
+                    raise RuntimeError(
+                        "Preview journeys require a configuration-owned local-fixture model"
+                    )
+                preview["local_fixture"] = {
+                    key: fixture[key]
+                    for key in ("approved", "key_choice", "approved_classes")
+                }
+                output.write_text(json.dumps(result, indent=2) + "\n")
+                status, _, _ = browser.fetch(
+                    "/api/models/local-fixture/setup", {}, method="DELETE"
+                )
+                if status not in (200, 404):
+                    raise RuntimeError(
+                        "Could not prepare the unapproved test fixture at " + base
+                    )
         for name in selected:
             command, env = commands[name]
             result["groups"].append(run_group(name, command, directory, env))
@@ -203,25 +241,66 @@ def main():
         result["completed"] = True
     finally:
         result["data_classes_restored"] = []
-        for browser, enabled in previews:
+        result["fixture_approvals_restored"] = []
+        for preview in previews:
+            fixture = preview.get("local_fixture")
+            mode_restored = False
+            fixture_restored = fixture is None
             try:
-                browser.login(
-                    "first-admin",
-                    (RUNTIME / "first-admin-password").read_text().strip(),
-                )
+                browser = Browser(preview["base"])
+                if (
+                    browser.login(
+                        "first-admin",
+                        (RUNTIME / "first-admin-password").read_text().strip(),
+                    )[0]
+                    != 200
+                ):
+                    raise RuntimeError("Could not sign in to restore the preview")
+                if fixture:
+                    if (
+                        browser.fetch(
+                            "/api/data-classes/mode", {"enabled": True}, method="PUT"
+                        )[0]
+                        != 200
+                    ):
+                        raise RuntimeError(
+                            "Could not enable classes for fixture restoration"
+                        )
+                    if fixture["approved"]:
+                        status, _, _ = browser.fetch(
+                            "/api/models/local-fixture/setup",
+                            {
+                                key: fixture[key]
+                                for key in ("key_choice", "approved_classes")
+                            },
+                            method="POST",
+                        )
+                        fixture_restored = status == 200
+                    else:
+                        status, _, _ = browser.fetch(
+                            "/api/models/local-fixture/setup", {}, method="DELETE"
+                        )
+                        fixture_restored = status in (200, 404)
                 status, _, _ = browser.fetch(
-                    "/api/data-classes/mode", {"enabled": enabled}, method="PUT"
+                    "/api/data-classes/mode",
+                    {"enabled": preview["classes_enabled"]},
+                    method="PUT",
                 )
-                result["data_classes_restored"].append(status == 200)
+                mode_restored = status == 200
                 browser.fetch("/sign-out", method="POST")
             except Exception:
-                result["data_classes_restored"].append(False)
+                pass
+            finally:
+                result["data_classes_restored"].append(mode_restored)
+                if fixture:
+                    result["fixture_approvals_restored"].append(fixture_restored)
         result["finished_utc"] = datetime.now(timezone.utc).isoformat()
         output.write_text(json.dumps(result, indent=2) + "\n")
     return int(
         not result["completed"]
         or not all(item["passed"] for item in result["groups"])
         or not all(result["data_classes_restored"])
+        or not all(result["fixture_approvals_restored"])
     )
 
 

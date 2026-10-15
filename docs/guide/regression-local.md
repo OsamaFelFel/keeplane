@@ -47,12 +47,18 @@ the isolated Calico environment described by their case files. An unavailable
 required environment is a failure or an explicitly unrun group.
 
 Use a fresh output filename. JUnit reports, case reports, stdout and stderr are
-retained beside it, including failures. The runner records the tested revision
-and restores each preview's original data-class mode. `--group docker` or another
+retained beside it, including failures. Each browser run has its own trace and
+screenshot directory. The runner records the tested revision and original
+preview settings. It prepares the configuration-owned `local-fixture` model as
+unapproved, then restores its original approval and each preview's class mode.
+Check the restoration fields in the result; if one is false, use the recorded
+original settings to restore that preview in the UI. `--group docker` or another
 named group selects a partial run; it does not establish full regression.
 The real-model output-limit check allows 600 seconds per reply and still
 requires 256 generated tokens through both direct and gateway paths; it does
-not measure response speed. Optional native Qwen3 trials are selected separately
+not measure response speed. On slower CPUs, set
+`KEEPLANE_MODEL_REQUEST_TIMEOUT=1200` to allow more time per reply without changing
+those assertions. Optional native Qwen3 trials are selected separately
 with `pytest -m optional`.
 
 ## CI and evidence

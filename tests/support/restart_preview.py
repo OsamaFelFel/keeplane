@@ -3,6 +3,9 @@
 import os
 from pathlib import Path
 import subprocess
+import time
+from urllib.error import URLError
+from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +31,11 @@ def restart_app(base):
         ).strip()
         if context != "kind-keeplane":
             raise RuntimeError(f"Refusing to restart Kubernetes context {context!r}")
+        previous_pods = subprocess.check_output(
+            command
+            + ["-n", "keeplane", "get", "pods", "-l", "app=keeplane-app", "-o", "name"],
+            text=True,
+        ).split()
         subprocess.run(
             command
             + ["-n", "keeplane", "rollout", "restart", "deployment/keeplane-app"],
@@ -35,6 +43,18 @@ def restart_app(base):
             capture_output=True,
             text=True,
         )
+        # A ready replacement does not mean the old forwarded pod has stopped.
+        # Wait for termination before checking the forwarding connection.
+        deadline = time.monotonic() + 120
+        for pod in previous_pods:
+            while subprocess.check_output(
+                command
+                + ["-n", "keeplane", "get", pod, "--ignore-not-found", "-o", "name"],
+                text=True,
+            ).strip():
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Previous preview pod did not terminate")
+                time.sleep(0.5)
         subprocess.run(
             command
             + [
@@ -51,3 +71,13 @@ def restart_app(base):
         )
     else:
         raise RuntimeError(f"Refusing to restart unknown preview {base!r}")
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(base + "/health/app", timeout=2) as response:
+                if response.status == 200:
+                    return
+        except (URLError, ConnectionError, TimeoutError):
+            pass
+        time.sleep(0.5)
+    raise RuntimeError("Preview forwarding did not recover after restart")

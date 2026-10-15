@@ -74,7 +74,7 @@ def run_cases():
     parser.add_argument(
         "--request-timeout",
         type=int,
-        default=600,
+        default=int(os.environ.get("KEEPLANE_MODEL_REQUEST_TIMEOUT", "600")),
         help="Seconds per generated reply; this case asserts limits, not latency",
     )
     args = parser.parse_args()
