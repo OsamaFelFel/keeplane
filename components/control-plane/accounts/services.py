@@ -27,6 +27,7 @@ from .contracts import (
 )
 from .models import EditionNote, LoginBudget, SessionOwner, User, UserOperation
 from common.storage import storage_service
+from model_registry.key_cleanup import retire_owner_keys
 
 
 DUMMY_PASSWORD = make_password("not-a-real-account")
@@ -260,6 +261,7 @@ class DjangoIdentity:
                 raise IdentityError(404, "Account not found")
             if user.username == "first-admin":
                 raise IdentityError(403, "The first admin cannot be removed")
+            retire_owner_keys(user)
             revoke(user)
             user.delete()
         return {"removed": True}
