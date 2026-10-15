@@ -21,6 +21,9 @@ server. SQLite is for the single-process local installation; shared deployments
 use PostgreSQL. See [local setup](../../docs/guide/local-preview.md) and
 [PostgreSQL operations](../../docs/guide/postgres-accounts.md).
 
+For manual container builds, prepare the web UI assets first using the commands
+in the PostgreSQL guide. The local launcher handles this step automatically.
+
 Python tests live in the repository's `tests/` tree and run through pytest.
 The one-time `import_preview` command preserves earlier local records without
 changing their original files. Serving workers never run schema migrations.
