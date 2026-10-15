@@ -163,7 +163,9 @@ def run_cases():
                 "RUN pip install --no-index --find-links /wheels --require-hashes --no-deps --target /deps -r /wheels/trial-requirements.txt\n"
             )
             + "COPY app /app/\nCOPY tests /tests/\nCOPY fixture.py /fixture.py\n"
-            "COPY fixture-config.yaml /fixture-config.yaml\nENV PYTHONPATH=/deps:/app:/\n"
+            "COPY fixture-config.yaml /fixture-config.yaml\n"
+            # Source-only fixture trees must be traversable by non-root workers.
+            "RUN chmod -R a+rX /app /tests\nENV PYTHONPATH=/deps:/app:/\n"
         )
         environment = {
             "KEEPLANE_DATABASE_HOST": "database",
