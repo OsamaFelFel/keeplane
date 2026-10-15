@@ -267,6 +267,19 @@ def run_cases():
             )
             return json.loads(output.stdout)
 
+        def owner_key_suite():
+            output = dc(
+                "exec", "-T", "--user", "0", "app-a", "python",
+                "/tests/fixtures/postgres_owner_keys.py",
+            )
+            observed = json.loads(output.stdout)
+            assert [item["case"] for item in observed["cases"]] == [
+                "PGKEY-01", "PGKEY-02", "PGKEY-03", "PGKEY-04"
+            ]
+            assert all(item["verdict"] == "pass" for item in observed["cases"])
+            assert observed["fixture_records_and_files_removed"]
+            return observed
+
         def record(identifier, action):
             result["failed_case"] = identifier
             observed = action()
@@ -445,6 +458,7 @@ def run_cases():
             record("PGAPI-13", lambda: probe("rotation"))
             record("PGAPI-14", lambda: probe("ascii-usernames"))
             record("PGAPI-15", lambda: probe("class-invariants"))
+            record("PGAPI-18", owner_key_suite)
             result["completed"] = True
         except Exception as error:
             result["fixture_error"] = type(error).__name__ + ": " + str(error)

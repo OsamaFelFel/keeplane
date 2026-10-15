@@ -25,6 +25,7 @@ Existing previews are not reset.
 | PGAPI-14 | ASCII case variants sign in and collide as duplicate names. Unicode lookalikes cannot alias an account or obtain a separate budget; the username column uses explicit C collation. |
 | PGAPI-15 | An in-use class reports its project count and cannot be removed. The last class and writes while disabled are protected. Turning the mode off and on retains existing definitions. |
 | PGAPI-16 | Start from the previous Django schema and populate all 12 record types. Move models into their domain apps without recreating tables; accounts, sessions, preferences, budgets, classes, approvals and Audit records remain intact. |
+| PGAPI-18 | Run the [owner-key cases](postgres-owner-key-cases.md) under app UID 65532: isolate two owners, observe PostgreSQL blocking a concurrent writer, roll back account removal, and retry a persisted file-deletion journal. Provider validation is synthetic. |
 
 Run `.venv/bin/python -m pytest tests/integration/test_postgres_accounts.py -m live`
 after building `keeplane-preview:kind-local`. GitHub Actions runs this fixture
