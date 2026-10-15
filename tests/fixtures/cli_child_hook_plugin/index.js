@@ -11,7 +11,12 @@ export default {
   id: "keeplane.research.child-hooks",
   async setup(context) {
     const record = row => appendFileSync(context.options.audit, JSON.stringify(row) + "\n")
+    const instructions = context.options.instructions
+    if (instructions !== undefined && (typeof instructions !== "string" || !instructions.trim() || instructions.length > 4096)) {
+      throw new Error("Invalid synthetic explicit instructions")
+    }
     const contextHook = await context.session.hook("context", input => {
+      if (instructions !== undefined) input.system.push({ type: "text", text: instructions })
       record({ event: "context", sessionID: input.sessionID, agent: input.agent, model: input.model })
     }, { providerID: "keeplane" })
     const httpHook = await context.session.hook("http.request", async input => {
