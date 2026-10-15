@@ -101,6 +101,12 @@ jobs:
         run: |
           set -o pipefail
           python3 deploy/local/up.py --port 3080 | tee test-results/startup-custom-port.log
+      - name: Verify the packaged preview image
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+          runtime_preview_image="$(docker image inspect keeplane-preview:docker-local --format '{{.Id}}')"
+          KEEPLANE_RUNTIME_PREVIEW_IMAGE="$runtime_preview_image" .venv/bin/python -m pytest 'tests/integration/test_runtime_image.py::test_runtime_image[preview]' -m live --junitxml=test-results/runtime-preview/junit.xml
       - name: Install the browser tests
         working-directory: tests/browser
         run: |
@@ -155,7 +161,9 @@ jobs:
       - name: Verify accounts, transactions, replica behavior and restore
         env:
           KEEPLANE_TEST_REPORT_DIR: test-results/postgres/cases
-        run: .venv/bin/python -m pytest tests/integration/test_postgres_accounts.py -m live --app-image keeplane-preview:postgres-local --junitxml=test-results/postgres/junit.xml
+        run: |
+          runtime_postgres_image="$(docker image inspect keeplane-preview:postgres-local --format '{{.Id}}')"
+          KEEPLANE_RUNTIME_POSTGRES_IMAGE="$runtime_postgres_image" .venv/bin/python -m pytest tests/integration/test_postgres_accounts.py 'tests/integration/test_runtime_image.py::test_runtime_image[postgres]' -m live --app-image "$runtime_postgres_image" --junitxml=test-results/postgres/junit.xml
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
