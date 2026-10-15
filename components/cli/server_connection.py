@@ -24,7 +24,7 @@ class NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def request(server, path, credential, *, method="GET", expected=200):
+def request(server, path, credential, *, method="GET", expected=200, payload=None):
     url = urlsplit(server)
     if (url.scheme not in {"https", "http"} or not url.hostname
             or url.username or url.password or url.query or url.fragment
@@ -38,8 +38,11 @@ def request(server, path, credential, *, method="GET", expected=200):
         raise ConnectionError("Use a supported runtime route.")
     outgoing = Request(
         server.rstrip("/") + path, method=method,
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
         headers={"Authorization": "Bearer " + credential, "Accept": "application/json"},
     )
+    if payload is not None:
+        outgoing.add_header("Content-Type", "application/json")
     # No ambient proxy, cookies, browser password store or redirect can carry the credential elsewhere.
     opener = build_opener(ProxyHandler({}), NoRedirects())
     try:
@@ -49,8 +52,9 @@ def request(server, path, credential, *, method="GET", expected=200):
             body = response.read(LIMIT + 1)
     except HTTPError as error:
         error.close()
-        messages = {401: "The Keeplane session is unavailable or expired.",
-                    403: "The requested action is unavailable.", 503: "Keeplane policy is unavailable; retry later."}
+        messages = {400: "The server refused these request details.",
+                    401: "The Keeplane session is unavailable or expired.",
+                    403: "The requested action is unavailable.", 503: "Keeplane is temporarily unavailable; retry later."}
         raise ConnectionError(messages.get(error.code, "The server refused this action.")) from None
     except (URLError, OSError, ValueError):
         raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
