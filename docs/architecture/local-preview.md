@@ -49,6 +49,10 @@ once, and starts Gunicorn. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
 Serving workers do not migrate schemas.
 
+The local app and gateway read `/gateway-config/local.yaml` from the same
+read-only directory bind. Git can replace that file atomically without leaving
+a container attached to an old file mount.
+
 Existing preview account, approval, class and Audit files remain unchanged.
 Their data is imported into the Django database; old sessions require a fresh
 sign-in. Imported password hashes are upgraded by Django when a user signs in.

@@ -34,7 +34,7 @@ services:
 
   gateway:
     image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
-    command: ["-f", "/config.yaml"]
+    command: ["-f", "/gateway-config/local.yaml"]
     environment:
       GATEWAY_RUNTIME_KEY_HASH: ${GATEWAY_RUNTIME_KEY_HASH}
       GATEWAY_ADMIN_KEY_HASH: ${GATEWAY_ADMIN_KEY_HASH}
@@ -44,7 +44,7 @@ services:
       model:
         condition: service_healthy
     volumes:
-      - ./integrations/gateway/local.yaml:/config.yaml:ro
+      - ./integrations/gateway:/gateway-config:ro
       - gateway-data:/data
       - provider-keys:/provider-keys:ro
     extra_hosts:
@@ -128,7 +128,7 @@ services:
       - ./components/control-plane:/app:ro
       - ./components/admin-ui:/ui:ro
       - app-secrets:/run/secrets:ro
-      - ./integrations/gateway/local.yaml:/gateway-config/local.yaml:ro
+      - ./integrations/gateway:/gateway-config:ro
       - account-data:/state
       - provider-keys:/provider-keys
     extra_hosts:
