@@ -121,6 +121,12 @@ failover backend. A retry can reach the next provider only when its current
 class, approval and shared key allow it. This is test wiring, not product routing
 or production policy publication.
 
+The [protocol check](../../tests/integration/native-runtime-protocol-cases.md)
+checks SSE content and tool-call arguments through the same callback. A
+tool-result request needs a fresh policy decision; withdrawing model approval
+blocks the next valid request before provider contact. This does not execute tools
+or cancel a response already in progress.
+
 The [two-copy check](../../tests/integration/native-runtime-replica-cases.md)
 uses one PostgreSQL primary for both authorizers. It checks withdrawal on each
 serving path and isolates one copy's database link or authorizer without changing

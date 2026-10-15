@@ -14,7 +14,7 @@ IMAGES = json.loads((ROOT / "deploy/local/stack.lock.json").read_text())["images
 
 
 @contextmanager
-def native_fallback_trial(tmp_path, existing, config):
+def native_runtime_trial(tmp_path, existing, config, *, fallback=False, protocol=False):
     project = "keeplane-native-" + uuid.uuid4().hex[:10]
     trial = tmp_path / "trial"
     trial.mkdir(mode=0o755)
@@ -70,6 +70,8 @@ def native_fallback_trial(tmp_path, existing, config):
             + [
                 str(ROOT / "components/control-plane") + ":/app:ro",
                 str(ROOT / "tests/fixtures/runtime_authorizer.py") + ":/fixture.py:ro",
+                str(ROOT / "tests/fixtures/runtime_protocol.py")
+                + ":/runtime_protocol.py:ro",
             ],
             "environment": {
                 "PYTHONPATH": "/app",
@@ -83,7 +85,8 @@ def native_fallback_trial(tmp_path, existing, config):
                 "GATEWAY_RUNTIME_KEY_FILE": "/trial/admin",
                 "RUNTIME_AUTHORIZER_KEY_FILE": "/trial/gateway-key",
                 "FIXTURE_SHARED_PROVIDER_KEY": "1",
-                "FIXTURE_NATIVE_FALLBACK": "1",
+                "FIXTURE_NATIVE_FALLBACK": "1" if fallback else "0",
+                "FIXTURE_NATIVE_PROTOCOL": "1" if protocol else "0",
                 "FIXTURE_PROVIDER_KEY_NAME": names[0],
                 "FIXTURE_PROVIDER_NEXT_KEY_NAME": names[1],
                 "PROVIDER_KEY_DIR": "/trial",
