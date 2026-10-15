@@ -12,8 +12,8 @@ from rest_framework.decorators import (
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from accounts.authentication import RuntimeSessionAuthentication
-from common.api import MODEL_GATEWAY
+from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
+from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from projects.access import organization_project_access
 from .policy import DjangoModelPolicy, ModelPolicyUnavailable
@@ -41,3 +41,16 @@ def project_models(request, project_id):
     return Response(
         {"project_id": project_id, "models": [{"id": name} for name in sorted(models)]}
     )
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["DELETE"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def session(request):
+    """Revoke only the exact credential authenticated for this request."""
+    if request.body:
+        return Response({"error": "Send an empty logout request"}, status=400)
+    IDENTITY.logout(request.auth)
+    return Response(status=204)

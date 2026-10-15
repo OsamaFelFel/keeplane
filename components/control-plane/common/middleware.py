@@ -44,6 +44,17 @@ class PublicSchemeMiddleware(MiddlewareMixin):
 
 class BrowserCsrfMiddleware(CsrfViewMiddleware):
     def process_view(self, request, callback, callback_args, callback_kwargs):
+        if getattr(callback, "runtime_bearer_only", False):
+            from accounts.authentication import RuntimeSessionAuthentication
+            from rest_framework.permissions import IsAuthenticated
+
+            view = getattr(callback, "cls", None)
+            if tuple(getattr(view, "authentication_classes", ())) == (
+                RuntimeSessionAuthentication,
+            ) and tuple(getattr(view, "permission_classes", ())) == (IsAuthenticated,):
+                # These views accept an explicit bearer credential only, never
+                # ambient browser cookies. DRF still authenticates every call.
+                return None
         # DRF's view exemption must not exempt anonymous sign-in or cookie writes.
         return super().process_view(request, None, callback_args, callback_kwargs)
 
