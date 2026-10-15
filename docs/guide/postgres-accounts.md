@@ -88,6 +88,11 @@ replicas that may restart.
 Back up the complete database and retain the matching signing secret separately.
 Restore into a fresh database and point all replicas at it. Integration cases
 prove identity, sessions, settings, approvals and Audit survive this operation.
+The database backup does not include provider-key files, gateway registrations,
+mounted credentials or certificates. Recover those separately before admitting
+model calls. A restore also returns accounts, sessions and policy to the backup's
+state; review later account revocations and approval changes before reopening
+access. The database fixture does not prove a complete deployment recovery.
 Production backup scheduling, retention, database availability, volume semantics
 and review-preview cutover remain release work.
 
