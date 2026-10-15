@@ -129,7 +129,11 @@ def run_cases():
         shutil.copyfile(
             ROOT / "tests/fixtures/postgres_gateway.py", build / "fixture.py"
         )
+        # These synthetic inputs become root-owned COPY files in the image.
+        # Keep them readable by the app even when the caller uses umask 077.
+        (build / "fixture.py").chmod(0o644)
         (build / "fixture-config.yaml").write_text("fixture: postgres-api\n")
+        (build / "fixture-config.yaml").chmod(0o644)
         source = hashlib.sha256()
         for path in sorted((build / "app").rglob("*.py")):
             source.update(
