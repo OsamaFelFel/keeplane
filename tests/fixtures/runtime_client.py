@@ -1,6 +1,7 @@
 """Sibling client with only its synthetic developer credential and project ID."""
 
 import json
+import os
 import sys
 from pathlib import Path
 from urllib.error import HTTPError
@@ -25,7 +26,10 @@ body = options.get(
     },
 )
 request = Request(
-    "http://gateway:5000" + options.get("path", "/v1/chat/completions"),
+    "http://"
+    + os.environ.get("FIXTURE_GATEWAY_HOST", "gateway")
+    + ":5000"
+    + options.get("path", "/v1/chat/completions"),
     data=json.dumps(body).encode(),
     headers=headers,
 )
