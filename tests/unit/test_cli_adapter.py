@@ -115,6 +115,7 @@ def test_detached_child_holding_pipes_does_not_extend_timeout(tmp_path):
         with pytest.raises(subprocess.TimeoutExpired):
             opencode_adapter.coding_turn([sys.executable, "-c", program], input="",
                                          env=dict(os.environ), cwd=tmp_path, timeout=1)
+        assert pid_file.exists(), "Detached-child control never started."
         assert time.monotonic() - started < 3
     finally:
         if pid_file.exists():
