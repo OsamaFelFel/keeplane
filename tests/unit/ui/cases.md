@@ -11,3 +11,10 @@ colocated tests.
 | UI-CSRF-02 | Fail token bootstrap. | No mutation request is sent. |
 | UI-CSRF-03 | Refuse or disconnect a mutation. | The write is not repeated automatically. |
 | UI-CSRF-04 | Supply a different-origin URL. | No token or request is sent to that origin. |
+
+## Projects
+
+- Admins can see project names, onboarding state and who used each project.
+- Class columns disappear while classes are off.
+- Search returns to the first bounded page; Previous and Next follow server results.
+- Empty and unavailable states are clear. Failed reloads do not leave stale rows visible.

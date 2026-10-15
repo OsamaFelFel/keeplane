@@ -14,7 +14,7 @@ urlpatterns = [
     path("health/ready", web.readiness),
     re_path(r"^(?:app/)?(?:assets|fonts)/(?P<asset>.+)$", web.asset),
     re_path(
-        r"^(?:app/?|app/(?:models|data-classes|audit|editions)|users|models|data-classes|audit|editions|sign-in)?$",
+        r"^(?:app/?|app/(?:projects|models|data-classes|audit|editions)|users|models|data-classes|audit|editions|sign-in)?$",
         web.application,
     ),
 ]

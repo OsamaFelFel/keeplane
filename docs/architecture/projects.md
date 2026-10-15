@@ -9,7 +9,8 @@ flowchart LR
   Caller[Authenticated caller] --> Store[Project use service]
   Store --> Projects[(Projects)]
   Store --> Usage[(Account usage)]
-  Admin[Signed-in admin] --> Listing[Project listing API]
+  Admin[Signed-in admin] --> Screen[React Projects screen]
+  Screen --> Listing[Project listing API]
   Listing --> Projects
   Listing --> Usage
   Listing --> Classes[(Class assignments)]
@@ -42,7 +43,10 @@ The request does not rename a project or alter model approvals.
 An admin can read the same path with `GET` to check the current result after an
 uncertain write response. Class fields are omitted while classes are off.
 
-CLI registration and the Projects screen are separate changes.
+The React Projects screen uses the listing API for server-side search and
+paging. It hides class columns while classes are off and keeps the table inside
+a scrollable frame on narrow screens. CLI registration and the
+class dialog are separate changes.
 
 ## Internal model authorization
 
