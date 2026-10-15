@@ -9,6 +9,10 @@ flowchart LR
   Caller[Authenticated caller] --> Store[Project use service]
   Store --> Projects[(Projects)]
   Store --> Usage[(Account usage)]
+  Admin[Signed-in admin] --> Listing[Project listing API]
+  Listing --> Projects
+  Listing --> Usage
+  Listing --> Classes[(Class assignments)]
 ```
 
 `DjangoProjectStore.register_use(user_id, project_id, name)` is an internal
@@ -21,8 +25,13 @@ Existing class assignments stay in `data_classes.ProjectClass`. Recording use
 does not assign a class, authorize a model or establish the origin of content.
 The project ID is requested context supplied by the caller.
 
-This change adds storage only. CLI registration, project access checks, admin
-listing and the Projects screen are separate changes.
+`GET /api/projects` is an internal admin read. It searches project names and
+returns stable, bounded pages with the accounts that used each project. It
+reads class assignments only while classes are enabled. It never returns
+passwords or sessions and never changes project policy. There is no onboarding
+completion writer yet, so current first-use records report `initialized: false`.
+
+CLI registration and the Projects screen are separate changes.
 
 ## Internal model authorization
 
