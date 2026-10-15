@@ -65,6 +65,18 @@ not measure response speed. On slower CPUs, set
 those assertions. Optional native Qwen3 trials are selected separately
 with `pytest -m optional`.
 
+To check packaged runtime imports, retained notices, SQLite migrations and
+Gunicorn startup without a gateway, supply both image names:
+
+```sh
+KEEPLANE_RUNTIME_PREVIEW_IMAGE=keeplane-preview:kind-local \
+KEEPLANE_RUNTIME_POSTGRES_IMAGE=keeplane-preview:postgres-local \
+  .venv/bin/python -m pytest -m optional tests/integration/test_runtime_image.py
+```
+
+The PostgreSQL variant also imports its native driver and checks retained source
+archives. This check does not connect to a PostgreSQL server.
+
 ## CI and evidence
 
 PR checks run frontend checks, pytest unit/integration checks, documented Docker
