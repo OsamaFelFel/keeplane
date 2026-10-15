@@ -20,7 +20,8 @@ deploy/local/kind-up.sh
 ```
 
 The script builds the UI and app, loads images into kind, and starts the models
-and gateways. Run it again after changing the app or chart. It uses
+and gateways. It checks tools, Node.js and Docker before creating credentials or
+building. Run it again after changing the app or chart. It uses
 `/private/tmp/keeplane-kind-kubeconfig` rather than your default Kubernetes
 context. Set `KEEPLANE_KUBECONFIG` to use another kubeconfig file, or
 `KEEPLANE_HELM_BIN` if Helm is outside `PATH`.
