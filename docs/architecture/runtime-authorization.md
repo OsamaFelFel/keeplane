@@ -97,8 +97,16 @@ flowchart LR
 The keyless fixture models remove developer authorization and Keeplane context
 headers after their final check. Native forwarding keeps those headers by
 default. A provider needing a key must instead receive its server-selected
-credential without forwarding the developer session; that integration remains
+credential without forwarding the developer session; production integration remains
 separate work.
+
+The shared-key variant verifies that native backend authentication replaces the
+developer session with a synthetic server-held provider key after authorization.
+It also confirms that missing or unreadable active keys stop provider contact.
+Its bounded rotation diagnostic reports in-place replacement separately from a
+new model revision and key-file reference, using match booleans only. A valid
+local file alone does not attest the gateway's loaded value. Existing-mode fixture
+mounts are explicit test setup, not an implemented customer key-delivery API.
 
 Native [external authorization](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/external-authz/)
 and [file-backed backend credentials](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/backend-authn/key/)
