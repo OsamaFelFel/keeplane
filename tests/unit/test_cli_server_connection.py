@@ -6,7 +6,8 @@ import uuid
 
 import pytest
 
-from components.cli.server_connection import ConnectionError, LIMIT, models, main
+from components.cli.server_connection import ConnectionError, LIMIT, models, main, logout
+from components.cli import session_logout
 
 
 @pytest.fixture
@@ -18,8 +19,8 @@ def server():
             pass
 
         def do_GET(self):
-            state.requests.append((self.path, self.headers.get("Authorization"), self.headers.get("Cookie")))
-            payload = state.payload or json.dumps({"project_id": state.project, "models": [{"id": "coder-b"}, {"id": "coder-a"}]}).encode()
+            state.requests.append((self.path, self.headers.get("Authorization"), self.headers.get("Cookie"), self.command))
+            payload = state.payload if state.payload is not None else json.dumps({"project_id": state.project, "models": [{"id": "coder-b"}, {"id": "coder-a"}]}).encode()
             self.send_response(state.status)
             self.send_header("Content-Type", "application/json")
             if state.location:
@@ -27,6 +28,9 @@ def server():
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+
+        def do_DELETE(self):
+            self.do_GET()
 
     http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=http.serve_forever, daemon=True)
@@ -44,7 +48,7 @@ def test_project_catalog_uses_only_explicit_bearer(server, monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
     result = models(server.url, uuid.UUID(server.project).hex, "synthetic-session")
     assert result == {"project_id": server.project, "models": [{"id": "coder-a"}, {"id": "coder-b"}]}
-    assert server.requests == [(f"/api/runtime/projects/{server.project}/models", "Bearer synthetic-session", None)]
+    assert server.requests == [(f"/api/runtime/projects/{server.project}/models", "Bearer synthetic-session", None, "GET")]
 
 
 @pytest.mark.parametrize("status", [401, 403, 503, 500])
@@ -88,3 +92,21 @@ def test_command_uses_environment_without_saving_or_echoing_it(server, monkeypat
     monkeypatch.setattr("sys.argv", ["server_connection", "--server", server.url, "--project", server.project])
     assert main() == 0
     assert "synthetic-session" not in capsys.readouterr().out
+
+
+def test_logout_revokes_only_explicit_session(server, monkeypatch, capsys):
+    server.status, server.payload = 204, b""
+    monkeypatch.setenv("KEEPLANE_SESSION_CREDENTIAL", "synthetic-session")
+    monkeypatch.setattr("sys.argv", ["session_logout", "--server", server.url])
+    assert session_logout.main() == 0
+    assert server.requests == [("/api/runtime/session", "Bearer synthetic-session", None, "DELETE")]
+    output = capsys.readouterr().out
+    assert "revoked" in output and "synthetic-session" not in output
+
+
+@pytest.mark.parametrize("status", [200, 302, 401, 403, 503])
+def test_logout_does_not_report_success_on_refusal_or_unknown_result(server, status):
+    server.status, server.payload = status, b'{"error":"SECRET synthetic-session"}'
+    with pytest.raises(ConnectionError) as error:
+        logout(server.url, "synthetic-session")
+    assert "SECRET" not in str(error.value) and "synthetic-session" not in str(error.value)

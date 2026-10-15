@@ -24,7 +24,7 @@ class NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def models(server, project_id, credential):
+def request(server, path, credential, *, method="GET", expected=200):
     url = urlsplit(server)
     if (url.scheme not in {"https", "http"} or not url.hostname
             or url.username or url.password or url.query or url.fragment
@@ -34,30 +34,44 @@ def models(server, project_id, credential):
         raise ConnectionError("Use HTTPS for a server outside this machine.")
     if not isinstance(credential, str) or re.fullmatch(r"[A-Za-z0-9._~-]{1,4096}", credential) is None:
         raise ConnectionError("Supply an opaque Keeplane session credential.")
-    try:
-        project_id = str(uuid.UUID(str(project_id)))
-    except (ValueError, TypeError, AttributeError):
-        raise ConnectionError("Use a valid project UUID.") from None
-    request = Request(
-        server.rstrip("/") + "/api/runtime/projects/" + project_id + "/models",
+    if not path.startswith("/api/runtime/") or "?" in path or "#" in path:
+        raise ConnectionError("Use a supported runtime route.")
+    outgoing = Request(
+        server.rstrip("/") + path, method=method,
         headers={"Authorization": "Bearer " + credential, "Accept": "application/json"},
     )
     # No ambient proxy, cookies, browser password store or redirect can carry the credential elsewhere.
     opener = build_opener(ProxyHandler({}), NoRedirects())
     try:
-        with opener.open(request, timeout=10) as response:
-            if response.status != 200 or response.headers.get_content_type() != "application/json":
-                raise ConnectionError("The server returned an invalid model catalog.")
+        with opener.open(outgoing, timeout=10) as response:
+            if response.status != expected or (expected != 204 and response.headers.get_content_type() != "application/json"):
+                raise ConnectionError("The server returned an unexpected response.")
             body = response.read(LIMIT + 1)
     except HTTPError as error:
         error.close()
         messages = {401: "The Keeplane session is unavailable or expired.",
-                    403: "This project is unavailable.", 503: "Keeplane policy is unavailable; retry later."}
-        raise ConnectionError(messages.get(error.code, "The server refused model discovery.")) from None
+                    403: "The requested action is unavailable.", 503: "Keeplane policy is unavailable; retry later."}
+        raise ConnectionError(messages.get(error.code, "The server refused this action.")) from None
     except (URLError, OSError, ValueError):
         raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
+    if len(body) > LIMIT:
+        raise ConnectionError("The server response exceeds the supported size.")
+    return body
+
+
+def logout(server, credential):
+    """Revoke only the supplied current session; never downgrade to cookie auth."""
+    request(server, "/api/runtime/session", credential, method="DELETE", expected=204)
+
+
+def models(server, project_id, credential):
     try:
-        data = json.loads(body) if len(body) <= LIMIT else None
+        project_id = str(uuid.UUID(str(project_id)))
+    except (ValueError, TypeError, AttributeError):
+        raise ConnectionError("Use a valid project UUID.") from None
+    body = request(server, "/api/runtime/projects/" + project_id + "/models", credential)
+    try:
+        data = json.loads(body)
         if not isinstance(data, dict) or set(data) != {"project_id", "models"}:
             raise ValueError
         if data["project_id"] != project_id or not isinstance(data["models"], list):
