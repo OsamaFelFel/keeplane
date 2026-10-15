@@ -13,6 +13,9 @@ flowchart LR
   Listing --> Projects
   Listing --> Usage
   Listing --> Classes[(Class assignments)]
+  Admin --> Assignment[Project class service]
+  Assignment --> Classes
+  Assignment --> Audit[(Optional settings Audit)]
 ```
 
 `DjangoProjectStore.register_use(user_id, project_id, name)` is an internal
@@ -30,6 +33,14 @@ returns stable, bounded pages with the accounts that used each project. It
 reads class assignments only while classes are enabled. It never returns
 passwords or sessions and never changes project policy. There is no onboarding
 completion writer yet, so current first-use records report `initialized: false`.
+
+`PUT /api/projects/{id}/class` accepts an explicit `class_id` or `null` to clear
+it. The admin-only write uses the settings lock shared by class edits and policy
+reads. It rejects unregistered projects, unknown classes and changes while
+classes are off. A required settings Audit failure rolls back the assignment.
+The request does not rename a project or alter model approvals.
+An admin can read the same path with `GET` to check the current result after an
+uncertain write response. Class fields are omitted while classes are off.
 
 CLI registration and the Projects screen are separate changes.
 
