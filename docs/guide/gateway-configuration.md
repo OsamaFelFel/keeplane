@@ -6,7 +6,7 @@ is the same in either mode. A **local model runner** is a separate choice: it
 serves a model behind whichever gateway the installation uses. Here
 `managed` means Keeplane installs the gateway inside the customer's cluster;
 it does not mean a Keeplane-hosted cloud service. The hosted service is outside
-the current Open Source release scope.
+the current release scope.
 
 | Mode | Keeplane installs | Gateway address | Current trial |
 | --- | --- | --- | --- |
