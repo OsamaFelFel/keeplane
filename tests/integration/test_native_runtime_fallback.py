@@ -8,7 +8,7 @@ from tests.integration.test_native_runtime_authorization import (
     external_authorization,
     gateway_config,
 )
-from tests.support.native_fallback_trial import native_fallback_trial
+from tests.support.native_runtime_trial import native_runtime_trial
 
 
 def fallback_config(existing, admin):
@@ -43,7 +43,9 @@ def fallback_config(existing, admin):
 def test_native_fallback_checks_each_selected_model(
     tmp_path, report_file, existing, case
 ):
-    with native_fallback_trial(tmp_path, existing, fallback_config) as trial:
+    with native_runtime_trial(
+        tmp_path, existing, fallback_config, fallback=True
+    ) as trial:
         if case != "class":
             trial.call("allow_public")
         if case == "approval":
