@@ -87,7 +87,7 @@ def marker(directory):
     return value["binding"]
 
 
-def check(root, directory):
+def check(root, directory, session=None, binding=None):
     names = set(os.listdir(directory))
     if names - FILES or any(
         not private_file(os.stat(name, dir_fd=directory, follow_symlinks=False))
@@ -111,6 +111,23 @@ def check(root, directory):
                 raise ValueError(
                     "Session state contains credentials; refusing to import them."
                 )
+            if session is not None:
+                row = connection.execute(
+                    "SELECT directory, model, time_idle, time_suspended "
+                    "FROM session_v2 WHERE id = ?",
+                    [session],
+                ).fetchone()
+                model = json.loads(row[1]) if row and row[1] else {}
+                if (
+                    not row
+                    or row[0] != binding["directory"]
+                    or model != {"providerID": "keeplane", "id": binding["model"]}
+                    or row[2] is None
+                    or row[3] is not None
+                ):
+                    raise ValueError(
+                        "Choose an existing idle session in this directory and model."
+                    )
     except sqlite3.Error:
         raise ValueError("Session database is unavailable.") from None
 
@@ -157,7 +174,7 @@ def managed(path, binding, session):
             raise ValueError(
                 "Session directory, gateway, model or runtime version changed."
             )
-        check(root, directory)
+        check(root, directory, session, binding)
         if session is not None and (root / "runtime.db").stat().st_size == 0:
             raise ValueError("Cannot resume an empty session directory.")
         yield SimpleNamespace(database=str(root / "runtime.db"), lock=lock)

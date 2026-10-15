@@ -26,6 +26,8 @@
   supplied grant; an invalid grant cannot reuse the previous one. Retained DB,
   WAL, SHM and metadata contain none of those synthetic grants. Explicit history
   reset makes the old session unavailable without another provider call.
+  Current instruction text/hash replaces the earlier rule without discarding
+  ordinary tool history. Unknown or differently scoped sessions fail before launch.
 
 Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.
 For CLI-01, install the exact runtime separately and set

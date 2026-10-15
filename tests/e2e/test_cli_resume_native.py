@@ -25,6 +25,8 @@ class Provider(Handler):
     sessions = set()
     continued = 0
     contacts = 0
+    current_rule = None
+    old_rule = None
 
     def do_POST(self):
         type(self).contacts += 1
@@ -32,6 +34,10 @@ class Provider(Handler):
         self.rfile = io.BytesIO(raw)
         body = json.loads(raw)
         if body.get("tools") and self.headers.get("Authorization") == "Bearer " + self.grant:
+            rule, digest = self.current_rule
+            system = json.dumps([row for row in body["messages"] if row.get("role") == "system"])
+            assert f"SHA-256 {digest})\\n{rule}" in system
+            assert not self.old_rule or self.old_rule not in json.dumps(body)
             self.sessions.add(self.headers["x-opencode-session-id"])
             if self.phase == 2:
                 last = max(index for index, row in enumerate(body["messages"]) if row.get("role") == "user")
@@ -60,6 +66,9 @@ def native_resume(binary):
         project = root / "project"
         project.mkdir()
         target, state = project / "math.py", root / "sessions"
+        rule = project / "AGENTS.md"
+        rule.write_text("INITIAL_REPO_RULE_65\n")
+        Provider.current_rule, Provider.old_rule = ("INITIAL_REPO_RULE_65", hashlib.sha256(rule.read_bytes()).hexdigest()), None
         target.write_text("def add(a, b):\n    return a - b\n")
         server = start(target, handler=Provider, turn_scoped=True)
         Handler.call_prefix = "first_"
@@ -67,7 +76,7 @@ def native_resume(binary):
         thread.start()
         command = [sys.executable, str(ROOT / "components/cli/opencode_adapter.py"), "--runtime", binary,
                    "--gateway", f"http://127.0.0.1:{server.server_port}/v1", "--model", "fixture-coder",
-                   "--directory", str(project), "--state-dir", str(state), "--timeout", "40"]
+                   "--directory", str(project), "--instructions", "AGENTS.md", "--state-dir", str(state), "--timeout", "40"]
 
         def invoke(prompt, grant, session=None):
             args = command + (["--session", session] if session else []) + [prompt]
@@ -83,6 +92,8 @@ def native_resume(binary):
             assert any(json.loads(line).get("sessionID") == session for line in first.stdout.splitlines() if line.startswith("{"))
             target.write_text("def add(a, b):\n    return a - b\n")
             Handler.calls, Provider.phase = [], 2
+            rule.write_text("CURRENT_REPO_RULE_66\n")
+            Provider.current_rule, Provider.old_rule = ("CURRENT_REPO_RULE_66", hashlib.sha256(rule.read_bytes()).hexdigest()), "INITIAL_REPO_RULE_65"
             Handler.call_prefix = "second_"
             first_grant = Handler.grant
             Handler.grant = "synthetic-fresh-resume-grant"
