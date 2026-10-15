@@ -96,3 +96,47 @@ def test_timeout_terminates_spawned_tool(tmp_path):
             break
         time.sleep(0.05)
     assert not state or state.startswith("Z"), "Timed-out tool is still running."
+
+
+def test_detached_child_holding_pipes_does_not_extend_timeout(tmp_path):
+    import os
+    import signal
+    import sys
+    import time
+
+    pid_file = tmp_path / "detached.pid"
+    program = (
+        "import subprocess,sys,time; from pathlib import Path; "
+        "child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],start_new_session=True); "
+        f"Path({str(pid_file)!r}).write_text(str(child.pid)); time.sleep(30)"
+    )
+    started = time.monotonic()
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            opencode_adapter.coding_turn([sys.executable, "-c", program], input="",
+                                         env=dict(os.environ), cwd=tmp_path, timeout=1)
+        assert time.monotonic() - started < 3
+    finally:
+        if pid_file.exists():
+            try:
+                os.kill(int(pid_file.read_text()), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+@pytest.mark.parametrize("grant", ['quote"token', "back\\slash", "nonascii-é", "slash/token"])
+def test_escaped_token_alphabets_are_rejected_before_launch(tmp_path, grant):
+    with pytest.raises(ValueError, match="credentials must use only"):
+        run(tmp_path / "missing", tmp_path, "https://gateway.test/v1", "coder", "Fix.", grant)
+
+
+def test_actual_json_event_credential_redaction(tmp_path, monkeypatch):
+    binary, grant = tmp_path / "opencode", "synthetic-grant_A.1~2"
+    binary.touch()
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "2.0.27", ""))
+    event = json.dumps({"type": "error", "error": {"message": "Refused Bearer " + grant}})
+    monkeypatch.setattr(opencode_adapter, "coding_turn", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, event, event))
+    result = run(binary, tmp_path, "https://gateway.test/v1", "coder", "Fix.", grant)
+    assert result.returncode == 1
+    assert grant not in result.stdout + result.stderr
+    assert json.loads(result.stdout)["error"]["message"] == "Refused Bearer [redacted]"

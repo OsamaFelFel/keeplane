@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -16,9 +17,10 @@ VERSION = "2.0.27"
 
 
 def coding_turn(command, *, input, env, cwd, timeout):
-    with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, text=True, env=env, cwd=cwd,
-                          start_new_session=True) as process:
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, env=env, cwd=cwd,
+                               start_new_session=True)
+    try:
         try:
             output, errors = process.communicate(input, timeout=timeout)
         except (subprocess.TimeoutExpired, KeyboardInterrupt):
@@ -26,9 +28,17 @@ def coding_turn(command, *, input, env, cwd, timeout):
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            process.communicate()
+            # Detached children may keep inherited pipes open. Wait only for
+            # the owned parent; closing our pipes below never waits for EOF.
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
             raise
         return subprocess.CompletedProcess(command, process.returncode, output, errors)
+    finally:
+        for stream in (process.stdin, process.stdout, process.stderr):
+            stream.close()
 
 
 def run(binary, directory, gateway, model, prompt, grant, timeout=300):
@@ -49,8 +59,8 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300):
         raise ValueError("Use HTTPS for a gateway outside this machine.")
     if not model or any(character.isspace() for character in model) or "#" in model:
         raise ValueError("Provide a gateway model ID without whitespace or a variant suffix.")
-    if not grant or any(character.isspace() for character in grant):
-        raise ValueError("Provide a valid Keeplane gateway credential.")
+    if not isinstance(grant, str) or re.fullmatch(r"[A-Za-z0-9._~-]{1,4096}", grant) is None:
+        raise ValueError("Gateway credentials must use only letters, digits, dot, underscore, tilde or hyphen.")
     if timeout <= 0 or not prompt.strip():
         raise ValueError("Provide a prompt and a positive timeout.")
     binary = str(Path(binary).expanduser().resolve(strict=True))
