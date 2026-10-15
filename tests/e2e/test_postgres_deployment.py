@@ -25,6 +25,7 @@ from urllib.request import HTTPSHandler, HTTPCookieProcessor, build_opener
 from urllib.error import URLError
 
 from tests.support.client import Browser
+from tests.support.kind_images import pin_loaded_image
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -330,6 +331,9 @@ def run_cases():
                 .strip()
             )
             run("kind", "load", "docker-image", IMAGE, "--name", "keeplane-netpol")
+            pinned_image = pin_loaded_image(
+                run, "docker.io/library/" + IMAGE, "keeplane-netpol")
+            result["app_manifest_reference"] = pinned_image
             # Both endpoints have their own leaf certificate from a disposable CA.
             run(
                 "openssl",
@@ -479,7 +483,7 @@ def run_cases():
             origin = "https://localhost:" + str(tls_port)
             values = {
                 "app": {
-                    "image": IMAGE,
+                    "image": pinned_image,
                     "pullPolicy": "Never",
                     "replicaCount": 2,
                     "runnerUrls": "http://model:18080",
