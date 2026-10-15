@@ -3,7 +3,7 @@
 import uuid
 
 from common.storage import settings_change, storage_service
-from data_classes.models import DataClass, ProjectClass
+from data_classes.models import DataClass, ProjectClass, Settings
 
 from .models import Project
 from .services import ProjectError
@@ -13,6 +13,27 @@ from .services import ProjectError
 class DjangoProjectClasses:
     def __init__(self, audit):
         self.audit = audit
+
+    def current(self, project_id):
+        project = Project.objects.filter(pk=project_id).first()
+        if project is None:
+            raise ProjectError(404, "Project not found")
+        enabled = Settings.objects.filter(pk=1, classes_enabled=True).exists()
+        result = {
+            "id": str(project.pk),
+            "name": project.name,
+            "classes_enabled": enabled,
+        }
+        if enabled:
+            row = (
+                ProjectClass.objects.filter(project_id=str(project.pk))
+                .select_related("data_class")
+                .first()
+            )
+            result["data_class"] = (
+                {"id": row.data_class_id, "name": row.data_class.name} if row else None
+            )
+        return result
 
     def assign(self, project_id, class_id, actor):
         try:

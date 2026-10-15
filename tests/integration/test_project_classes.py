@@ -39,6 +39,23 @@ def test_assign_clear_and_class_in_use_guard(context):
     service.classes.remove("confidential")
 
 
+def test_current_class_read_supports_recovery_and_hides_fields_while_off(context):
+    service, project, actor = context
+    writer = DjangoProjectClasses(service.audit)
+    writer.assign(project.pk, "confidential", actor)
+    assert writer.current(project.pk)["data_class"]["id"] == "confidential"
+    service.classes.set_enabled(False)
+    assert writer.current(project.pk) == {
+        "id": str(project.pk),
+        "name": "Example",
+        "classes_enabled": False,
+    }
+    assert (
+        ProjectClass.objects.get(project_id=str(project.pk)).data_class_id
+        == "confidential"
+    )
+
+
 def test_audit_records_changes_once_and_off_means_no_record(context):
     service, project, actor = context
     writer = DjangoProjectClasses(service.audit)
@@ -123,6 +140,7 @@ def test_class_write_requires_admin_action_and_explicit_choice(context):
         patch("common.api.IDENTITY", service.identity),
         patch("projects.views.AUDIT", service.audit),
     ):
+        assert client.get(path).status_code == 401
         assert (
             client.put(
                 path, {"class_id": "public"}, content_type="application/json"
@@ -161,6 +179,7 @@ def test_class_write_requires_admin_action_and_explicit_choice(context):
         client.cookies["keeplane_session"] = service.identity.login(
             "project-dev", "developer-test-password"
         )
+        assert client.get(path).status_code == 403
         assert (
             client.put(
                 path,

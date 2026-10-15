@@ -39,5 +39,7 @@ it. The admin-only write uses the settings lock shared by class edits and policy
 reads. It rejects unregistered projects, unknown classes and changes while
 classes are off. A required settings Audit failure rolls back the assignment.
 The request does not rename a project or alter model approvals.
+An admin can read the same path with `GET` to check the current result after an
+uncertain write response. Class fields are omitted while classes are off.
 
 CLI registration, project access checks and the Projects screen are separate changes.

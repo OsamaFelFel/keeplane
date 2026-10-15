@@ -26,11 +26,18 @@ def projects(request):
     return response
 
 
-@api_view(["PUT"])
+@api_view(["GET", "PUT"])
 def project_class(request, project_id):
     user, denied = admin(request)
     if denied:
         return denied
+    if request.method == "GET":
+        try:
+            response = Response(DjangoProjectClasses(AUDIT).current(project_id))
+        except ProjectError as error:
+            response = failure(error.status, error.message)
+        response["Cache-Control"] = "no-store"
+        return response
     denied = action_error(request)
     if denied:
         return denied
