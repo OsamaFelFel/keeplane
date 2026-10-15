@@ -76,6 +76,9 @@ Only the runtime database is retained; HOME, configuration, caches and temporary
 files remain disposable. State is bound to the canonical working directory,
 gateway API, model and exact runtime version. Changed bindings, unsafe files or
 stored runtime credentials are refused. One owned lock serializes its use.
+Resume also requires an existing idle native session in that directory and model;
+unknown IDs fail before provider contact. This check uses the pinned runtime's
+database metadata because its native `--session` option can create a missing ID.
 Server-account binding awaits the browser sign-in integration: this is local
 OS-user history, not proof of a Keeplane account or project provenance.
 

@@ -30,6 +30,17 @@ def database(root, credential=False):
         connection.execute("CREATE TABLE credential(value TEXT)")
         connection.execute("CREATE TABLE history(message TEXT)")
         connection.execute("INSERT INTO history VALUES ('Synthetic prior turn')")
+        connection.execute(
+            "CREATE TABLE session_v2(id TEXT, directory TEXT, model TEXT, time_idle INTEGER, time_suspended INTEGER)"
+        )
+        connection.execute(
+            "INSERT INTO session_v2 VALUES (?, ?, ?, 1, NULL)",
+            [
+                "ses_first",
+                str(root.parent / "project"),
+                '{"providerID":"keeplane","id":"coder"}',
+            ],
+        )
         if credential:
             connection.execute("INSERT INTO credential VALUES ('must-not-import')")
 
@@ -120,6 +131,26 @@ def test_stored_credentials_are_not_read_or_used(state):
     ):
         pass
     assert "must-not-import" not in str(error.value)
+
+
+@pytest.mark.parametrize("change", ["missing", "directory", "model", "active"])
+def test_resume_refuses_unknown_or_differently_scoped_native_sessions(state, change):
+    root, binding = state
+    database(root)
+    with sqlite3.connect(root / "runtime.db") as connection:
+        if change == "missing":
+            connection.execute("DELETE FROM session_v2")
+        elif change == "directory":
+            connection.execute("UPDATE session_v2 SET directory = '/other'")
+        elif change == "model":
+            connection.execute("UPDATE session_v2 SET model = '{}' ")
+        else:
+            connection.execute("UPDATE session_v2 SET time_suspended = 1")
+    with (
+        pytest.raises(ValueError, match="existing idle session"),
+        managed(root, binding, "ses_first"),
+    ):
+        pass
 
 
 def test_inherited_lock_survives_caller_close_until_runtime_child_stops(state):
