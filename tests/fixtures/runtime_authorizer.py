@@ -51,6 +51,7 @@ class Silent(WSGIRequestHandler):
 
 class Model(BaseHTTPRequestHandler):
     requires_key = False
+    fail_private = False
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -78,6 +79,11 @@ class Model(BaseHTTPRequestHandler):
         )
         if self.requires_key and not key_matches:
             self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.fail_private and body["model"] == "mock-private":
+            self.send_response(503)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -129,6 +135,8 @@ def serve():
         classes.set_enabled(True)
         ProjectClass.objects.create(project_id=project, data_class_id="confidential")
     shared = os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
+    fallback = os.environ.get("FIXTURE_NATIVE_FALLBACK") == "1"
+    Model.fail_private = fallback
     if shared:
         Model.requires_key = True
     definitions = [
@@ -147,6 +155,11 @@ def serve():
         }
         for name in ("private", "public", "outside")
     ]
+    if fallback:
+        for definition in definitions:
+            definition["health"] = {
+                "eviction": {"duration": "120s", "consecutiveFailures": 1}
+            }
     if shared:
         for definition in definitions:
             definition["auth"] = {
@@ -158,6 +171,12 @@ def serve():
                     }
                 }
             }
+            if fallback and definition["id"] == "public":
+                definition["auth"]["key"]["value"] = {
+                    "file": str(
+                        Path("/trial") / os.environ["FIXTURE_PROVIDER_NEXT_KEY_NAME"]
+                    )
+                }
             definition["requestHeaders"]["remove"].remove("authorization")
     reuse = False
     if os.environ.get("FIXTURE_REUSE_NATIVE_DEFINITIONS") == "1":
@@ -185,6 +204,29 @@ def serve():
                 fingerprint(name, resource_body["resources"]),
                 key_choice="shared" if shared else "none",
             )
+    if fallback:
+        status, _ = MODEL_GATEWAY.request(
+            "/api/config/resources/llm.virtualModel",
+            {
+                "resources": [
+                    {
+                        "value": {
+                            "name": "fallback",
+                            "routing": {
+                                "failover": {
+                                    "targets": [
+                                        {"model": "private", "priority": 0},
+                                        {"model": "public", "priority": 1},
+                                    ]
+                                }
+                            },
+                        }
+                    }
+                ]
+            },
+            method="PUT",
+        )
+        assert status == 200
     credential = STATE / "credential"
     credential.write_text(json.dumps({"token": token, "project": project}))
     credential.chmod(0o600)
@@ -250,6 +292,17 @@ def command(action, arguments):
         return stores()[3].set_enabled(arguments == "enabled")
     elif action == "classes_enabled":
         return stores()[3].enabled()
+    elif action == "allow_public":
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        stores()[2].approve(
+            "public",
+            ["Confidential"],
+            fingerprint("public", body["resources"]),
+            key_choice="shared",
+        )
+    elif action == "withdraw_public":
+        stores()[2].remove("public")
     elif action == "revoke":
         stores()[1].logout(credential["token"])
     elif action == "summary":
