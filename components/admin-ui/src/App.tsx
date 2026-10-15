@@ -6,6 +6,7 @@ import { DeveloperPage } from '@/app/DeveloperPage'
 import { SignInPage } from '@/features/auth/SignInPage'
 
 const UsersPage = lazy(() => import('@/features/users/UsersPage').then(module => ({ default: module.UsersPage })))
+const ProjectsPage = lazy(() => import('@/features/projects/ProjectsPage').then(module => ({ default: module.ProjectsPage })))
 const DataClassesPage = lazy(() => import('@/features/data-classes/DataClassesPage').then(module => ({ default: module.DataClassesPage })))
 const AuditPage = lazy(() => import('@/features/audit/AuditPage').then(module => ({ default: module.AuditPage })))
 const ModelsPage = lazy(() => import('@/features/models/ModelsPage').then(module => ({ default: module.ModelsPage })))
@@ -22,6 +23,7 @@ export default function App() {
     <Suspense fallback={<p role="status">Loading…</p>}><Routes>
       <Route path="/" element={<ModelsPage />} />
       <Route path="/app/" element={<UsersPage />} />
+      <Route path="/app/projects" element={<ProjectsPage />} />
       <Route path="/app/models" element={<ModelsPage />} />
       <Route path="/app/data-classes" element={<DataClassesPage />} />
       <Route path="/app/audit" element={<AuditPage />} />
