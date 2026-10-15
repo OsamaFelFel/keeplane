@@ -5,6 +5,7 @@ import subprocess
 import pytest
 
 from components.cli.opencode_adapter import run
+from components.cli import opencode_adapter
 
 
 @pytest.mark.parametrize("native_code,event,expected", [(0, "text", 0), (0, "error", 1), (7, "text", 7)])
@@ -34,6 +35,7 @@ def test_disposable_profile_and_failure_propagation(tmp_path, monkeypatch, nativ
         return subprocess.CompletedProcess(command, native_code, json.dumps({"type": event}), "synthetic-grant")
 
     monkeypatch.setattr(subprocess, "run", invoke)
+    monkeypatch.setattr(opencode_adapter, "coding_turn", invoke)
     result = run(binary, tmp_path, "https://gateway.test/v1", "coder", "Fix the file.", "synthetic-grant")
     assert result.returncode == expected
     assert result.stderr == "[redacted]"
@@ -58,6 +60,7 @@ def test_timeout_removes_profile(tmp_path, monkeypatch):
         raise subprocess.TimeoutExpired(command, 1, output=b"synthetic-grant")
 
     monkeypatch.setattr(subprocess, "run", invoke)
+    monkeypatch.setattr(opencode_adapter, "coding_turn", invoke)
     with pytest.raises(subprocess.TimeoutExpired):
         run(binary, tmp_path, "http://127.0.0.1:8080/v1", "coder", "Fix.", "synthetic-grant")
     assert all(not profile.exists() for profile in profiles)
@@ -69,3 +72,27 @@ def test_rejects_wrong_runtime_version(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, "1.19.0", ""))
     with pytest.raises(ValueError, match="requires OpenCode V2"):
         run(binary, tmp_path, "https://gateway.test/v1", "coder", "Fix.", "grant")
+
+
+def test_timeout_terminates_spawned_tool(tmp_path):
+    import os
+    import sys
+    import time
+
+    pid_file = tmp_path / "child.pid"
+    child = "import time; time.sleep(30)"
+    program = (
+        "import subprocess,sys,time; from pathlib import Path; "
+        f"child=subprocess.Popen([sys.executable,'-c',{child!r}]); "
+        f"Path({str(pid_file)!r}).write_text(str(child.pid)); time.sleep(30)"
+    )
+    with pytest.raises(subprocess.TimeoutExpired):
+        opencode_adapter.coding_turn([sys.executable, "-c", program], input="",
+                                     env=dict(os.environ), cwd=tmp_path, timeout=1)
+    pid = pid_file.read_text()
+    for _ in range(20):
+        state = subprocess.run(["ps", "-o", "stat=", "-p", pid], capture_output=True, text=True).stdout.strip()
+        if not state or state.startswith("Z"):
+            break
+        time.sleep(0.05)
+    assert not state or state.startswith("Z"), "Timed-out tool is still running."

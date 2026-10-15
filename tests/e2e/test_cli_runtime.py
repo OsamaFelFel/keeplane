@@ -6,6 +6,10 @@ import tempfile
 from threading import Thread
 from unittest.mock import patch
 
+if __name__ != "__main__":
+    import pytest
+    pytestmark = pytest.mark.optional
+
 from components.cli.opencode_adapter import run
 from tests.fixtures.cli_coding_provider import Handler, start
 

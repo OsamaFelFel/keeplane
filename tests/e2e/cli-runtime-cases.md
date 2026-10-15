@@ -5,7 +5,7 @@
   cannot divert the request. The gateway credential is absent from printed events
   and runtime profile files. An invalid credential fails without another tool call.
 - **CLI-02:** Unit checks cover native errors with zero exit status, nonzero exits,
-  timeouts, profile cleanup, credential redaction, rejected insecure endpoints and
+  timeouts, spawned-tool termination, profile cleanup, credential redaction, rejected insecure endpoints and
   a mismatched runtime version.
 
 Run the isolated checks with `python -m pytest tests/unit/test_cli_adapter.py`.

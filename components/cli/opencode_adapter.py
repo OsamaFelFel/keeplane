@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -14,8 +15,26 @@ from urllib.parse import urlsplit
 VERSION = "2.0.27"
 
 
+def coding_turn(command, *, input, env, cwd, timeout):
+    with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, env=env, cwd=cwd,
+                          start_new_session=True) as process:
+        try:
+            output, errors = process.communicate(input, timeout=timeout)
+        except (subprocess.TimeoutExpired, KeyboardInterrupt):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate()
+            raise
+        return subprocess.CompletedProcess(command, process.returncode, output, errors)
+
+
 def run(binary, directory, gateway, model, prompt, grant, timeout=300):
     """Use a disposable profile; the gateway remains responsible for authorization."""
+    if os.name != "posix":
+        raise ValueError("This prototype currently supports macOS and Linux.")
     url = urlsplit(gateway)
     if (
         url.scheme not in ("http", "https")
@@ -81,11 +100,11 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300):
         )
         if version.returncode or version.stdout.strip().removeprefix("opencode ").removeprefix("v") != VERSION:
             raise ValueError("This prototype requires OpenCode V2 " + VERSION + ".")
-        result = subprocess.run(
+        result = coding_turn(
             [binary, "run", "--standalone", "--format", "json",
              "--model", "keeplane/" + model],
             input=prompt, env=environment, cwd=directory,
-            capture_output=True, text=True, timeout=timeout, check=False,
+            timeout=timeout,
         )
         result.stdout = result.stdout.replace(grant, "[redacted]")
         result.stderr = result.stderr.replace(grant, "[redacted]")
@@ -120,6 +139,9 @@ def main():
     except subprocess.TimeoutExpired:
         print("Coding turn timed out; review any edits before retrying.", file=sys.stderr)
         return 124
+    except KeyboardInterrupt:
+        print("Coding turn cancelled; review any edits before retrying.", file=sys.stderr)
+        return 130
     except (OSError, ValueError) as error:
         print(str(error).replace(grant or "\0", "[redacted]"), file=sys.stderr)
         return 2

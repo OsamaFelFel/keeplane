@@ -12,7 +12,7 @@ flowchart LR
   Gateway --> Model[Configured model]
 ```
 
-Use Python 3.9+, an independently installed exact runtime binary and a gateway
+Use macOS or Linux, Python 3.9+, an independently installed exact runtime binary and a gateway
 with an OpenAI-compatible API and tool-capable model. Obtain a test gateway
 credential from the installation operator. This is a Keeplane gateway credential,
 not a cloud provider key. Provider keys stay on the server.
@@ -34,7 +34,8 @@ into a command or commit it. HTTP is accepted only for a loopback test gateway.
 
 The adapter prints the runtime's JSON events when the turn ends. Review its edits and run the
 project's tests. A denied request or native error exits unsuccessfully; a timeout
-exits with 124. `--timeout 600` gives a slow turn ten minutes. A failed turn can
+exits with 124; cancellation exits with 130. Both stop the runtime's process group.
+`--timeout 600` gives a slow turn ten minutes. A failed turn can
 leave edits, so inspect the diff before retrying. There is no direct-provider fallback.
 
 Each turn uses a temporary profile and excludes existing runtime configuration,
