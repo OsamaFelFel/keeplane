@@ -4,7 +4,8 @@ COPY components/control-plane/requirements-account-api.txt /tmp/requirements-acc
 RUN pip install --no-cache-dir -r /tmp/requirements-account-api.txt
 COPY components/control-plane/ /app/
 COPY components/admin-ui/ /ui/
-RUN mkdir -p /run/keeplane-secrets /gateway-config
+RUN mkdir -p /run/keeplane-secrets /gateway-config \
+    && chmod -R a+rX,go-w /app /ui
 WORKDIR /app
 
 USER 65532:65532

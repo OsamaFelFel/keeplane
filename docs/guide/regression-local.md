@@ -95,3 +95,18 @@ Reports are retained as CI artifacts for 30 days, including failures. State the
 tested revision, results and unrun checks in the PR. Release evidence needs a
 longer retention policy. Commit fixtures, readable cases and deliberate visual
 baselines; keep routine generated output outside source control.
+
+## Check image file permissions
+
+After building the admin UI, run:
+
+```sh
+.venv/bin/python -m pytest tests/integration/test_app_image_permissions.py -m live
+```
+
+The disposable fixture packages the actual app and UI with restrictive input
+permissions. The non-root image user must read the app, compiled UI and fonts
+and must be unable to change them. It reuses cached base and
+requirements layers where available, runs without network access, and removes
+its own container and image. No running
+preview or private credential is included.
