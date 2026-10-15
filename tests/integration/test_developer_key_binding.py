@@ -104,8 +104,12 @@ def test_binding_migration_preserves_ownership_and_requires_legacy_revalidation(
             "key_name": row.key_name,
             "pending_key_name": row.pending_key_name,
         }
-        MigrationExecutor(connection).migrate(after)
-        current = DeveloperProviderKey.objects.get(pk=row.pk)
+        upgraded = MigrationExecutor(connection)
+        upgraded.migrate(after)
+        new = upgraded.loader.project_state(after).apps.get_model(
+            "model_registry", "DeveloperProviderKey"
+        )
+        current = new.objects.get(pk=row.pk)
         assert {name: getattr(current, name) for name in original} == original
         assert current.validation_fingerprint == ""
     finally:
