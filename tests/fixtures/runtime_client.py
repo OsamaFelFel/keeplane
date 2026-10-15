@@ -35,8 +35,21 @@ request = Request(
 )
 try:
     with urlopen(request, timeout=5) as response:
-        response.read()
+        raw = response.read(65537)
+        if len(raw) > 65536:
+            raise RuntimeError("Disposable protocol response is too large")
         status = response.status
+        if options.get("observe_protocol"):
+            print(
+                json.dumps(
+                    {
+                        "status": status,
+                        "content_type": response.headers.get("Content-Type"),
+                        "body": raw.decode("utf-8"),
+                    }
+                )
+            )
+            raise SystemExit(0)
 except HTTPError as error:
     error.read()
     status = error.code
