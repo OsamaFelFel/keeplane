@@ -14,7 +14,7 @@ flowchart LR
   Listing --> Projects
   Listing --> Usage
   Listing --> Classes[(Class assignments)]
-  Admin --> Assignment[Project class service]
+  Screen --> Assignment[Project class service]
   Assignment --> Classes
   Assignment --> Audit[(Optional settings Audit)]
 ```
@@ -46,4 +46,6 @@ uncertain write response. Class fields are omitted while classes are off.
 The React Projects screen uses the listing API for server-side search and
 paging. It hides class columns while classes are off and keeps the table inside
 a scrollable frame on narrow screens. CLI registration, project access checks
-and the class dialog are separate changes.
+are separate changes. The class dialog reads current definitions and sends one
+explicit assignment. A lost response disables editing until an admin checks the
+stored result; the same GET readback supports recovery without a repeated write.
