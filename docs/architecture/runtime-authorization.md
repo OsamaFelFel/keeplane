@@ -113,6 +113,12 @@ tests per-request header injection from a trusted final callback. Its synthetic
 server-only key map checks actor isolation and withdrawal; production personal-key
 storage and selection remain separate work.
 
+The [definition-generation check](../../tests/integration/native-definition-binding-cases.md)
+stops a stale selected resource before key delivery, even when its model ID and
+provider address match the current one. It depends on a controlled publisher
+using a fresh generation for every complete definition; the native gateway does
+not attest arbitrary definitions. Production publication remains separate work.
+
 Native [external authorization](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/external-authz/)
 and [file-backed backend credentials](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/backend-authn/key/)
 provide the transport. These fixture checks do not install production isolation
