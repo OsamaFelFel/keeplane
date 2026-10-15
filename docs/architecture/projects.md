@@ -42,4 +42,25 @@ The request does not rename a project or alter model approvals.
 An admin can read the same path with `GET` to check the current result after an
 uncertain write response. Class fields are omitted while classes are off.
 
-CLI registration, project access checks and the Projects screen are separate changes.
+CLI registration and the Projects screen are separate changes.
+
+## Internal model authorization
+
+`DjangoModelAuthorization(identity, model_policy, project_access=...)` composes a
+current Django session, a registered project and current model eligibility.
+The required server access function receives canonical account and project IDs;
+only an explicit `True` allows the check to continue. Project usage never grants
+access, and admin status never bypasses model restrictions. A successful check
+returns only the account, project and model IDs.
+
+```mermaid
+flowchart LR
+  Session[Current Django session] --> Project[Registered project]
+  Project --> Access[Required server access policy]
+  Access --> Models[Current eligible models]
+  Models --> Decision[Account, project and model IDs]
+```
+
+There is no HTTP authorization endpoint or credential issuer yet. Deployment
+must still configure its project-access policy and enforce the decision at the
+final gateway destination. [Isolated cases](../../tests/integration/model-authorization-cases.md) cover this composition.

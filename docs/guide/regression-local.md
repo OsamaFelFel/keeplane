@@ -67,7 +67,7 @@ with `pytest -m optional`.
 
 ## CI and evidence
 
-PR checks run frontend checks, pytest unit/integration checks, documented Docker
+PRs and updates to `main` run frontend checks, pytest unit/integration checks, documented Docker
 startup on default and custom ports, Linux browser behavior and a disposable
 PostgreSQL API/restore fixture. macOS visual baselines and full Kubernetes
 acceptance have separate environments. Green CI covers only its selected checks.
