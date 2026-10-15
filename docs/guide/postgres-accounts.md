@@ -9,10 +9,9 @@ in progress.
 
 ## Configure a clean installation
 
-Install the pinned API requirements and
-`components/control-plane/requirements-postgres.txt`. The latter uses the
-replaceable pure-Python Psycopg 3.3.6 distribution and needs an installed `libpq`.
-The default preview image does not include that optional driver.
+PostgreSQL mode adds `components/control-plane/requirements-postgres.txt` to the
+pinned API requirements. For a direct Python installation, install both sets and
+`libpq` for Psycopg 3.3.6. The default preview image omits the optional driver.
 
 For a manual image build, install Node.js 22.12 or newer with npm and prepare the
 web UI first. The image copies the generated `components/admin-ui/dist` assets;
