@@ -35,10 +35,14 @@ This prototype accepts credentials made of letters, digits, `.`, `_`, `~` and `-
 
 The adapter prints the runtime's JSON events when the turn ends. Review its edits and run the
 project's tests. A denied request or native error exits unsuccessfully; a timeout
-exits with 124; cancellation exits with 130. Both terminate the runtime's process
+exits with 124; Ctrl+C exits with 130; SIGTERM during a turn exits with 143.
+All three terminate the runtime's process
 group and bound cleanup without waiting for inherited output pipes to close.
 Children that create independent sessions are outside that cleanup boundary;
 this prototype does not sandbox or terminate detached workloads.
+SIGTERM during process creation is deferred until the adapter owns the child.
+The version probe retains its separate ten-second limit. The prior SIGTERM handler
+is restored when the CLI's coding invocation ends. SIGKILL cannot run cleanup.
 `--timeout 600` gives a slow turn ten minutes. A failed turn can
 leave edits, so inspect the diff before retrying. There is no direct-provider fallback.
 
