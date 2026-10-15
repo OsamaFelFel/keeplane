@@ -49,7 +49,9 @@ The local launcher builds React, prepares private credentials, runs database
 migrations in a separate startup service, imports existing local preview data
 once, and starts Gunicorn. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
-Serving workers do not migrate schemas.
+Serving workers do not migrate schemas. PostgreSQL chart installs require one
+immutable app image reference for the serving copies, migration Job and
+supplied-gateway preflight; local SQLite trial images may use tags.
 
 The local app and gateway read `/gateway-config/local.yaml` from the same
 read-only directory bind. Git can replace that file atomically without leaving

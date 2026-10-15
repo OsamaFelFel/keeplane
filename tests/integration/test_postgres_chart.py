@@ -5,7 +5,10 @@ from tests.integration.test_chart_package import CHART, case, named, run
 
 
 def run_cases():
+    image = "registry.example.test/keeplane@sha256:" + "a" * 64
     base = (
+        "--set",
+        "app.image=" + image,
         "--set",
         "app.postgres.enabled=true",
         "--set",
@@ -175,6 +178,25 @@ def run_cases():
             {"externally_migrated_render_exit": external.returncode},
         )
     )
+    mutable = {}
+    for value in ("", "keeplane-preview:local", "registry/app:v1", "registry/app:latest",
+                  "registry/app@sha256:abc", "registry/app@sha256:" + "A" * 64):
+        result = run("template", "pg", CHART, *base, "--set", "app.image=" + value)
+        mutable[value] = result.returncode != 0 and (
+            "app.postgres requires app.image pinned" in result.stderr
+            or (not value and "minLength" in result.stderr)
+        )
+    rows.append(case("PGCHART-07", all(mutable.values()),
+                     {"invalid_images_rejected": mutable}))
+    existing_job = named(existing.stdout, "Job", "pg-existing-gateway-preflight")
+    same_image = all(
+        'image: "' + image + '"' in manifest
+        for manifest in (app, job, existing_job,
+                         named(existing.stdout, "Deployment", "pg-app"),
+                         named(existing.stdout, "Job", "pg-accounts-migrate"))
+    )
+    rows.append(case("PGCHART-08", same_image,
+                     {"same_pinned_app_image_in_both_modes": same_image}))
     print(json.dumps({"suite": "PostgreSQL chart contract", "results": rows}, indent=2))
     return int(any(row["verdict"] != "pass" for row in rows))
 
