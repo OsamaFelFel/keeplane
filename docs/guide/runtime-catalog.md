@@ -55,3 +55,16 @@ remain valid. The route accepts no account ID and never authenticates cookies.
 It needs no CSRF cookie because authorization comes only from the explicit
 header. Browser sign-in, account changes and browser sign-out keep their normal
 [Django CSRF protection](https://docs.djangoproject.com/en/5.2/ref/csrf/).
+
+## Register first use
+
+Send `POST /api/runtime/projects` with the Bearer credential and JSON containing
+exactly `project_id` (an explicit UUID) and `name` (1–120 printable characters).
+Success returns 200 with the canonical `project_id` and server-preserved name.
+Repeated use records the current account without renaming the project or changing
+its class. Invalid bodies or extra fields return 400; unavailable storage returns
+503. The account always comes from the session, never the body.
+
+This records use before onboarding. It does not infer Git identity, write repo
+files, assign a class or grant access. The developer client supplies the project
+context explicitly; repository/content provenance remains outside this check.
