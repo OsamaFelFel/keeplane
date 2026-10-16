@@ -20,6 +20,10 @@ def access_token(request=None):
     return ACCESS_PREFIX + secrets.token_urlsafe(32)
 
 
+def refresh_token(request=None):
+    return "kpr_" + secrets.token_urlsafe(32)
+
+
 def checksum(value):
     return hashlib.sha256(value.encode("ascii")).hexdigest()
 
