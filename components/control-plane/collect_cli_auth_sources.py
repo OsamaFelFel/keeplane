@@ -116,6 +116,43 @@ def original_members(path, members):
     return pending
 
 
+def recipe_sources(pins):
+    """A release recipe declares inputs; it does not attest the wheel build."""
+    records = pins.get("recipe_declared_sources", [])
+    names = set()
+    for row in records:
+        name = row["name"]
+        declared = row["declared_by"]
+        packages = [
+            package
+            for package in pins["packages"]
+            if package["name"] == declared["package"]
+            and package["version"] == declared["version"]
+            and package["wheel"]["sha256"] == declared["wheel_sha256"]
+        ]
+        if (
+            not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name)
+            or name in names
+            or len(packages) != 1
+            or row.get("attribution") != "release-recipe-only"
+            or row.get("wheel_build_attested") is not False
+            or row["source"]["file"] != f"{name}-{row['version']}.tar.gz"
+            or not row["source"]["url"].endswith(f"/v{row['version']}.tar.gz")
+            or not re.fullmatch(
+                r"https://raw\.githubusercontent\.com/[A-Za-z0-9_.-]+/"
+                r"[A-Za-z0-9_.-]+/[a-f0-9]{40}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml",
+                declared["recipe"]["url"],
+            )
+            or declared["recipe"]["file"] == row["source"]["file"]
+            or not row["source_notices"]
+        ):
+            raise ValueError("Invalid release-recipe source attribution")
+        names.add(name)
+        for filename in row["source_notices"]:
+            relative(filename)
+    return records
+
+
 def rust_lock(pins, output, crates):
     inventory = pins["rust_inventory"]
     lock = inventory["cargo_lock"]
@@ -196,7 +233,15 @@ def collect(pins, wheels, output, source_cache=None):
         ("license-texts", artifact) for artifact in pins["supplemental_license_texts"]
     )
     crates = rust_components(pins, build_records)
+    recipes = recipe_sources(pins)
     tasks.extend(("rust-" + row["name"], row["source"]) for row in crates)
+    for row in recipes:
+        origin = "recipe-" + row["name"]
+        if origin in {name for name, _ in tasks} or any(
+            native["name"] == origin for native in pins.get("native_sources", [])
+        ):
+            raise ValueError("Release recipe output collides with another component")
+        tasks.extend(((origin, row["declared_by"]["recipe"]), (origin, row["source"])))
     for native in pins.get("native_sources", []):
         if len(relative(native["name"]).parts) != 1:
             raise ValueError("Invalid native component name")
@@ -279,6 +324,29 @@ def collect(pins, wheels, output, source_cache=None):
                 {"component": native["name"], "error_class": type(error).__name__}
             )
     rust_notice_count = 0
+    recipe_notice_count = 0
+    for row in recipes:
+        origin, recipe = "recipe-" + row["name"], row["declared_by"]["recipe"]
+        if not {(origin, recipe["file"]), (origin, row["source"]["file"])} <= accepted:
+            continue
+        try:
+            recipe_path = output / origin / recipe["file"]
+            if recipe_path.stat().st_size > 1024 * 1024:
+                raise ValueError("Release recipe exceeds 1 MiB")
+            raw = recipe_path.read_bytes()
+            if raw.count(row["source"]["url"].encode()) != 1:
+                raise ValueError(
+                    "Source URL is not uniquely declared by the release recipe"
+                )
+            members = original_members(
+                output / origin / row["source"]["file"], row["source_notices"]
+            )
+            source_notices.extend(
+                (relative(origin) / name, original) for name, original in members
+            )
+            recipe_notice_count += len(members)
+        except (OSError, ValueError, KeyError, tarfile.TarError) as error:
+            failures.append({"component": origin, "error_class": type(error).__name__})
     if cargo_verified:
         for crate in crates:
             origin = "rust-" + crate["name"]
@@ -327,6 +395,8 @@ def collect(pins, wheels, output, source_cache=None):
         "original_build_records": len(build_records),
         "source_notice_files": len(source_notices),
         "native_source_records": pins.get("native_sources", []),
+        "recipe_declared_source_records": recipes,
+        "recipe_source_notice_files": recipe_notice_count,
         "native_notice_failures": failures,
         "rust_inventory": pins.get("rust_inventory"),
         "rust_cargo_lock_verified": cargo_verified,

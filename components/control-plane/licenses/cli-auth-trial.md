@@ -64,13 +64,21 @@ those and their original texts without interpreting a licence choice. This
 includes Unicode-3.0 notices, the LLVM exception and both texts in dual-licensed
 archives. Original Cargo.lock bytes are copied into `build-records/`.
 
+The bundle also retains libffi 3.4.6 and its original `LICENSE` and
+`LICENSE-BUILDTOOLS`, as named by CFFI 2.1.1's pinned Linux release workflow.
+The workflow and archive hashes are checked, and the workflow must name the
+exact source URL once. These records are marked **release-recipe-only**:
+they document declared build inputs, without attesting that the verified CFFI
+wheel was built from them. They stay separate from wheel-SBOM declarations.
+The report never marks the wheel build attested or native inventory complete.
+
 This is not a completed binary inventory. The cryptography wheel embeds Rust
 code and includes `cryptography.libs/libgcc_s-0cd532bd.so.1`. Its original
 auditwheel SBOM declares Alpine libgcc 14.2.0-r6, separately from the app base's
 source inventory. Rust compiler/standard-library provenance, libgcc sources,
-build patches and native build reproduction remain open. CFFI/libffi and
-charset-normalizer's compiled
-code also need exact artifact review. Cryptography documents its
+build patches and native build reproduction remain open. CFFI/libffi build
+equivalence and charset-normalizer's compiled code also need exact artifact
+review. Cryptography documents its
 [static wheels](https://cryptography.io/en/48.0.1/installation/#static-wheels);
 the [GCC exception](https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-14.2.0/COPYING.RUNTIME)
 does not remove that inventory work. The report always marks native closure

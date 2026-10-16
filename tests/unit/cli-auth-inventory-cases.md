@@ -23,6 +23,10 @@ access, package installation or unpacking archive trees.
   and copies no Rust notices.
 - Original Cargo licence strings, including legacy forms, stay unchanged. A
   changed declaration prevents that crate's notice from being accepted.
+- Release-recipe sources stay separate from wheel-SBOM declarations and never
+  attest the wheel build. Require the exact verified wheel subject, immutable
+  recipe URL and checksums; copy original notices only when that recipe names
+  the exact source URL once. Drift, corruption or unsafe paths fail visibly.
 
 Actual source/notice collection is a separate maintainer command. Passing these
 checks does not close bundled native-code provenance or release approval.
