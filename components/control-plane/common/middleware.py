@@ -45,10 +45,10 @@ class PublicSchemeMiddleware(MiddlewareMixin):
 
 class BrowserCsrfMiddleware(CsrfViewMiddleware):
     def process_view(self, request, callback, callback_args, callback_kwargs):
-        from accounts import oauth_views
+        from accounts import oauth_device, oauth_views
 
         if (
-            callback is oauth_views.token
+            callback in (oauth_views.token, oauth_device.start)
             and settings.CLI_OAUTH_ENABLED
             and request.method == "POST"
             and request.content_type == "application/x-www-form-urlencoded"
