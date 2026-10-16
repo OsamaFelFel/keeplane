@@ -330,3 +330,11 @@ def test_selected_metadata_is_exact_and_ignores_client_fingerprint_header(instal
     assert send(installed, True, prompt="untrusted-content").status_code == 400
     assert send(installed, definition_fingerprint=installed.fp).status_code == 400
     assert not installed.requests
+
+
+def test_existing_gateway_installation_is_not_enabled_by_a_manifest(
+    installed, monkeypatch
+):
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    assert send(installed).status_code == 503
+    assert not installed.requests

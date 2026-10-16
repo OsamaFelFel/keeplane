@@ -122,6 +122,8 @@ def authorize_installed(request, *, selected=False):
         body = callback_metadata(request, selected=selected)
         if isinstance(body, Response):
             return body
+        if os.environ.get("GATEWAY_MODE", "managed") != "managed":
+            raise ModelPolicyUnavailable("Managed runtime installation is required")
         DjangoInstalledRuntimeGate(
             MODEL_GATEWAY,
             settings.RUNTIME_GUARD_MANIFEST_FILE,
