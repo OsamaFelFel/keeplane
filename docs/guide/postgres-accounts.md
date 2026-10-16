@@ -162,3 +162,5 @@ privileged mode or account/database Secret mounts. Restricted Pod Security needs
 an explicit exception. Leave `fsGroup` unset on every gateway sharing this PVC;
 the app retains it for account storage. Volume permission repair is not a
 zero-interruption guarantee for other serving copies during an app rollout.
+When upgrading with `--reuse-values`, clear an older gateway setting with
+`--set-json 'agentgateway-standalone.podSecurityContext.fsGroup=null'`.
