@@ -49,7 +49,22 @@ The local launcher builds React, prepares private credentials, runs database
 migrations in a separate startup service, imports existing local preview data
 once, and starts Gunicorn. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
-Serving workers do not migrate schemas.
+Serving workers do not migrate schemas. PostgreSQL chart installs require one
+immutable app image reference for the serving copies, migration Job and
+supplied-gateway preflight; local SQLite trial images may use tags.
+
+The packaged app and public UI remain root-owned and readable by the app user,
+even when the build inputs have private file permissions. The app user cannot
+change those files.
+
+Readiness compares the database's migration history with the app's
+known migrations. The graph is cached per worker; each probe makes one read
+query. Pending migrations or unavailable storage keep the copy out of service,
+while liveness stays independent so it can recover without restarting.
+
+The local app and gateway read `/gateway-config/local.yaml` from the same
+read-only directory bind. Git can replace that file atomically without leaving
+a container attached to an old file mount.
 
 Existing preview account, approval, class and Audit files remain unchanged.
 Their data is imported into the Django database; old sessions require a fresh
