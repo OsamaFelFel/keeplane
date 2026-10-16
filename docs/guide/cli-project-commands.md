@@ -33,5 +33,6 @@ flowchart LR
 
 Logout and explicit local `forget` retain the [profile recovery behavior](cli-account-profile.md).
 Use the [key commands](cli-provider-key-commands.md) to manage your own stored
-provider keys. Coding dispatch, resume history and init apply remain separate
-integration work. Controlled HTTP checks do not prove the real Django browser issuer.
+provider keys. The [coding command](cli-coding.md) joins this profile to local
+tool turns and account-bound resume history through an operator's protected
+gateway. Initialization and migration apply remain separate work.

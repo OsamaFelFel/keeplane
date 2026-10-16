@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from components.cli.session_state import discard, managed
+from components.cli.session_state import account_binding, discard, managed
 
 
 @pytest.fixture
@@ -76,6 +76,13 @@ def test_refuses_changed_binding(state, field):
         managed(root, dict(binding, **{field: "changed"}), None),
     ):
         pass
+
+
+@pytest.mark.parametrize("value", [None, {}, {"issuer": "http://remote.test", "actor_id": "x", "project_id": "y"},
+                                   {"issuer": "https://server.test", "actor_id": None, "project_id": "y"}])
+def test_rejects_invalid_account_bindings(value):
+    with pytest.raises(ValueError, match="account binding"):
+        account_binding(value)
 
 
 @pytest.mark.parametrize(
