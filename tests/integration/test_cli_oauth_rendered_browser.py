@@ -48,6 +48,6 @@ def test_rendered_react_sign_in_returns_to_consent_and_cli(signed_in_cli):  # no
     assert journey.flow.refresh(journey.credential.refresh_token).status_code == 400
     paths = {path for path, _ in journey.observations}
     assert {"/sign-in", "/api/session", "/oauth/authorize/", "/oauth/token/"} <= paths
-    assert any(path.startswith("/assets/") for path in paths)
+    assert any(path.startswith(("/assets/", "/app/assets/")) for path in paths)
     assert all(not cookie for path, cookie in journey.observations
                if path == "/oauth/token/" or path.startswith("/api/runtime/"))
