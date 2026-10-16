@@ -168,6 +168,9 @@ request sampling are separate; the admin UI does not configure them.
 `fsGroup`. Save the release's explicit user settings privately, then apply them
 to the new chart defaults with `--reset-values`:
 
+Build and load the updated app image using the setup steps above; the old image
+lacks the provider-volume initializer.
+
 ```sh
 umask 077
 values_dir="$(mktemp -d /tmp/keeplane-helm-values.XXXXXX)"
