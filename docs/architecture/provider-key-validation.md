@@ -15,6 +15,12 @@ authentication. HTTPS is required; an explicit constructor flag permits HTTP
 only for loopback synthetic fixtures. Unknown formats fail before key contact.
 This transport accepts non-space ASCII provider keys only.
 
+A native value may include `id` only as a string exactly matching the API model
+ID. Name-only definitions retain their existing behavior; neither form is
+rewritten. The complete value and revision still determine the fingerprint, so
+adding or changing an ID requires fresh approval. This field alone does not
+attest a native destination or admit a protected publication envelope.
+
 The request contains only “Reply OK.” and a one-token generation limit, using
 [OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 or [Anthropic Messages](https://platform.claude.com/docs/en/api/messages/create).
