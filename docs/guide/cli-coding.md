@@ -1,17 +1,19 @@
 # Code with a signed-in account
 
-This integration trial joins browser sign-in to the pinned local coding runtime.
-It requires macOS or Linux, Python 3.9+, OpenCode V2 2.0.27, and an operator-provided
-protected gateway endpoint. The ordinary gateway listener is not sufficient:
-the protected listener must recheck Keeplane identity, project and model policy
-on every model request. Production installation of that listener remains work.
+Install the [CLI wheel](cli-install.md), then use your signed-in account for a
+local coding turn. This trial requires macOS or Linux, Python 3.9+, the external
+OpenCode V2 2.0.27 binary, and an operator-installed protected trial gateway.
+The ordinary gateway listener is insufficient: the protected listener rechecks
+Keeplane identity, project and model policy on every model request. The
+[installed journey](../../tests/e2e/installed-cli-cases.md) covers this flow with
+a shared-key model; personal-key coding is not enabled here.
 
 First [sign in](cli-browser-login.md). Then choose a model from
-`keeplane.py models --profile PROFILE --project PROJECT_ID` for a registered
+`keeplane models --profile PROFILE --project PROJECT_ID` for a registered
 project, or ask the installation operator which model to use on first use.
 
 ```sh
-python3 components/cli/keeplane.py code \
+keeplane code \
   --profile "$HOME/.config/keeplane/account" \
   --project 00000000-0000-0000-0000-000000000001 --name "Example" \
   --model coder --runtime /path/to/opencode-v2 \
@@ -49,12 +51,15 @@ directory instead. History contains conversation and tool results; protect it
 like repository contents.
 
 Ctrl-C cancels the owned turn and returns 130. A timeout returns 124; termination
-returns 143. Review file edits before retrying: cancellation does not undo them.
-Finish or cancel the active command before using its account profile elsewhere.
-Sign out with `keeplane.py logout --profile PROFILE`; the gateway must reject
+returns 143. Cleanup covers the owned runtime process group; detached tools and
+safe resume of an unfinished turn are not guaranteed. Review file edits before
+retrying: cancellation does not undo them. Finish or cancel the active command
+before using its account profile elsewhere.
+Sign out with `keeplane logout --profile PROFILE`; the gateway must reject
 that credential on subsequent requests. Already authorized work is not recalled.
 
 Use explicit [refresh](cli-account-profile.md) before a turn when needed;
 [device sign-in](cli-device-login.md) is available when this machine has no browser.
-Initialization, migration apply and automatic routing remain separate integration
-work. This trial does not select a release runtime.
+Use [init preview](cli-migration-preview.md) to inspect existing project settings
+without changing files. Migration apply and automatic routing remain separate
+work. Release runtime selection and distribution checks remain open.
