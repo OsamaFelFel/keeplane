@@ -14,7 +14,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Check CI selection behavior
+        run: python3 -m unittest discover -s tests/unit -p 'test_ci_scope.py'
+      - name: Select application checks
+        id: scope
+        run: python3 .github/scripts/ci_scope.py
+
   frontend:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
@@ -45,6 +63,8 @@ jobs:
           retention-days: 30
 
   backend:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -77,6 +97,8 @@ jobs:
           retention-days: 30
 
   local-application:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -140,6 +162,8 @@ jobs:
           fi
 
   postgres:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
