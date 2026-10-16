@@ -10,9 +10,18 @@ from common.errors import StorageUnavailable
 from model_registry import developer_keys
 from model_registry.developer_keys import DeveloperKeyError, DjangoDeveloperKeyStore
 from model_registry.models import DeveloperProviderKey
+from model_registry.key_validation import VerifiedProviderKey
 
 pytestmark = pytest.mark.django_db(transaction=True)
 KEY, REPLACEMENT = "synthetic-provider-key-one", "synthetic-provider-key-two"
+
+
+class Validator:
+    def __call__(self, owner_id, model_id, key):
+        return VerifiedProviderKey(owner_id, model_id, "a" * 64)
+
+    def require_current(self, verification):
+        pass
 
 
 @pytest.fixture
@@ -22,7 +31,7 @@ def stores(tmp_path, monkeypatch):
     monkeypatch.setattr("integrations.gateway.keys.os.fchown", lambda *args: None)
     root = tmp_path / "keys"
     owners = [User.objects.create(username=name, role="developer") for name in ("alice", "bob")]
-    return [DjangoDeveloperKeyStore(owner.pk, str(root), validate_key=lambda *args: True) for owner in owners], root
+    return [DjangoDeveloperKeyStore(owner.pk, str(root), validate_key=Validator()) for owner in owners], root
 
 
 def test_owner_isolation_replace_and_remove(stores):
@@ -41,7 +50,7 @@ def test_owner_isolation_replace_and_remove(stores):
     assert alice.remove("model")["status"] == "missing"
 
 
-@pytest.mark.parametrize("verdict", [False, None, 1])
+@pytest.mark.parametrize("verdict", [False, None, 1, True, VerifiedProviderKey("other-owner", "model", "a" * 64)])
 def test_validation_is_mandatory_and_rejected_replacement_preserves_old_key(stores, verdict):
     (alice, _), root = stores
     alice.put("model", KEY)

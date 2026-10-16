@@ -5,7 +5,8 @@ model ID and submitted key. It checks the current Keeplane-approved `personal`
 model definition, sends one fixed provider request, then checks the definition
 again. Success returns `VerifiedProviderKey` with those IDs and the definition
 fingerprint. This result is internal metadata, not an authentication credential.
-No public route, CLI command, storage write or task dispatch is connected here.
+The [internal key store](developer-key-storage.md) consumes this verification.
+No public route, CLI command or task dispatch is connected here.
 
 Supported definitions are the existing `openAI` and `anthropic` cloud formats,
 with only `model` and optional `baseUrl` parameters and no configured provider
@@ -28,8 +29,8 @@ unavailable responses issue no verification; provider 401/403 means refused.
 Success proves this check, not future key acceptance or inference readiness.
 
 `require_current(verification)` runs inside a storage transaction, locks current
-approval and checks its fresh registry fingerprint. Storage must persist that
-binding and recheck it before mutation; final dispatch must check the actual
+approval and checks its fresh registry fingerprint. The internal store persists
+that binding and rechecks it before mutation; final dispatch must check the actual
 selected definition too. Account-removal cleanup and public admission remain
 separate prerequisites. Run the [synthetic HTTP cases](../../tests/integration/test_provider_key_validation.py)
 with `python -m pytest tests/integration/test_provider_key_validation.py`.
