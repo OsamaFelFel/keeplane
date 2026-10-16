@@ -7,6 +7,35 @@ const users = [
   { id: 'developer-1', username: 'developer-example', role: 'developer', sign_in: 'local', managed: false },
 ]
 
+test('BR-11: developers see CLI sign-in for this server on desktop and mobile', async ({ page }) => {
+  await page.route('**/api/identity', route => route.fulfill({ json: {
+    id: 'developer-1', username: 'developer-example', role: 'developer',
+  } }))
+  const adminRequests: string[] = []
+  page.on('request', request => {
+    if (/^\/api\/(users|models|projects)(\/|$|\?)/.test(new URL(request.url()).pathname)) {
+      adminRequests.push(request.url())
+    }
+  })
+  await page.goto('/app/')
+  await expect(page.getByRole('heading', { name: 'The web UI is for admins' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign in from the CLI' })).toBeVisible()
+  await expect(page.getByText('Ask your operator for the CLI', { exact: false })).toBeVisible()
+  const command = page.locator('pre code')
+  const server = new URL(page.url()).origin
+  await expect(command).toContainText(`keeplane login --server '${server}'`)
+  await expect(command).toContainText('mkdir -p "$HOME/.config/keeplane"')
+  await expect(command).toContainText('--profile "$HOME/.config/keeplane/account"')
+  await expect(page.getByText('--device', { exact: true })).toBeVisible()
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 800 })
+    await expect(command).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+  }
+  await expect(page.getByRole('navigation')).toHaveCount(0)
+  expect(adminRequests).toEqual([])
+})
+
 async function mockAdmin(page: Page, listedUsers = users) {
   await page.route('**/api/identity', route => route.fulfill({ json: {
     id: 'break-glass', username: 'first-admin', role: 'admin',

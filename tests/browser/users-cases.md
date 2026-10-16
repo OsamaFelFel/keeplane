@@ -19,6 +19,7 @@ current database contents.
 | BR-08 | Sign in while the API returns a one-minute attempt limit. | The form explains the wait, retains the username, and allows another attempt. |
 | BR-09 | Sign in with invalid credentials. | The same generic message hides which usernames exist. |
 | BR-10 | Sign in while account storage is unavailable. | The form explains the storage problem and allows retry; it does not blame the password. |
+| BR-11 | Open the web UI as a developer at desktop and 320px widths. | It shows the CLI prerequisite, a sign-in command using this server and an explicit private profile, and the device option. The page stays within the viewport and loads no admin navigation or admin APIs. |
 
 The real Docker and kind account and Audit suites separately test backend permissions,
 database effects and idempotent writes. Browser mocks here isolate UI behavior.
