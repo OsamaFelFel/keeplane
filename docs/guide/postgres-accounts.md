@@ -43,6 +43,52 @@ dependencies while building an image, then rebuild to update them. Installer
 notices remain under `/usr/share/keeplane/licenses/pip-<version>/`. The pinned
 base layers still carry their original distribution obligations.
 
+### Add CLI sign-in to the shared-database image
+
+For the approved sign-in integration trial, build the combined target instead:
+
+```sh
+docker build --platform linux/amd64 --target postgres-cli-auth-trial \
+  -t keeplane-postgres-cli-trial:local -f components/control-plane/Dockerfile .
+```
+
+It adds the hash-pinned sign-in dependencies to the PostgreSQL image, retaining
+their original notices and the driver's source records. It contains neither
+runtime Python installers nor a CLI agent binary. Normal image targets are unchanged.
+The [source and notice obligations](../../components/control-plane/licenses/cli-auth-trial.md)
+still apply; this target does not select a release distribution.
+
+Configure the database and signing secret as below. Set
+`KEEPLANE_CLI_OAUTH_ENABLED=1` and the installation's HTTPS `PUBLIC_ORIGIN` for
+the migration, client-registration and serving processes. Before serving, run:
+
+```sh
+python /app/manage.py migrate --noinput
+python /app/manage.py register_cli_client
+python /app/manage.py register_cli_client --device
+```
+
+Missing dependencies or changed fixed clients fail rather than silently enabling
+another sign-in flow.
+
+To enable sign-in in the Helm installation, use the combined image's immutable
+registry digest and set `app.cliSignIn.enabled=true`. It requires PostgreSQL and
+the existing HTTPS app address. The migration Job registers both fixed clients
+after migrating, using its separate database credential. Normal installs keep
+sign-in off. Missing optional dependencies fail setup.
+
+If `app.postgres.migration.enabled=false`, your database operator must run all
+three commands above, with the same image and environment, before serving.
+Readiness returns 503 while either fixed client is missing or differs; it does
+not create or repair them. Registration refuses changed metadata, so review that
+configuration before deliberately repairing it. A matching registration is safe
+to repeat. Turning sign-in off retains its tables and clients.
+
+Use the [installed CLI sign-in commands](cli-browser-login.md) with that server
+address and a private profile. This enables account access only. The protected
+coding listener still requires its separate installation; this chart setting
+does not deploy it or complete the release integration.
+
 Configure every app replica and the one-off migration process:
 
 | Setting | Value |

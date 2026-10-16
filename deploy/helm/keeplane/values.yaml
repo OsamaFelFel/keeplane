@@ -5,6 +5,9 @@ app:
   imagePullSecrets: []
   resources: {}
   replicaCount: 1
+  cliSignIn:
+    # Requires the optional PostgreSQL + CLI sign-in image and fixed clients.
+    enabled: false
   runnerUrls: "http://qwen:8080"
   postgres:
     enabled: false

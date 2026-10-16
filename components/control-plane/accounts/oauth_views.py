@@ -74,12 +74,13 @@ def loopback_redirect(value):
     )
 
 
-def fixed_client(client_id=CLIENT_ID):
+def fixed_client(client_id=CLIENT_ID, *, lock=True):
     from oauth2_provider.models import Application
 
     if client_id not in {CLIENT_ID, DEVICE_ID}:
         return False
-    client = Application.objects.select_for_update().filter(client_id=client_id).first()
+    clients = Application.objects.select_for_update() if lock else Application.objects
+    client = clients.filter(client_id=client_id).first()
     return client is not None and (
         client.client_type == client.CLIENT_PUBLIC
         and client.authorization_grant_type

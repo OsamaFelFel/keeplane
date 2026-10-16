@@ -1,14 +1,13 @@
-"""Readiness follows known schema state; it never runs migrations."""
+"""Readiness checks schema and enabled sign-in prerequisites without writing."""
 
+import builtins
 import json
 
 import pytest
+from common import readiness, web
 from django.db import OperationalError, connection
 from django.db.migrations.recorder import MigrationRecorder
 from django.test import RequestFactory
-
-from common import readiness, web
-
 
 pytestmark = pytest.mark.django_db
 
@@ -20,6 +19,19 @@ def probe():
 def test_current_schema_needs_one_read_query(django_assert_num_queries):
     with django_assert_num_queries(1):
         assert probe().status_code == 200
+
+
+def test_disabled_sign_in_never_reads_optional_clients(settings, monkeypatch):
+    settings.CLI_OAUTH_ENABLED = False
+    original = builtins.__import__
+
+    def forbid_optional(name, *args, **kwargs):
+        if name.startswith("oauth2_provider"):
+            raise AssertionError("Disabled sign-in must not import optional models")
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", forbid_optional)
+    assert probe().status_code == 200
 
 
 def test_pending_known_migration_refuses_readiness_without_writing():

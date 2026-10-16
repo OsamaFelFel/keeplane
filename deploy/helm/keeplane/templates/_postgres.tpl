@@ -17,6 +17,14 @@
   value: "1"
 {{- end -}}
 
+{{- define "keeplane.postgres.publicOrigin" -}}
+{{- if .Values.ingress.enabled -}}
+{{- printf "https://%s" (required "ingress.host is required" .Values.ingress.host) -}}
+{{- else -}}
+{{- .Values.app.postgres.publicOrigin -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "keeplane.postgres.mounts" -}}
 - name: database-credentials
   mountPath: /run/keeplane-database
