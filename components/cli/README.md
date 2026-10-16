@@ -1,5 +1,9 @@
 # Try a local coding turn
 
+For the experimental sign-in and project commands, use the
+[shared CLI entry point](../../docs/guide/cli-project-commands.md).
+Manage your own provider keys with the [key commands](../../docs/guide/cli-provider-key-commands.md).
+
 This experimental adapter connects OpenCode V2 **2.0.27** to an explicitly
 configured protected gateway. It exercises the local coding loop while the
 CLI sign-in and project-registration flows are being built. It does not select
