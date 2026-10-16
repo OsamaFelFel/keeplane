@@ -74,6 +74,10 @@ class PersonalProvider(BaseHTTPRequestHandler):
                     )
                 )
                 and (anthropic or not self.headers.get("x-api-key"))
+                and (
+                    anthropic
+                    or self.headers.get("Authorization") == "Bearer " + supplied
+                )
                 and len(
                     self.headers.get_all(
                         "x-api-key" if anthropic else "Authorization", []
