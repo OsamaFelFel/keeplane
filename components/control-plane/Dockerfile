@@ -41,6 +41,17 @@ RUN pip install --no-cache-dir --only-binary=:all: --require-hashes --no-deps \
     && python /app/remove_runtime_installers.py
 USER 65532:65532
 
+# Optional sign-in dependencies, copied with their original wheel notices.
+FROM core AS cli-auth-dependencies
+USER 0
+RUN pip install --prefix /cli-auth-dependencies/usr/local --ignore-installed --no-cache-dir \
+    --only-binary=:all: --require-hashes --no-deps \
+    -r /app/requirements-cli-auth.txt
+
+# Explicit shared-database sign-in trial; normal image targets stay unchanged.
+FROM postgres AS postgres-cli-auth-trial
+COPY --from=cli-auth-dependencies /cli-auth-dependencies/usr/local/ /usr/local/
+
 FROM core AS preview
 USER 0
 RUN python /app/remove_runtime_installers.py

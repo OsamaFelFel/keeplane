@@ -1,4 +1,4 @@
-# Explicit ADR 022 integration trial; not installed in the default app image.
+# Optional ADR 022 sign-in trial; omitted from normal app image targets.
 # Install after requirements-account-api.txt with --require-hashes --no-deps.
 # Verified wheels: Linux musl CPython 3.13 and the macOS CPython 3.12 trial.
 certifi==2026.7.22 --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
