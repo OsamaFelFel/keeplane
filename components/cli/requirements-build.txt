@@ -1,0 +1,3 @@
+# Build-only backend: MIT, unmodified; not included in the Keeplane wheel.
+# https://pypi.org/project/setuptools/84.0.0/
+setuptools==84.0.0 --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670

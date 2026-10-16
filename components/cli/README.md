@@ -1,7 +1,10 @@
 # Try a local coding turn
 
+Install the `keeplane` command with the [wheel installation guide](../../docs/guide/cli-install.md).
+Inspect an existing project with [init preview](../../docs/guide/cli-migration-preview.md).
 For the experimental sign-in and project commands, use the
 [shared CLI entry point](../../docs/guide/cli-project-commands.md).
+Use [device sign-in](../../docs/guide/cli-device-login.md) when a browser cannot open here.
 Manage your own provider keys with the [key commands](../../docs/guide/cli-provider-key-commands.md).
 Run a turn and resume private history with the [signed-in coding command](../../docs/guide/cli-coding.md).
 

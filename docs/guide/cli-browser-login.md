@@ -2,9 +2,9 @@
 
 This experimental command needs macOS or Linux, Python 3.9+, a browser and a
 trial Keeplane server with browser authorization, token exchange and the current
-account route. The issuer is not included in the packaged preview yet. Current
-client tests use a controlled HTTP issuer; they do not prove Django consent or
-the complete deployed sign-in flow.
+account route. The issuer is not included in the packaged preview yet. Tests
+join the actual client and Django sign-in, consent, project and logout routes
+with synthetic accounts; they do not prove a deployed installation or browser UI.
 
 Choose a private profile outside Git. Its parent directory must already exist.
 
@@ -49,8 +49,9 @@ revoke the new pair. An unconfirmed-revocation error needs server-side session
 withdrawal by the installation operator. A failed durable save may leave a
 revoked local credential; use logout to remove it after confirmed withdrawal.
 
-Device fallback, automatic refresh and account-bound coding/resume integration
-remain separate steps. This trial does not select the release CLI runtime.
+Use [device sign-in](cli-device-login.md) when this computer cannot open your
+browser, or the [coding command](cli-coding.md) for account-bound turns and resume.
+Automatic refresh remains separate. This trial does not select the release CLI runtime.
 
 The flow follows [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252) and
 [S256 PKCE](https://www.rfc-editor.org/rfc/rfc7636).

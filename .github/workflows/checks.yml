@@ -49,6 +49,7 @@ jobs:
     timeout-minutes: 10
     env:
       PYTHONPATH: components/control-plane
+      KEEPLANE_CLI_BUILD_PYTHON: ${{ github.workspace }}/.venv/bin/python
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -57,6 +58,7 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/pip install -r tests/requirements.txt
+          .venv/bin/pip install --require-hashes -r components/cli/requirements-build.txt
       - name: Install the pinned Helm tool for chart checks
         run: |
           curl --fail --location --output /tmp/helm.tar.gz https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz

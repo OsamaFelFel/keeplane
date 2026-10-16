@@ -54,5 +54,7 @@ Finish or cancel the active command before using its account profile elsewhere.
 Sign out with `keeplane.py logout --profile PROFILE`; the gateway must reject
 that credential on subsequent requests. Already authorized work is not recalled.
 
-Initialization, migration apply, automatic routing, refresh and device sign-in
-remain separate integration work. This trial does not select a release runtime.
+Use explicit [refresh](cli-account-profile.md) before a turn when needed;
+[device sign-in](cli-device-login.md) is available when this machine has no browser.
+Initialization, migration apply and automatic routing remain separate integration
+work. This trial does not select a release runtime.
