@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "common",
     "accounts",
     "model_registry",
+    "gateway_publications",
     "data_classes",
     "projects",
     "audit",

@@ -124,6 +124,13 @@ uses a bounded map of current markers for two candidates. Each selected resource
 checks its own marker before key delivery; a stale fallback cannot use the first
 model's marker. This is a fixed disposable protocol, not production publication.
 
+The [internal definition factory](../../tests/integration/definition-generation-factory-cases.md)
+persists a fresh generation before building a guarded model candidate. It keeps
+the approved raw fingerprint, generated envelope digest and complete global
+wiring digest separate. Failed and retired generations remain recorded. This
+factory writes no gateway configuration and enables no dispatch; native final
+readback and approval/key validation remain required before integration.
+
 Native [external authorization](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/external-authz/)
 and [file-backed backend credentials](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/backend-authn/key/)
 provide the transport. These fixture checks do not install production isolation

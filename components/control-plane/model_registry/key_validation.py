@@ -1,11 +1,12 @@
 """Validate one submitted key against a current server-approved definition."""
 
-from dataclasses import dataclass
-from pathlib import Path
+import json
 import subprocess
 import sys
+from copy import deepcopy
+from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlsplit
-import json
 
 from django.db import transaction
 
@@ -25,6 +26,14 @@ class VerifiedProviderKey:
     definition_fingerprint: str
 
 
+@dataclass(frozen=True)
+class RawProviderDefinition:
+    model_id: str
+    definition_fingerprint: str
+    revision: int
+    value: dict = field(repr=False)
+
+
 class DjangoProviderKeyValidator:
     def __init__(self, gateway, *, timeout=8, allow_loopback_http=False):
         if not 0 < timeout <= 10:
@@ -34,7 +43,7 @@ class DjangoProviderKeyValidator:
         self.gateway, self.timeout = gateway, timeout
         self.allow_loopback_http = allow_loopback_http
 
-    def _definition(self, model_id, lock=False):
+    def _parsed_definition(self, model_id, lock=False):
         approvals = (
             ModelApproval.objects.select_for_update() if lock else ModelApproval.objects
         )
@@ -102,11 +111,24 @@ class DjangoProviderKeyValidator:
             raise ValueError("Use an approved HTTPS provider address")
         _ = url.port  # Reject malformed ports before secret contact.
         suffix = "/chat/completions" if provider == "openAI" else "/messages"
-        return current, {
+        entry = next(row for row in resources if row["id"] == model_id)
+        return RawProviderDefinition(
+            model_id, current, entry["revision"], deepcopy(value)
+        ), {
             "provider": provider,
             "model": params["model"],
             "url": base.rstrip("/") + suffix,
         }
+
+    def raw_definition(self, model_id, *, lock=False):
+        """Read a strict approved definition without sending a key or provider call."""
+        if lock and not transaction.get_connection().in_atomic_block:
+            raise RuntimeError("Lock the raw definition inside a transaction")
+        return self._parsed_definition(model_id, lock)[0]
+
+    def _definition(self, model_id, lock=False):
+        definition, request = self._parsed_definition(model_id, lock)
+        return definition.definition_fingerprint, request
 
     def __call__(self, owner_id, model_id, key):
         current, request = self._definition(model_id)
