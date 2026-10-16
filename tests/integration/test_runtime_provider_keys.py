@@ -1,5 +1,6 @@
 """Owner-only HTTP admission with real sessions, bound storage and mock provider."""
 
+from json import scanner
 from types import SimpleNamespace
 
 import pytest
@@ -187,6 +188,26 @@ def test_malformed_duplicate_large_or_non_json_body_is_generic(api, raw, status,
     assert response.status_code == status
     assert raw.encode() not in response.content
     assert not api.provider["calls"]
+
+
+def test_injected_json_recursion_failure_is_refused_before_key_or_provider_contact(
+    api, monkeypatch
+):
+    # Fault injection selects the stdlib Python scanner to exercise recursion
+    # failure; this body need not exceed the native C decoder's depth limit.
+    monkeypatch.setattr(scanner, "make_scanner", scanner.py_make_scanner)
+    raw = '{"model_id":"model","key":' + "[" * 1500 + "0" + "]" * 1500 + "}"
+    assert len(raw.encode()) < 4096
+    response = api.client.put(
+        PATH,
+        raw,
+        content_type="application/json",
+        HTTP_AUTHORIZATION="Bearer " + api.tokens[0],
+    )
+    assert response.status_code == 400
+    assert response.json() == {"error": "Send a valid JSON object"}
+    assert not api.provider["calls"] and not api.gateway.reads
+    assert not DeveloperProviderKey.objects.exists() and not api.root.exists()
 
 
 def test_current_definition_and_binding_checks_do_not_transfer_keys(api):

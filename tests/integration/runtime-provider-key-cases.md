@@ -19,6 +19,7 @@ flowchart LR
 | Two owners add/replace/remove keys for the same model | Each sees and changes only their own registration; admin role gives no cross-owner access. |
 | Cookie, expired or invalid bearer | 401; zero provider calls and no key writes. |
 | Logout, password change, disable or removal after initial HTTP authentication | Fresh owner-lock recheck rejects the stale request before provider contact. |
+| Injected JSON parser recursion failure with a body below 4 KiB | Generic 400 with zero provider/gateway contact and no key write. |
 | Extra owner/file/fingerprint fields, duplicate JSON, invalid keys or large body | Generic refusal with zero provider contact. |
 | Raw definition changes before replacement | No old binding is transferred or invalid replacement saved. |
 | Model is withdrawn or key binding is old/unbound | GET still shows own metadata; DELETE remains usable without gateway contact. |

@@ -86,7 +86,7 @@ def provider_keys(request):
             return Response({"error": "Send JSON"}, status=415)
         try:
             body = json.loads(request.body, object_pairs_hook=strict_object)
-        except (ValueError, UnicodeError):
+        except (ValueError, UnicodeError, RecursionError):
             return Response({"error": "Send a valid JSON object"}, status=400)
         fields = {"model_id", "key"} if request.method == "PUT" else {"model_id"}
         if not isinstance(body, dict) or set(body) != fields:
