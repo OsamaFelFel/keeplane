@@ -18,3 +18,8 @@ For both browser and approved device grants:
 Each worker uses its own database connection. Fixture gates only control timing;
 the authorization, grant processing and revocation use the real Django/Toolkit
 views. These checks do not prove a browser, installed gateway or model dispatch.
+
+The lock observer refreshes its transaction's activity snapshot before each read,
+as [PostgreSQL documents](https://www.postgresql.org/docs/16/monitoring-stats.html).
+The withdrawal case also checks that the blocked request is waiting on the exact
+database process holding its owner lock.
