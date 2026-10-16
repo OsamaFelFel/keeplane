@@ -1,5 +1,8 @@
 # Try a local coding turn
 
+Start with the [installed CLI quickstart](../../docs/guide/cli-quickstart.md) for
+sign-in, reviewed instructions, coding, resume, keys and sign-out in one place.
+
 Install the `keeplane` command with the [wheel installation guide](../../docs/guide/cli-install.md).
 Preview a project or copy selected root instructions with [init](../../docs/guide/cli-migration-preview.md).
 For the experimental sign-in and project commands, use the
