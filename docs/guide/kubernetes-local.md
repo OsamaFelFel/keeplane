@@ -148,8 +148,6 @@ only that volume, and is not privileged. Clusters enforcing the Restricted Pod
 Security profile need an explicit exception for this initializer. Managed gateway
 pods must leave `fsGroup` unset so their restarts do not widen key permissions.
 Upgrade the app and gateway together; an older app image lacks the initializer.
-If using `helm upgrade --reuse-values`, also pass
-`--set-json 'agentgateway-standalone.podSecurityContext.fsGroup=null'`.
 
 The [stack lock](../../deploy/local/stack.lock.json) pins trial images, chart and
 demo model. Local values are development inputs. The cluster's kindnet CNI does
@@ -163,3 +161,30 @@ The supplied gateway cannot read Keeplane's provider-key volume in another
 namespace, so shared-key registration is refused there. The bundled Qwen runner
 has a 4,096-token active context and a 256-token output limit. Runner capacity and
 request sampling are separate; the admin UI does not configure them.
+
+### Preserve settings when upgrading Helm
+
+`--reuse-values` can restore old chart defaults, including the gateway's
+`fsGroup`. Save the release's explicit user settings privately, then apply them
+to the new chart defaults with `--reset-values`:
+
+Build and load the updated app image using the setup steps above; the old image
+lacks the provider-volume initializer.
+
+```sh
+umask 077
+values_dir="$(mktemp -d /tmp/keeplane-helm-values.XXXXXX)"
+helm --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane \
+  get values keeplane -o json > "$values_dir/original-values.json"
+helm --kubeconfig /private/tmp/keeplane-kind-kubeconfig \
+  upgrade keeplane deploy/helm/keeplane --namespace keeplane \
+  --reset-values -f "$values_dir/original-values.json" \
+  --set-json 'agentgateway-standalone.podSecurityContext.fsGroup=null' \
+  --wait --timeout 180s
+```
+
+Export without `--all`; computed old defaults would reintroduce the problem.
+For the existing-gateway app, replace both release and namespace with
+`keeplane-existing`. Keep the export outside Git: values can contain private
+configuration. Retain it if the upgrade fails, correct the reported error and
+retry with that file. This export does not back up databases or provider keys.
