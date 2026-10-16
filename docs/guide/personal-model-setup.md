@@ -1,8 +1,13 @@
 # Set up a model for each developer's own key
 
-Personal setup is available through the admin API for fixed OpenAI and Anthropic
-models. The Models dialog and installed Personal coding path are separate work.
-Use an existing admin browser session and the normal CSRF and
+In **Models and routing**, choose **Add model**, select OpenAI or Anthropic,
+enter the upstream model ID and choose **Each developer adds their own key**.
+Choose approved classes if they are enabled, then add the model. No shared key
+is needed. **Edit** keeps the Personal choice when you save its classes.
+Installed Personal coding remains separate work.
+
+The same setup is available through the admin API. Use an existing admin browser
+session and the normal CSRF and
 `X-Keeplane-Action: 1` mutation headers.
 
 Send `POST /api/models` with:
