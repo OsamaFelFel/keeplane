@@ -189,6 +189,17 @@ filesystem publication reports an unconfirmed state and the launcher must stop
 the gateway. The opt-in Compose launcher owns this workflow; its full host execution remains
 unverified. Ordinary preview deployment remains unchanged.
 
+The internal [per-model binding reader](../../tests/unit/runtime-binding-cases.md)
+is a prerequisite for automatic model activation. It keeps complete shared
+entry/private wiring and the selected model's provider, authentication and final
+guards, while excluding only provably disjoint stable-ID model targets. This
+lets a publisher distinguish an unrelated registry update from a change to the
+model being used. Ambiguous or unsupported routing fails closed. The existing
+installed gate still uses its complete snapshot; this reader enables no traffic.
+The remaining integration must publish and verify each copy automatically when
+an admin adds or edits a model, preserve other models' access, and withdraw stale
+bindings before acknowledging stricter changes.
+
 ## Managed operator contract
 
 An operator can configure `RUNTIME_GUARD_MANIFEST_FILE` as an absolute path to a
