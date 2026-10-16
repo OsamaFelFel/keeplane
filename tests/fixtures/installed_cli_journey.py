@@ -22,6 +22,7 @@ from urllib.request import (
 )
 
 RULE = "INSTALLED_CLI_RULE: preserve the addition function's interface."
+MIGRATION_TEXT = RULE + "\nPRIVATE_MIGRATION_INSTRUCTION\n"
 ROOT = Path("/client")
 REPORT = {"passed": False, "stage": "setup", "commands": []}
 
@@ -170,12 +171,16 @@ def journey(seed):
     repository, history = ROOT / "project", ROOT / "history"
     repository.mkdir()
     (repository / ".git").mkdir()
-    (repository / "AGENTS.md").write_text(RULE + "\n")
-    (repository / "CLAUDE.md").write_text("PRIVATE_MIGRATION_INSTRUCTION")
+    (repository / "CLAUDE.md").write_bytes(MIGRATION_TEXT.encode())
     target = repository / "math.py"
     target.write_text("def add(a, b):\n    return a - b\n")
     before = {
         path.name: path.read_bytes() for path in repository.iterdir() if path.is_file()
+    }
+    original_modes = {
+        path.name: path.stat().st_mode
+        for path in repository.iterdir()
+        if path.is_file()
     }
     preview = execute(
         "init-preview", [cli, "init", "--preview", "--directory", repository]
@@ -185,6 +190,63 @@ def journey(seed):
     assert "PRIVATE_MIGRATION_INSTRUCTION" not in preview
     assert before == {
         path.name: path.read_bytes() for path in repository.iterdir() if path.is_file()
+    }
+    plan = ROOT / "migration.json"
+    reviewed = execute(
+        "init-save-plan",
+        [
+            cli,
+            "init",
+            "--preview",
+            "--source",
+            "CLAUDE.md",
+            "--plan",
+            plan,
+            "--directory",
+            repository,
+        ],
+    )
+    parsed = json.loads(reviewed)
+    assert parsed["writes"] == [] and parsed["mode"] == "preview-only"
+    assert parsed["plan"]["source"] == "CLAUDE.md"
+    assert parsed["plan"]["target"] == "AGENTS.md"
+    assert "PRIVATE_MIGRATION_INSTRUCTION" not in reviewed + plan.read_text()
+    assert before == {
+        path.name: path.read_bytes() for path in repository.iterdir() if path.is_file()
+    }
+    applied = json.loads(
+        execute(
+            "init-apply-plan", [cli, "init", "--apply", plan, "--directory", repository]
+        )
+    )
+    digest = hashlib.sha256(before["CLAUDE.md"]).hexdigest()
+    assert applied == {
+        "mode": "partial-instruction-migration",
+        "source": "CLAUDE.md",
+        "created": "AGENTS.md",
+        "sha256": digest,
+        "originals": "kept",
+    }
+    assert (repository / "AGENTS.md").read_bytes() == before["CLAUDE.md"]
+    assert (repository / "AGENTS.md").stat().st_mode & 0o777 == 0o600
+    assert plan.stat().st_mode & 0o777 == 0o600
+    assert all((repository / name).read_bytes() == raw for name, raw in before.items())
+    assert all(
+        (repository / name).stat().st_mode == mode
+        for name, mode in original_modes.items()
+    )
+    assert {path.name for path in repository.iterdir()} == {
+        ".git",
+        "CLAUDE.md",
+        "AGENTS.md",
+        "math.py",
+    }
+    REPORT["migration"] = {
+        "source": "CLAUDE.md",
+        "created": "AGENTS.md",
+        "sha256": digest,
+        "original_bytes_and_modes_preserved": True,
+        "plan_contains_content": False,
     }
 
     def login(label):
