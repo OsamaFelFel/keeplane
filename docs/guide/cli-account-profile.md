@@ -1,8 +1,8 @@
 # Check or sign out a CLI account
 
-This is the private credential storage part of the browser sign-in trial. The
-login command is being added separately; the current checks use synthetic
-credentials. Do not construct a profile by putting secrets in shell commands.
+This is the private credential storage part of the browser sign-in trial. Use
+[browser sign-in](cli-browser-login.md) to create the profile; do not construct
+one by putting secrets in shell commands.
 
 On macOS or Linux with Python 3.9+, an existing Keeplane credential profile can
 check its current account or sign out:
