@@ -39,6 +39,12 @@ def pytest_collection_modifyitems(items):
 
 
 @pytest.fixture
+def cli_browser_driver():
+    """Use the HTTP form driver unless a rendered-browser case overrides it."""
+    return None
+
+
+@pytest.fixture
 def domain_services(db, tmp_path):
     from accounts.services import DjangoIdentity
     from audit.services import DjangoAuditStore

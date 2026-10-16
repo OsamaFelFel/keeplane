@@ -65,3 +65,16 @@ runtime key API. Compose that API with the issuer and reviewed CLI to run it:
 
 The fixture checks private file permissions and that command output contains no
 provider or account credential. It does not prove personal-key model dispatch.
+
+`test_cli_oauth_rendered_browser.py` replaces the HTTP form driver with Chromium.
+It renders the compiled React sign-in page, signs in with a disposable developer,
+returns to the real consent page and follows the CLI's loopback callback. The
+CLI then reads its account, registers a project, lists models and logs out.
+Browser sign-in and consent keep CSRF; runtime/token requests carry no browser
+cookie. No provider request or native coding turn runs in this case.
+
+Run it with `-m optional`, the issuer dependencies and reviewed CLI source.
+Set `KEEPLANE_BROWSER_NODE` to Node with the locked `tests/browser` Playwright
+dependencies and Chromium installed. Set `KEEPLANE_BROWSER_UI` to the admin-ui
+directory containing its compiled `dist`. The helper blocks non-loopback URLs
+and suppresses browser errors and callback URLs in test output.
