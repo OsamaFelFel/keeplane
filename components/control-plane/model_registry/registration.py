@@ -261,6 +261,7 @@ class ModelManagement:
         check_name = "keeplane-keycheck-" + uuid.uuid4().hex
         check_resource = json.loads(json.dumps(updated))
         check_resource["name"] = check_name
+        check_resource["id"] = check_name
 
         # A model already in service may still answer with its old route just
         # after a management update. A unique model proves the new key first.
@@ -427,7 +428,7 @@ class ModelManagement:
         params = {"model": model}
         if self.cloud_base_urls[source]:
             params["baseUrl"] = self.cloud_base_urls[source]
-        resource = {"name": name, "provider": provider, "params": params}
+        resource = {"id": name, "name": name, "provider": provider, "params": params}
         if key_path:
             resource["auth"] = {"key": {"value": {"file": key_path}}}
         status, _ = self.gateway.request(
@@ -743,6 +744,7 @@ class ModelManagement:
             )
         # External endpoints and credentials need account and policy controls.
         resource = {
+            "id": name,
             "name": name,
             "provider": {"custom": {"formats": [{"type": "completions"}]}},
             "params": {"model": model, "baseUrl": sources[source]},
