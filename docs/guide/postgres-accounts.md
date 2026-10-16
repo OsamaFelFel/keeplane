@@ -154,3 +154,16 @@ that production property. Managed gateways need their read-only mount configured
 separately. Customer-gateway provider credentials remain a separate integration
 contract. This chart does not install or operate PostgreSQL, choose a database
 operator, schedule backups or claim a release-ready gateway policy boundary.
+
+Before each app starts, a provider-only init container restores UID 65532,
+directory mode 0700 and managed key-file mode 0600. Existing paths and key bytes
+stay unchanged. It runs as UID 0 with only CHOWN, FOWNER and DAC_OVERRIDE, without
+privileged mode or account/database Secret mounts. Restricted Pod Security needs
+an explicit exception. Leave `fsGroup` unset on every gateway sharing this PVC;
+the app retains it for account storage. Volume permission repair is not a
+zero-interruption guarantee for other serving copies during an app rollout.
+For an existing release, [save its explicit user settings and upgrade with
+`--reset-values`](kubernetes-local.md#preserve-settings-when-upgrading-helm).
+Use your deployment's kubeconfig, release and namespace, and add the new
+`app.image` digest as an override after the saved values. Keep the export private
+and outside Git; it preserves Helm settings, not database or key backups.
