@@ -37,9 +37,14 @@ def user_dict(user):
 
 
 def revoke(user):
-    Session.objects.filter(
-        session_key__in=SessionOwner.objects.filter(user=user).values("session_id")
-    ).delete()
+    from .cli_credentials import revoke_user
+
+    with transaction.atomic():
+        User.objects.select_for_update().get(pk=user.pk)
+        Session.objects.filter(
+            session_key__in=SessionOwner.objects.filter(user=user).values("session_id")
+        ).delete()
+        revoke_user(user)
 
 
 def identifier(value):
