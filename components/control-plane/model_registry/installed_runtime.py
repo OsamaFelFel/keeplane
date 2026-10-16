@@ -9,6 +9,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from common.storage import storage_service
+from integrations.gateway.applied import (
+    AppliedStateUnavailable,
+    applied_fingerprint,
+    read_applied,
+)
 
 from .authorization import ModelAccessDenied
 from .fingerprints import fingerprint
@@ -61,13 +66,20 @@ def manifest(path):
         if (
             not isinstance(value, dict)
             or set(value)
-            != {"version", "enabled", "file_digest", "effective_digest", "models"}
+            != {
+                "version",
+                "enabled",
+                "file_digest",
+                "effective_digest",
+                "applied_digest",
+                "models",
+            }
             or type(value["version"]) is not int
-            or value["version"] != 1
+            or value["version"] != 2
             or value["enabled"] is not True
             or any(
                 not isinstance(value[key], str) or not HEX.fullmatch(value[key])
-                for key in ("file_digest", "effective_digest")
+                for key in ("file_digest", "effective_digest", "applied_digest")
             )
             or not isinstance(value["models"], dict)
             or not 1 <= len(value["models"]) <= 32
@@ -157,7 +169,7 @@ class DjangoInstalledRuntimeGate:
             or not isinstance(params.get("model"), str)
             or not 0 < len(params["model"]) <= 256
             or set(value) - {"id", "name", "provider", "params", "auth"}
-            or value.get("id", model_id) != model_id
+            or value.get("id") != model_id
             or value.get("name") != model_id
             or value.get("provider")
             not in (
@@ -208,3 +220,11 @@ class DjangoInstalledRuntimeGate:
         ):
             if digest(self._read(path)) != declaration[key]:
                 raise ModelPolicyUnavailable("Installed runtime wiring changed")
+        try:
+            if (
+                applied_fingerprint(read_applied(self.gateway))
+                != declaration["applied_digest"]
+            ):
+                raise AppliedStateUnavailable()
+        except AppliedStateUnavailable:
+            raise ModelPolicyUnavailable("Applied runtime wiring changed") from None
