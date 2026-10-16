@@ -7,6 +7,8 @@ const search = (target: string) => '?' + new URLSearchParams({ return_to: target
 test('sign-in resumes only the same-origin CLI authorization route', () => {
   const target = '/oauth/authorize/?client_id=keeplane-cli&state=synthetic'
   expect(signInReturn(search(target), origin)).toBe(target)
+  const device = '/oauth/confirm-device/?user_code=ABCD1234'
+  expect(signInReturn(search(device), origin)).toBe(device)
   expect(signInReturn('', origin)).toBeNull()
   for (const unsafe of ['https://other.example/', '//other.example/', '/app/', '/oauth/token/',
     '/oauth/authorize/?state=a#fragment', '/oauth/authorize/?state=bad\nline',

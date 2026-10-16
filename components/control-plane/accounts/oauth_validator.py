@@ -59,11 +59,12 @@ class KeeplaneOAuthValidator(OAuth2Validator):
         return True
 
     def _save_bearer_token(self, token, request, *args, **kwargs):
-        kind, value = (
-            (CliCredentialBinding.Kind.CODE, request.code)
-            if request.grant_type == "authorization_code"
-            else (CliCredentialBinding.Kind.REFRESH, request.refresh_token)
-        )
+        if request.grant_type == "authorization_code":
+            kind, value = CliCredentialBinding.Kind.CODE, request.code
+        elif request.grant_type == "urn:ietf:params:oauth:grant-type:device_code":
+            kind, value = CliCredentialBinding.Kind.DEVICE, request.device_code
+        else:
+            kind, value = CliCredentialBinding.Kind.REFRESH, request.refresh_token
         owner = self._owner(kind, value, request.user.pk)
         if owner is None:
             raise InvalidGrantError(request=request)
