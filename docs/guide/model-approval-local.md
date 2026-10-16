@@ -7,7 +7,7 @@ classes; when they are off, there is no class field. Keeplane checks
 that the model answers before it records approval. The local trial supports
 no-key models and Keeplane-managed shared keys for cloud-format models against
 a local authenticated fixture. [Personal setup](personal-model-setup.md) is
-available through the admin API; its dialog and installed coding path remain open.
+available for fixed cloud models; its installed coding path remains open.
 The class choices come from the [Data classes page](data-classes-local.md),
 where admins can add or rename classes and change their approved models.
 The model list identifies native OpenAI and Anthropic gateway models as Cloud

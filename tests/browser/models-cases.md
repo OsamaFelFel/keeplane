@@ -2,6 +2,11 @@
 
 These cases use the product team's Models, Add model and Edit model designs. They run against the actual React build with controlled API responses; the local end-to-end suite separately exercises the gateway and model API.
 
+- Personal Add hides the shared-key field, sends only the Personal choice and
+  keeps the selected model/choice after a refused provider check.
+- Personal Edit names the developer-owned choice, explains the provider check,
+  preserves that choice when saving classes and offers no shared-key replacement.
+
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
 | MO-UI-01 | Open Models with one approved model and one model added outside Keeplane, then narrow the browser to 320px and open Add model. | The page shows the different setup states, keeps the page inside the viewport, and its provider dropdown and address field are both at least 44px tall. |
