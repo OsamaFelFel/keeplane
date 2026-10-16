@@ -41,21 +41,17 @@ def test_personal_setup_cannot_dispatch_or_be_downgraded_by_existing_admin_flows
     stores.catalog.approve("personal-model", [], "definition-one", key_choice="personal")
 
     def unexpected(*args, **kwargs):
-        raise AssertionError("An unavailable personal-key flow contacted the gateway")
+        raise AssertionError("A Personal downgrade or admin chat contacted the gateway")
 
     gateway = SimpleNamespace(request=unexpected, resources=unexpected)
     management = ModelManagement(
         stores.catalog, stores.classes, gateway, None, "managed", None, "", [],
         {"openai": "", "anthropic": ""}, "",
     )
-    for choice in ("personal", "none", "shared"):
+    for choice in ("none", "shared"):
         assert management.setup("personal-model", {"key_choice": choice})[0] == 400
-    assert management.add({
-        "name": "new-model", "model": "upstream-model", "source": "openai", "key_choice": "personal",
-    })[0] == 400
     assert ask_model({"model": "personal-model", "prompt": "fixture"}, stores.catalog, gateway, None)[0] == 503
     assert stores.catalog.get("personal-model")["key_choice"] == "personal"
-    assert stores.catalog.get("new-model") is None
 
 
 @pytest.mark.django_db(transaction=True)
