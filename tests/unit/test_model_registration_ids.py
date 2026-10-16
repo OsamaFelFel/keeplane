@@ -61,6 +61,17 @@ class Catalog:
         return self.rows[model_id]
 
 
+@pytest.mark.parametrize("source", [[], {}])
+def test_malformed_source_is_rejected_before_gateway_or_storage_contact(source):
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Invalid model input must not contact storage or gateway")
+
+    forbidden = SimpleNamespace(enabled=unexpected, list=unexpected, request=unexpected, resources=unexpected)
+    registrar = ModelManagement(object(), forbidden, forbidden, None, "managed", None, "", set(), {"openai": "", "anthropic": ""}, "")
+    status, body = registrar.add({"name": "model", "model": "upstream", "source": source})
+    assert status == 400 and body == {"error": "Choose a supported model source"}
+
+
 @pytest.fixture
 def registrar(tmp_path, monkeypatch):
     def save(directory, value):
