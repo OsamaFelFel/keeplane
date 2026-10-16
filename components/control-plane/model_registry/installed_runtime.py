@@ -145,6 +145,24 @@ class DjangoInstalledRuntimeGate:
             raise ModelAccessDenied(
                 403, "This model is not installed for runtime access"
             )
+        self.require_definition(model_id, expected, selected_fingerprint)
+        for path, key in (
+            ("/api/config", "file_digest"),
+            ("/api/config/effective", "effective_digest"),
+        ):
+            if digest(self._read(path)) != declaration[key]:
+                raise ModelPolicyUnavailable("Installed runtime wiring changed")
+        try:
+            if (
+                applied_fingerprint(read_applied(self.gateway))
+                != declaration["applied_digest"]
+            ):
+                raise AppliedStateUnavailable()
+        except AppliedStateUnavailable:
+            raise ModelPolicyUnavailable("Applied runtime wiring changed") from None
+
+    def require_definition(self, model_id, expected, selected_fingerprint=None):
+        """Installer preflight only; this alone never authorizes inference."""
         resources = registry_rows(
             self._read("/api/config/resources/llm.model"), "resources"
         )
@@ -214,17 +232,3 @@ class DjangoInstalledRuntimeGate:
                 != expected["key_digest"]
             ):
                 raise ModelPolicyUnavailable("Installed shared key changed")
-        for path, key in (
-            ("/api/config", "file_digest"),
-            ("/api/config/effective", "effective_digest"),
-        ):
-            if digest(self._read(path)) != declaration[key]:
-                raise ModelPolicyUnavailable("Installed runtime wiring changed")
-        try:
-            if (
-                applied_fingerprint(read_applied(self.gateway))
-                != declaration["applied_digest"]
-            ):
-                raise AppliedStateUnavailable()
-        except AppliedStateUnavailable:
-            raise ModelPolicyUnavailable("Applied runtime wiring changed") from None
