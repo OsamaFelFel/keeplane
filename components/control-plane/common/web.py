@@ -2,10 +2,12 @@
 
 import mimetypes
 import os
+
 from django.conf import settings
 from django.db import DatabaseError, connection
 from django.http import FileResponse, HttpResponseRedirect, JsonResponse
 from django.views.decorators.http import require_GET
+
 from .api import MODEL_GATEWAY, actor, admin
 from .readiness import schema_ready
 
@@ -62,6 +64,11 @@ def readiness(request):
     try:
         if not schema_ready(connection):
             return JsonResponse({"app": "unavailable"}, status=503)
+        if settings.CLI_OAUTH_ENABLED:
+            from accounts.oauth_views import CLIENT_ID, DEVICE_ID, fixed_client
+
+            if not all(fixed_client(name, lock=False) for name in (CLIENT_ID, DEVICE_ID)):
+                return JsonResponse({"app": "unavailable"}, status=503)
     except DatabaseError:
         return JsonResponse({"app": "unavailable"}, status=503)
     return JsonResponse({"app": "ready"})

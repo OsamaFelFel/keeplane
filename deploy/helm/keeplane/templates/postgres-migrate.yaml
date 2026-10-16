@@ -32,9 +32,25 @@ spec:
         - name: migrate
           image: {{ .Values.app.image | quote }}
           imagePullPolicy: {{ .Values.app.pullPolicy }}
+          {{- if .Values.app.cliSignIn.enabled }}
+          command:
+            - sh
+            - -ec
+            - |
+              python /app/manage.py migrate --noinput
+              python /app/manage.py register_cli_client
+              python /app/manage.py register_cli_client --device
+          {{- else }}
           command: ["python", "/app/manage.py", "migrate", "--noinput"]
+          {{- end }}
           env:
             {{- include "keeplane.postgres.env" . | nindent 12 }}
+            {{- if .Values.app.cliSignIn.enabled }}
+            - name: KEEPLANE_CLI_OAUTH_ENABLED
+              value: "1"
+            - name: PUBLIC_ORIGIN
+              value: {{ include "keeplane.postgres.publicOrigin" . | quote }}
+            {{- end }}
             - name: KEEPLANE_DATABASE_USER
               value: {{ required "app.postgres.migration.user is required" .Values.app.postgres.migration.user | quote }}
           volumeMounts:

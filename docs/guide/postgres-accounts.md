@@ -71,9 +71,23 @@ python /app/manage.py register_cli_client --device
 Missing dependencies or changed fixed clients fail rather than silently enabling
 another sign-in flow.
 
-This prepares the image only. Helm does not yet enable CLI sign-in or register
-its clients, and the protected coding listener still requires its separate
-installation. The [local sign-in guide](cli-sign-in-trial.md) describes that trial.
+To enable sign-in in the Helm installation, use the combined image's immutable
+registry digest and set `app.cliSignIn.enabled=true`. It requires PostgreSQL and
+the existing HTTPS app address. The migration Job registers both fixed clients
+after migrating, using its separate database credential. Normal installs keep
+sign-in off. Missing optional dependencies fail setup.
+
+If `app.postgres.migration.enabled=false`, your database operator must run all
+three commands above, with the same image and environment, before serving.
+Readiness returns 503 while either fixed client is missing or differs; it does
+not create or repair them. Registration refuses changed metadata, so review that
+configuration before deliberately repairing it. A matching registration is safe
+to repeat. Turning sign-in off retains its tables and clients.
+
+Use the [installed CLI sign-in commands](cli-browser-login.md) with that server
+address and a private profile. This enables account access only. The protected
+coding listener still requires its separate installation; this chart setting
+does not deploy it or complete the release integration.
 
 Configure every app replica and the one-off migration process:
 

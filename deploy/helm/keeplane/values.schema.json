@@ -16,7 +16,11 @@
             "properties": {"name": {"type": "string", "minLength": 1}}
           }
         },
-        "resources": {"type": "object"}
+        "resources": {"type": "object"},
+        "cliSignIn": {
+          "type": "object",
+          "properties": {"enabled": {"type": "boolean"}}
+        }
       }
     },
     "gateway": {
