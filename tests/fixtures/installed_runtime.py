@@ -95,6 +95,7 @@ def bootstrap(provider_handler):
             "Origin": origin,
             "Host": origin.split("://", 1)[1],
             "Content-Type": "application/json",
+            "X-Keeplane-Action": "1",
             "X-CSRFToken": csrf,
             "Cookie": "; ".join(name + "=" + value for name, value in cookies.items()),
         }
