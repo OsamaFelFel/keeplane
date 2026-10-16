@@ -10,6 +10,10 @@ urlpatterns = [
         runtime_callback.authorize_installed,
         {"selected": True},
     ),
+    path(
+        "internal/runtime/installed/operator-validation",
+        runtime_callback.authorize_operator_validation,
+    ),
     path("api/runtime/projects", runtime_views.register_project_use),
     path("api/runtime/session", runtime_views.session),
     path("api/runtime/provider-keys", runtime_keys.provider_keys),

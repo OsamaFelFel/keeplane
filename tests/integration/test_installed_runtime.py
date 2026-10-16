@@ -6,7 +6,8 @@ from copy import deepcopy
 import pytest
 from data_classes.models import ProjectClass
 from django.test import override_settings
-from model_registry import runtime_callback
+from integrations.gateway.applied import applied_fingerprint
+from model_registry import installed_runtime, runtime_callback
 from model_registry.fingerprints import fingerprint
 from model_registry.installed_runtime import digest
 from model_registry.models import ModelApproval
@@ -20,6 +21,7 @@ def installed(callback, tmp_path, monkeypatch):
     f = callback
     for row in f.resources:
         row["value"] = {
+            "id": row["id"],
             "name": row["id"],
             "provider": "openAI",
             "params": {
@@ -32,6 +34,20 @@ def installed(callback, tmp_path, monkeypatch):
         )
     f.file = {"config": {}, "gateways": {}, "binds": [], "policies": []}
     f.requests = []
+    f.applied = {
+        "workloads": [],
+        "services": [],
+        "binds": [],
+        "routes": {},
+        "policies": [],
+        "backends": [],
+        "models": [],
+        "version": {},
+        "config": {},
+    }
+    monkeypatch.setattr(
+        installed_runtime, "read_applied", lambda gateway: deepcopy(f.applied)
+    )
 
     def request(path, *, timeout, connection_retries):
         assert timeout == 5 and connection_retries == 0
@@ -62,10 +78,11 @@ def installed(callback, tmp_path, monkeypatch):
             gateway_fingerprint=fp, key_choice=choice
         )
         f.declaration = {
-            "version": 1,
+            "version": 2,
             "enabled": True,
             "file_digest": digest(f.file),
             "effective_digest": digest(f.effective),
+            "applied_digest": applied_fingerprint(f.applied),
             "models": {
                 "private": {
                     "fingerprint": fp,
@@ -166,7 +183,7 @@ def test_invalid_manifest_refuses_before_gateway_reads(installed, change):
         if change == "personal":
             f.declaration["models"]["private"]["key_choice"] = "personal"
         else:
-            f.declaration[change] = 2 if change == "version" else True
+            f.declaration[change] = 1 if change == "version" else True
         f.write()
     assert send(f).status_code == 503
     assert not f.requests
@@ -220,6 +237,31 @@ def test_new_enrollment_still_refuses_old_selected_overlay(installed):
     assert send(installed).status_code == 200
     assert send(installed, True).status_code == 503
     assert send(installed, True, definition_fingerprint=new_fp).status_code == 200
+
+
+@pytest.mark.parametrize("selected", [False, True])
+@pytest.mark.parametrize("fault", ["changed", "missing", "outage"])
+def test_both_stages_require_fresh_complete_applied_state(
+    installed, monkeypatch, selected, fault
+):
+    if fault == "changed":
+        installed.applied["policies"].append({"unexpected": True})
+    elif fault == "missing":
+        installed.applied = {}
+    else:
+        from integrations.gateway.applied import AppliedStateUnavailable
+
+        def unavailable(gateway):
+            raise AppliedStateUnavailable()
+
+        monkeypatch.setattr(installed_runtime, "read_applied", unavailable)
+    assert send(installed, selected).status_code == 503
+
+
+def test_name_only_resource_cannot_be_enrolled_with_an_indexed_native_target(installed):
+    del installed.resources[0]["value"]["id"]
+    installed.enroll()
+    assert send(installed).status_code == 503
 
 
 @pytest.mark.parametrize(
