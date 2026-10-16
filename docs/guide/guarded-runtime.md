@@ -4,8 +4,8 @@ The managed local preview can expose a guarded model endpoint on loopback port
 5000. Start the normal preview and add an approved keyless or shared model in
 Models first. Only newly registered models with a stable native ID can be
 enrolled; existing name-only models are not rewritten. Registered Personal
-OpenAI/Anthropic models can also be enrolled once each developer has
-[added their own key](cli-provider-key-commands.md). Keys remain on the server.
+OpenAI/Anthropic models can also be enrolled. Developers
+[add their own key](cli-provider-key-commands.md) before using them; keys remain on the server.
 
 For browser CLI sign-in, supply an explicitly prepared OAuth-capable trial app
 image and the current first-party CLI. The default preview image does not include
