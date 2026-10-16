@@ -10,7 +10,8 @@ flowchart LR
   C --> M[Fresh operator manifest]
   M --> D[Complete raw definition and revision]
   D --> W[Declared file and effective configuration]
-  W --> P[Current project access and model class policy]
+  W --> A[Applied routing and guards]
+  A --> P[Current project access and model class policy]
   P --> R[Canonical actor, project and model only]
 ```
 
@@ -26,10 +27,13 @@ native policy. The returned metadata contains no key, filename or fingerprint.
 | Manifest is absent, disabled, malformed, oversized, writable by others or a symbolic link | Deny before gateway reads. |
 | Approved model is absent from the exact installed list | Deny, including outside models, file models and virtual/wildcard aliases. |
 | Resource, revision, approval, key choice or either complete configuration changes | Deny. |
+| Valid request health/failure measurements change after a provider error and recovery | Both stages keep the same enrollment; the manifest is unchanged. |
+| Eviction, endpoint membership, capacity, destination, guard or auth changes | Deny even alongside valid measurement changes. |
 | Operator enrolls a newer revision but the selected overlay still carries the old fingerprint | Entry may succeed; the old selected overlay denies. |
 | Shared key disappears, changes content/name or becomes a symbolic link | Deny; do not return the key. |
 | Project class changes or the developer signs out | Apply the new policy on the next request. |
 | Client adds prompt, authority fields or a forged fingerprint header | Refuse unexpected metadata; ignore the header. |
+| The manifest uses the old applied signature | Deny until the operator explicitly reenrolls. |
 
 This bounded gate does not accept personal provider keys or publish configuration.
 The actual managed installation must prove applied guards before enabling its
