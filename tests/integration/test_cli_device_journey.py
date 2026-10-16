@@ -67,16 +67,7 @@ class QuietHandler(WSGIRequestHandler):
         pass
 
 
-def test_real_device_client_profile_registration_catalog_and_logout(
-    browser_flow,
-    monkeypatch,
-    tmp_path,
-    capsys,
-):
-    from accounts import views
-    from common import api
-    from model_registry import runtime_views
-
+def load_cli(monkeypatch):
     source = Path(
         os.environ.get("KEEPLANE_CLI_SOURCE", Path(__file__).resolve().parents[2])
     )
@@ -91,6 +82,20 @@ def test_real_device_client_profile_registration_catalog_and_logout(
     spec = importlib.util.spec_from_file_location("keeplane_join", entry)
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
+    return cli
+
+
+def test_real_device_client_profile_registration_catalog_and_logout(
+    browser_flow,
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    from accounts import views
+    from common import api
+    from model_registry import runtime_views
+
+    cli = load_cli(monkeypatch)
 
     flow = browser_flow
     call_command("register_cli_client", device=True, verbosity=0)
@@ -249,6 +254,16 @@ def test_real_device_client_profile_registration_catalog_and_logout(
             assert json.loads(command("models", "--project", project))["models"] == [
                 {"id": "coder"}
             ]
+            old = credential
+            assert "refreshed" in command("refresh")
+            with cli.opened(profile) as store:
+                credential = store.load()
+            assert credential.client_id == "keeplane-cli-device"
+            assert credential.actor_id == old.actor_id
+            assert credential.access_token != old.access_token
+            assert credential.refresh_token != old.refresh_token
+            assert flow.identity.session(old.access_token) is None
+            assert json.loads(command("whoami"))["id"] == str(flow.owner.pk)
             assert "removed" in command("logout")
             assert not (profile / "credential.json").exists()
             assert flow.identity.session(credential.access_token) is None
@@ -270,6 +285,72 @@ def test_real_device_client_profile_registration_catalog_and_logout(
                 if path in {"/oauth/device/", "/oauth/token/"}
                 or path.startswith("/api/runtime/")
             )
+    finally:
+        if thread.is_alive():
+            http.shutdown()
+        http.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("replay", [False, True])
+def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
+    browser_flow,
+    monkeypatch,
+    tmp_path,
+    replay,
+):
+    cli = load_cli(monkeypatch)
+    flow = browser_flow
+    initial = flow.exchange(flow.code())
+    assert initial.status_code == 200
+    tokens = initial.json()
+    http = make_server(
+        "127.0.0.1", 0, get_wsgi_application(), handler_class=QuietHandler
+    )
+    server = f"http://127.0.0.1:{http.server_port}"
+    thread = Thread(target=http.serve_forever, daemon=True)
+    profile = tmp_path / "browser-profile"
+    try:
+        with override_settings(
+            OAUTH2_PROVIDER=dict(settings.OAUTH2_PROVIDER, OIDC_ISS_ENDPOINT=server)
+        ):
+            thread.start()
+            with cli.opened(profile, create=True) as store:
+                cli.browser_login.save_login(
+                    store, server, tokens["access_token"], tokens["refresh_token"]
+                )
+            # Existing browser profiles have no client ID. Read as browser only.
+            target = profile / "credential.json"
+            data = json.loads(target.read_text())
+            data["format"] = "keeplane-credential-v1"
+            del data["client_id"]
+            target.write_text(json.dumps(data))
+            assert "refreshed" in cli.credential_refresh.refresh(profile)
+            with cli.opened(profile) as store:
+                fresh = store.load()
+            assert fresh.client_id == "keeplane-cli"
+            assert fresh.actor_id == str(flow.owner.pk)
+            assert fresh.access_token != tokens["access_token"]
+            assert fresh.refresh_token != tokens["refresh_token"]
+            assert json.loads(target.read_text())["format"] == "keeplane-credential-v2"
+            assert flow.identity.session(tokens["access_token"]) is None
+            assert cli.account_session.account(server, fresh.access_token)["id"] == str(
+                flow.owner.pk
+            )
+            if replay:
+                with pytest.raises(cli.ConnectionError):
+                    cli.browser_login.exchange(
+                        server,
+                        {
+                            "grant_type": "refresh_token",
+                            "client_id": "keeplane-cli",
+                            "refresh_token": tokens["refresh_token"],
+                        },
+                    )
+                assert flow.identity.session(fresh.access_token) is None
+            assert "removed" in cli.account_session.run("logout", profile)
+            assert flow.identity.session(fresh.access_token) is None
+            assert flow.refresh(fresh.refresh_token).status_code == 400
     finally:
         if thread.is_alive():
             http.shutdown()

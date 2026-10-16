@@ -42,6 +42,9 @@ def issuer():
         device_errors=[],
         device_starts=0,
         device_polls=[],
+        refresh_requests=[],
+        expected_refresh=None,
+        refresh_client="keeplane-cli",
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -101,6 +104,26 @@ def issuer():
                         "expires_in": 1800,
                         "interval": 5,
                         "future_secret": "must_not_be_saved",
+                    },
+                )
+                return
+            if form.get("grant_type") == "refresh_token":
+                state.refresh_requests.append((form, dict(self.headers)))
+                valid = (
+                    set(form) == {"grant_type", "client_id", "refresh_token"}
+                    and form["client_id"] == state.refresh_client
+                    and form["refresh_token"] == state.expected_refresh
+                )
+                self.respond(
+                    state.token_status if valid else 400,
+                    state.token_body
+                    or {
+                        "access_token": state.access,
+                        "refresh_token": state.refresh,
+                        "token_type": "Bearer",
+                        "scope": "runtime",
+                        "expires_in": 3600,
+                        "ignored": "must_not_be_saved",
                     },
                 )
                 return

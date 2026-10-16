@@ -54,6 +54,7 @@ def test_actual_device_command_profile_cadence_and_no_raw_credentials(
     with opened(path) as store:
         credential = store.load()
     assert credential.actor_id == issuer.actor and credential.issuer == issuer.url
+    assert credential.client_id == "keeplane-cli-device"
     output = capsys.readouterr()
     assert (
         issuer.user_code in output.out

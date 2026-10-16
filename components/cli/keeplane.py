@@ -11,6 +11,7 @@ if __package__:
         account_session,
         browser_login,
         coding,
+        credential_refresh,
         device_login,
         opencode_adapter,
         provider_keys,
@@ -22,6 +23,7 @@ else:
     import account_session
     import browser_login
     import coding
+    import credential_refresh
     import device_login
     import opencode_adapter
     import provider_keys
@@ -77,6 +79,7 @@ def main():
             command.add_argument("--key-stdin", action="store_true", help="Read the key from a pipe instead of the hidden prompt")
     for action, help_text in {
         "whoami": "Show the current account",
+        "refresh": "Rotate this CLI credential pair once",
         "logout": "Revoke this CLI session and remove its local credential",
         "forget": "Remove only the local credential",
         "register-project": "Record account use of an explicit project",
@@ -99,6 +102,8 @@ def main():
             output = "Signed in to Keeplane."
         elif args.command in {"whoami", "logout", "forget"}:
             output = account_session.run(args.command, args.profile)
+        elif args.command == "refresh":
+            output = credential_refresh.refresh(args.profile)
         elif args.command == "keys":
             output = provider_keys.run(args.key_action, args.profile, args.model,
                                        key_stdin=getattr(args, "key_stdin", False))

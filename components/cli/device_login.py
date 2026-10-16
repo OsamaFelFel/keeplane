@@ -108,5 +108,5 @@ def login(server, path, *, timeout=120, announce=print):
                 if pending.code == "slow_down":
                     interval += 5
                 continue
-            save_login(profile, server, access, refresh)
+            save_login(profile, server, access, refresh, client_id=CLIENT_ID)
             return

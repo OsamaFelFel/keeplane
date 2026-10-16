@@ -254,10 +254,10 @@ def exchange(server, form, *, allow_pending=False, timeout=10):
         ) from None
 
 
-def save_login(profile, server, access, refresh):
+def save_login(profile, server, access, refresh, *, client_id="keeplane-cli"):
     try:
         actor = account(server, access)
-        profile.save(Credential(server, actor["id"], access, refresh))
+        profile.save(Credential(server, actor["id"], access, refresh, client_id))
     except BaseException:
         # A later admission/storage failure must not silently leave a valid pair.
         try:

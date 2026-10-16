@@ -8,6 +8,7 @@ packaged command. Use macOS or Linux and Python 3.9+.
 ```sh
 python3 components/cli/keeplane.py login --server https://keeplane.example --profile /absolute/private/keeplane-account
 python3 components/cli/keeplane.py whoami --profile /absolute/private/keeplane-account
+python3 components/cli/keeplane.py refresh --profile /absolute/private/keeplane-account
 python3 components/cli/keeplane.py register-project --profile /absolute/private/keeplane-account --project PROJECT_UUID --name 'My project'
 python3 components/cli/keeplane.py models --profile /absolute/private/keeplane-account --project PROJECT_UUID
 python3 components/cli/keeplane.py logout --profile /absolute/private/keeplane-account
@@ -34,7 +35,7 @@ flowchart LR
   Check --> Project[Register use or list allowed models]
 ```
 
-Logout and explicit local `forget` retain the [profile recovery behavior](cli-account-profile.md).
+Explicit refresh, logout and local `forget` follow the [profile recovery behavior](cli-account-profile.md).
 Use the [key commands](cli-provider-key-commands.md) to manage your own stored
 provider keys. The [coding command](cli-coding.md) joins this profile to local
 tool turns and account-bound resume history through an operator's protected
