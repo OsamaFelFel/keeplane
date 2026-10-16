@@ -106,6 +106,9 @@ Volumes are kept. Add `-v` only if you intend to delete their data.
 - **Build failure:** repeat the command with `--verbose` for the underlying error.
 - **Sign-in check refused:** check the address and credential directory; retain
   the original password file when restarting.
+- **Models load, but adding models fails after a Git update:** if the gateway
+  reports a missing config file, rerun the launcher. It recreates containers with
+  the current directory mount while retaining existing credentials and volumes.
 - **Gateway not ready:** run `docker compose logs app gateway qwen`. The model
   may still be loading, or Docker may need more available memory.
 
