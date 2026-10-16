@@ -60,9 +60,12 @@ class PersonalCompose(OwnedCompose):
             "1",
             "-subj",
             "/CN=Keeplane fixture CA",
-            "-addext", "basicConstraints=critical,CA:TRUE",
-            "-addext", "keyUsage=critical,keyCertSign,cRLSign",
-            "-addext", "subjectKeyIdentifier=hash",
+            "-addext",
+            "basicConstraints=critical,CA:TRUE",
+            "-addext",
+            "keyUsage=critical,keyCertSign,cRLSign",
+            "-addext",
+            "subjectKeyIdentifier=hash",
         )
         openssl(
             "req",
