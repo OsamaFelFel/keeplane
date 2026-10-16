@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 import pytest
 from accounts.models import User
 from data_classes.models import ProjectClass
+from django.db import DatabaseError
 from model_registry import developer_keys, personal_transport
 from model_registry.developer_keys import DjangoDeveloperKeyStore
 from model_registry.key_validation import (
@@ -89,7 +90,9 @@ def test_missing_owner_key_stops_at_entry_before_native_backend_handoff(personal
     f = personal
     f.store.remove("private")
     entry = decision(f)
-    assert entry.status_code == 503 and not f.reads
+    assert entry.status_code == 403 and not f.reads
+    assert entry.json() == {"error": "Add or replace your provider key"}
+    assert "no-store" in entry["Cache-Control"]
     # Selection stays metadata-only; the native entry gate must precede it.
     assert decision(f, True).status_code == 200 and not f.reads
     assert handoff(f).status_code == 503 and not f.reads
@@ -98,6 +101,39 @@ def test_missing_owner_key_stops_at_entry_before_native_backend_handoff(personal
     assert entry.status_code == 200 and len(f.reads) == 1
     assert all(value not in entry.content.decode() for value in (KEY, NEXT, f.token))
     assert handoff(f).json()["access_token"] == NEXT and len(f.reads) == 2
+
+
+@pytest.mark.parametrize(
+    "fault", ["missing-file", "unsafe-file", "database", "registry"]
+)
+def test_unavailable_storage_and_policy_are_not_reported_as_missing_keys(
+    personal, monkeypatch, fault
+):
+    f = personal
+    if fault in {"missing-file", "unsafe-file"}:
+        row = developer_keys.DeveloperProviderKey.objects.get(owner_id=f.actor["id"])
+        path = f.key_directory / row.key_name
+        if fault == "missing-file":
+            path.unlink()
+        else:
+            path.chmod(0o644)
+    elif fault == "database":
+
+        def failed(*args, **kwargs):
+            raise DatabaseError(KEY + str(f.key_directory))
+
+        monkeypatch.setattr(
+            developer_keys.DeveloperProviderKey.objects, "select_for_update", failed
+        )
+    else:
+        f.state.status = 503
+    entry = decision(f)
+    assert entry.status_code == 503
+    assert entry.json() == {"error": "Gateway authorization is unavailable"}
+    assert all(
+        value not in entry.content.decode()
+        for value in (KEY, f.token, str(f.key_directory))
+    )
 
 
 @pytest.mark.parametrize(

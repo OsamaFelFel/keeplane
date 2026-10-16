@@ -14,6 +14,13 @@ from .provider_keys import managed_key_available
 from .resolved_keys import read_private_key
 
 
+class DeveloperKeyMissing(StorageUnavailable):
+    """No current bound key registration exists for this owner and model."""
+
+    def __init__(self):
+        super().__init__("Provider key is unavailable")
+
+
 class DeveloperKeyError(Exception):
     pass
 
@@ -113,8 +120,10 @@ class DjangoDeveloperKeyStore:
                     owner=owner, model_id=model_id, validation_fingerprint=digest
                 ).first()
                 if not row or not row.key_name:
-                    raise ValueError
+                    raise DeveloperKeyMissing
                 return read_private_key(self.directory, row.key_name)
+        except DeveloperKeyMissing:
+            raise
         except Exception:  # noqa: BLE001 -- credential boundary hides all underlying failures
             raise StorageUnavailable("Provider key is unavailable") from None
 
