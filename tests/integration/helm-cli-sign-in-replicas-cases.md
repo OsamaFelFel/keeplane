@@ -11,6 +11,10 @@ relay; two pod-specific port-forwards make the serving copy explicit.
 | HELM-REPLICA-02 | Device authorization starts on A, approval/exchange finish on B, and the same cross-copy checks pass. |
 | HELM-REPLICA-03 | With external migrations, the chart adds no migration hook. Missing or changed client registrations make both copies unready without modifying them. Explicit operator migration/registration restores readiness; altered metadata is refused. |
 
+Each sign-in channel also uses a separate profile to replay an old refresh
+credential. Both copies refuse it and withdraw its rotated family. Keeping this
+control separate ensures the logout check starts with a working credential.
+
 The fixture uses real HTTP sign-in, CSRF and consent forms. It does not prove a
 rendered browser, ingress/load-balancer configuration, database HA or protected
 model coding. The supplied gateway API is a deterministic preflight fixture;

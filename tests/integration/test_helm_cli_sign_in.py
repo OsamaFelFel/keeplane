@@ -138,10 +138,27 @@ def test_installed_login_refresh_and_logout_across_helm_copies(helm_sign_in, cha
         fixture.route(copy)
         assert client.credential_status(current) == 401
         assert client.credential_status(current, refresh=True) == 400
+        assert client.credential_status(original, refresh=True) == 400
+    # Replaying a rotated refresh withdraws its current family. Keep that
+    # destructive negative control separate from the live-current logout proof.
+    replay_profile = fixture.directory / ("replay-profile-" + channel)
+    fixture.route(0)
+    client.login(channel, replay_profile, fixture.route)
+    replay_original = client.credential(replay_profile)
+    fixture.route(1)
+    client.command("refresh", replay_profile)
+    replay_current = client.credential(replay_profile)
+    for copy in (0, 1):
+        fixture.route(copy)
+        assert client.credential_status(replay_original) == 401
+        assert client.credential_status(replay_original, refresh=True) == 400
+        assert client.credential_status(replay_current) == 401
+    client.command("forget", replay_profile)
+    assert not (replay_profile / "credential.json").exists()
     output = fixture.logs() + b"\n".join(client.output)
     assert not any(
         value.encode() in output
-        for credential in (original, current)
+        for credential in (original, current, replay_original, replay_current)
         for value in (credential["access_token"], credential["refresh_token"])
     )
     fixture.report["cases"].append(
@@ -149,6 +166,7 @@ def test_installed_login_refresh_and_logout_across_helm_copies(helm_sign_in, cha
             "channel": channel,
             "cross_copy_identity_refresh_logout": True,
             "old_and_current_credentials_revoked": True,
+            "separate_refresh_replay_control_withdraws_rotated_family": True,
             "ordinary_logs_and_cli_output_clean": True,
         }
     )

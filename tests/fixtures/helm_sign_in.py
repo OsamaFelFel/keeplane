@@ -300,15 +300,20 @@ class HelmSignIn:
         )
         self.report["app_manifest_reference"] = pinned
         self.created = True
-        self.apply(
-            {
-                "apiVersion": "v1",
-                "kind": "Namespace",
-                "metadata": {
-                    "name": self.namespace,
-                    "labels": {"keeplane-test-owner": self.namespace},
-                },
-            }
+        self.kube(
+            "create",
+            "-f",
+            "-",
+            input_data=json.dumps(
+                {
+                    "apiVersion": "v1",
+                    "kind": "Namespace",
+                    "metadata": {
+                        "name": self.namespace,
+                        "labels": {"keeplane-test-owner": self.namespace},
+                    },
+                }
+            ).encode(),
         )
         self.certificates()
         app_password, ddl_password = (
