@@ -1,0 +1,57 @@
+# Opt-in managed preview only. Never apply this to a customer gateway.
+services:
+  runtime-init:
+    profiles: ["runtime"]
+    image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+    user: "0"
+    pull_policy: never
+    command: ["python", "/prepare_runtime.py"]
+    volumes:
+      - runtime-installation:/installed
+      - app-secrets:/run/secrets:ro
+      - ./deploy/local/prepare_runtime.py:/prepare_runtime.py:ro
+      - ./deploy/local/runtime-base.json:/runtime-base.json:ro
+
+  gateway:
+    command: ["-f", "/installed/gateway.json"]
+    volumes:
+      - runtime-installation:/installed:ro
+    ports:
+      - 127.0.0.1:${KEEPLANE_RUNTIME_PORT:-5000}:5000
+
+  app:
+    image: ${KEEPLANE_RUNTIME_APP_IMAGE:-keeplane-preview:docker-local}
+    environment:
+      KEEPLANE_CLI_OAUTH_ENABLED: ${KEEPLANE_RUNTIME_OAUTH_ENABLED:-0}
+      RUNTIME_AUTHORIZER_KEY_FILE: /installed/callback-key
+      RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
+      GATEWAY_FILE_CONFIG: /installed/gateway.json
+    volumes:
+      - runtime-installation:/installed:ro
+
+  runtime-install:
+    profiles: ["runtime"]
+    image: ${KEEPLANE_RUNTIME_APP_IMAGE:-keeplane-preview:docker-local}
+    pull_policy: never
+    network_mode: service:gateway
+    environment:
+      GATEWAY_URL: http://127.0.0.1:4000
+      GATEWAY_ADMIN_KEY_FILE: /run/secrets/gateway-admin-key
+      GATEWAY_RUNTIME_KEY_FILE: /run/secrets/gateway-runtime-key
+      FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
+      RUNTIME_AUTHORIZER_KEY_FILE: /installed/callback-key
+      RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
+      GATEWAY_FILE_CONFIG: /installed/gateway.json
+      PROVIDER_KEY_DIR: /provider-keys
+      PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
+      GATEWAY_MODE: managed
+      KEEPLANE_CLI_OAUTH_ENABLED: ${KEEPLANE_RUNTIME_OAUTH_ENABLED:-0}
+    volumes:
+      - ./components/control-plane:/app:ro
+      - runtime-installation:/installed
+      - account-data:/state
+      - app-secrets:/run/secrets:ro
+      - provider-keys:/provider-keys:ro
+
+volumes:
+  runtime-installation:
