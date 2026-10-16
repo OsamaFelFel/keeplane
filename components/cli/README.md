@@ -1,7 +1,7 @@
 # Try a local coding turn
 
 Install the `keeplane` command with the [wheel installation guide](../../docs/guide/cli-install.md).
-Inspect an existing project with [init preview](../../docs/guide/cli-migration-preview.md).
+Preview a project or copy selected root instructions with [init](../../docs/guide/cli-migration-preview.md).
 For the experimental sign-in and project commands, use the
 [shared CLI entry point](../../docs/guide/cli-project-commands.md).
 Use [device sign-in](../../docs/guide/cli-device-login.md) when a browser cannot open here.
@@ -103,5 +103,5 @@ After an interrupted coding turn, review edits before continuing; this slice
 proves completed text/tool turns, not safe replay of unfinished side effects or
 attachments from discarded caches. Built-in tool permission prompts remain enabled.
 This is not a sandbox or proof of project provenance. Login, authorized-model
-discovery integration, native provider protocols, routing, migration apply and offline distribution
+discovery integration, native provider protocols, routing, full migration apply and offline distribution
 remain separate work.

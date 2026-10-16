@@ -154,6 +154,13 @@ def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issu
             "PRIVATE_INSTRUCTION" not in output
             and not (repository / "AGENTS.md").exists()
         )
+        plan = away / "migration.json"
+        preview = run([command, "init", "--preview", "--directory", repository,
+                       "--source", "CLAUDE.md", "--plan", plan])
+        assert "PRIVATE_INSTRUCTION" not in preview
+        applied = json.loads(run([command, "init", "--apply", plan, "--directory", repository]))
+        assert applied["mode"] == "partial-instruction-migration"
+        assert (repository / "AGENTS.md").read_bytes() == (repository / "CLAUDE.md").read_bytes()
     profile = tmp_path / "profile"
     output = run(
         [
