@@ -58,12 +58,18 @@ runtime Python installers nor a CLI agent binary. Normal image targets are uncha
 The [source and notice obligations](../../components/control-plane/licenses/cli-auth-trial.md)
 still apply; this target does not select a release distribution.
 
-Configure the database and signing secret as below. Before serving, migrate once
-and run `python /app/manage.py register_cli_client` followed by
-`python /app/manage.py register_cli_client --device`. Set
-`KEEPLANE_CLI_OAUTH_ENABLED=1` on serving processes and use the installation's
-HTTPS `PUBLIC_ORIGIN`. Missing dependencies or changed fixed clients fail rather
-than silently enabling another sign-in flow.
+Configure the database and signing secret as below. Set
+`KEEPLANE_CLI_OAUTH_ENABLED=1` and the installation's HTTPS `PUBLIC_ORIGIN` for
+the migration, client-registration and serving processes. Before serving, run:
+
+```sh
+python /app/manage.py migrate --noinput
+python /app/manage.py register_cli_client
+python /app/manage.py register_cli_client --device
+```
+
+Missing dependencies or changed fixed clients fail rather than silently enabling
+another sign-in flow.
 
 This prepares the image only. Helm does not yet enable CLI sign-in or register
 its clients, and the protected coding listener still requires its separate

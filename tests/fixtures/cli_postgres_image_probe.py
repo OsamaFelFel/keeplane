@@ -17,6 +17,8 @@ assert os.geteuid() == 65532
 for name in ("pip", "ensurepip"):
     assert importlib.util.find_spec(name) is None
 assert not any(Path("/usr/local/bin").glob("pip*"))
+for name in ("_cffi_backend", "cryptography.hazmat.bindings._rust"):
+    importlib.import_module(name)
 for key in ("password", "signing"):
     path = Path("/state") / key
     path.write_text(seed[key])
