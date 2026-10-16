@@ -43,11 +43,15 @@ def test_owned_host_runtime_launcher_preserves_state_and_stops_on_failure(
     }
     try:
         fixture.validate()  # No container command runs before project/volume checks.
+        report["stage"] = "initialize-private-volumes"
         fixture.compose("run", "--rm", "--no-deps", "initialize")
+        report["stage"] = "initialize-private-runtime"
         fixture.compose("run", "--rm", "--no-deps", "runtime-init")
+        report["stage"] = "start-private-gateway-provider"
         fixture.compose(
             "up", "-d", "--no-build", "--pull", "never", "--no-deps", "gateway", "model"
         )
+        report["stage"] = "initial-migrations"
         fixture.compose(
             "run",
             "--rm",
@@ -58,7 +62,9 @@ def test_owned_host_runtime_launcher_preserves_state_and_stops_on_failure(
             "migrate",
             "--noinput",
         )
+        report["stage"] = "initial-app-start"
         fixture.compose("up", "-d", "--no-build", "--pull", "never", "--no-deps", "app")
+        report["stage"] = "initial-readiness"
         fixture.ready()
         report["stage"] = "admin-registration"
         admin = Browser(fixture.server)
