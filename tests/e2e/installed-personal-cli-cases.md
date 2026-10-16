@@ -9,11 +9,11 @@ their key/header checks run before any tool responder. No paid model is called.
 | --- | --- |
 | PCLI-01 | Offline wheel/native hashes match; reviewed CLAUDE.md copy supplies exact instruction bytes/hash to model requests. |
 | PCLI-02 | Both accounts sign in through actual consent, register use and see both allowed Personal model IDs. |
-| PCLI-03 | Missing key reports missing; coding denies within ten seconds without hitting the runtime deadline, with provider contacts, probes, tools and failures all unchanged. |
+| PCLI-03 | Missing key reports missing; coding displays “Add or replace your provider key” and denies within ten seconds without hitting the runtime deadline, with provider contacts, probes, tools and failures all unchanged. |
 | PCLI-04 | Stdin-only key set/status precedes actual read/edit tools for the selected provider and owner. |
 | PCLI-05 | Replacement selects the new key immediately; credential refresh and new-process resume preserve exact completed tool-call/result pairs. |
 | PCLI-06 | Other-owner key metadata stays separate; neither account can use the other's saved history, even with the same allowed project/model. |
-| PCLI-07 | Removal reports missing and denies coding within ten seconds without a runtime timeout, leaving all provider counters unchanged; the other owner still runs tools. Both remove their keys and sign out; logged-out bearer returns 401 with unchanged provider state. |
+| PCLI-07 | Removal reports missing; coding displays “Add or replace your provider key” and denies within ten seconds without a runtime timeout, leaving all provider counters unchanged; the other owner still runs tools. Both remove their keys and sign out; logged-out bearer returns 401 with unchanged provider state. |
 | PCLI-08 | Developer uses a separate internal network, UID 65532 and read-only root; no server/key/private-TLS volume is mounted. Wrong CA fails and retained history/output contains no credential/key bytes. |
 
 Use a frozen Git checkout containing the actual Personal activation, admin

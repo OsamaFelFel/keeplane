@@ -53,7 +53,7 @@ def journey(seed):
     known += [actor["password"] for actor in seed["accounts"].values()]
     outputs = []
 
-    def execute(label, command, *, key=None, denied=False):
+    def execute(label, command, *, key=None, denied=False, required_error=None):
         REPORT["stage"] = label
         started = time.monotonic()
         result = subprocess.run(
@@ -68,11 +68,18 @@ def journey(seed):
         )
         elapsed = time.monotonic() - started
         REPORT["commands"].append(
-            {"name": label, "exit_code": result.returncode, "seconds": round(elapsed, 3)}
+            {
+                "name": label,
+                "exit_code": result.returncode,
+                "seconds": round(elapsed, 3),
+            }
         )
         outputs.append(result.stdout + result.stderr)
         assert all(secret not in outputs[-1] for secret in known)
-        if bool(result.returncode) != denied:
+        missing_message = (
+            required_error is not None and required_error not in outputs[-1]
+        )
+        if bool(result.returncode) != denied or missing_message:
             safe = {"name": label, "stdout": result.stdout, "stderr": result.stderr}
             for field in ("stdout", "stderr"):
                 for secret in known:
@@ -80,7 +87,7 @@ def journey(seed):
             path = ROOT / "command-failure.json"
             path.write_text(json.dumps(safe))
             path.chmod(0o600)
-        assert bool(result.returncode) == denied
+        assert bool(result.returncode) == denied and not missing_message
         if denied:
             assert result.returncode != 124 and elapsed < 10
         return result.stdout
@@ -265,6 +272,7 @@ def journey(seed):
             session=None,
             history_actor=None,
             denied=False,
+            missing_key=False,
             histories=histories,
             args=args,
             protocol=protocol,
@@ -284,7 +292,14 @@ def journey(seed):
                 command += ["--session", session]
             command += ["PERSONAL_TURN:" + phase + ": fix addition."]
             before = status()
-            raw = execute(f"{protocol}-{actor}-{phase}", command, denied=denied)
+            raw = execute(
+                f"{protocol}-{actor}-{phase}",
+                command,
+                denied=denied,
+                required_error="Add or replace your provider key"
+                if missing_key
+                else None,
+            )
             if denied:
                 assert status() == before
                 assert target.read_text().endswith("return a - b\n")
@@ -318,7 +333,7 @@ def journey(seed):
             return current
 
         assert key("status", "a", model) == key("status", "b", model) == "missing"
-        turn("a", "first", denied=True)
+        turn("a", "first", denied=True, missing_key=True)
         key("set", "a", model, "a")
         assert key("status", "a", model) == "added"
         first = turn("a", "first")
@@ -342,7 +357,7 @@ def journey(seed):
             key("status", "a", model) == "missing"
             and key("status", "b", model) == "added"
         )
-        turn("a", "resume", session=first, denied=True)
+        turn("a", "resume", session=first, denied=True, missing_key=True)
         other = turn("b", "first")
         turn("a", "first", session=other, history_actor="b", denied=True)
         key("remove", "b", model)
