@@ -58,12 +58,18 @@ class QuietHandler(WSGIRequestHandler):
 
 
 @pytest.fixture
+def cli_browser_driver():
+    return None
+
+
+@pytest.fixture
 def signed_in_cli(
     browser_flow,  # noqa: F811 - shared pytest fixture imported above.
     monkeypatch,
     tmp_path,
     capsys,
     request,
+    cli_browser_driver,
 ):
     from accounts import views
     from common import api
@@ -176,7 +182,7 @@ def signed_in_cli(
     try:
         with override_settings(PUBLIC_ORIGIN=server, OAUTH2_PROVIDER=configured):
             thread.start()
-            monkeypatch.setattr(cli.browser_login.webbrowser, "open", browser)
+            monkeypatch.setattr(cli.browser_login.webbrowser, "open", cli_browser_driver or browser)
 
             def command(action, *arguments, expected=0):
                 monkeypatch.setattr(
