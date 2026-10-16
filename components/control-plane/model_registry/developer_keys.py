@@ -8,6 +8,7 @@ from accounts.models import User
 from common.errors import StorageUnavailable
 from common.storage import storage_service
 from integrations.gateway.keys import KEY_NAME, remove, save
+from .key_validation import ProviderKeyRefused, VerifiedProviderKey
 from .models import DeveloperProviderKey
 from .provider_keys import managed_key_available
 
@@ -19,7 +20,9 @@ class DeveloperKeyError(Exception):
 @storage_service
 class DjangoDeveloperKeyStore:
     def __init__(self, owner_id, directory, *, validate_key):
-        if not callable(validate_key):
+        if not callable(validate_key) or not callable(
+            getattr(validate_key, "require_current", None)
+        ):
             raise DeveloperKeyError("Configure a server provider-key validator")
         if not directory or not Path(directory).is_absolute():
             raise StorageUnavailable("Provider key storage is unavailable")
@@ -61,6 +64,8 @@ class DjangoDeveloperKeyStore:
 
     def _status(self, model_id, row):
         present = bool(row and row.key_name)
+        if present and not row.validation_fingerprint:
+            raise StorageUnavailable("This provider key requires validation")
         if present and not managed_key_available(self.directory, self._path(row.key_name)):
             raise StorageUnavailable("Provider key file is unavailable")
         return {"model_id": model_id, "status": "added" if present else "missing",
@@ -87,7 +92,7 @@ class DjangoDeveloperKeyStore:
             raise StorageUnavailable("Key state changed; cleanup status is unavailable") from None
 
     def put(self, model_id, value):
-        """Add/replace only after the supplied real validator returns literal True.
+        """Add/replace only after server-issued, definition-bound verification.
 
         The validator owns model eligibility and live provider validation. No
         default implementation or public write route is supplied by this store.
@@ -103,11 +108,18 @@ class DjangoDeveloperKeyStore:
             raise DeveloperKeyError("Enter a valid provider key")
         try:
             accepted = self.validate_key(str(self.owner_id), model_id, value)
+        except ProviderKeyRefused:
+            raise DeveloperKeyError("The provider refused the key") from None
         except Exception:
             raise DeveloperKeyError("The provider key could not be checked") from None
-        if accepted is False:
-            raise DeveloperKeyError("The provider refused the key")
-        if accepted is not True:
+        if (
+            not isinstance(accepted, VerifiedProviderKey)
+            or accepted.owner_id != str(self.owner_id)
+            or accepted.model_id != model_id
+            or not isinstance(accepted.definition_fingerprint, str)
+            or len(accepted.definition_fingerprint) != 64
+            or any(c not in "0123456789abcdef" for c in accepted.definition_fingerprint)
+        ):
             raise DeveloperKeyError("The provider key could not be checked")
         new_name = None
         try:
@@ -115,12 +127,21 @@ class DjangoDeveloperKeyStore:
             # after the file lifecycle has advanced. User locks serialize writers.
             with transaction.atomic(durable=True):
                 owner = self._owner(lock=True)
+                try:
+                    self.validate_key.require_current(accepted)
+                except Exception:
+                    raise DeveloperKeyError(
+                        "The current model could not be verified; check the key again"
+                    ) from None
                 row, _ = DeveloperProviderKey.objects.get_or_create(owner=owner, model_id=model_id)
                 if not self._drain(row):
                     raise StorageUnavailable("Previous provider key cleanup is pending")
                 new_name = Path(save(self.directory, value)).name
                 row.pending_key_name, row.key_name = row.key_name, new_name
-                row.save(update_fields=["key_name", "pending_key_name"])
+                row.validation_fingerprint = accepted.definition_fingerprint
+                row.save(
+                    update_fields=["key_name", "pending_key_name", "validation_fingerprint"]
+                )
         except BaseException as error:
             if new_name and not self._remove(new_name):
                 raise StorageUnavailable("The key was not saved; temporary-key cleanup failed") from None
