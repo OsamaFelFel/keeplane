@@ -157,3 +157,20 @@ flowchart LR
   A --> MockA[Private mock A]
   B --> MockB[Private mock B]
 ```
+
+The [installed-runtime gate](../../tests/integration/installed-runtime-cases.md)
+adds fresh operator enrollment to separate entry and selected-model callbacks.
+It binds exact raw definitions, immutable shared-key files and complete file and
+effective baselines without modifying model resources. It remains disabled by
+default. [Managed installation](../guide/guarded-runtime.md) must verify applied
+native guards before exposing and enabling the protected listener.
+
+The internal managed installer now publishes only file-owned policy overlays;
+raw API model values and approval fingerprints stay unchanged. It requires a
+fresh gateway with an exact trusted JSON baseline, verifies complete applied
+entry/final/provider wiring, and rechecks every enrollment before enabling the
+manifest. Re-enrollment requires a new gateway process: native request routing
+and backend policy reads do not share one lifetime snapshot. A failed final
+filesystem publication reports an unconfirmed state and the launcher must stop
+the gateway. The opt-in Compose launcher and installed CLI acceptance follow
+separately; ordinary preview deployment remains unchanged.

@@ -10,6 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "http://127.0.0.1:3000")
 PUBLIC_ORIGIN_ALIASES = os.environ.get("PUBLIC_ORIGIN_ALIASES", "")
 RUNTIME_AUTHORIZER_KEY_FILE = os.environ.get("RUNTIME_AUTHORIZER_KEY_FILE", "")
+RUNTIME_GUARD_MANIFEST_FILE = os.environ.get("RUNTIME_GUARD_MANIFEST_FILE", "")
 CSRF_TRUSTED_ORIGINS = [
     value.strip()
     for value in (PUBLIC_ORIGIN + "," + PUBLIC_ORIGIN_ALIASES).split(",")
