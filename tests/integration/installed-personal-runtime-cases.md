@@ -1,7 +1,10 @@
 # Managed Personal model access
 
 Entry checks the current owner's bound key before native backend selection;
-missing → added can proceed without altering backend health. Selection returns
+missing → added can proceed without altering backend health. A known missing or
+removed current key registration returns 403 with an instruction to add or replace
+the key, so the coding runtime does not retry it as an outage. Unreadable key files,
+database failures and unavailable policy still return 503. Selection returns
 metadata only, and the final private handoff reads the current key again.
 Local initialization makes an existing provider-key volume private (0700),
 preserving saved keys; the resolver continues to reject an exposed directory.
