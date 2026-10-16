@@ -16,7 +16,8 @@ class Connection(BaseRequestHandler):
         self.request.settimeout(30)
         try:
             host, port = self.server.upstream
-            with socket.create_connection((host, port), timeout=30) as upstream:
+            # Own the raw socket even if TLS wrapping fails.
+            with socket.create_connection((host, port), timeout=30) as upstream:  # noqa: SIM117
                 with (
                     upstream,
                     self.server.context.wrap_socket(
