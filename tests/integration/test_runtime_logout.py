@@ -48,6 +48,24 @@ def test_logout_revokes_only_its_explicit_bearer_session(sessions):
     )
 
 
+def test_current_runtime_account_requires_live_explicit_bearer(sessions):
+    sessions.client.cookies["keeplane_session"] = sessions.first
+    assert sessions.client.get("/api/runtime/session").status_code == 401
+    response = sessions.client.get(
+        "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + sessions.first
+    )
+    assert response.status_code == 200
+    assert response.json() == sessions.identity.session(sessions.first)
+    assert "no-store" in response["Cache-Control"]
+    sessions.identity.logout(sessions.first)
+    assert (
+        sessions.client.get(
+            "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + sessions.first
+        ).status_code
+        == 401
+    )
+
+
 @pytest.mark.parametrize("header", [None, "Bearer invalid", "Basic invalid"])
 def test_cookie_or_invalid_header_cannot_revoke_a_session(sessions, header):
     sessions.client.cookies["keeplane_session"] = sessions.first

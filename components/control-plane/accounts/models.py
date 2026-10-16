@@ -41,6 +41,19 @@ class SessionOwner(models.Model):
         db_table = "accounts_sessionowner"
 
 
+class CliCredentialBinding(models.Model):
+    class Kind(models.TextChoices):
+        CODE = "code", "Authorization code"
+        ACCESS = "access", "Access token"
+        REFRESH = "refresh", "Refresh token"
+        DEVICE = "device", "Device grant"
+
+    checksum = models.CharField(max_length=64, primary_key=True)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    auth_hash = models.CharField(max_length=64)
+
+
 class LoginBudget(models.Model):
     bucket = models.CharField(max_length=64, primary_key=True)
     attempts = models.PositiveIntegerField(default=0)
