@@ -1,12 +1,48 @@
-# Try a local coding turn
+# Use the Keeplane CLI
 
-Install the `keeplane` command with the [wheel installation guide](../../docs/guide/cli-install.md).
-Preview a project or copy selected root instructions with [init](../../docs/guide/cli-migration-preview.md).
-For the experimental sign-in and project commands, use the
-[shared CLI entry point](../../docs/guide/cli-project-commands.md).
-Use [device sign-in](../../docs/guide/cli-device-login.md) when a browser cannot open here.
-Manage your own provider keys with the [key commands](../../docs/guide/cli-provider-key-commands.md).
-Run a turn and resume private history with the [signed-in coding command](../../docs/guide/cli-coding.md).
+Start with the installed `keeplane` command:
+
+1. [Install the CLI wheel](../../docs/guide/cli-install.md). It contains Keeplane's
+   commands and instruction hook; install the coding runtime separately.
+2. [Review existing project instructions](../../docs/guide/cli-migration-preview.md)
+   with `keeplane init --preview`, which leaves repository files unchanged.
+   The guide also explains how to save and review a plan, then copy one root
+   `CLAUDE.md` or `QWEN.md` to a new `AGENTS.md`. Originals and settings stay
+   unchanged. Init requires Python 3.11+.
+3. [Sign in through your browser](../../docs/guide/cli-browser-login.md), or use
+   [a device code](../../docs/guide/cli-device-login.md). Check your account with
+   `keeplane whoami`.
+4. [Register a project and list its models](../../docs/guide/cli-project-commands.md).
+   Use the explicit project ID supplied for your work.
+5. [Run a coding turn and resume it](../../docs/guide/cli-coding.md) with
+   `keeplane code`. Select reviewed instruction files explicitly and keep history
+   outside the repository.
+6. [Refresh or sign out](../../docs/guide/cli-account-profile.md) with
+   `keeplane refresh` or `keeplane logout`, using the same private profile.
+
+These commands need macOS or Linux and Python 3.9+ unless noted above. Sign-in
+needs an operator-configured trial server. Coding also needs the exact external
+OpenCode V2 **2.0.27** binary and the installation's protected gateway URL.
+The gateway checks current account, project and model policy on every request;
+provider keys stay on the server. The ordinary gateway listener is insufficient.
+
+The [installed journey](../../tests/e2e/installed-cli-cases.md) covers real Django
+sign-in, managed gateway installation, native read/edit tools, refreshed
+credentials, account/project-bound resume and logout with synthetic accounts.
+This remains an integration trial: release runtime selection and distribution
+checks are open. Init supports only the reviewed root instruction copy; broader
+onboarding, settings conversion and automatic refresh remain separate work.
+[Personal key commands](../../docs/guide/cli-provider-key-commands.md) manage
+server-held registrations; personal-key coding is not enabled by this journey.
+Cancellation stops the owned runtime process group but cannot guarantee cleanup
+of detached tools or safe continuation of an unfinished turn. Review edits
+before retrying.
+
+## Low-level adapter prototype
+
+Use the standalone adapter below only for an operator-controlled integration
+experiment. It does not use the signed-in account profile or send the project
+context supplied by `keeplane code`.
 
 This experimental adapter connects OpenCode V2 **2.0.27** to an explicitly
 configured protected gateway. The standalone command below exercises the coding
@@ -87,8 +123,9 @@ stored runtime credentials are refused. One owned lock serializes its use.
 Resume also requires an existing idle native session in that directory and model;
 unknown IDs fail before provider contact. This check uses the pinned runtime's
 database metadata because its native `--session` option can create a missing ID.
-Server-account binding awaits the browser sign-in integration: this is local
-OS-user history, not proof of a Keeplane account or project provenance.
+The standalone adapter binds only local OS-user history. The installed
+`keeplane code` command also binds the issuer, current account and project;
+neither path proves repository provenance.
 
 To remove all saved history from that state while keeping its binding and lock:
 
@@ -102,6 +139,6 @@ and the state is rejected, inspect the owned directory and choose a fresh one.
 After an interrupted coding turn, review edits before continuing; this slice
 proves completed text/tool turns, not safe replay of unfinished side effects or
 attachments from discarded caches. Built-in tool permission prompts remain enabled.
-This is not a sandbox or proof of project provenance. Login, authorized-model
-discovery integration, native provider protocols, routing, full migration apply and offline distribution
-remain separate work.
+This is not a sandbox or proof of project provenance. Use the installed commands
+above for sign-in and authorized-model discovery. Broader migration, automatic
+routing and release distribution remain separate work.

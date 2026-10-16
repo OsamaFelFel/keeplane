@@ -15,6 +15,36 @@ RUNTIME_DIR=/private/tmp/keeplane-accounts-trial
 FIRST_ADMIN_PASSWORD="$RUNTIME_DIR/first-admin-password"
 
 cd "$ROOT"
+for kind_tool in python3 node npm docker kind kubectl "$HELM_BIN" rg shasum; do
+  if ! command -v "$kind_tool" >/dev/null 2>&1; then
+    printf 'Missing tool: %s. See docs/guide/kubernetes-local.md for prerequisites.\n' "$kind_tool" >&2
+    exit 1
+  fi
+done
+python3 - <<'PY'
+import re
+import subprocess
+import sys
+
+if sys.version_info < (3, 9):
+    sys.exit("Python 3.9 or newer is required.")
+
+def checked(command, message):
+    try:
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        sys.exit(message)
+    if result.returncode:
+        sys.exit(message)
+    return result.stdout.strip()
+
+version = checked(["node", "--version"], "Node.js could not be checked. Check its installation.")
+match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", version)
+if not match or tuple(int(part) for part in match.groups()[:2]) < (22, 12):
+    sys.exit("Node.js 22.12 or newer is required. Update Node.js and retry.")
+checked(["docker", "info", "--format", "{{.ServerVersion}}"],
+        "Docker is unavailable. Start Docker, check access and retry.")
+PY
 if [ ! -f "$QWEN_MODEL" ]; then
   printf 'Missing %s; download it using docs/guide/local-preview.md first.\n' "$QWEN_MODEL" >&2
   exit 1

@@ -1,19 +1,23 @@
 # Sign in through your browser
 
-This experimental command needs macOS or Linux, Python 3.9+, a browser and a
-trial Keeplane server with browser authorization, token exchange and the current
-account route. The issuer is not included in the packaged preview yet. Tests
-join the actual client and Django sign-in, consent, project and logout routes
-with synthetic accounts; they do not prove a deployed installation or browser UI.
+Install the [Keeplane CLI wheel](cli-install.md), then sign in to your
+installation. You need macOS or Linux, Python 3.9+, a browser and the server URL
+from your operator. The server must use an operator-prepared trial image with
+browser authorization enabled and the fixed Keeplane CLI client registered;
+the ordinary preview image does not include it.
+
+Sign-in uses your existing Keeplane account. Before saving credentials, the CLI
+checks that account with the configured server. Browser UI acceptance and the
+[installed CLI journey](../../tests/e2e/installed-cli-cases.md) cover sign-in,
+consent and logout with synthetic accounts. This is still an integration trial,
+not release distribution approval.
 
 Choose a private profile outside Git. Its parent directory must already exist.
 
 ```sh
-python3 components/cli/browser_login.py \
-  --server https://keeplane.example \
+keeplane login --server https://keeplane.example \
   --profile /absolute/private/keeplane-account
-python3 components/cli/account_session.py whoami \
-  --profile /absolute/private/keeplane-account
+keeplane whoami --profile /absolute/private/keeplane-account
 ```
 
 Sign in and approve the request in your normal browser. Keeplane checks the
@@ -51,7 +55,9 @@ revoked local credential; use logout to remove it after confirmed withdrawal.
 
 Use [device sign-in](cli-device-login.md) when this computer cannot open your
 browser, or the [coding command](cli-coding.md) for account-bound turns and resume.
-Automatic refresh remains separate. This trial does not select the release CLI runtime.
+Use explicit [refresh](cli-account-profile.md) when needed; refresh is not
+automatic and does not happen during a coding turn. This trial does not select
+the release CLI runtime.
 
 The flow follows [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252) and
 [S256 PKCE](https://www.rfc-editor.org/rfc/rfc7636).

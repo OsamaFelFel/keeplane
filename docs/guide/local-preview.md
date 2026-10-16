@@ -78,7 +78,11 @@ another installation: this launcher manages one Compose project and its volumes.
    **Data classes**, return to the model and choose its approved classes.
 5. Open **Audit** to see the infrastructure admin's sign-ins, then sign out.
 
-There is no chat panel or finished developer CLI yet. The local
+There is no chat panel. For opt-in signed-in CLI model access, follow the
+[guarded runtime setup](guarded-runtime.md); it requires an explicitly prepared
+OAuth-capable trial app image. The default preview does not enable that flow.
+
+The local
 [`ask.py`](../../deploy/local/ask.py) helper exercises a model request; it is a
 development tool. See [model setup](model-add-local.md) for the supported flows.
 
