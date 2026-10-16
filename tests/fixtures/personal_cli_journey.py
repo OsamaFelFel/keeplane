@@ -6,6 +6,7 @@ import os
 import ssl
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
@@ -54,6 +55,7 @@ def journey(seed):
 
     def execute(label, command, *, key=None, denied=False):
         REPORT["stage"] = label
+        started = time.monotonic()
         result = subprocess.run(
             list(map(str, command)),
             cwd=ROOT,
@@ -64,7 +66,10 @@ def journey(seed):
             timeout=70,
             check=False,
         )
-        REPORT["commands"].append({"name": label, "exit_code": result.returncode})
+        elapsed = time.monotonic() - started
+        REPORT["commands"].append(
+            {"name": label, "exit_code": result.returncode, "seconds": round(elapsed, 3)}
+        )
         outputs.append(result.stdout + result.stderr)
         assert all(secret not in outputs[-1] for secret in known)
         if bool(result.returncode) != denied:
@@ -76,6 +81,8 @@ def journey(seed):
             path.write_text(json.dumps(safe))
             path.chmod(0o600)
         assert bool(result.returncode) == denied
+        if denied:
+            assert result.returncode != 124 and elapsed < 10
         return result.stdout
 
     wheel, binary = Path("/package/keeplane.whl"), Path("/runtime/opencode")
