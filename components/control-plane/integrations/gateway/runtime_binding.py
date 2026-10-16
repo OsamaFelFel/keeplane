@@ -157,6 +157,11 @@ def project_applied(value, model_id):
             current = identifier(target["name"][len(PREFIX) :])
             if current != model_id:
                 continue
+        elif kind == "internal":
+            # The maintained management UI uses this native admin reference.
+            # Keep it and every attached field; no arbitrary internal target.
+            if target != {"name": "ui", "namespace": "", "target": "forward"}:
+                raise ValueError()
         elif kind != "host":
             raise ValueError()
         retained.append(row)

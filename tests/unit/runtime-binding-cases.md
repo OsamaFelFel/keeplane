@@ -14,6 +14,7 @@ caller must supply a trusted expected binding and the correct gateway copy.
 | A route can select another backend, or routing uses wildcards, header conditions, virtual models, duplicate IDs or legacy name-only models | Refuse this first reader's unsupported or ambiguous snapshot. |
 | A policy has an unknown target or namespace | Refuse; never silently discard it. |
 | Retained routes, final callbacks or key exchange reference an excluded model or unknown backend | Refuse. A named host dependency stays bound, including its destination. |
+| Native UI management references `/ui` | Retain the exact `internal` UI/empty-namespace/`forward` backend and all management guards; refuse other internal targets. |
 | Only validated request measurements change | Keep A's binding. Eviction and unknown fields remain bound. |
 | Reading the snapshot | Leave the input unchanged; return no key or definition. |
 
@@ -27,7 +28,8 @@ stay bound. Named route and callback references use `backend` in both
 `LocalBackend` and `SimpleBackendReference`; bare local names compile to `/name`
 (`types/local.rs:1497,5821`, `types/agent.rs:1531–1594`). Retained references must
 resolve to retained backends; disjoint model backends cannot secretly become
-shared dependencies. Provider groups must remain the existing supported single
+shared dependencies. The native UI's exact internal forward target is generated
+at `types/local.rs:4052–4085` and stays bound. Provider groups must remain the supported single
 direct endpoint; virtual-model fallback remains refused. This makes no lease,
 loaded-key or in-flight revocation claim.
 

@@ -332,6 +332,28 @@ def test_generic_host_dependencies_are_retained_and_bound():
     assert binding(state) != before
 
 
+def test_native_ui_admin_reference_is_retained_and_bound():
+    state = snapshot()
+    management = {
+        "backend": {"internal": {"name": "ui", "namespace": "", "target": "forward"}}
+    }
+    state["applied"]["backends"].insert(-1, management)
+    state["applied"]["routes"]["management"] = {
+        "backends": [{"backend": "/ui"}],
+        "inlinePolicies": [{"apiKey": {"mode": "strict"}}],
+    }
+    before = binding(state)
+    add_other(state)
+    assert binding(state) == before
+    state["applied"]["routes"]["management"]["inlinePolicies"][0]["apiKey"]["mode"] = (
+        "optional"
+    )
+    assert binding(state) != before
+    management["backend"]["internal"]["target"] = "/config_dump"
+    with pytest.raises(RuntimeInstallationUnavailable):
+        binding(state)
+
+
 @pytest.mark.parametrize("failure", [None, "file", "resources", "applied"])
 def test_reads_configured_copy_and_refuses_unavailable_snapshots(monkeypatch, failure):
     state, calls = snapshot(), []
