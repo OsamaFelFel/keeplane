@@ -8,9 +8,12 @@
   timeouts, spawned-tool termination, detached-child pipe deadlines, profile cleanup,
   opaque credential validation, JSON-event redaction, rejected insecure endpoints and
   a mismatched runtime version.
-- **CLI-03:** SIGTERM stops the owned runtime process group, removes its disposable
-  profile and exits 143. Controls cover a signal during process creation, large
-  stdin, grouped child tools and a detached child holding output pipes. A pinned
+- **CLI-03:** SIGTERM asks the pinned runtime to interrupt its session, then
+  force-stops remaining owned group members after a bounded grace period,
+  removes its disposable profile and exits 143. A cooperative process reaps
+  its managed tool in a separate group; an uncooperative process and its grouped
+  tool are force-stopped. Controls also cover a signal during process creation,
+  large stdin, grouped child tools and a detached child holding output pipes. A pinned
   native runtime reaches a stalled synthetic provider before cancellation; its
   process is gone and profile removed afterward. Detached workloads and SIGKILL
   remain outside cleanup guarantees.

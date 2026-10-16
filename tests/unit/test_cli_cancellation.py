@@ -110,3 +110,59 @@ def test_signal_during_launch_waits_until_the_child_is_owned(tmp_path, monkeypat
             if child.poll() is None:
                 os.killpg(child.pid, signal.SIGKILL)
                 child.wait(timeout=2)
+
+
+@pytest.mark.parametrize("cooperative", [True, False])
+def test_native_interruption_cleans_managed_tools_or_forces_owned_group(tmp_path, cooperative):
+    record = tmp_path / "pids"
+    heartbeat = tmp_path / "heartbeat"
+    interrupted = tmp_path / "interrupted"
+    child = f"import time; from pathlib import Path\nwhile True:\n Path({str(heartbeat)!r}).write_text(str(time.time_ns())); time.sleep(.02)"
+    program = f"""import json,os,signal,subprocess,sys,time
+from pathlib import Path
+child=subprocess.Popen([sys.executable,'-c',{child!r}],start_new_session={cooperative})
+def stop(*_):
+ Path({str(interrupted)!r}).write_text('native interruption received')
+ if {cooperative}:
+  os.killpg(child.pid,signal.SIGTERM)
+  child.wait(timeout=1)
+  sys.exit(0)
+signal.signal(signal.SIGINT,stop)
+Path({str(record)!r}).write_text(json.dumps({{'parent':os.getpid(),'child':child.pid}}))
+time.sleep(30)
+"""
+
+    def cancel_when_ready():
+        for _ in range(200):
+            if record.exists() and heartbeat.exists():
+                os.kill(os.getpid(), signal.SIGTERM)
+                return
+            time.sleep(.01)
+
+    thread = Thread(target=cancel_when_ready)
+    thread.start()
+    started = time.monotonic()
+    try:
+        with termination_requested() as cancelled, pytest.raises(Cancelled):
+            coding_turn([sys.executable, "-c", program], input="", env={"PATH": os.defpath},
+                        cwd=tmp_path, timeout=10, cancelled=cancelled)
+        assert interrupted.read_text() == "native interruption received"
+        assert time.monotonic() - started < (2 if cooperative else 6)
+        state = json.loads(record.read_text())
+        with pytest.raises(ProcessLookupError):
+            os.kill(state["parent"], 0)
+        if cooperative:
+            with pytest.raises(ProcessLookupError):
+                os.kill(state["child"], 0)
+        before = heartbeat.read_bytes()
+        time.sleep(.1)
+        assert heartbeat.read_bytes() == before, "Owned tool is still running"
+    finally:
+        thread.join(timeout=2)
+        if record.exists():
+            state = json.loads(record.read_text())
+            for pid, grouped in ((state["parent"], True), (state["child"], cooperative)):
+                try:
+                    (os.killpg if grouped else os.kill)(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
