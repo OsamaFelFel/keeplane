@@ -13,6 +13,7 @@ caller must supply a trusted expected binding and the correct gateway copy.
 | A's provider destination or native authentication differs from its raw definition | Refuse the snapshot. |
 | A route can select another backend, or routing uses wildcards, header conditions, virtual models, duplicate IDs or legacy name-only models | Refuse this first reader's unsupported or ambiguous snapshot. |
 | A policy has an unknown target or namespace | Refuse; never silently discard it. |
+| Retained routes, final callbacks or key exchange reference an excluded model or unknown backend | Refuse. A named host dependency stays bound, including its destination. |
 | Only validated request measurements change | Keep A's binding. Eviction and unknown fields remain bound. |
 | Reading the snapshot | Leave the input unchanged; return no key or definition. |
 
@@ -22,7 +23,13 @@ first, then matches concrete model names and headers (`llm/model_router.rs:347,
 Backend and policy dump collections are sorted by their store keys
 (`store/binds.rs:2185–2198`). This reader excludes only disjoint exact model
 targets; shared routes, listeners, configuration and every selected-target field
-stay bound. It makes no lease, loaded-key or in-flight revocation claim.
+stay bound. Named route and callback references use `backend` in both
+`LocalBackend` and `SimpleBackendReference`; bare local names compile to `/name`
+(`types/local.rs:1497,5821`, `types/agent.rs:1531–1594`). Retained references must
+resolve to retained backends; disjoint model backends cannot secretly become
+shared dependencies. Provider groups must remain the existing supported single
+direct endpoint; virtual-model fallback remains refused. This makes no lease,
+loaded-key or in-flight revocation claim.
 
 Native add/edit/remove and tamper controls remain required before connecting
 this reader to automatic publication or the installed gate. Legacy routing,

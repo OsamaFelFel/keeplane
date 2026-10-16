@@ -264,6 +264,74 @@ def test_measurements_only_are_excluded_and_inputs_are_not_changed():
     assert binding(state) != before
 
 
+@pytest.mark.parametrize(
+    "location",
+    [
+        "file-route",
+        "applied-route",
+        "file-callback",
+        "file-key-exchange",
+        "callback",
+        "key-exchange",
+    ],
+)
+@pytest.mark.parametrize(
+    "reference", ["llm:model:aaa-before", "/llm:model:aaa-before", "unknown"]
+)
+def test_retained_wiring_cannot_reference_an_excluded_or_unknown_backend(
+    location, reference
+):
+    state = snapshot()
+    add_other(state)
+    if location == "file-route":
+        state["file_config"]["binds"][0]["listeners"][0]["routes"][0]["backends"] = [
+            {"backend": reference}
+        ]
+        state["effective_config"] = effective(state["file_config"], state["resources"])
+    elif location == "applied-route":
+        state["applied"]["routes"]["shared-route"] = {
+            "backends": [{"backend": reference}]
+        }
+    elif location.startswith("file-"):
+        policy = {"backend": reference}
+        key = "extAuthz" if location == "file-callback" else "backendAuth"
+        if key == "backendAuth":
+            policy = {"oauthTokenExchange": policy}
+        state["file_config"]["policies"][0]["policy"] = {key: policy}
+        state["effective_config"] = effective(state["file_config"], state["resources"])
+    else:
+        policy = {"backend": reference}
+        if location == "key-exchange":
+            policy = {"backendAuth": {"oauthTokenExchange": policy}}
+        else:
+            policy = {"extAuthz": policy}
+        state["applied"]["policies"][0]["policy"] = {"backend": policy}
+    with pytest.raises(RuntimeInstallationUnavailable, match="binding is unavailable"):
+        binding(state)
+
+
+def test_generic_host_dependencies_are_retained_and_bound():
+    state = snapshot()
+    host = {
+        "backend": {
+            "host": {"name": "guard-host", "namespace": "", "target": "private:3000"}
+        }
+    }
+    state["applied"]["backends"].insert(-1, host)
+    state["file_config"]["policies"][0]["policy"]["extAuthz"] = {
+        "backend": "guard-host"
+    }
+    state["effective_config"] = effective(state["file_config"], state["resources"])
+    state["applied"]["policies"][0]["policy"] = {
+        "backend": {"extAuthz": {"backend": "/guard-host"}}
+    }
+    before = binding(state)
+    add_other(state)
+    assert binding(state) == before
+    host["backend"]["host"]["target"] = "changed:3000"
+    assert binding(state) != before
+
+
 @pytest.mark.parametrize("failure", [None, "file", "resources", "applied"])
 def test_reads_configured_copy_and_refuses_unavailable_snapshots(monkeypatch, failure):
     state, calls = snapshot(), []

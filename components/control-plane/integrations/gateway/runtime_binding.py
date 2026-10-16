@@ -167,6 +167,26 @@ def project_applied(value, model_id):
     return result
 
 
+def require_backend_references(value, retained):
+    """Named route/callback/key-exchange dependencies must remain fully bound.
+
+    LocalBackend and SimpleBackendReference use the same `backend` field. Bare
+    local names compile to `/name`; namespaced keys already contain a slash.
+    This only refuses unsupported references; it never removes another field.
+    """
+    if isinstance(value, dict):
+        reference = value.get("backend")
+        if isinstance(reference, str):
+            key = reference if "/" in reference else "/" + reference
+            if key not in retained:
+                raise ValueError()
+        for row in value.values():
+            require_backend_references(row, retained)
+    elif isinstance(value, list):
+        for row in value:
+            require_backend_references(row, retained)
+
+
 def model_serving_binding(
     model_id, key_choice, file_config, effective_config, resources, applied
 ):
@@ -207,12 +227,23 @@ def model_serving_binding(
             {model_id: {"key_choice": key_choice}},
             {model_id: PREFIX + model_id},
         )
+        projected_applied = project_applied(applied, model_id)
+        retained = set()
+        for row in projected_applied["backends"]:
+            target = next(iter(row["backend"].values()))
+            if not isinstance(target["namespace"], str) or not isinstance(
+                target["name"], str
+            ):
+                raise TypeError()
+            retained.add(target["namespace"] + "/" + target["name"])
+        for value in (projected_file, projected_effective, projected_applied):
+            require_backend_references(value, retained)
         return ModelServingBinding(
             model_id,
             digest({"value": selected["value"], "revision": selected["revision"]}),
             digest(projected_file),
             digest(projected_effective),
-            applied_fingerprint(project_applied(applied, model_id)),
+            applied_fingerprint(projected_applied),
         )
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
         raise RuntimeInstallationUnavailable(
