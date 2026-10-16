@@ -24,7 +24,8 @@ The [profile guide](cli-account-profile.md) covers storage and logout recovery.
 Each attempt uses fresh state and an S256 PKCE verifier. The temporary listener
 accepts only `http://127.0.0.1:{ephemeral-port}/callback`, with its exact Host,
 state and optional issuer. Foreign, duplicate or malformed callbacks cannot
-complete the flow. The authorization code is exchanged only with the configured
+complete the flow. Unknown response fields are ignored; success and refusal
+cannot be combined. The authorization code is exchanged only with the configured
 issuer; redirects, ambient proxies and cookies are excluded. Unknown token
 response fields are ignored and never saved or printed; duplicate keys fail.
 
@@ -40,6 +41,8 @@ sequenceDiagram
 `--timeout 120` sets the browser callback wait; one to 300 seconds is supported.
 The listener also closes stalled HTTP connections. Token/account requests retain
 a ten-second socket timeout, not a total deadline. Ctrl+C cancels the attempt.
+A failed exchange may have completed on the server; this client cannot revoke
+credentials it never received.
 The external browser process is not owned, sandboxed or closed by this command.
 If account verification or saving fails after issuance, the client attempts to
 revoke the new pair. An unconfirmed-revocation error needs server-side session

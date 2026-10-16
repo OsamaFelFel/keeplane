@@ -34,6 +34,7 @@ def issuer():
         token_status=200,
         token_body=None,
         before_callback=None,
+        callback_extra={},
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -61,7 +62,9 @@ def issuer():
                     "Location",
                     params["redirect_uri"]
                     + "?"
-                    + urlencode({"state": params["state"], "code": code}),
+                    + urlencode(
+                        {"state": params["state"], "code": code, **state.callback_extra}
+                    ),
                 )
                 self.end_headers()
             else:
@@ -195,6 +198,7 @@ def test_foreign_duplicate_wrong_state_and_wrong_host_callbacks_cannot_consume_f
             (location.replace("state=", "state=wrong"), {}),
             (location + "&iss=https%3A%2F%2Fother.invalid", {}),
             (location + "&code=duplicate_code_value", {}),
+            (location + "&error=access_denied", {}),
             (location, {"Host": "other.invalid"}),
         ]:
             with pytest.raises(HTTPError) as error:
@@ -204,7 +208,19 @@ def test_foreign_duplicate_wrong_state_and_wrong_host_callbacks_cannot_consume_f
 
     issuer.before_callback = before
     browser_login.login(issuer.url, tmp_path / "profile", browser=issuer.browser)
-    assert rejected == [400] * 5 and len(issuer.exchanges) == 1
+    assert rejected == [400] * 6 and len(issuer.exchanges) == 1
+
+
+def test_unknown_callback_members_are_ignored_without_saving_or_echoing(
+    issuer, tmp_path, capsys
+):
+    issuer.callback_extra = {"future_metadata": "unknown_callback_value"}
+    path = tmp_path / "profile"
+    browser_login.login(issuer.url, path, browser=issuer.browser)
+    assert len(issuer.exchanges) == 1 and issuer.exchanges[0][2]
+    assert "unknown_callback_value" not in (path / "credential.json").read_text()
+    output = capsys.readouterr()
+    assert "unknown_callback_value" not in output.out + output.err
 
 
 @pytest.mark.parametrize(

@@ -92,17 +92,12 @@ def authorization_code(server, *, timeout, browser):
                     and secrets.compare_digest(values.get("state", [""])[0], state)
                     and values.get("iss", [server])[0] == server
                 )
-                if valid and set(values) <= {"state", "code", "iss"}:
-                    code = values.get("code", [""])[0]
+                if valid and "code" in values and "error" not in values:
+                    code = values["code"][0]
                     valid = re.fullmatch(r"[A-Za-z0-9_-]{16,200}", code) is not None
                     if valid:
                         result.append(code)
-                elif (
-                    valid
-                    and set(values)
-                    <= {"state", "error", "error_description", "error_uri", "iss"}
-                    and "error" in values
-                ):
+                elif valid and "error" in values and "code" not in values:
                     result.append(None)
                 else:
                     valid = False
