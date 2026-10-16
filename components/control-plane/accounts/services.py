@@ -27,6 +27,7 @@ from .contracts import (
 )
 from .models import EditionNote, LoginBudget, SessionOwner, User, UserOperation
 from common.storage import storage_service
+from model_registry.key_cleanup import retire_owner_keys
 
 
 DUMMY_PASSWORD = make_password("not-a-real-account")
@@ -145,7 +146,14 @@ class DjangoIdentity:
 
     def logout(self, token):
         if token and isinstance(token, str) and len(token) <= 200:
-            SessionStore(session_key=token).delete()
+            with transaction.atomic():
+                owner_id = SessionOwner.objects.filter(session_id=token).values_list("user_id", flat=True).first()
+                if owner_id is None:
+                    owner = self.authenticated_user(token)
+                    owner_id = owner.pk if owner else None
+                if owner_id is not None:
+                    User.objects.select_for_update().filter(pk=owner_id).first()
+                SessionStore(session_key=token).delete()
 
     def users(self, query):
         page, size = pagination(query)
@@ -265,6 +273,7 @@ class DjangoIdentity:
                 raise IdentityError(404, "Account not found")
             if user.username == "first-admin":
                 raise IdentityError(403, "The first admin cannot be removed")
+            retire_owner_keys(user)
             revoke(user)
             user.delete()
         return {"removed": True}
