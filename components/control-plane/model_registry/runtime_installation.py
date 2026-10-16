@@ -125,10 +125,10 @@ class DjangoRuntimeInstallation:
             if (
                 approval is None
                 or row is None
-                or approval.key_choice not in ("none", "shared")
+                or approval.key_choice not in ("none", "shared", "personal")
             ):
                 raise RuntimeInstallationUnavailable(
-                    "Choose a current approved keyless or shared model"
+                    "Choose a current approved supported model"
                 )
             key_name, key_digest = "", ""
             if approval.key_choice == "shared":

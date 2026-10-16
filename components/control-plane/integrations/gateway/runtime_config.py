@@ -121,6 +121,32 @@ def selected_callback(host, model_id, fingerprint):
     return result
 
 
+def personal_exchange(host, model_id, fingerprint):
+    return {
+        "host": host,
+        "path": "/internal/runtime/installed-provider-token",
+        "cache": {"maxEntries": 0},
+        "additionalParams": {
+            "project_id": 'request.headers["x-keeplane-project-id"]',
+            "model_id": json.dumps(model_id),
+            "definition_fingerprint": json.dumps(fingerprint),
+        },
+        "policies": {
+            "backendAuth": {
+                "key": {
+                    "value": {"file": "/installed/callback-key"},
+                    "location": {
+                        "header": {
+                            "name": "x-keeplane-gateway-credential",
+                            "prefix": "",
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+
 def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
     if not isinstance(base, dict) or set(models) != set(targets) or not models:
         raise RuntimeInstallationUnavailable(
@@ -202,10 +228,24 @@ def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
                 },
             }
         )
+        if declaration["key_choice"] == "personal":
+            policies.append(
+                {
+                    "name": {"name": "keeplane-key-" + suffix, "namespace": ""},
+                    "target": deepcopy(target),
+                    "policy": {
+                        "backendAuth": {
+                            "oauthTokenExchange": personal_exchange(
+                                callback_host, model_id, declaration["fingerprint"]
+                            )
+                        }
+                    },
+                }
+            )
         # Backend transformations run after successful final auth and native
         # provider-key injection. Never carry caller headers to the provider.
         outbound = '{"content-type": "application/json"'
-        if declaration["key_choice"] == "shared":
+        if declaration["key_choice"] in ("shared", "personal"):
             outbound += ', "authorization": request.headers["authorization"]'
         outbound += "}"
         policies.append(
@@ -218,4 +258,3 @@ def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
             }
         )
     return result
-

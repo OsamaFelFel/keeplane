@@ -3,8 +3,14 @@
 from copy import deepcopy
 
 import pytest
-from integrations.gateway.runtime_config import RuntimeInstallationUnavailable
-from integrations.gateway.runtime_readback import require_applied_models
+from integrations.gateway.runtime_config import (
+    RuntimeInstallationUnavailable,
+    personal_exchange,
+)
+from integrations.gateway.runtime_readback import (
+    compiled_exchange,
+    require_applied_models,
+)
 
 
 def fixture():
@@ -153,3 +159,20 @@ def test_custom_completions_requires_the_exact_native_null_path(fault):
         del formats[0]["path"]
     with pytest.raises(RuntimeInstallationUnavailable):
         verify(dump, resources)
+
+
+@pytest.mark.parametrize("cache", [None, {}, {"maxEntries": 1}, {"maxEntries": False}])
+def test_personal_generated_exchange_must_explicitly_disable_cache(cache):
+    config = personal_exchange("app:3000", "demo", "a" * 64)
+    expected = compiled_exchange(config)
+    assert "cache" not in expected  # Native deliberately omits this from config_dump.
+    assert expected["subjectToken"] == {
+        "source": {"header": {"name": "authorization", "prefix": "Bearer "}},
+        "tokenType": "urn:ietf:params:oauth:token-type:access_token",
+    }
+    assert expected["grantType"] == "tokenExchange"
+    assert expected["inlineBackend"] == "app:3000"
+    assert expected["policies"][0]["backendAuth"]["key"]["value"] == "<redacted>"
+    config["cache"] = cache
+    with pytest.raises(RuntimeInstallationUnavailable):
+        compiled_exchange(config)

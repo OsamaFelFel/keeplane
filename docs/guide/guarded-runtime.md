@@ -3,7 +3,9 @@
 The managed local preview can expose a guarded model endpoint on loopback port
 5000. Start the normal preview and add an approved keyless or shared model in
 Models first. Only newly registered models with a stable native ID can be
-enrolled; existing name-only models are not rewritten.
+enrolled; existing name-only models are not rewritten. Registered Personal
+OpenAI/Anthropic models can also be enrolled once each developer has
+[added their own key](cli-provider-key-commands.md). Keys remain on the server.
 
 For browser CLI sign-in, supply an explicitly prepared OAuth-capable trial app
 image and the current first-party CLI. The default preview image does not include
@@ -34,7 +36,7 @@ changes through Models, rerun the opt-in command so a fresh gateway loads and
 verifies the new state. Health changes also stop this fixed enrollment until
 its declared and applied state match again.
 
-This is an opt-in managed local trial. Personal keys, virtual/fallback models,
+This is an opt-in managed local trial. Virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its
 current scope. The installer, isolated CLI journey and host installation/restart
 flow have native acceptance. The host check does not run the full preview
