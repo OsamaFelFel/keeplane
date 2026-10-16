@@ -21,6 +21,8 @@ def ask_model(body, catalog, gateway, file_config):
     approval = catalog.get(model)
     if approval is None:
         return 403, {"error": "This model has not been set up for Keeplane"}
+    if approval["key_choice"] == "personal":
+        return 503, {"error": "Developer-owned provider keys are not available for local requests yet"}
     status, registry = gateway.resources()
     if status != 200:
         return status, registry
