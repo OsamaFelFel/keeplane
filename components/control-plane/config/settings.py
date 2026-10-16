@@ -56,6 +56,10 @@ OAUTH2_PROVIDER = {
     "SCOPES": {"runtime": "Use Keeplane from the CLI"},
     "DEFAULT_SCOPES": ["runtime"],
     "ACCESS_TOKEN_GENERATOR": "accounts.cli_credentials.access_token",
+    "REFRESH_TOKEN_GENERATOR": "accounts.cli_credentials.refresh_token",
+    "ALWAYS_RELOAD_OAUTHLIB_CORE": True,
+    "COMPLIANT_BCP_RFC9700_AUTHZ_RESPONSE_ISS": True,
+    "OIDC_ISS_ENDPOINT": PUBLIC_ORIGIN.rstrip("/"),
     "PKCE_REQUIRED": True,
     "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
     "COMPLIANT_BCP_RFC9700_PASSWORD_GRANT": True,
@@ -70,6 +74,28 @@ OAUTH2_PROVIDER = {
     "REFRESH_TOKEN_EXPIRE_SECONDS": 8 * 60 * 60,
     "ALLOW_URI_WILDCARDS": False,
     "ALLOW_LOCALHOST_LOOPBACK": False,
+}
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.template.context_processors.csrf",
+            ]
+        },
+    }
+]
+# Toolkit/oauthlib debug messages include raw protocol requests and redirect URLs.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"oauth_null": {"class": "logging.NullHandler"}},
+    "loggers": {
+        name: {"handlers": ["oauth_null"], "propagate": False}
+        for name in ("oauthlib", "oauth2_provider")
+    },
 }
 MIDDLEWARE = [
     "common.middleware.StorageFailureMiddleware",

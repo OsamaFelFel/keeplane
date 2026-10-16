@@ -19,5 +19,26 @@ Run `test_cli_oauth_identity.py` with the separate trial dependencies and
 - Issuance refuses an account whose password changed after authorization. A
   database outage returns an unavailable response without exposing credentials.
 
-These cases exercise account integration; browser PKCE, device protocol, actual
-CLI sign-in and multi-replica checks follow in separate focused changes.
+`test_cli_oauth_browser.py` adds the actual Toolkit HTTP issuer:
+
+- Native browser sign-in, current-account consent and Cancel preserve the state
+  parameter; only approval creates a bound code. First-admin sign-in keeps Audit.
+- S256 and the exact loopback redirect are required. Wrong verifiers/redirects,
+  code replay, edited clients, duplicate fields and unsupported scope are refused.
+- Consent and existing browser writes retain CSRF. The dedicated form token
+  endpoint accepts only explicit code/refresh grants; cookies provide no authority.
+- Refresh rotation, old-token family replay protection, password/global/session
+  withdrawal, disabled accounts and missing bindings are checked through HTTP.
+- Withdrawal before the owner lock is observed from the live grant, even when
+  the password hash is unchanged. Binding failure rolls issuance back completely.
+- Trial-off and insecure public-origin settings refuse issuance. Unknown request
+  members cannot choose account, role, scope or resource authority.
+
+`test_cli_oauth_journey.py` runs the reviewed CLI over real WSGI HTTP: browser
+sign-in/consent, callback, private profile, current account, first-use registration,
+authorized catalog and exact logout. The controlled browser submits real CSRF
+forms but does not render the React app. A synthetic gateway supplies metadata
+only; no provider request occurs. Token/runtime requests carry no browser cookie.
+
+Device protocol, PostgreSQL concurrent issuance, a real browser and the complete
+protected coding journey remain separate acceptance checks.
