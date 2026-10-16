@@ -26,6 +26,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
+from .developer_keys import DeveloperKeyMissing
 from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
 from .models import ModelApproval, ProviderKeyChoice
 from .personal_dispatch import DjangoPersonalDispatch
@@ -202,6 +203,8 @@ def authorize_installed(request, *, selected=False):
                 body["model_id"],
                 definition_fingerprint=enrollment["fingerprint"],
             )
+    except DeveloperKeyMissing:
+        return Response({"error": "Add or replace your provider key"}, status=403)
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
     except (ModelPolicyUnavailable, StorageUnavailable):
