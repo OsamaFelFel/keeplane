@@ -148,6 +148,8 @@ only that volume, and is not privileged. Clusters enforcing the Restricted Pod
 Security profile need an explicit exception for this initializer. Managed gateway
 pods must leave `fsGroup` unset so their restarts do not widen key permissions.
 Upgrade the app and gateway together; an older app image lacks the initializer.
+If using `helm upgrade --reuse-values`, also pass
+`--set-json 'agentgateway-standalone.podSecurityContext.fsGroup=null'`.
 
 The [stack lock](../../deploy/local/stack.lock.json) pins trial images, chart and
 demo model. Local values are development inputs. The cluster's kindnet CNI does
