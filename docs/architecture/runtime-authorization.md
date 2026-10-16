@@ -284,6 +284,19 @@ and only the exact authenticated applied-state route is proxied.
 
 ## Private Personal key handoff
 
+The admin [Personal setup API](../guide/personal-model-setup.md) registers a fixed
+keyless cloud definition and checks provider reachability without borrowing a
+developer key. Its approval binds the complete raw definition and revision;
+developer-key validation remains a separate operation.
+
+```mermaid
+flowchart LR
+  A[Admin chooses Personal] --> R[Register keyless definition]
+  R --> P[Check provider without a key]
+  P --> V[Recheck complete definition]
+  V --> S[Save Personal approval]
+```
+
 `POST /internal/runtime/provider-token` is an internal adapter for the gateway's
 native token exchange. It requires the current private gateway credential and a
 bounded form containing the developer's explicit runtime credential, project,
