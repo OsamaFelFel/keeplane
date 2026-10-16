@@ -22,6 +22,7 @@ class PublicationUnavailable(ValueError):
 class PublicationTarget:
     gateway: object = field(repr=False)
     expected_wiring: dict = field(repr=False)
+    expected_effective: dict = field(repr=False)
 
 
 @storage_service
@@ -54,12 +55,17 @@ class DjangoNativePublication:
             ):
                 raise PublicationUnavailable("Declare a supported target")
             wiring = deepcopy(target.expected_wiring)
+            effective = deepcopy(target.expected_effective)
             if (
                 not isinstance(wiring, dict)
                 or not {"config", "gateways", "binds", "policies"} <= wiring.keys()
+                or not isinstance(effective, dict)
+                or not {"config", "gateways", "binds", "policies"} <= effective.keys()
             ):
-                raise PublicationUnavailable("Declare complete target wiring")
-            self.targets[name] = PublicationTarget(target.gateway, wiring)
+                raise PublicationUnavailable(
+                    "Declare complete file and effective wiring"
+                )
+            self.targets[name] = PublicationTarget(target.gateway, wiring, effective)
         self.factory, self.mode, self.primary_target = factory, mode, primary_target
         # This trusted constructor declaration, never approval/client metadata,
         # determines which existing gateway resources the service may change.
@@ -163,7 +169,13 @@ class DjangoNativePublication:
             != candidate.wiring_digest
         ):
             raise PublicationUnavailable("Primary wiring does not match the candidate")
-        observations = {name: {"state": "pending"} for name in self.targets}
+        observations = {
+            name: {
+                "state": "pending",
+                "baseline_digest": digest(target.expected_effective),
+            }
+            for name, target in self.targets.items()
+        }
         with transaction.atomic(durable=True):
             attempt = DefinitionPublication.objects.create(
                 generation_id=candidate.generation,
@@ -182,13 +194,16 @@ class DjangoNativePublication:
                 if fingerprint(candidate.model_id, [raw]) != candidate.raw_fingerprint:
                     raise PublicationUnavailable("Target raw definition changed")
                 initial[name] = raw["revision"]
+                effective = self._read(target, "/api/config/effective")
+                if digest(effective) != digest(target.expected_effective):
+                    raise PublicationUnavailable("Native effective baseline changed")
                 expected[name] = self._expected_effective(
-                    self._read(target, "/api/config/effective"), candidate
+                    target.expected_effective, candidate
                 )
             for name, target in self.targets.items():
                 self._still_prepared(candidate)
                 wiring = self._wiring(target)
-                observations[name] = {"state": "submitted", "wiring_digest": wiring}
+                observations[name].update(state="submitted", wiring_digest=wiring)
                 self._persist(attempt, "started", observations)
                 wrote = True
                 status, _ = target.gateway.request(
@@ -220,10 +235,11 @@ class DjangoNativePublication:
                     "protected_fingerprint": fingerprint(candidate.model_id, [row]),
                     "effective_digest": effective,
                     "wiring_digest": wiring,
+                    "baseline_digest": digest(target.expected_effective),
                 }
             self._still_prepared(candidate)
             self._persist(attempt, "readback_complete", observations)
-        except Exception:
+        except Exception:  # noqa: BLE001 - retain unknown native writes without secret errors
             self._persist(attempt, "partial" if wrote else "failed", observations)
             raise PublicationUnavailable("Publication could not be confirmed") from None
         return {"state": attempt.state, "targets": deepcopy(observations)}

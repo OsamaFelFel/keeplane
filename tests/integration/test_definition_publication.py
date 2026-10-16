@@ -30,7 +30,7 @@ class Target:
         )
         self.write_status, self.commit_error = 200, False
         self.after_write = lambda: None
-        self.fault, self.reads = "", []
+        self.fault, self.reads, self.untrusted_effective = "", [], False
 
     def request(self, path, body=None, *, method="GET", timeout, connection_retries):
         assert timeout == 5 and connection_retries == 0
@@ -59,7 +59,9 @@ class Target:
         effective.setdefault("llm", {}).setdefault("models", []).append(
             deepcopy(self.store["row"]["value"])
         )
-        if self.store["writes"] and self.fault == "effective":
+        if self.untrusted_effective or (
+            self.store["writes"] and self.fault == "effective"
+        ):
             effective["policies"] = [{"untrusted": PRIVATE}]
         return 200, effective
 
@@ -82,6 +84,8 @@ def trial(request, monkeypatch):
     factory.read_wiring = lambda: deepcopy(targets["a"].wiring)
     factory.validator.gateway = targets["a"]
     candidate = factory.prepare("model")
+    effective = deepcopy(wiring)
+    effective["llm"]["models"].append(deepcopy(raw_gateway.resource["value"]))
 
     def publisher(controlled=frozenset({"model"})):
         return DjangoNativePublication(
@@ -90,7 +94,7 @@ def trial(request, monkeypatch):
             primary_target="a",
             controlled_model_ids=controlled,
             targets={
-                name: PublicationTarget(target, wiring)
+                name: PublicationTarget(target, wiring, effective)
                 for name, target in targets.items()
             },
         )
@@ -117,6 +121,7 @@ def test_final_readbacks_keep_raw_and_native_fingerprints_separate(trial):
         )
         assert target.store["row"]["value"] == candidate.value
         assert target.wiring["llm"]["models"][0]["name"] == "customer-owned"
+        assert seen["baseline_digest"] != seen["effective_digest"]
     assert "auth" not in DefinitionGeneration.objects.get().envelope
 
 
@@ -141,7 +146,7 @@ def test_approval_ownership_flag_is_not_operator_control(trial):
     assert all(target.store["writes"] == 0 for target in targets.values())
 
 
-@pytest.mark.parametrize("change", ["raw", "wiring", "retired"])
+@pytest.mark.parametrize("change", ["raw", "wiring", "effective", "retired"])
 def test_failed_preflight_is_retained_without_native_writes(trial, change):
     factory, candidate, targets, publisher = trial
     service = publisher()
@@ -149,12 +154,16 @@ def test_failed_preflight_is_retained_without_native_writes(trial, change):
         targets["b"].store["row"]["revision"] += 1
     elif change == "wiring":
         targets["b"].wiring["policies"] = []
+    elif change == "effective":
+        # File configuration still matches. API-created topology is not trusted.
+        targets["b"].untrusted_effective = True
     else:
         factory.retire("model")
     with pytest.raises(PublicationUnavailable):
         service.publish(candidate)
     assert DefinitionPublication.objects.get().state == "failed"
     assert all(target.store["writes"] == 0 for target in targets.values())
+    assert PRIVATE not in json.dumps(DefinitionPublication.objects.get().targets)
 
 
 @pytest.mark.parametrize("committed", [False, True])

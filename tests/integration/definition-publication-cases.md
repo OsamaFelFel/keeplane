@@ -1,9 +1,13 @@
 # Record one native publication attempt
 
 `DjangoNativePublication` takes a prepared factory candidate, managed/existing
-mode, every configured target and its complete trusted configuration, a primary
+mode, every configured target and its complete trusted file and effective
+configuration baselines, a primary
 target, and an explicit operator-controlled model allowlist. Model approval and
 client flags cannot grant control of an existing gateway resource.
+The operator declares both baselines. The service refuses pre-existing API
+topology drift even when the file still matches, and derives the expected final
+configuration by replacing only the declared model in that trusted baseline.
 
 ```mermaid
 flowchart LR
@@ -25,7 +29,7 @@ are recorded as complete.
 | --- | --- |
 | Complete protected value is read back from every target | Keep each protected revision/fingerprint separately from the approved raw fingerprint. |
 | Approval says owned but operator did not declare control | No native write. |
-| Any raw definition, complete wiring or prepared candidate is stale | Retain failure; no preflight write. |
+| Any raw definition, file/effective baseline or prepared candidate is stale | Retain failure; no preflight write, including API policy drift with an unchanged file. |
 | PUT fails or may have committed | Retain partial/unknown state; never retry or roll back automatically. |
 | A final resource is missing, has an old revision, differs from the envelope, or changes other effective settings | Refuse completion. |
 | Approval, candidate or wiring changes after the first PUT | Stop the remaining attempt. |

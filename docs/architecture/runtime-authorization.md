@@ -109,6 +109,7 @@ readback and approval/key validation remain required before integration.
 
 The [internal publisher](../../tests/integration/definition-publication-cases.md)
 can submit that candidate to explicitly declared, operator-controlled targets.
+It requires trusted complete file and effective baselines before writing.
 It retains failed/partial attempts and rereads every target after all writes,
 recording each complete protected revision/fingerprint separately. This confirms
 management desired state; it changes no approvals or keys and enables no traffic.
