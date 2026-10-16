@@ -7,7 +7,7 @@ import os
 import re
 import sys
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 import uuid
 
@@ -43,14 +43,19 @@ def origin(server):
     return url.scheme + "://" + host + suffix
 
 
-def request(server, path, credential, *, method="GET", expected=200, payload=None):
+def request(server, path, credential, *, method="GET", expected=200, payload=None, query=None):
     server = origin(server)
     if not isinstance(credential, str) or re.fullmatch(r"[A-Za-z0-9._~-]{1,4096}", credential) is None:
         raise ConnectionError("Supply an opaque Keeplane session credential.")
     if not path.startswith("/api/runtime/") or "?" in path or "#" in path:
         raise ConnectionError("Use a supported runtime route.")
+    if query is not None and (not isinstance(query, dict) or any(
+            not isinstance(name, str) or not isinstance(value, str)
+            for name, value in query.items())):
+        raise ConnectionError("Use supported runtime query fields.")
+    target = path + ("?" + urlencode(query) if query else "")
     outgoing = Request(
-        server.rstrip("/") + path, method=method,
+        server.rstrip("/") + target, method=method,
         data=None if payload is None else json.dumps(payload).encode("utf-8"),
         headers={"Authorization": "Bearer " + credential, "Accept": "application/json"},
     )
