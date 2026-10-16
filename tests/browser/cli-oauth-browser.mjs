@@ -1,8 +1,9 @@
 import { chromium, expect } from '@playwright/test'
 
 // Invoked only by the optional isolated Django/CLI test, with synthetic accounts.
-const browser = await chromium.launch()
+let browser
 try {
+  browser = await chromium.launch()
   const context = await browser.newContext({ serviceWorkers: 'block' })
   const page = await context.newPage()
   const writes = []
@@ -30,5 +31,5 @@ try {
   console.error('The rendered CLI sign-in journey failed.')
   process.exitCode = 1
 } finally {
-  await browser.close()
+  await browser?.close()
 }
