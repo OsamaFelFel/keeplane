@@ -13,6 +13,13 @@ import sys
 import tempfile
 from urllib.parse import urlsplit
 
+if __package__:
+    from .instructions import snapshot
+    from .session_state import managed
+else:
+    from instructions import snapshot
+    from session_state import managed
+
 
 VERSION = "2.0.27"
 
@@ -41,12 +48,12 @@ def termination_requested():
         signal.signal(signal.SIGTERM, previous)
 
 
-def coding_turn(command, *, input, env, cwd, timeout, cancelled=None):
+def coding_turn(command, *, input, env, cwd, timeout, cancelled=None, pass_fds=()):
     if cancelled is not None and cancelled.requested:
         raise Cancelled
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, text=True, env=env, cwd=cwd,
-                               start_new_session=True)
+                               start_new_session=True, pass_fds=pass_fds)
     try:
         try:
             if cancelled is not None:
@@ -77,7 +84,7 @@ def coding_turn(command, *, input, env, cwd, timeout, cancelled=None):
             stream.close()
 
 
-def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None):
+def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None):
     """Use a disposable profile; the gateway remains responsible for authorization."""
     if os.name != "posix":
         raise ValueError("This prototype currently supports macOS and Linux.")
@@ -103,7 +110,15 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
     directory = str(Path(directory).expanduser().resolve(strict=True))
     if not Path(directory).is_dir():
         raise ValueError("The working directory must be a directory.")
-    with tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary:
+    instruction_snapshot = snapshot(directory, instructions) if instructions else None
+    if session is not None and (not isinstance(session, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session) is None):
+        raise ValueError("Provide a native session ID.")
+    host = "[" + url.hostname.lower() + "]" if ":" in url.hostname else url.hostname.lower()
+    if url.port and url.port != {"https": 443, "http": 80}[url.scheme]:
+        host += ":" + str(url.port)
+    gateway = url._replace(netloc=host, path=url.path.rstrip("/")).geturl()
+    binding = {"directory": directory, "gateway": gateway, "model": model, "version": VERSION}
+    with managed(state_dir, binding, session) as state, tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary:
         profile = Path(temporary)
         environment = {
             name: value
@@ -128,14 +143,24 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             "model": "keeplane/" + model,
             "share": "disabled", "snapshots": False,
         }
+        if instruction_snapshot:
+            config["plugins"] = [{
+                "package": str(Path(__file__).with_name("instruction_plugin").resolve()),
+                "options": instruction_snapshot,
+            }]
+        configuration = json.dumps(config, ensure_ascii=False)
+        if len(configuration.encode("utf-8")) > 120 * 1024:
+            raise ValueError("Serialized runtime configuration exceeds 120 KiB; choose smaller instruction files.")
         # The credential is absent from configuration, process arguments and disk files.
         environment.update({
             "KEEPLANE_RUNTIME_GRANT": grant,
-            "OPENCODE_CONFIG_CONTENT": json.dumps(config),
+            "OPENCODE_CONFIG_CONTENT": configuration,
             "OPENCODE_CONFIG_PROJECT_DISABLE": "1",
             "OPENCODE_DISABLE_MODELS_FETCH": "1",
             "OPENCODE_DISABLE_FFF": "1",
         })
+        if state:
+            environment["OPENCODE_DB"] = state.database
         (profile / "config" / "opencode").mkdir()
         (profile / "config" / "opencode" / "opencode.json").write_text(
             '{"update":"disable"}\n'
@@ -146,12 +171,15 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         )
         if version.returncode or version.stdout.strip().removeprefix("opencode ").removeprefix("v") != VERSION:
             raise ValueError("This prototype requires OpenCode V2 " + VERSION + ".")
+        command = [binary, "run", "--standalone", "--format", "json", "--model", "keeplane/" + model]
+        if session:
+            command += ["--session", session]
         result = coding_turn(
-            [binary, "run", "--standalone", "--format", "json",
-             "--model", "keeplane/" + model],
+            command,
             input=prompt, env=environment, cwd=directory,
             timeout=timeout,
             cancelled=cancelled,
+            pass_fds=(state.lock,) if state else (),
         )
         result.stdout = result.stdout.replace(grant, "[redacted]")
         result.stderr = result.stderr.replace(grant, "[redacted]")
@@ -173,6 +201,10 @@ def main():
     parser.add_argument("--model", required=True, help="Model ID registered in that gateway")
     parser.add_argument("--directory", type=Path, default=Path.cwd())
     parser.add_argument("--timeout", type=float, default=300)
+    parser.add_argument("--instructions", action="append", default=[], type=Path,
+                        help="Reviewed UTF-8 instruction file directly in --directory; repeatable")
+    parser.add_argument("--state-dir", type=Path, help="Private Keeplane-owned session directory outside the repository")
+    parser.add_argument("--session", help="Resume this native session ID from --state-dir")
     parser.add_argument("prompt")
     args = parser.parse_args()
     grant = os.environ.pop("KEEPLANE_GATEWAY_GRANT", None)
@@ -183,7 +215,9 @@ def main():
             grant = getpass.getpass("Keeplane gateway credential: ")
         with termination_requested() as cancelled:
             result = run(args.runtime, args.directory, args.gateway, args.model,
-                         args.prompt, grant, args.timeout, cancelled=cancelled)
+                         args.prompt, grant, args.timeout, cancelled=cancelled,
+                         instructions=args.instructions, state_dir=args.state_dir,
+                         session=args.session)
     except subprocess.TimeoutExpired:
         print("Coding turn timed out; review any edits before retrying.", file=sys.stderr)
         return 124
