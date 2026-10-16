@@ -33,7 +33,17 @@ at `types/local.rs:4052–4085` and stays bound. Provider groups must remain the
 direct endpoint; virtual-model fallback remains refused. This makes no lease,
 loaded-key or in-flight revocation claim.
 
-Native add/edit/remove and tamper controls remain required before connecting
-this reader to automatic publication or the installed gate. Legacy routing,
-compatible customer gateways and safe activation on every copy remain required
-integration work, rather than behavior implemented by this reader.
+The disposable native check used the pinned image and a real read-only
+Kubernetes ConfigMap projection. It passed all 25 checks: A stayed unchanged
+through B's raw definition and final/stripping policy add, edit and removal;
+changing A or shared guards invalidated it. The Pod did not restart and no
+provider requests were sent. A separate check applied two ConfigMap updates
+without restarting the Pod.
+
+Earlier checks are retained privately: an incorrect fixture create endpoint,
+the initially unsupported native UI shape, and host-file desired/applied policy
+divergence. The host reload cause is unconfirmed; no host hot-reload claim is made.
+
+Automatic publication, the installed gate, legacy routing, compatible customer
+gateways and safe activation on every copy still need integration. This reader
+alone enables no traffic.
