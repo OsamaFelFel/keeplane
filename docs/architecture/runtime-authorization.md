@@ -97,8 +97,21 @@ flowchart LR
 The keyless fixture models remove developer authorization and Keeplane context
 headers after their final check. Native forwarding keeps those headers by
 default. A provider needing a key must instead receive its server-selected
-credential without forwarding the developer session; that integration remains
+credential without forwarding the developer session; production integration remains
 separate work.
+
+The shared-key variant verifies that native backend authentication replaces the
+developer session with a synthetic server-held provider key after authorization.
+It also confirms that missing or unreadable active keys stop provider contact.
+Its bounded rotation diagnostic reports in-place replacement separately from a
+new model revision and key-file reference, using match booleans only. A valid
+local file alone does not attest the gateway's loaded value. Existing-mode fixture
+mounts are explicit test setup, not an implemented customer key-delivery API.
+
+The [actor-key check](../../tests/integration/native-actor-provider-key-cases.md)
+tests per-request header injection from a trusted final callback. Its synthetic
+server-only key map checks actor isolation and withdrawal; production personal-key
+storage and selection remain separate work.
 
 The [internal definition factory](../../tests/integration/definition-generation-factory-cases.md)
 persists a fresh generation before building a guarded model candidate. It keeps
@@ -120,3 +133,30 @@ provide the transport. These fixture checks do not install production isolation
 or policy publication, cover every route/fallback/replica, or select a release
 gateway. [The test cases](../../tests/integration/native-runtime-authorization-cases.md)
 list prerequisites and the command.
+
+The [fallback check](../../tests/integration/native-runtime-fallback-cases.md)
+attaches selected-model checks to each candidate section of a fixed native
+failover backend. A retry can reach the next provider only when its current
+class, approval and shared key allow it. This is test wiring, not product routing
+or production policy publication.
+
+The [protocol check](../../tests/integration/native-runtime-protocol-cases.md)
+checks SSE content and tool-call arguments through the same callback. A
+tool-result request needs a fresh policy decision; withdrawing model approval
+blocks the next valid request before provider contact. This does not execute tools
+or cancel a response already in progress.
+
+The [two-copy check](../../tests/integration/native-runtime-replica-cases.md)
+uses one PostgreSQL primary for both authorizers. It checks withdrawal on each
+serving path and isolates one copy's database link or authorizer without changing
+the other copy. This remains a disposable Docker capability trial.
+
+```mermaid
+flowchart LR
+  Client --> A[Gateway A and private authorizer]
+  Client --> B[Gateway B and private authorizer]
+  A --> Primary[Shared Keeplane PostgreSQL primary]
+  B --> Primary
+  A --> MockA[Private mock A]
+  B --> MockB[Private mock B]
+```

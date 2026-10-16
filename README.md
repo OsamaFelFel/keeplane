@@ -27,6 +27,7 @@ configuration, a short walkthrough, stopping and troubleshooting.
 | --- | --- |
 | `components/admin-ui/` | React application and shared browser assets |
 | `components/control-plane/` | Django API, accounts, model setup, classes and Audit |
+| `components/cli/` | Experimental local coding-runtime adapter |
 | `integrations/gateway/` | Gateway configuration |
 | `deploy/` | Local development and Kubernetes packaging |
 | `tests/` | Tests, fixtures, case descriptions and visual baselines |
