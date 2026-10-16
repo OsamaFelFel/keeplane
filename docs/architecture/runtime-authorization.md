@@ -281,3 +281,31 @@ provider credential. Unknown Keeplane headers, cookies, developer credentials
 and operator credentials never belong upstream. Native administrator tracing
 can contain credentials; port 15000 stays on the gateway's loopback interface,
 and only the exact authenticated applied-state route is proxied.
+
+## Private Personal key handoff
+
+`POST /internal/runtime/provider-token` is an internal adapter for the gateway's
+native token exchange. It requires the current private gateway credential and a
+bounded form containing the developer's explicit runtime credential, project,
+fixed model and full definition fingerprint. Browser cookies do not authenticate
+it. Current account/project/model policy and that owner's private key are checked
+on every call; the response is never cached.
+
+The provider key is returned only across this trusted server boundary. Keep the
+callback credential and response away from developer clients, proxies that log
+bodies and public gateway routes. The native transport must disable token caching.
+This endpoint does not attest installed routing, enroll Personal models or enable
+their public inference. Builder, applied-state verification and the installed gate
+still need integration. See [the cases](../../tests/integration/personal-transport-cases.md).
+
+```mermaid
+sequenceDiagram
+  participant G as Trusted gateway adapter
+  participant K as Private key handoff
+  participant P as Current account and model policy
+  participant S as Owner's private key store
+  G->>K: Private credential and fixed model metadata
+  K->>P: Recheck developer and authorized project/model
+  K->>S: Resolve current owner's definition-bound key
+  K-->>G: Provider key, no-store
+```
