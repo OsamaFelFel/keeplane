@@ -75,7 +75,6 @@ def test_current_account_failure_prevents_listing(api, monkeypatch, capsys, faul
 @pytest.mark.parametrize(
     "rows",
     [
-        [row(status="refused")],
         [row(status="healthy")],
         [row(status=[])],
         [row(required=1)],
@@ -129,3 +128,9 @@ def test_invalid_project_is_rejected_and_saved_credentials_redacted(
     assert command(api, monkeypatch) == 0
     output = capsys.readouterr()
     assert api.access not in output.out and api.refresh not in output.out
+
+
+def test_confirmed_refused_registration_is_visible(api, monkeypatch, capsys):
+    api.key_list = [row(status="refused")]
+    assert command(api, monkeypatch) == 0
+    assert json.loads(capsys.readouterr().out)["models"] == api.key_list

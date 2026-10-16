@@ -77,7 +77,7 @@ def main():
     key_list = key_commands.add_parser("list", help="List allowed models and your saved key status")
     key_list.add_argument("--profile", required=True)
     key_list.add_argument("--project", required=True)
-    for action in ("set", "status", "remove"):
+    for action in ("set", "status", "check", "remove"):
         command = key_commands.add_parser(action)
         command.add_argument("--profile", required=True)
         command.add_argument("--model", required=True)

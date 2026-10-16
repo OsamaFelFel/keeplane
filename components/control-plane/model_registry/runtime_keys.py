@@ -75,6 +75,19 @@ def key_store(request, model_id):
 @authentication_classes([RuntimeSessionAuthentication])
 @permission_classes([IsAuthenticated])
 def provider_keys(request):
+    return provider_key_response(request)
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["POST"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def check_provider_key(request):
+    return provider_key_response(request, check_saved=True)
+
+
+def provider_key_response(request, *, check_saved=False):
     if len(request.body) > 4096:
         return Response({"error": "Request is too large"}, status=413)
     if request.method == "GET":
@@ -114,7 +127,9 @@ def provider_keys(request):
             return Response({"error": "Enter a valid provider key"}, status=400)
     try:
         store = key_store(request, model_id)
-        if request.method == "PUT":
+        if check_saved:
+            result = store.check(model_id)
+        elif request.method == "PUT":
             result = store.put(model_id, key)
         elif request.method == "DELETE":
             result = store.remove(model_id)
@@ -164,16 +179,17 @@ def project_provider_keys(request, project_id):
                 choice not in ProviderKeyChoice.values for choice in choices.values()
             ):
                 raise ModelPolicyUnavailable()
-            added = set(
-                DeveloperProviderKey.objects.filter(owner=owner, model_id__in=allowed)
+            registrations = {
+                model_id: "refused" if refused else "added"
+                for model_id, refused in DeveloperProviderKey.objects.filter(owner=owner, model_id__in=allowed)
                 .exclude(key_name="")
-                .values_list("model_id", flat=True)
-            )
+                .values_list("model_id", "refused")
+            }
             rows = [
                 {
                     "id": name,
                     "own_key_required": choices[name] == ProviderKeyChoice.PERSONAL,
-                    "status": ("added" if name in added else "missing")
+                    "status": registrations.get(name, "missing")
                     if choices[name] == ProviderKeyChoice.PERSONAL
                     else None,
                 }

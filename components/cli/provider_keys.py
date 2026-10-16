@@ -95,7 +95,7 @@ def list_keys(profile_path, project_id):
                     or type(row["own_key_required"]) is not bool
                     or (
                         row["own_key_required"]
-                        and row["status"] not in {"added", "missing"}
+                        and row["status"] not in {"added", "missing", "refused"}
                     )
                     or (not row["own_key_required"] and row["status"] is not None)
                 ):
@@ -112,8 +112,8 @@ def list_keys(profile_path, project_id):
 
 
 def run(action, profile_path, model_id, *, key_stdin=False):
-    if action not in {"set", "status", "remove"} or (key_stdin and action != "set"):
-        raise ConnectionError("Choose keys set, status or remove.")
+    if action not in {"set", "status", "check", "remove"} or (key_stdin and action != "set"):
+        raise ConnectionError("Choose keys set, status, check or remove.")
     if (
         not isinstance(model_id, str)
         or not 0 < len(model_id) <= 256
@@ -134,9 +134,9 @@ def run(action, profile_path, model_id, *, key_stdin=False):
         try:
             body = request(
                 credential.issuer,
-                "/api/runtime/provider-keys",
+                "/api/runtime/provider-keys" + ("/check" if action == "check" else ""),
                 credential.access_token,
-                method={"set": "PUT", "status": "GET", "remove": "DELETE"}[action],
+                method={"set": "PUT", "status": "GET", "check": "POST", "remove": "DELETE"}[action],
                 payload=None
                 if action == "status"
                 else {
@@ -152,7 +152,7 @@ def run(action, profile_path, model_id, *, key_stdin=False):
                     or not isinstance(data, dict)
                     or set(data) != {"model_id", "status", "cleanup_pending"}
                     or data["model_id"] != model_id
-                    or data["status"] not in {"added", "missing"}
+                    or data["status"] not in {"added", "missing", "refused"}
                     or type(data["cleanup_pending"]) is not bool
                     or (action == "set" and data["status"] != "added")
                     or (action == "remove" and data["status"] != "missing")
@@ -161,7 +161,7 @@ def run(action, profile_path, model_id, *, key_stdin=False):
             except (ValueError, TypeError, RecursionError):
                 raise ConnectionError("Keeplane returned invalid key status.") from None
         except ConnectionError as error:
-            if action != "status" and error.status not in {400, 401, 403, 413, 415}:
+            if action in {"set", "remove"} and error.status not in {400, 401, 403, 413, 415}:
                 raise ConnectionError(
                     "The key change may have completed. Check keys status before retrying.",
                     error.status,
