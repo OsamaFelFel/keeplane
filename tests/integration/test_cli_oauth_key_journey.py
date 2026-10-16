@@ -32,6 +32,8 @@ def key_cli(signed_in_cli, provider, monkeypatch, tmp_path, capsys):  # noqa: F8
     from model_registry.fingerprints import fingerprint
     from model_registry.key_validation import DjangoProviderKeyValidator
 
+    # Host HTTP fixtures keep host ownership; deployment fixtures check UID 65532.
+    monkeypatch.setattr("integrations.gateway.keys.os.fchown", lambda *args: None)
     journey = signed_in_cli
     resource = {"id": journey.model_id, "revision": 1,
                 "value": {"name": journey.model_id, "provider": "openAI",

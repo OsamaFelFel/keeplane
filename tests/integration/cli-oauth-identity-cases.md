@@ -78,3 +78,5 @@ runtime key API. Compose that API with the issuer and reviewed CLI to run it:
 
 The fixture checks private file permissions and that command output contains no
 provider or account credential. It does not prove personal-key model dispatch.
+The host fixture retains the invoking user's file ownership; container UID checks
+belong to the separate deployment fixtures.
