@@ -112,6 +112,7 @@ def setup(provider, kind="openAI", timeout=2):
     ), gateway
 
 
+@pytest.mark.parametrize("explicit_id", [False, True])
 @pytest.mark.parametrize(
     "kind,path,limit",
     [
@@ -120,9 +121,14 @@ def setup(provider, kind="openAI", timeout=2):
     ],
 )
 def test_fixed_provider_request_issues_definition_bound_verification(
-    provider, kind, path, limit
+    provider, kind, path, limit, explicit_id
 ):
     validator, gateway = setup(provider, kind)
+    if explicit_id:
+        gateway.resource["value"]["id"] = "model"
+        ModelApproval.objects.update(
+            gateway_fingerprint=fingerprint("model", [gateway.resource])
+        )
     verified = validator("actor", "model", KEY)
     assert (verified.owner_id, verified.model_id) == ("actor", "model")
     assert verified.definition_fingerprint == fingerprint("model", [gateway.resource])
@@ -136,6 +142,36 @@ def test_fixed_provider_request_issues_definition_bound_verification(
         limit: 1,
     }
     assert call["anthropic_version"] == ("2023-06-01" if kind == "anthropic" else None)
+
+
+@pytest.mark.parametrize(
+    "native_id", ["other", "", None, 1, ["model"], {"id": "model"}]
+)
+def test_invalid_native_id_is_refused_before_provider_contact(provider, native_id):
+    validator, gateway = setup(provider)
+    original = fingerprint("model", [gateway.resource])
+    gateway.resource["value"]["id"] = native_id
+    current = fingerprint("model", [gateway.resource])
+    assert current != original
+    # A current approval cannot make a mismatched/malformed ID acceptable.
+    ModelApproval.objects.update(gateway_fingerprint=current)
+    with pytest.raises(ValueError, match="unsupported"):
+        validator("actor", "model", KEY)
+    assert not provider["calls"]
+
+
+def test_adding_matching_native_id_requires_fresh_approval(provider):
+    validator, gateway = setup(provider)
+    gateway.resource["value"]["id"] = "model"
+    with pytest.raises(ValueError, match="changed"):
+        validator("actor", "model", KEY)
+    assert not provider["calls"]
+    ModelApproval.objects.update(
+        gateway_fingerprint=fingerprint("model", [gateway.resource])
+    )
+    verified = validator("actor", "model", KEY)
+    assert verified.definition_fingerprint == fingerprint("model", [gateway.resource])
+    assert len(provider["calls"]) == 1
 
 
 @pytest.mark.parametrize(

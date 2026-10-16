@@ -19,5 +19,49 @@ Run `test_cli_oauth_identity.py` with the separate trial dependencies and
 - Issuance refuses an account whose password changed after authorization. A
   database outage returns an unavailable response without exposing credentials.
 
-These cases exercise account integration; browser PKCE, device protocol, actual
-CLI sign-in and multi-replica checks follow in separate focused changes.
+`test_cli_oauth_browser.py` adds the actual Toolkit HTTP issuer:
+
+- Native browser sign-in, current-account consent and Cancel preserve the state
+  parameter; only approval creates a bound code. First-admin sign-in keeps Audit.
+- S256 and the exact loopback redirect are required. Wrong verifiers/redirects,
+  code replay, edited clients, duplicate fields and unsupported scope are refused.
+- Consent and existing browser writes retain CSRF. The dedicated form token
+  endpoint accepts only explicit code/refresh grants; cookies provide no authority.
+- Refresh rotation, old-token family replay protection, password/global/session
+  withdrawal, disabled accounts and missing bindings are checked through HTTP.
+- Withdrawal before the owner lock is observed from the live grant, even when
+  the password hash is unchanged. Binding failure rolls issuance back completely.
+- Trial-off and insecure public-origin settings refuse issuance. Unknown request
+  members cannot choose account, role, scope or resource authority.
+
+`test_cli_oauth_journey.py` runs the reviewed CLI over real WSGI HTTP: browser
+sign-in/consent, callback, private profile, current account, first-use registration,
+authorized catalog and exact logout. The controlled browser submits real CSRF
+forms but does not render the React app. A synthetic gateway supplies metadata
+only; no provider request occurs in that case. Token/runtime requests carry no browser cookie.
+
+Its optional native coding case uses the same real browser issuer and private
+profile, then actual V2 read/edit tools and resume. A synthetic model fixture
+calls the actual Django private authorizer for every model request. Withdrawing
+approval after the CLI precheck stops dispatch; logout also rejects a copied old
+token. Private history contains no account or gateway credential. This fixture
+does not implement or prove the installed native gateway listener.
+
+Device protocol, PostgreSQL concurrent issuance, a real browser and the complete
+installed native gateway journey remain separate acceptance checks. Set both
+`KEEPLANE_CLI_SOURCE` to the reviewed coding CLI repository snapshot and
+`KEEPLANE_OPENCODE_V2_BIN` to the pinned runtime to run the native case.
+
+`test_cli_oauth_key_journey.py` uses a real browser-issued CLI profile against the
+runtime key API. Compose that API with the issuer and reviewed CLI to run it:
+
+- Add, read, replace and remove a personal key. Only validation contacts the
+  synthetic provider; status reads do not. Replacing a key removes its old file.
+- A changed model definition prevents another validation request while allowing
+  the developer to read and remove their old key.
+- Logout after initial request authentication is checked again under the owner
+  lock, before contacting the provider or storing a key. The access and refresh
+  pair are withdrawn, and the failed command retains the local profile.
+
+The fixture checks private file permissions and that command output contains no
+provider or account credential. It does not prove personal-key model dispatch.

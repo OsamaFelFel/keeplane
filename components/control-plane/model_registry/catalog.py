@@ -2,8 +2,9 @@
 
 from common.storage import settings_change, storage_service
 from data_classes.models import DataClass
+from django.db.models import Exists, OuterRef
 
-from .models import ModelApproval, ProviderKeyChoice
+from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
 
 
 @storage_service
@@ -21,6 +22,30 @@ class DjangoModelCatalog:
                 "owned_by_keeplane",
             )
             .first()
+        )
+
+    def personal_key_count(self, model_id, expected_fingerprint):
+        """Count current-bound active-owner registrations, returning no identities."""
+        if (
+            not isinstance(expected_fingerprint, str)
+            or len(expected_fingerprint) != 64
+            or any(c not in "0123456789abcdef" for c in expected_fingerprint)
+        ):
+            return 0
+        current = ModelApproval.objects.filter(
+            pk=OuterRef("model_id"),
+            key_choice=ProviderKeyChoice.PERSONAL,
+            gateway_fingerprint=expected_fingerprint,
+        )
+        return (
+            DeveloperProviderKey.objects.filter(
+                model_id=model_id,
+                owner__is_active=True,
+                validation_fingerprint=expected_fingerprint,
+            )
+            .exclude(key_name="")
+            .filter(Exists(current))
+            .count()
         )
 
     def approve(

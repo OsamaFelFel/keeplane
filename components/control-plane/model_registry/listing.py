@@ -84,9 +84,8 @@ def list_models(get_models, get_resources, catalog, file_config, runner_urls):
         details = model_details(model_id, resources, runner_urls)
         if catalog:
             approval = catalog.get(model_id)
-            if approval and approval["gateway_fingerprint"] != fingerprint(
-                model_id, raw_resources, file_config
-            ):
+            current = fingerprint(model_id, raw_resources, file_config)
+            if approval and approval["gateway_fingerprint"] != current:
                 approval = None
             details.update(
                 {
@@ -100,5 +99,9 @@ def list_models(get_models, get_resources, catalog, file_config, runner_urls):
                     else False,
                 }
             )
+            if approval and approval["key_choice"] == "personal":
+                details["developer_key_count"] = catalog.personal_key_count(
+                    model_id, current
+                )
         models.append(details)
     return 200, {"models": models}

@@ -27,6 +27,7 @@ class Credential:
     actor_id: str
     access_token: str
     refresh_token: str
+    client_id: str = "keeplane-cli"
 
     def __repr__(self):
         return "<Keeplane credential: redacted>"
@@ -43,11 +44,19 @@ def private_file(info):
 
 def decode(data):
     try:
-        if (
+        fields = {"format", "issuer", "actor_id", "access_token", "refresh_token"}
+        if isinstance(data, dict) and data.get("format") == "keeplane-credential-v1":
+            if set(data) != fields:
+                raise ValueError
+            data = dict(data, client_id="keeplane-cli")
+        elif (
             not isinstance(data, dict)
-            or set(data)
-            != {"format", "issuer", "actor_id", "access_token", "refresh_token"}
-            or data["format"] != "keeplane-credential-v1"
+            or data.get("format") != "keeplane-credential-v2"
+            or set(data) != fields | {"client_id"}
+        ):
+            raise ValueError
+        if (
+            data["client_id"] not in {"keeplane-cli", "keeplane-cli-device"}
             or data["issuer"] != origin(data["issuer"])
             or data["actor_id"] != str(uuid.UUID(data["actor_id"]))
             or not isinstance(data["access_token"], str)
@@ -59,6 +68,15 @@ def decode(data):
         return Credential(**{key: data[key] for key in Credential.__annotations__})
     except (ValueError, TypeError, AttributeError, ConnectionError):
         raise ProfileError("Credential profile is invalid.") from None
+
+
+def unique(pairs):
+    result = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError
+        result[name] = value
+    return result
 
 
 class Profile:
@@ -80,12 +98,12 @@ class Profile:
         if len(raw) > 4096:
             raise ProfileError("Credential profile is invalid.")
         try:
-            return decode(json.loads(raw))
+            return decode(json.loads(raw, object_pairs_hook=unique))
         except (ValueError, RecursionError):
             raise ProfileError("Credential profile is invalid.") from None
 
     def save(self, credential):
-        data = dict(format="keeplane-credential-v1", **vars(credential))
+        data = dict(format="keeplane-credential-v2", **vars(credential))
         decode(data)
         payload = json.dumps(data).encode()
         if len(payload) > 4096:

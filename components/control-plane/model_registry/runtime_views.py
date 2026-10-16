@@ -14,6 +14,8 @@ from rest_framework.response import Response
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
 from accounts.cli_credentials import RuntimeIdentity
+from accounts.models import User
+from django.db import transaction
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from projects.access import organization_project_access
@@ -62,7 +64,10 @@ def session(request):
         )
     if request.body:
         return Response({"error": "Send an empty logout request"}, status=400)
-    RuntimeIdentity(IDENTITY).logout(request.auth)
+    with transaction.atomic():
+        User.objects.select_for_update().filter(pk=request.user.pk).first()
+        RuntimeSessionAuthentication().authenticate(request)
+        RuntimeIdentity(IDENTITY).logout(request.auth)
     return Response(status=204)
 
 

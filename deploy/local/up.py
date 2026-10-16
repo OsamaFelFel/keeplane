@@ -5,6 +5,7 @@ import hashlib
 import http.cookiejar
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -168,11 +169,25 @@ def main():
     parser.add_argument("--context-size", type=int, default=os.environ.get("QWEN_CONTEXT_TOKENS", "4096"),
                         help="Bundled demo runner context, in tokens (default: 4096)")
     parser.add_argument("--verbose", action="store_true", help="Show dependency and container build output")
+    parser.add_argument("--runtime-model", action="append", default=[],
+                        help="Opt in to guarded coding access for an exact approved keyless/shared model ID; repeat for more models")
+    parser.add_argument("--runtime-port", type=int, default=5000,
+                        help="Guarded loopback port when --runtime-model is supplied (default: 5000)")
+    parser.add_argument("--runtime-app-image",
+                        help="Explicit OAuth-capable trial app image for guarded CLI sign-in; does not install dependencies")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
     if args.context_size < 512:
         parser.error("--context-size must be at least 512 tokens")
+    if not 1 <= args.runtime_port <= 65535 or (args.runtime_model and args.runtime_port == args.port):
+        parser.error("--runtime-port must be between 1 and 65535 and different from --port")
+    if len(args.runtime_model) > 32 or len(set(args.runtime_model)) != len(args.runtime_model):
+        parser.error("Declare up to 32 unique --runtime-model IDs")
+    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}", value) for value in args.runtime_model):
+        parser.error("Declare exact supported --runtime-model IDs")
+    if args.runtime_app_image and not args.runtime_model:
+        parser.error("--runtime-app-image requires at least one --runtime-model")
     RUNTIME = Path(args.runtime_dir).expanduser().resolve()
     print("Checking Python, Node.js and Docker…", flush=True)
     prerequisites(args.verbose)
@@ -189,6 +204,13 @@ def main():
     base = f"http://127.0.0.1:{args.port}"
     print("Checking sign-in and the model gateway…", flush=True)
     wait_preview(base)
+    if args.runtime_model:
+        from guarded_runtime import install
+        print("Installing guarded model access on a fresh managed gateway…", flush=True)
+        runtime_endpoint = install(REPO, RUNTIME, args.runtime_model, args.runtime_port,
+                                   env={**os.environ, **dict(line.split("=", 1) for line in (RUNTIME / ".env").read_text().splitlines())},
+                                   wait_ready=lambda: wait_preview(base), app_image=args.runtime_app_image)
+        print(f"Guarded model endpoint: {runtime_endpoint}")
     print(f"Keeplane is ready: {base}")
     print("First admin username: first-admin")
     print(f"First admin password file: {RUNTIME / 'first-admin-password'}")

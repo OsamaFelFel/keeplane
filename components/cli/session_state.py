@@ -6,13 +6,32 @@ import json
 import os
 import sqlite3
 import stat
+import uuid
 from contextlib import closing, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import quote
 
+if __package__:
+    from .server_connection import ConnectionError, origin
+else:
+    from server_connection import ConnectionError, origin
+
 FORMAT = "keeplane-opencode-session-v1"
 FILES = {"binding.json", "lock", "runtime.db", "runtime.db-wal", "runtime.db-shm"}
+
+
+def account_binding(value):
+    try:
+        if (not isinstance(value, dict)
+                or set(value) != {"issuer", "actor_id", "project_id"}
+                or value["issuer"] != origin(value["issuer"])
+                or any(value[key] != str(uuid.UUID(value[key]))
+                       for key in ("actor_id", "project_id"))):
+            raise ValueError
+    except (ConnectionError, ValueError, TypeError, AttributeError):
+        raise ValueError("Session account binding is unavailable.") from None
+    return value
 
 
 def private_file(info):
@@ -78,12 +97,18 @@ def marker(directory):
         or set(value) != {"format", "binding"}
         or value["format"] != FORMAT
         or not isinstance(value["binding"], dict)
-        or set(value["binding"]) != {"directory", "gateway", "model", "version"}
+        or set(value["binding"]) not in (
+            {"directory", "gateway", "model", "version"},
+            {"directory", "gateway", "model", "version", "issuer", "actor_id", "project_id"},
+        )
         or any(
             not isinstance(item, str) or not item for item in value["binding"].values()
         )
     ):
         raise ValueError("Session binding is unavailable.")
+    binding = value["binding"]
+    if "issuer" in binding:
+        account_binding({key: binding[key] for key in ("issuer", "actor_id", "project_id")})
     return value["binding"]
 
 
@@ -172,7 +197,7 @@ def managed(path, binding, session):
             os.fsync(directory)
         elif marker(directory) != binding:
             raise ValueError(
-                "Session directory, gateway, model or runtime version changed."
+                "Session directory, gateway, model, runtime version, account or project changed."
             )
         check(root, directory, session, binding)
         if session is not None and (root / "runtime.db").stat().st_size == 0:

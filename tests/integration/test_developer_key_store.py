@@ -180,15 +180,12 @@ def test_rollback_and_unlink_failure_explicitly_report_unreferenced_file(stores,
     assert [path.read_text() for path in root.iterdir()] == [KEY]  # Operator recovery required.
 
 
-def test_owner_deletion_requires_key_cleanup(stores, domain_services):
-    from django.db.models.deletion import ProtectedError
+def test_owner_deletion_refuses_an_unknown_storage_directory(stores, domain_services, monkeypatch):
     (alice, _), root = stores
     alice.put("model", KEY)
-    # No HTTP key admission exists. Account-removal integration is a prerequisite;
-    # until then PROTECT prevents silently orphaning a provider credential.
-    with pytest.raises(StorageUnavailable) as error:
+    monkeypatch.delenv("PROVIDER_KEY_DIR", raising=False)
+    with pytest.raises(StorageUnavailable, match="must be configured"):
         domain_services.identity.delete_user(str(alice.owner_id))
-    assert isinstance(error.value.__cause__, ProtectedError)
     assert alice.status("model")["status"] == "added"
     alice.remove("model")
     assert domain_services.identity.delete_user(str(alice.owner_id)) == {"removed": True}

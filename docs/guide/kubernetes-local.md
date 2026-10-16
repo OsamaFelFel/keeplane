@@ -20,7 +20,8 @@ deploy/local/kind-up.sh
 ```
 
 The script builds the UI and app, loads images into kind, and starts the models
-and gateways. Run it again after changing the app or chart. It uses
+and gateways. It checks tools, Node.js and Docker before creating credentials or
+building. Run it again after changing the app or chart. It uses
 `/private/tmp/keeplane-kind-kubeconfig` rather than your default Kubernetes
 context. Set `KEEPLANE_KUBECONFIG` to use another kubeconfig file, or
 `KEEPLANE_HELM_BIN` if Helm is outside `PATH`.
@@ -49,9 +50,8 @@ Close that command when finished. These loopback addresses are accessible from
 your own computer. The managed port 13000 comes from
 [`deploy/local/kind.yaml`](../../deploy/local/kind.yaml); the existing app's
 browser port is the first number in `13001:3000` above.
-For another managed-app port, use the same port-forward pattern with namespace
-`keeplane`, `service/keeplane-app` and a free host port. This avoids recreating
-the cluster and its volumes.
+To use another port, follow [Change the browser port](#change-the-browser-port)
+below. The app must also trust the new browser address for sign-in and changes.
 
 In **Models and routing**, choose **Add model** → **Local runner**:
 
@@ -80,8 +80,8 @@ kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane logs depl
 - **Missing model:** run the Docker launcher to obtain the pinned file.
 - **Checksum mismatch:** move the reported model file aside, then run the Docker
   launcher to download it again. Both launchers refuse a different file.
-- **Port-forward fails:** check that the existing app pod is ready and the host
-  port is free. Change the first port number if needed.
+- **Port-forward fails:** check that the app pod is ready and the host port is
+  free. Follow the port-change steps below if you need another port.
 - **Gateway unavailable:** inspect its pods and logs. Keeplane's UI remains
   available to show the gateway warning; `/health` reports dependency health.
 - **Raw gateway UI returns 401:** gateway management requires its private admin
@@ -98,6 +98,40 @@ To run Kubernetes application checks, prepare the Python environment in
 This runs the kind application group. Chart, network and deployment checks have
 separate groups in the testing guide. Reusable procedures live in
 [Kubernetes cases](../../tests/e2e/kubernetes-cases.md).
+
+## Change the browser port
+
+Port-forwarding changes how the browser reaches Keeplane. The app also checks
+the browser's origin (scheme, host and port) before accepting sign-in or changes.
+Changing only the port-forward can load the page but leave those actions blocked.
+
+For example, to add port 14000 to the managed trial, first update its trusted
+addresses. This preserves the default addresses and the installed release's
+other values, including its image and Secret names. If you already added custom
+aliases, include them in the comma-separated list too.
+
+```sh
+helm upgrade keeplane deploy/helm/keeplane \
+  --kubeconfig /private/tmp/keeplane-kind-kubeconfig --namespace keeplane \
+  --reuse-values \
+  --set-string app.localTrial.publicOrigin=http://127.0.0.1:14000 \
+  --set-string 'app.localTrial.publicOriginAliases=http://127.0.0.1:13000\,http://localhost:13000\,http://localhost:14000' \
+  --wait
+kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane \
+  port-forward service/keeplane-app 14000:3000 --address 127.0.0.1
+```
+
+Keep the second command running and open <http://127.0.0.1:14000>. For the
+existing-gateway trial, replace the release and namespace with
+`keeplane-existing`, the Service with `keeplane-existing-app`, and the original
+port 13000 with 13001 in the alias list. Choose a different free port if needed.
+The backslashes inside the quoted alias value let Helm accept the commas.
+
+These settings become `PUBLIC_ORIGIN` and `PUBLIC_ORIGIN_ALIASES` in the app.
+Aliases are explicit addresses, without paths or trailing slashes. No cluster
+recreation is needed. Closing the port-forward leaves the trusted addresses in
+place; rerunning `kind-up.sh` restores the checked-in local values. Keep a local
+values override if you want to reapply your addresses after setup.
 
 ## Keep data and understand the limits
 

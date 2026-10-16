@@ -45,17 +45,29 @@ class PublicSchemeMiddleware(MiddlewareMixin):
 
 class BrowserCsrfMiddleware(CsrfViewMiddleware):
     def process_view(self, request, callback, callback_args, callback_kwargs):
+        from accounts import oauth_views
+
+        if (
+            callback is oauth_views.token
+            and settings.CLI_OAUTH_ENABLED
+            and request.method == "POST"
+            and request.content_type == "application/x-www-form-urlencoded"
+        ):
+            # Only the dedicated grant endpoint: cookies never authenticate it.
+            return None
         if getattr(callback, "runtime_bearer_only", False):
             from accounts.authentication import RuntimeSessionAuthentication
+            from model_registry.runtime_callback import OperatorValidationAuthentication
             from model_registry.personal_transport import GatewayTransportAuthentication
             from rest_framework.permissions import IsAuthenticated
 
             view = getattr(callback, "cls", None)
             if tuple(getattr(view, "authentication_classes", ())) in (
                 (RuntimeSessionAuthentication,),
+                (OperatorValidationAuthentication,),
                 (GatewayTransportAuthentication,),
             ) and tuple(getattr(view, "permission_classes", ())) == (IsAuthenticated,):
-                # These views accept explicit header credentials only, never
+                # These views accept an explicit bearer credential only, never
                 # ambient browser cookies. DRF still authenticates every call.
                 return None
         # DRF's view exemption must not exempt anonymous sign-in or cookie writes.
