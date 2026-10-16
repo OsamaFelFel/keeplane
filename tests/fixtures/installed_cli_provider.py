@@ -16,6 +16,12 @@ class InstalledCliProvider(Handler):
     continued = 0
     failures: ClassVar[list[str]] = []
 
+    def details(self):
+        return {}
+
+    def respond(self, body):
+        return False
+
     def do_GET(self):
         if self.path != "/fixture/status":
             self.send_error(404)
@@ -26,6 +32,7 @@ class InstalledCliProvider(Handler):
                 "tools": self.calls,
                 "continued": self.continued,
                 "failures": self.failures,
+                **self.details(),
             }
         ).encode()
         self.send_response(200)
@@ -82,6 +89,8 @@ class InstalledCliProvider(Handler):
                                 and arguments["newString"] == "return a + b"
                             )
                     type(self).continued += 1
+            if self.respond(body):
+                return
         except (AssertionError, ValueError, KeyError, TypeError):
             self.failures.append("provider-oracle")
             self.send_error(500, "Synthetic provider oracle failed")
