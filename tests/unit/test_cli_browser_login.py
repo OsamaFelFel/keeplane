@@ -14,7 +14,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 import pytest
 
-from components.cli import browser_login
+from components.cli import browser_login, keeplane
 from components.cli.credential_profile import Profile, ProfileError, opened
 from components.cli.server_connection import ConnectionError, NoRedirects
 
@@ -146,16 +146,18 @@ def issuer():
         thread.join(timeout=3)
 
 
+@pytest.mark.parametrize("unified", [False, True])
 def test_actual_command_pkce_current_actor_private_profile_and_no_secret_output(
-    issuer, tmp_path, monkeypatch, capsys
+    issuer, tmp_path, monkeypatch, capsys, unified
 ):
     path = tmp_path / "profile"
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
     monkeypatch.setattr(browser_login.webbrowser, "open", issuer.browser)
+    prefix = ["keeplane", "login"] if unified else ["browser_login"]
     monkeypatch.setattr(
-        "sys.argv", ["browser_login", "--server", issuer.url, "--profile", str(path)]
+        "sys.argv", [*prefix, "--server", issuer.url, "--profile", str(path)]
     )
-    assert browser_login.main() == 0
+    assert (keeplane.main if unified else browser_login.main)() == 0
     with opened(path) as profile:
         credential = profile.load()
         assert (credential.issuer, credential.actor_id) == (issuer.url, issuer.actor)
