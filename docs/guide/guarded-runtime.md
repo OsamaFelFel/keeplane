@@ -36,7 +36,8 @@ its declared and applied state match again.
 
 This is an opt-in managed local trial. Personal keys, virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its
-current scope. The actual installer and isolated CLI journey have native
-acceptance; a complete host launcher run remains unverified. See the
+current scope. The installer, isolated CLI journey and host installation/restart
+flow have native acceptance. The host check does not run the full preview
+bootstrap in `up.py`. See the
 [operator contract](../architecture/runtime-authorization.md#managed-operator-contract)
 for enrollment fields, private callbacks and applied-state checks.
