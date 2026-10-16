@@ -58,11 +58,6 @@ class QuietHandler(WSGIRequestHandler):
 
 
 @pytest.fixture
-def cli_browser_driver():
-    return None
-
-
-@pytest.fixture
 def signed_in_cli(
     browser_flow,  # noqa: F811 - shared pytest fixture imported above.
     monkeypatch,
