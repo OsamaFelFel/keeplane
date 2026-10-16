@@ -39,3 +39,8 @@ class DeveloperProviderKey(models.Model):
                 fields=("owner", "model_id"), name="developer_key_owner_model_unique"
             )
         ]
+
+
+class PendingProviderKeyDeletion(models.Model):
+    directory = models.TextField()
+    key_name = models.CharField(max_length=36)

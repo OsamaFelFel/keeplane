@@ -1,21 +1,20 @@
 """Real Keeplane APIs on two app copies and one disposable PostgreSQL database."""
 
-import pytest
-
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
 import re
-from pathlib import Path
 import secrets
 import shutil
 import subprocess
 import tempfile
 import time
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 POSTGRES = (
@@ -49,7 +48,7 @@ def run_cases():
     image = project + ":local"
     base_tag = project + ":base"
     result = {
-        "time_utc": datetime.now(timezone.utc).isoformat(),
+        "time_utc": datetime.now(timezone.utc).isoformat(),  # noqa: UP017 - standalone Python 3.9 fixture
         "project": project,
         "postgres_image": POSTGRES,
         "cases": [],
@@ -66,7 +65,7 @@ def run_cases():
 
     def run(command, input_data=None, check=True):
         item = subprocess.run(
-            command, input=input_data, capture_output=True, timeout=420
+            command, input=input_data, capture_output=True, timeout=420, check=False
         )
         if check and item.returncode:
             # Keep enough context to diagnose CI failures, with fixture secrets removed.
@@ -133,7 +132,11 @@ def run_cases():
         shutil.copyfile(
             ROOT / "tests/fixtures/postgres_gateway.py", build / "fixture.py"
         )
+        # These synthetic inputs become root-owned COPY files in the image.
+        # Keep them readable by the app even when the caller uses umask 077.
+        (build / "fixture.py").chmod(0o644)
         (build / "fixture-config.yaml").write_text("fixture: postgres-api\n")
+        (build / "fixture-config.yaml").chmod(0o644)
         source = hashlib.sha256()
         for path in sorted((build / "app").rglob("*.py")):
             source.update(
@@ -173,7 +176,9 @@ def run_cases():
             + "\nUSER 0\n"
             + ("" if args.app_image else "COPY --from=driver /deps /deps\n")
             + "COPY app /app/\nCOPY tests /tests/\nCOPY fixture.py /fixture.py\n"
-            "COPY fixture-config.yaml /fixture-config.yaml\nENV PYTHONPATH=/deps:/app:/\n"
+            "COPY fixture-config.yaml /fixture-config.yaml\n"
+            # Source-only fixture trees must be traversable by non-root workers.
+            "RUN chmod -R a+rX /app /tests\nENV PYTHONPATH=/deps:/app:/\n"
         )
         environment = {
             "KEEPLANE_DATABASE_HOST": "database",
@@ -280,6 +285,19 @@ def run_cases():
                 action,
             )
             return json.loads(output.stdout)
+
+        def owner_key_suite():
+            output = dc(
+                "exec", "-T", "--user", "0", "app-a", "python",
+                "/tests/fixtures/postgres_owner_keys.py",
+            )
+            observed = json.loads(output.stdout)
+            assert [item["case"] for item in observed["cases"]] == [
+                "PGKEY-01", "PGKEY-02", "PGKEY-03", "PGKEY-04"
+            ]
+            assert all(item["verdict"] == "pass" for item in observed["cases"])
+            assert observed["fixture_records_and_files_removed"]
+            return observed
 
         def record(identifier, action):
             result["failed_case"] = identifier
@@ -462,8 +480,9 @@ def run_cases():
             record("PGAPI-13", lambda: probe("rotation"))
             record("PGAPI-14", lambda: probe("ascii-usernames"))
             record("PGAPI-15", lambda: probe("class-invariants"))
+            record("PGAPI-18", owner_key_suite)
             result["completed"] = True
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - retain fixture failure before owned cleanup
             result["fixture_error"] = type(error).__name__ + ": " + str(error)
         finally:
             cleanup = dc("down", "--volumes", "--remove-orphans", check=False)
