@@ -1,7 +1,8 @@
 # Authorize each fallback model
 
 This disposable native trial uses a fixed two-model alias. The approved Private
-model deliberately returns 503. A native retry then selects Public. Keeplane
+model deliberately returns 503. A native retry with an explicit 500 ms backoff
+then selects Public. Keeplane
 checks the actual selected model before either provider receives the task.
 The alias and its first candidate are explicit test setup, not a product routing
 rule or virtual-model approval contract.
@@ -17,6 +18,19 @@ Every case runs in managed and existing-gateway modes with real Django records,
 synthetic keys and local mocks. Provider contact and key use are recorded as
 model names and booleans only. Developer sessions and Keeplane context headers
 never reach either provider. Unrelated native configuration stays intact.
+
+Before sending the task, the fixture waits up to ten seconds for `/v1/models`
+to list its active concrete models and fallback alias. This read does not contact
+a provider or consume Private's deliberate 503. The task itself is sent once.
+Safe status, selected-model decisions and provider-contact observations are saved
+before assertions, so a failure keeps its diagnostics. The report marks a pass
+only after every assertion succeeds; it contains no credentials or task content.
+
+Native eviction runs asynchronously. A preserved check without backoff selected
+Private twice and returned 503 even though every authorization check allowed it.
+This fixture tests fallback with the configured backoff; immediate fallback is
+not guaranteed or claimed. It keeps the same exact selected-model and provider
+contact checks.
 
 Guards attached only to `llm:model:<id>` do not protect the generated failover
 backend. This pinned gateway exposes each candidate as a section of

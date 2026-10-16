@@ -108,6 +108,22 @@ new model revision and key-file reference, using match booleans only. A valid
 local file alone does not attest the gateway's loaded value. Existing-mode fixture
 mounts are explicit test setup, not an implemented customer key-delivery API.
 
+The [actor-key check](../../tests/integration/native-actor-provider-key-cases.md)
+tests per-request header injection from a trusted final callback. Its synthetic
+server-only key map checks actor isolation and withdrawal; production personal-key
+storage and selection remain separate work.
+
+The [definition-generation check](../../tests/integration/native-definition-binding-cases.md)
+stops a stale selected resource before key delivery, even when its model ID and
+provider address match the current one. It depends on a controlled publisher
+using a fresh generation for every complete definition; the native gateway does
+not attest arbitrary definitions. Production publication remains separate work.
+
+The [fallback generation check](../../tests/integration/native-fallback-definition-binding-cases.md)
+uses a bounded map of current markers for two candidates. Each selected resource
+checks its own marker before key delivery; a stale fallback cannot use the first
+model's marker. This is a fixed disposable protocol, not production publication.
+
 Native [external authorization](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/external-authz/)
 and [file-backed backend credentials](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/backend-authn/key/)
 provide the transport. These fixture checks do not install production isolation

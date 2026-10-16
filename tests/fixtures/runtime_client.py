@@ -28,7 +28,8 @@ body = options.get(
 request = Request(
     "http://"
     + os.environ.get("FIXTURE_GATEWAY_HOST", "gateway")
-    + ":5000"
+    + ":"
+    + str(options.get("port", 5000))
     + options.get("path", "/v1/chat/completions"),
     data=json.dumps(body).encode(),
     headers=headers,
@@ -39,6 +40,16 @@ try:
         if len(raw) > 65536:
             raise RuntimeError("Disposable protocol response is too large")
         status = response.status
+        if options.get("observe_credentials"):
+            print(
+                json.dumps(
+                    {
+                        "status": status,
+                        "authorization_returned": "Authorization" in response.headers,
+                    }
+                )
+            )
+            raise SystemExit(0)
         if options.get("observe_protocol"):
             print(
                 json.dumps(
@@ -53,4 +64,14 @@ try:
 except HTTPError as error:
     error.read()
     status = error.code
+    if options.get("observe_credentials"):
+        print(
+            json.dumps(
+                {
+                    "status": status,
+                    "authorization_returned": "Authorization" in error.headers,
+                }
+            )
+        )
+        raise SystemExit(0)
 print(json.dumps(status))

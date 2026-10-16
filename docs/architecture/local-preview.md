@@ -53,6 +53,10 @@ Serving workers do not migrate schemas. PostgreSQL chart installs require one
 immutable app image reference for the serving copies, migration Job and
 supplied-gateway preflight; local SQLite trial images may use tags.
 
+The packaged app and public UI remain root-owned and readable by the app user,
+even when the build inputs have private file permissions. The app user cannot
+change those files.
+
 Readiness compares the database's migration history with the app's
 known migrations. The graph is cached per worker; each probe makes one read
 query. Pending migrations or unavailable storage keep the copy out of service,

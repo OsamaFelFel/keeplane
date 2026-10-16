@@ -18,3 +18,17 @@ class ModelApproval(models.Model):
                 name="model_key_choice_valid",
             )
         ]
+
+
+class DeveloperProviderKey(models.Model):
+    owner = models.ForeignKey("accounts.User", on_delete=models.PROTECT)
+    model_id = models.CharField(max_length=256)
+    key_name = models.CharField(max_length=36, default="", blank=True)
+    pending_key_name = models.CharField(max_length=36, default="", blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("owner", "model_id"), name="developer_key_owner_model_unique"
+            )
+        ]
