@@ -26,3 +26,7 @@ to `test-results/2026-10-09-cloud-add.json`.
 The suite compares its key-file listing before and after the cases and cleans
 up trial models even if an assertion fails. A separate browser review is still
 needed for visual alignment with the product canvas.
+
+The [registration unit cases](../unit/test_model_registration_ids.py) also check
+malformed API input: an array or object used as the model source returns a clear
+400 error before storage, gateway or provider contact.
