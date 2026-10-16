@@ -18,7 +18,9 @@ job. All volumes are local to a unique `COMPOSE_PROJECT_NAME`; a rendered-config
 check rejects the fixed external preview account volume before any container
 starts. Host ports are reserved loopback ports. The actual runtime override,
 launcher, private preparation scripts, migrations, client registration and
-management installer are unchanged.
+management installer are unchanged. The fixture supplies `/app` as the working
+directory, runs the real Gunicorn configuration and includes `/opt/oauth` on
+Python's module path for the cached OAuth test image.
 
 The cases use real admin HTTP model registration, real browser PKCE sign-in and
 a guarded provider request. Re-enrollment must preserve credentials, accounts,

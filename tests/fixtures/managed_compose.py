@@ -141,6 +141,15 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
             },
             "app": {
                 "image": image,
+                "working_dir": "/app",
+                "command": [
+                    "python",
+                    "-m",
+                    "gunicorn",
+                    "--config",
+                    "config/gunicorn.conf.py",
+                    "config.wsgi:application",
+                ],
                 "environment": {
                     "GATEWAY_URL": "http://gateway:4000",
                     "GATEWAY_ADMIN_KEY_FILE": "/run/secrets/gateway-admin-key",
@@ -149,6 +158,7 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
                     "PUBLIC_ORIGIN": self.server,
                     "PROVIDER_KEY_DIR": "/provider-keys",
                     "PREVIEW_OPENAI_BASE_URL": "http://model:18080/v1",
+                    "PYTHONPATH": "/app:/opt/oauth",
                     "PYTHONDONTWRITEBYTECODE": "1",
                 },
                 "volumes": [
@@ -159,6 +169,13 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
                 ],
                 "ports": ["127.0.0.1:" + str(self.app_port) + ":3000"],
                 "tmpfs": ["/tmp:uid=65532,gid=65532,mode=700"],
+            },
+            "runtime-install": {
+                "working_dir": "/app",
+                "environment": {
+                    "PYTHONPATH": "/app:/opt/oauth",
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                },
             },
         }
         for service in services.values():
