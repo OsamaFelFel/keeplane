@@ -261,7 +261,8 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
         return self.command(self.prefix + list(args))
 
     def validate(self):
-        config = json.loads(self.compose("config", "--format", "json"))
+        config = json.loads(self.compose("--profile", "*", "config", "--format", "json"))
+        assert {"runtime-init", "runtime-install"} <= config["services"].keys()
         assert config["name"] == self.project
         assert all(
             not row.get("external") and row["name"].startswith(self.project + "_")
