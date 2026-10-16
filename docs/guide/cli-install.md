@@ -26,6 +26,9 @@ cannot open a browser. See [sign-in and project commands](cli-project-commands.m
 [device sign-in](cli-device-login.md), [profile recovery](cli-account-profile.md)
 and [coding](cli-coding.md). Every source-tree `python3 components/cli/keeplane.py`
 command can instead use the installed `keeplane` executable from any directory.
+If you sign into the web UI as a developer, it shows the sign-in command with
+that server's address. Your operator must first provide the CLI and enable CLI
+sign-in. The command keeps the private account profile outside your repository.
 Coding still requires an independently installed OpenCode V2 2.0.27 binary and
 an operator-configured protected gateway. The wheel does not select or download
 a native runtime, and the server's optional sign-in trial remains separate.
