@@ -29,6 +29,7 @@ python3 components/cli/opencode_adapter.py \
   --gateway https://keeplane.example/v1 \
   --model registered-coder \
   --directory /absolute/path/to/project \
+  --instructions AGENTS.md \
   'Fix the failing addition test.'
 ```
 
@@ -51,13 +52,52 @@ is restored when the CLI's coding invocation ends. SIGKILL cannot run cleanup.
 leave edits, so inspect the diff before retrying. There is no direct-provider fallback.
 
 Each turn uses a temporary profile and excludes existing runtime configuration,
-credentials and extensions. On this pinned runtime, its project-configuration
-isolation flag also suppresses repository `AGENTS.md` instructions. Existing
-repository guidance is therefore not preserved by this prototype yet. The
-[paired native control](../../tests/e2e/cli-child-hook-cases.md) records this
-limit; enabling arbitrary project configuration is not an acceptable remedy.
-The profile is removed when the invocation ends;
-sessions cannot yet be resumed. Built-in tool permission prompts remain enabled.
+credentials and extensions. `--instructions AGENTS.md` explicitly includes a
+reviewed UTF-8 file directly in `--directory`; repeat the option for more files.
+The adapter snapshots their bytes, labels them with SHA-256 hashes, and adds that
+text through its own context hook for parent and child requests. A later turn
+reads a fresh snapshot. Files are limited to 32 KiB each, 64 KiB total and eight
+sources; symlinks, special files, duplicates and paths in other directories are
+refused. The final encoded runtime configuration is capped at 120 KiB, including
+JSON escaping. File contents are instructions, never executable configuration.
+
+There is no automatic discovery: without `--instructions`, repository guidance
+is still omitted. Ancestor and nested directory rules need a separate scoped
+integration; this option does not flatten them into every request. Project
+provider settings, plugins, hooks and credential stores remain excluded. The
+[paired native control](../../tests/e2e/cli-child-hook-cases.md) explains why
+enabling all project configuration would be unsafe.
+The profile is removed when the invocation ends. To keep a completed session,
+add `--state-dir /absolute/private/keeplane-session` outside the repository.
+Its parent directory must already exist. Keeplane creates a private state
+directory or accepts an empty private one; existing vendor profiles and databases
+are refused. The runtime's JSON events contain the session ID. Repeat the same
+command with `--session SESSION_ID` and the same state directory to continue it.
+Supply a current gateway credential again; no saved credential authorizes resume.
+Repeat `--instructions` to use the current reviewed text.
+
+Only the runtime database is retained; HOME, configuration, caches and temporary
+files remain disposable. State is bound to the canonical working directory,
+gateway API, model and exact runtime version. Changed bindings, unsafe files or
+stored runtime credentials are refused. One owned lock serializes its use.
+Resume also requires an existing idle native session in that directory and model;
+unknown IDs fail before provider contact. This check uses the pinned runtime's
+database metadata because its native `--session` option can create a missing ID.
+Server-account binding awaits the browser sign-in integration: this is local
+OS-user history, not proof of a Keeplane account or project provenance.
+
+To remove all saved history from that state while keeping its binding and lock:
+
+```sh
+python3 components/cli/session_state.py --discard /absolute/private/keeplane-session
+```
+
+The next invocation can start a new session. An active state cannot be reset.
+Do not unlink its lock to bypass that check. If initial creation was interrupted
+and the state is rejected, inspect the owned directory and choose a fresh one.
+After an interrupted coding turn, review edits before continuing; this slice
+proves completed text/tool turns, not safe replay of unfinished side effects or
+attachments from discarded caches. Built-in tool permission prompts remain enabled.
 This is not a sandbox or proof of project provenance. Login, authorized-model
-discovery, native provider protocols, routing, migration and offline distribution
+discovery integration, native provider protocols, routing, migration apply and offline distribution
 remain separate work.

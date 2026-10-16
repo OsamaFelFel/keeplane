@@ -15,7 +15,15 @@ IMAGES = json.loads((ROOT / "deploy/local/stack.lock.json").read_text())["images
 
 @contextmanager
 def native_runtime_trial(
-    tmp_path, existing, config, *, fallback=False, protocol=False, actor_keys=False
+    tmp_path,
+    existing,
+    config,
+    *,
+    fallback=False,
+    protocol=False,
+    actor_keys=False,
+    definition_binding=False,
+    definition_fallback=False,
 ):
     project = "keeplane-native-" + uuid.uuid4().hex[:10]
     trial = tmp_path / "trial"
@@ -30,6 +38,8 @@ def native_runtime_trial(
         "provider-expected": provider_key,
         names[0]: provider_key,
         names[1]: provider_key,
+        "generation-a": uuid.uuid4().hex,
+        "generation-b": uuid.uuid4().hex,
     }
     for name, value in values.items():
         (trial / name).write_text(value)
@@ -76,6 +86,10 @@ def native_runtime_trial(
                 + ":/runtime_protocol.py:ro",
                 str(ROOT / "tests/fixtures/runtime_actor_keys.py")
                 + ":/runtime_actor_keys.py:ro",
+                str(ROOT / "tests/fixtures/runtime_definition_binding.py")
+                + ":/runtime_definition_binding.py:ro",
+                str(ROOT / "tests/fixtures/runtime_fallback_binding.py")
+                + ":/runtime_fallback_binding.py:ro",
             ],
             "environment": {
                 "PYTHONPATH": "/app",
@@ -90,6 +104,8 @@ def native_runtime_trial(
                 "RUNTIME_AUTHORIZER_KEY_FILE": "/trial/gateway-key",
                 "FIXTURE_SHARED_PROVIDER_KEY": "0" if actor_keys else "1",
                 "FIXTURE_NATIVE_ACTOR_KEYS": "1" if actor_keys else "0",
+                "FIXTURE_DEFINITION_BINDING": "1" if definition_binding else "0",
+                "FIXTURE_DEFINITION_FALLBACK": "1" if definition_fallback else "0",
                 "FIXTURE_NATIVE_FALLBACK": "1" if fallback else "0",
                 "FIXTURE_NATIVE_PROTOCOL": "1" if protocol else "0",
                 "FIXTURE_PROVIDER_KEY_NAME": names[0],
@@ -106,6 +122,30 @@ def native_runtime_trial(
             ],
         },
     }
+    if definition_binding:
+        assert actor_keys
+        assert not definition_fallback or fallback
+        stale = config(existing, values["admin"])
+        stale["gateways"]["default"]["port"] = 4001
+        for key, port in (
+            ("adminAddr", 15010),
+            ("statsAddr", 15030),
+            ("readinessAddr", 15031),
+        ):
+            stale["config"][key] = "127.0.0.1:" + str(port)
+        stale["binds"][0]["port"] = 5001
+        for route in stale["binds"][0]["listeners"][0]["routes"]:
+            route["backends"][0]["host"] = "127.0.0.1:4001"
+        (trial / "gateway-stale.yaml").write_text(json.dumps(stale))
+        services["gateway-stale"] = {
+            "image": IMAGES["agentgateway"],
+            "command": ["-f", "/trial/gateway-stale.yaml"],
+            "network_mode": "service:gateway",
+            "depends_on": ["gateway"],
+            "volumes": mounts,
+            "tmpfs": ["/data:uid=65532,gid=65532,mode=700"],
+        }
+        services["fixture"]["depends_on"].append("gateway-stale")
     for service in services.values():
         service.update(
             {
@@ -174,6 +214,7 @@ def native_runtime_trial(
             call=call,
             probe=probe,
             select_actor=select_actor,
+            generation_a=values["generation-a"],
             public_key_file=trial / names[1],
             before=call("config"),
         )
