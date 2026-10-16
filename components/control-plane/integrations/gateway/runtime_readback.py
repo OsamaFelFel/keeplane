@@ -17,6 +17,35 @@ def compiled_callback(config):
     return result
 
 
+def compiled_exchange(config):
+    if (
+        config.get("cache") != {"maxEntries": 0}
+        or type(config["cache"]["maxEntries"]) is not int
+    ):
+        raise RuntimeInstallationUnavailable("Personal key caching is unsupported")
+    result = deepcopy(config)
+    # The pinned native serializer omits cache entirely. Its configured zero
+    # limit is bound by the complete file/effective digests, not this snapshot.
+    del result["cache"]
+    result["inlineBackend"] = result.pop("host")
+    auth = result["policies"]["backendAuth"]
+    auth["key"]["value"] = "<redacted>"
+    result["policies"] = [{"backendAuth": auth}]
+    bearer = {"header": {"name": "authorization", "prefix": "Bearer "}}
+    location = result.get("authorizationLocation", bearer)
+    if location not in (bearer, {"header": {"name": "x-api-key", "prefix": ""}}):
+        raise RuntimeInstallationUnavailable("The Personal key location is unsupported")
+    result.update(
+        grantType="tokenExchange",
+        subjectToken={
+            "source": bearer,
+            "tokenType": "urn:ietf:params:oauth:token-type:access_token",
+        },
+        authorizationLocation=deepcopy(location),
+    )
+    return result
+
+
 def require_applied_overlay(dump, generated, models, targets):
     """Prove exact serving entry/final guards before creating an active manifest."""
 
@@ -33,16 +62,23 @@ def require_applied_overlay(dump, generated, models, targets):
         key = "/" + name
         expected_keys.add(key)
         selected = "extAuthz" in config["policy"]
-        policy = (
-            {"extAuthz": compiled_callback(config["policy"]["extAuthz"])}
-            if selected
-            else {
+        if selected:
+            policy = {"extAuthz": compiled_callback(config["policy"]["extAuthz"])}
+        elif "backendAuth" in config["policy"]:
+            policy = {
+                "backendAuth": {
+                    "oauthTokenExchange": compiled_exchange(
+                        config["policy"]["backendAuth"]["oauthTokenExchange"]
+                    )
+                }
+            }
+        else:
+            policy = {
                 "transformation": {
                     "request": config["policy"]["transformations"]["request"],
                     "response": None,
                 }
             }
-        )
         same(
             policies.get(key),
             {

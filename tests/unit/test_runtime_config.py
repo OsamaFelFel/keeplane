@@ -103,3 +103,81 @@ def test_an_existing_listener_is_not_overwritten():
             {"demo": {"fingerprint": "a" * 64, "key_choice": "none"}},
             {"demo": "llm:model:demo"},
         )
+
+
+def test_adding_personal_policy_preserves_existing_operator_and_shared_guards():
+    base = {
+        "gateways": {"default": {"port": 4000}},
+        "llm": {"policies": {"apiKey": {"mode": "strict", "keys": [{"keyHash": "a"}]}}},
+    }
+    shared = {"demo": {"fingerprint": "b" * 64, "key_choice": "shared"}}
+    before = overlay(base, shared, {"demo": "llm:model:demo"})
+    after = overlay(
+        base,
+        {**shared, "personal": {"fingerprint": "a" * 64, "key_choice": "personal"}},
+        {"demo": "llm:model:demo", "personal": "llm:model:personal"},
+        personal_providers={"personal": "openAI"},
+    )
+    assert all(policy in after["policies"] for policy in before["policies"])
+    assert before["gateways"] == after["gateways"]
+    assert before["binds"] == after["binds"] and before["llm"] == after["llm"]
+    assert sum("backendAuth" in policy["policy"] for policy in after["policies"]) == 1
+
+
+@pytest.mark.parametrize(
+    "provider,header", [("openAI", "authorization"), ("anthropic", "x-api-key")]
+)
+def test_personal_provider_auth_location_matches_the_validated_raw_provider(
+    provider, header
+):
+    base = {
+        "gateways": {"default": {"port": 4000}},
+        "llm": {"policies": {"apiKey": {"mode": "strict", "keys": [{"keyHash": "a"}]}}},
+    }
+    result = overlay(
+        base,
+        {"demo": {"fingerprint": "a" * 64, "key_choice": "personal"}},
+        {"demo": "llm:model:demo"},
+        personal_providers={"demo": provider},
+    )
+    exchange = next(
+        row["policy"]["backendAuth"]["oauthTokenExchange"]
+        for row in result["policies"]
+        if "backendAuth" in row["policy"]
+    )
+    location = exchange.get(
+        "authorizationLocation",
+        {"header": {"name": "authorization", "prefix": "Bearer "}},
+    )
+    assert location["header"]["name"] == header
+    if provider == "anthropic":
+        assert (
+            location["header"]["prefix"] == ""
+            and header in result["config"]["sensitiveHeaders"]
+        )
+    strip = next(
+        row["policy"]["transformations"]["request"]["replace"]
+        for row in result["policies"]
+        if "transformations" in row["policy"]
+    )
+    assert (
+        strip
+        == '{"content-type": "application/json", "'
+        + header
+        + '": request.headers["'
+        + header
+        + '"]}'
+    )
+
+
+@pytest.mark.parametrize(
+    "providers", [None, {}, {"demo": "custom"}, {"other": "anthropic"}]
+)
+def test_personal_provider_map_cannot_be_inferred_or_mismatched(providers):
+    with pytest.raises(RuntimeInstallationUnavailable):
+        overlay(
+            {},
+            {"demo": {"key_choice": "personal"}},
+            {"demo": "llm:model:demo"},
+            personal_providers=providers,
+        )
