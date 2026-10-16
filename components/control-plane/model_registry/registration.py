@@ -635,6 +635,8 @@ class ModelManagement:
         name = body.get("name", "")
         model = body.get("model", "")
         source = body.get("source", "fixture")
+        if not isinstance(source, str):
+            return self.reply(400, {"error": "Choose a supported model source"})
         if (
             not isinstance(name, str)
             or not name
