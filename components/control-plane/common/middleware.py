@@ -1,11 +1,12 @@
 """Protect browser requests before they reach the administration API."""
 
-from django.core.exceptions import RequestDataTooBig
 from django.conf import settings
+from django.core.exceptions import RequestDataTooBig
 from django.db import DatabaseError
 from django.http import JsonResponse
 from django.middleware.csrf import CsrfViewMiddleware
 from django.utils.deprecation import MiddlewareMixin
+
 from .errors import StorageUnavailable
 
 
@@ -46,11 +47,13 @@ class BrowserCsrfMiddleware(CsrfViewMiddleware):
     def process_view(self, request, callback, callback_args, callback_kwargs):
         if getattr(callback, "runtime_bearer_only", False):
             from accounts.authentication import RuntimeSessionAuthentication
+            from model_registry.runtime_callback import OperatorValidationAuthentication
             from rest_framework.permissions import IsAuthenticated
 
             view = getattr(callback, "cls", None)
-            if tuple(getattr(view, "authentication_classes", ())) == (
-                RuntimeSessionAuthentication,
+            if tuple(getattr(view, "authentication_classes", ())) in (
+                (RuntimeSessionAuthentication,),
+                (OperatorValidationAuthentication,),
             ) and tuple(getattr(view, "permission_classes", ())) == (IsAuthenticated,):
                 # These views accept an explicit bearer credential only, never
                 # ambient browser cookies. DRF still authenticates every call.
