@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import tarfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from zipfile import BadZipFile, ZipFile
@@ -50,7 +51,7 @@ def check_requirements(pins, requirements):
 
 def collect(pins, wheels, output, source_cache=None):
     # Verify every cache input before creating output or starting downloads.
-    notices, tasks = [], []
+    notices, tasks, build_records = [], [], {}
     for package in pins["packages"]:
         origin = relative(package["name"])
         if len(origin.parts) != 1:
@@ -73,10 +74,40 @@ def collect(pins, wheels, output, source_cache=None):
                 if hashlib.sha256(original).hexdigest() != digest:
                     raise ValueError("Notice checksum mismatch")
                 notices.append((origin / target, original))
+            for filename, digest in package.get("build_records", {}).items():
+                relative(filename)
+                if wheel.getinfo(filename).file_size > 1024 * 1024:
+                    raise ValueError("Build record exceeds 1 MiB")
+                original = wheel.read(filename)
+                if hashlib.sha256(original).hexdigest() != digest:
+                    raise ValueError("Build record checksum mismatch")
+                build_records[(package["name"], filename)] = original
         tasks.append((package["name"], package["source"]))
     tasks.extend(
         ("license-texts", artifact) for artifact in pins["supplemental_license_texts"]
     )
+    for native in pins.get("native_sources", []):
+        if len(relative(native["name"]).parts) != 1:
+            raise ValueError("Invalid native component name")
+        declared = native["declared_by"]
+        record = json.loads(build_records[(declared["package"], declared["member"])])
+        matches = [
+            component
+            for component in record["components"]
+            if component["name"] == native["name"]
+            and component.get("version") == native["version"]
+        ]
+        if (
+            len(matches) != 1
+            or {"alg": "SHA-256", "content": native["source"]["sha256"]}
+            not in matches[0].get("hashes", [])
+            or {"type": "distribution", "url": native["source"]["url"]}
+            not in matches[0].get("externalReferences", [])
+        ):
+            raise ValueError("Native source does not match the wheel SBOM")
+        for filename in native["source_notices"]:
+            relative(filename)
+        tasks.append((native["name"], native["source"]))
     for _, artifact in tasks:
         if len(relative(artifact["file"]).parts) != 1 or not re.fullmatch(
             r"[a-f0-9]{64}", artifact["sha256"]
@@ -87,6 +118,10 @@ def collect(pins, wheels, output, source_cache=None):
     output.mkdir(parents=True, exist_ok=False)
     for name, data in notices:
         target = output / "notices" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    for (package, filename), data in build_records.items():
+        target = output / "build-records" / package / filename
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
     budget = Budget()
@@ -106,14 +141,48 @@ def collect(pins, wheels, output, source_cache=None):
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         results = list(pool.map(obtain, tasks))
+    source_notices, failures = [], []
+    accepted = {(item["origin"], item["name"]) for item in results if item["verified"]}
+    for native in pins.get("native_sources", []):
+        if (native["name"], native["source"]["file"]) not in accepted:
+            continue
+        try:
+            pending = []
+            with tarfile.open(
+                output / native["name"] / native["source"]["file"], "r:gz"
+            ) as archive:
+                for filename, digest in native["source_notices"].items():
+                    member = archive.getmember(filename)
+                    if not member.isfile() or member.size > 1024 * 1024:
+                        raise ValueError("Source notice must be a bounded regular file")
+                    original = archive.extractfile(member).read()
+                    if hashlib.sha256(original).hexdigest() != digest:
+                        raise ValueError("Source notice checksum mismatch")
+                    pending.append(
+                        (relative(native["name"]) / relative(filename), original)
+                    )
+            source_notices.extend(pending)
+        except (OSError, ValueError, KeyError, tarfile.TarError) as error:
+            failures.append(
+                {"component": native["name"], "error_class": type(error).__name__}
+            )
+    for name, data in source_notices:
+        target = output / "notices" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
     report = {
-        "artifacts_verified": all(item["verified"] for item in results),
+        "artifacts_verified": all(item["verified"] for item in results)
+        and not failures,
         "wheel_packages_verified": len(pins["packages"]),
         "original_notice_files": len(notices),
+        "original_build_records": len(build_records),
+        "source_notice_files": len(source_notices),
+        "native_source_records": pins.get("native_sources", []),
+        "native_notice_failures": failures,
         "sources_and_license_texts": results,
         "complete_native_inventory": False,
         "open_native_review": pins["open_native_review"],
-        "archives_extracted": False,
+        "archive_trees_unpacked": False,
         "packages_installed": False,
     }
     (output / "inventory.json").write_text(json.dumps(report, indent=2) + "\n")

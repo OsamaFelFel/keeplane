@@ -11,8 +11,11 @@ python3 components/control-plane/collect_cli_auth_sources.py \
 
 The command checks all 12 wheel hashes and 17 original notice files, then
 downloads the exact published source distributions and supplemental licence
-texts pinned in `cli-auth-trial.json`. It copies notice bytes unchanged and keeps
-archives intact. Nothing is installed or extracted. `inventory.json` records
+texts pinned in `cli-auth-trial.json`. It also preserves the cryptography wheel's
+three original SBOMs and collects the OpenSSL 4.0.1 source URL/checksum declared
+there. The OpenSSL and bundled Perl-template licence files are copied byte for
+byte; archive trees are never unpacked or executed. Nothing is installed.
+`inventory.json` records
 verification failures; a failed artifact returns a nonzero exit code. Network
 collection shares the base-source collector's four-minute and size limits.
 For offline use, add `--source-cache /path/to/files`, containing the pinned
@@ -36,12 +39,18 @@ The bundle adds the missing GPL text without changing the wheel. `certifi`'s
 MPL notice and source archive are retained, with the full MPL text; see
 [MPL sections 3.1–3.4](https://www.mozilla.org/MPL/2.0/).
 
-This is a Python-package source and notice bundle, not a completed binary
-inventory. The cryptography wheel embeds OpenSSL and Rust code and includes
-`cryptography.libs/libgcc_s-0cd532bd.so.1`. Its GCC 14.2.0 compiler metadata is
-separate from the app base's source inventory. Exact native sources, build
-patches, and third-party notices remain unverified; an embedded version string
-does not prove that provenance. CFFI/libffi and charset-normalizer's compiled
+The OpenSSL source is bound to a checksum in the exact verified wheel's own
+SBOM, rather than inferred from binary strings. The pinned publication record
+identifies PyCA's wheel subject and publishing workflow commit; it is not an
+independently verified reproducible-build attestation. Original SBOMs stay in
+`build-records/`, with native source records and licence-copy counts in the report.
+The collector does not verify Sigstore signatures or rebuild the wheel.
+
+This is not a completed binary inventory. The cryptography wheel embeds Rust
+code and includes `cryptography.libs/libgcc_s-0cd532bd.so.1`. Its original
+auditwheel SBOM declares Alpine libgcc 14.2.0-r6, separately from the app base's
+source inventory. Rust/libgcc sources, build patches and third-party notices
+remain open. CFFI/libffi and charset-normalizer's compiled
 code also need exact artifact review. Cryptography documents its
 [static wheels](https://cryptography.io/en/48.0.1/installation/#static-wheels);
 the [GCC exception](https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-14.2.0/COPYING.RUNTIME)

@@ -73,6 +73,11 @@
         "cryptography-48.0.1.dist-info/licenses/LICENSE": "3e0c7c091a948b82533ba98fd7cbb40432d6f1a9acbf85f5922d2f99a93ae6bb",
         "cryptography-48.0.1.dist-info/licenses/LICENSE.APACHE": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe",
         "cryptography-48.0.1.dist-info/licenses/LICENSE.BSD": "602c4c7482de6479dd2e9793cda275e5e63d773dacd1eca689232ab7008fb4fb"
+      },
+      "build_records": {
+        "cryptography-48.0.1.dist-info/sboms/auditwheel.cdx.json": "dae5479c7694801d07dbd8b0a8a495e4aebce0c30832910ca5c848ca66e40fd3",
+        "cryptography-48.0.1.dist-info/sboms/cryptography-rust.cyclonedx.json": "9b2b3873832a3999a192327543e07e9cdcd66f083fd77a009054ace71cc6e92f",
+        "cryptography-48.0.1.dist-info/sboms/sbom.json": "58f780e03ba9030ff66b3ed9e02c06e72a9f0a477caa3ae4299ab3e7b81c5f50"
       }
     },
     {
@@ -241,9 +246,39 @@
     }
   ],
   "open_native_review": [
-    "cryptography wheel: corresponding OpenSSL 4.0.1 build, Rust dependency notices and bundled libgcc source/patch provenance are not established by these Python sdists.",
-    "Bundled cryptography.libs/libgcc_s-0cd532bd.so.1 has SHA256 c8f934f958f22b3b9c8e790fde6bc2d2f55ab9ae8b9f5eea65425b20271782d0 and Alpine GCC 14.2.0 compiler metadata; this is separate from the current app base GCC source inventory.",
+    "OpenSSL source and original source licences match the embedded wheel SBOM; Rust dependency sources/notices and bundled libgcc source/patch provenance remain open.",
+    "The original auditwheel SBOM declares bundled libgcc 14.2.0-r6; corresponding Alpine package sources/patches and native build reproduction remain separate from the app base inventory.",
     "CFFI backend native/libffi provenance and charset-normalizer compiled-code provenance still need exact shipped-artifact review."
   ],
-  "complete_native_inventory": false
+  "complete_native_inventory": false,
+  "native_sources": [
+    {
+      "name": "openssl",
+      "version": "4.0.1",
+      "source": {
+        "file": "openssl-4.0.1.tar.gz",
+        "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.1/openssl-4.0.1.tar.gz",
+        "sha256": "2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09"
+      },
+      "declared_by": {
+        "package": "cryptography",
+        "member": "cryptography-48.0.1.dist-info/sboms/sbom.json"
+      },
+      "source_notices": {
+        "openssl-4.0.1/LICENSE.txt": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+        "openssl-4.0.1/external/perl/Text-Template-1.56/LICENSE": "9837f05336ef3cbacb6a96e1672a0426d81ad01191f214b8d48e22ca62338181"
+      },
+      "publication_record": {
+        "url": "https://pypi.org/integrity/cryptography/48.0.1/cryptography-48.0.1-cp311-abi3-musllinux_1_2_x86_64.whl/provenance",
+        "subject": "cryptography-48.0.1-cp311-abi3-musllinux_1_2_x86_64.whl",
+        "sha256": "9bd3f92d76217892b15df84ca256c2c113d386fdda7a7d8691aeeced976507c6",
+        "repository": "pyca/cryptography",
+        "workflow": ".github/workflows/pypi-publish.yml",
+        "commit": "ef0c7fc3cd0409939e3ce65755454cc925e96501",
+        "build_workflow_url": "https://raw.githubusercontent.com/pyca/cryptography/ef0c7fc3cd0409939e3ce65755454cc925e96501/.github/workflows/wheel-builder.yml",
+        "build_workflow_sha256": "edd23c25060b52653d1c68101253b7d804d8a361de71c33f951af550690a1793",
+        "scope": "PyPI publication provenance, not an independently verified reproducible native build."
+      }
+    }
+  ]
 }
