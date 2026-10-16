@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/sidebar'
 
 const links = [
-  { label: 'Projects', href: null },
+  { label: 'Projects', href: '/app/projects' },
   { label: 'Users', href: '/app/' },
   { label: 'Workflows', href: null },
   { label: 'Agents', href: null },

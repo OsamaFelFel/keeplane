@@ -15,6 +15,23 @@ uses a disposable database, synthetic credentials and a mock provider only.
 - The existing configuration keeps its unrelated file-owned model intact and listed, but that model receives no protected work without Keeplane setup.
 - Both disposable modes remove their containers and internal network, including on failure. No host ports, external inference or shared previews are used.
 
+The same cases also run with a synthetic shared provider key. Native backend
+authentication replaces the developer credential only after selected-model
+authorization; the mock requires its exact expected key. Evidence stores only
+whether that key matched and whether client/session/context headers leaked.
+Removing the active managed key, making it unreadable, withdrawing approval or
+revoking the account stops provider contact, including when native configuration
+retains a loaded key after reload fails.
+
+A separate bounded diagnostic first edits a valid key file in place, then publishes
+a different key through a new native model revision/file reference and reads the
+revision back. Neither step deletes a file. Up to three provider probes per stage
+record new-key match booleans and statuses under `KEEPLANE_TEST_REPORT_DIR`; stale
+or refused results are retained even when the authorization cases pass. Deletion
+is tested afterward. This diagnostic does not establish safe rotation across
+replicas or customer key delivery. Existing-mode tests use an explicit synthetic
+file mount; Keeplane's unsupported customer shared-key API still returns 422.
+
 This checks one fixed chat route and selected native model backends on the pinned
 gateway. It does not prove production publication, routing/fallback coverage,
 provider-key isolation, TLS, Kubernetes network policy or replica behavior.
