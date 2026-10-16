@@ -70,7 +70,8 @@ requires 256 generated tokens through both direct and gateway paths; it does
 not measure response speed. On slower CPUs, set
 `KEEPLANE_MODEL_REQUEST_TIMEOUT=1200` to allow more time per reply without changing
 those assertions. Optional native Qwen3 trials are selected separately
-with `pytest -m optional`.
+with `pytest -m optional`. The component group also excludes optional trials;
+its packaged-image import and driver checks remain required.
 
 To check packaged runtime imports, retained notices, SQLite migrations and
 Gunicorn startup without a gateway, supply both image names:
@@ -78,7 +79,7 @@ Gunicorn startup without a gateway, supply both image names:
 ```sh
 KEEPLANE_RUNTIME_PREVIEW_IMAGE=keeplane-preview:kind-local \
 KEEPLANE_RUNTIME_POSTGRES_IMAGE=keeplane-preview:postgres-local \
-  .venv/bin/python -m pytest -m optional tests/integration/test_runtime_image.py
+  .venv/bin/python -m pytest -m live tests/integration/test_runtime_image.py
 ```
 
 The PostgreSQL variant also imports its native driver and checks retained source
