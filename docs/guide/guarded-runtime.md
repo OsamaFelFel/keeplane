@@ -31,10 +31,10 @@ Fix the reported setup problem, then rerun the same opt-in command. Existing
 accounts, API models and keys remain stored. Do not edit the generated manifest
 to make a failed check pass. Ordinary startup without runtime flags is unchanged.
 
-Changing a model, key or gateway configuration can stop access. After making
-changes through Models, rerun the opt-in command so a fresh gateway loads and
-verifies the new state. Health changes also stop this fixed enrollment until
-its declared and applied state match again.
+After changing a model, shared key or gateway configuration, rerun the opt-in
+command so a fresh gateway verifies the new state. Personal key changes apply
+to the next request. A provider/backend failure also requires fresh enrollment
+because this fixed trial binds native health state.
 
 This is an opt-in managed local trial. Virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its

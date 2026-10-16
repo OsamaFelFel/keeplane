@@ -1,5 +1,9 @@
 # Managed Personal model access
 
+Entry checks the current owner's bound key before native backend selection;
+missing → added can proceed without altering backend health. Selection returns
+metadata only, and the final private handoff reads the current key again.
+
 - Enroll only an exact approved API model with a stable ID, a fixed HTTPS
   OpenAI/Anthropic definition and no global provider key. Installation does not
   read developer keys or change the raw model.

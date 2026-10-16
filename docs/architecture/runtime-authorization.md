@@ -270,6 +270,8 @@ Bearer credential and the separate private callback key, plus the exact
 and `definition_fingerprint`. Success returns `{"allowed": true}`; it does not
 attest developer access, approval or enrollment. Developer credentials cannot
 use it, and it never contacts a provider itself.
+Approved Personal models are denied at this callback before native token exchange;
+their administration check uses the separate keyless HTTPS provider probe.
 
 The native installation overwrites the marker on both listeners
 before authorization: `operator` on private port 4000 and `1` on protected port
@@ -305,6 +307,14 @@ before the same current actor/project/model and owner-key checks. The per-model
 native token exchange fixes the model/fingerprint and sends the requested project
 and current developer credential. It runs before outbound header stripping and
 does not recover an operator credential as a developer key.
+
+The installed entry callback first checks that a Personal key is available for
+the current owner and definition, returning metadata only. A missing key is denied
+before native backend selection. The final private token exchange still resolves
+the key afresh. A genuine backend/provider failure changes native health state
+and requires fresh enrollment in this fixed trial; health and eviction remain
+part of the applied binding. Concurrent withdrawal after entry can also fail
+at that final boundary; this is not an in-flight availability guarantee.
 
 Token caching is explicitly disabled in the complete file/effective configuration.
 The pinned native applied serializer omits that setting: readback verifies the

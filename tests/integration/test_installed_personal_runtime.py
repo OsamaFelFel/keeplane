@@ -82,7 +82,22 @@ def test_personal_entry_final_and_handoff_keep_the_raw_definition(personal):
     assert handoff(f).json()["access_token"] == NEXT
     f.store.remove("private")
     assert handoff(f).status_code == 503
-    assert len(f.reads) == 2 and not f.resources[0]["value"].get("auth")
+    assert len(f.reads) == 3 and not f.resources[0]["value"].get("auth")
+
+
+def test_missing_owner_key_stops_at_entry_before_native_backend_handoff(personal):
+    f = personal
+    f.store.remove("private")
+    entry = decision(f)
+    assert entry.status_code == 503 and not f.reads
+    # Selection stays metadata-only; the native entry gate must precede it.
+    assert decision(f, True).status_code == 200 and not f.reads
+    assert handoff(f).status_code == 503 and not f.reads
+    f.store.put("private", NEXT)
+    entry = decision(f)
+    assert entry.status_code == 200 and len(f.reads) == 1
+    assert all(value not in entry.content.decode() for value in (KEY, NEXT, f.token))
+    assert handoff(f).json()["access_token"] == NEXT and len(f.reads) == 2
 
 
 @pytest.mark.parametrize(
@@ -149,7 +164,9 @@ def test_client_cannot_select_uninstalled_contract_or_replace_gateway_identity(
 def test_only_fixed_cloud_personal_providers_are_enrolled(installed, provider):
     installed.resources[0]["value"]["provider"] = provider
     installed.fp = installed.enroll("personal")
-    assert decision(installed).status_code == (200 if provider == "anthropic" else 503)
+    assert decision(installed, True).status_code == (
+        200 if provider == "anthropic" else 503
+    )
 
 
 @pytest.mark.parametrize("fault", ["http", "auth", "global-key-metadata"])

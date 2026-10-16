@@ -12,6 +12,7 @@ from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from django.conf import settings
+from django.db import DatabaseError
 from django.views.decorators.cache import never_cache
 from projects.access import organization_project_access
 from rest_framework.authentication import BaseAuthentication
@@ -26,6 +27,8 @@ from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
+from .models import ModelApproval, ProviderKeyChoice
+from .personal_dispatch import DjangoPersonalDispatch
 from .policy import ModelPolicyUnavailable
 from .provider_keys import DjangoSharedKeyAvailability
 from .runtime_views import model_policy
@@ -177,12 +180,28 @@ def authorize_installed(request, *, selected=False):
             return body
         if os.environ.get("GATEWAY_MODE", "managed") != "managed":
             raise ModelPolicyUnavailable("Managed runtime installation is required")
-        DjangoInstalledRuntimeGate(
+        enrollment = DjangoInstalledRuntimeGate(
             MODEL_GATEWAY,
             settings.RUNTIME_GUARD_MANIFEST_FILE,
             os.environ.get("PROVIDER_KEY_DIR", ""),
         ).require_installed(body["model_id"], body.get("definition_fingerprint"))
         result = authorized_model(request, body)
+        if not selected and enrollment["key_choice"] == "personal":
+            # Missing keys must fail before native backend selection, where a
+            # failed token exchange would change the enrolled backend's health.
+            # Discard this private value; the final transport resolves it again.
+            DjangoPersonalDispatch(
+                RuntimeIdentity(IDENTITY),
+                model_policy(),
+                MODEL_GATEWAY,
+                os.environ.get("PROVIDER_KEY_DIR", ""),
+                project_access=organization_project_access,
+            ).resolve(
+                request.auth,
+                body["project_id"],
+                body["model_id"],
+                definition_fingerprint=enrollment["fingerprint"],
+            )
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
     except (ModelPolicyUnavailable, StorageUnavailable):
@@ -202,6 +221,15 @@ def authorize_operator_validation(request):
         if isinstance(body, Response):
             return body
     except ModelPolicyUnavailable:
+        return Response({"error": "Operator validation is unavailable"}, status=503)
+    try:
+        if ModelApproval.objects.filter(
+            pk=body["model_id"], key_choice=ProviderKeyChoice.PERSONAL
+        ).exists():
+            return Response(
+                {"error": "Personal models use their provider check"}, status=403
+            )
+    except DatabaseError:
         return Response({"error": "Operator validation is unavailable"}, status=503)
     # This privileged callback deliberately does not attest approval, enrollment or
     # user access: model setup validates before approval and while enrollment is off.

@@ -160,6 +160,7 @@ class DjangoInstalledRuntimeGate:
                 raise AppliedStateUnavailable()
         except AppliedStateUnavailable:
             raise ModelPolicyUnavailable("Applied runtime wiring changed") from None
+        return expected
 
     def require_definition(self, model_id, expected, selected_fingerprint=None):
         """Installer preflight only; this alone never authorizes inference."""
