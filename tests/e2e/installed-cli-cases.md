@@ -43,3 +43,14 @@ This covers browser sign-in and shared-key coding. Device mode, cancellation,
 destructive migration, personal-key dispatch, external TLS deployment and release
 runtime selection are separate checks. Project registration here repeats the
 explicit fixture seed; it does not invent repository identity or init defaults.
+
+The separate `test_installed_cli_cancellation.py` case opts into two additional
+checks on a known saved session. It sends SIGINT/SIGTERM only after the provider
+has answered and a real foreground native shell child has written its owned PID
+barrier. Exit codes must be 130/143 within five seconds, with no native/tool PID or
+temporary runtime profile left behind. Process states, including zombies, are
+recorded before cleanup on failure. Each signal is followed by real credential
+rotation and a fresh process resuming the completed assistant/tool history.
+Interrupted-call visibility is reported, without requiring a particular treatment
+of unfinished work. Arbitrary detached or background processes are outside this
+controlled foreground-tool check.

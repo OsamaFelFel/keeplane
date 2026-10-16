@@ -1,6 +1,7 @@
 """Real installer + actual OAuth issuer, confined to the trusted server container."""
 
 import json
+import os
 import uuid
 from pathlib import Path
 from threading import Event
@@ -9,7 +10,13 @@ from tests.fixtures.installed_cli_provider import InstalledCliProvider
 from tests.fixtures.installed_runtime import bootstrap
 
 if __name__ == "__main__":
-    seed = bootstrap(InstalledCliProvider)
+    provider = InstalledCliProvider
+    if os.environ.get("FIXTURE_CLI_CANCELLATION") == "1":
+        from tests.fixtures.installed_cli_cancel_provider import CancellationProvider
+
+        provider = CancellationProvider
+    seed = bootstrap(provider)
+    seed["cancellation"] = provider is not InstalledCliProvider
     from data_classes.models import ProjectClass
     from django.core.management import call_command
     from projects.services import DjangoProjectStore

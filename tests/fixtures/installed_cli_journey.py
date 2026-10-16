@@ -375,6 +375,23 @@ def journey(seed):
         current["tools"] == ["read", "edit", "read", "edit"]
         and current["continued"] >= 3
     )
+    if seed.get("cancellation"):
+        from installed_cli_cancel import check
+
+        REPORT["stage"] = "cancellation"
+        fresh, REPORT["cancellation"] = check(
+            cli,
+            profile,
+            args,
+            session,
+            repository,
+            environment,
+            execute,
+            status,
+            known,
+            output,
+        )
+        current = status()
     contacts = current["contacts"]
     wrong = list(args)
     wrong[1] = str(uuid.UUID(seed["alternate_project_id"]))
