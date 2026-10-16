@@ -23,6 +23,28 @@ OBSERVED = {"provider": [], "exchange": [], "secrets": []}
 REPORT = {"passed": False, "checks": [], "uid": os.geteuid()}
 
 
+def django_endpoint():
+    """Observe status only around the unchanged production WSGI application."""
+    from wsgiref.simple_server import WSGIRequestHandler, make_server
+
+    from django.core.handlers.wsgi import WSGIHandler
+
+    application = WSGIHandler()
+
+    class SilentHandler(WSGIRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    def observed(environ, start_response):
+        def status(code, headers, exc_info=None):
+            OBSERVED["exchange"].append({"admitted": code.startswith("200 ")})
+            return start_response(code, headers, exc_info)
+
+        return application(environ, status)
+
+    return make_server("127.0.0.1", 18081, observed, handler_class=SilentHandler)
+
+
 class Endpoint(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -246,8 +268,9 @@ def check(name, token, project, *, key=None):
 
 def main():
     global CALLBACK, DEFINITION, KEYS, SERVICE, ORIGIN, PASSWORD, FORM
-    import django
     from importlib.metadata import version
+
+    import django
 
     django.setup()
     REPORT["oauth_versions"] = {
@@ -302,9 +325,16 @@ def main():
         secrets.token_urlsafe(24),
         "application/x-www-form-urlencoded",
     )
+    http_transport = os.environ.get("KEEPLANE_PERSONAL_HTTP_TRANSPORT") == "1"
+    REPORT["token_transport"] = "django-http" if http_transport else "fixture-adapter"
     for port in (18080, 18081):
+        server = (
+            django_endpoint()
+            if port == 18081 and http_transport
+            else ThreadingHTTPServer(("127.0.0.1", port), Endpoint)
+        )
         threading.Thread(
-            target=ThreadingHTTPServer(("127.0.0.1", port), Endpoint).serve_forever,
+            target=server.serve_forever,
             daemon=True,
         ).start()
     call_command(

@@ -11,12 +11,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run_trial(directory):
+def run_trial(directory, *, http_transport=False):
     source = Path(os.environ["KEEPLANE_PERSONAL_DISPATCH_SOURCE"]).resolve()
     image = os.environ["KEEPLANE_OAUTH_FIXTURE_IMAGE"]
     assert (
         source / "components/control-plane/model_registry/personal_dispatch.py"
     ).is_file()
+    if http_transport:
+        assert (
+            source / "components/control-plane/model_registry/personal_transport.py"
+        ).is_file()
     project = "keeplane-personal-" + uuid.uuid4().hex[:10]
     directory.mkdir(mode=0o755)
     value = {
@@ -39,7 +43,7 @@ def run_trial(directory):
     )
     exchange = {
         "host": "127.0.0.1:18081",
-        "path": "/token",
+        "path": "/internal/runtime/provider-token" if http_transport else "/token",
         "cache": {"maxEntries": 0},
         "additionalParams": {
             "project_id": 'request.headers["x-keeplane-project-id"]',
@@ -188,6 +192,17 @@ def run_trial(directory):
             security_opt=["no-new-privileges:true"],
             pull_policy="never",
         )
+    if http_transport:
+        services["worker"]["environment"].update(
+            {
+                "KEEPLANE_PERSONAL_HTTP_TRANSPORT": "1",
+                "GATEWAY_URL": "http://127.0.0.1:4000",
+                "GATEWAY_ADMIN_KEY_FILE": "/trial/admin",
+                "GATEWAY_RUNTIME_KEY_FILE": "/trial/admin",
+                "RUNTIME_AUTHORIZER_KEY_FILE": "/trial/callback-key",
+                "PROVIDER_KEY_DIR": "/state/keys",
+            }
+        )
     compose = directory / "compose.json"
     compose.write_text(
         json.dumps({"services": services, "networks": {"default": {"internal": True}}})
@@ -208,6 +223,7 @@ def run_trial(directory):
         for path in sorted(backend.rglob("*.py"))
     }
     report = {
+        "http_transport": http_transport,
         "backend_manifest_sha256": hashlib.sha256(
             json.dumps(manifest, sort_keys=True).encode()
         ).hexdigest(),
