@@ -28,8 +28,9 @@ python3 deploy/local/up.py --runtime-model MODEL_ID \
   --runtime-app-image keeplane-cli-trial:local
 ```
 
-The launcher migrates and registers the fixed clients. Keep the same private
-runtime directory to preserve accounts, keys and approvals. Use the returned
+The launcher migrates and registers the fixed clients. Reuse the same private
+`--runtime-dir` and keep the Compose named volumes. The directory holds operator
+credentials; the volumes hold accounts, provider keys and approvals. Use the returned
 server address when signing in. The server's `PUBLIC_ORIGIN` must match the
 browser and CLI address; use HTTPS except for a configured loopback installation.
 Keep your [CLI profile](cli-account-profile.md) outside Git.
