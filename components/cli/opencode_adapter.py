@@ -1,24 +1,24 @@
 """Run one experimental local coding turn through a protected gateway."""
 
 import argparse
-from contextlib import contextmanager
 import getpass
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
+from pathlib import Path
 from urllib.parse import urlsplit
 
 if __package__:
     from .instructions import snapshot
-    from .session_state import managed
+    from .session_state import account_binding, managed
 else:
     from instructions import snapshot
-    from session_state import managed
+    from session_state import account_binding, managed
 
 
 VERSION = "2.0.27"
@@ -84,7 +84,7 @@ def coding_turn(command, *, input, env, cwd, timeout, cancelled=None, pass_fds=(
             stream.close()
 
 
-def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None):
+def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None):
     """Use a disposable profile; the gateway remains responsible for authorization."""
     if os.name != "posix":
         raise ValueError("This prototype currently supports macOS and Linux.")
@@ -118,6 +118,8 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         host += ":" + str(url.port)
     gateway = url._replace(netloc=host, path=url.path.rstrip("/")).geturl()
     binding = {"directory": directory, "gateway": gateway, "model": model, "version": VERSION}
+    if account_context is not None:
+        binding.update(account_binding(account_context))
     with managed(state_dir, binding, session) as state, tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary:
         profile = Path(temporary)
         environment = {
@@ -143,6 +145,10 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             "model": "keeplane/" + model,
             "share": "disabled", "snapshots": False,
         }
+        if account_context is not None:
+            config["providers"]["keeplane"]["headers"] = {
+                "X-Keeplane-Project-ID": account_context["project_id"],
+            }
         if instruction_snapshot:
             config["plugins"] = [{
                 "package": str(Path(__file__).with_name("instruction_plugin").resolve()),
