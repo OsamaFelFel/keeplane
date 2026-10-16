@@ -20,21 +20,26 @@ class DeveloperKeyError(Exception):
 
 @storage_service
 class DjangoDeveloperKeyStore:
-    def __init__(self, owner_id, directory, *, validate_key):
+    def __init__(self, owner_id, directory, *, validate_key, reauthenticate=None):
         if not callable(validate_key) or not callable(
             getattr(validate_key, "require_current", None)
         ):
             raise DeveloperKeyError("Configure a server provider-key validator")
         if not directory or not Path(directory).is_absolute():
             raise StorageUnavailable("Provider key storage is unavailable")
+        if reauthenticate is not None and not callable(reauthenticate):
+            raise DeveloperKeyError("Configure current runtime authentication")
+        self.reauthenticate = reauthenticate
         self.owner_id, self.directory = owner_id, directory
         self.validate_key = validate_key
 
     def _owner(self, lock=False, active=True):
         owners = User.objects.select_for_update() if lock else User.objects
         owners = owners.filter(pk=self.owner_id)
-        owner = (owners.filter(is_active=True) if active else owners).first()
-        if owner is None:
+        owner = owners.first()
+        if lock and active and self.reauthenticate:
+            self.reauthenticate(owner)
+        if owner is None or (active and not owner.is_active):
             raise DeveloperKeyError("This account is unavailable")
         return owner
 
