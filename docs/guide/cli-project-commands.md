@@ -13,6 +13,9 @@ python3 components/cli/keeplane.py models --profile /absolute/private/keeplane-a
 python3 components/cli/keeplane.py logout --profile /absolute/private/keeplane-account
 ```
 
+Add `--device` to `login` to approve a short code in another browser. See
+[device sign-in](cli-device-login.md) for prerequisites and cancellation behavior.
+
 Replace `PROJECT_UUID` with an explicit project UUID. Registration records that
 your account uses the project and returns its server-preserved name. It does not
 initialize files, derive Git identity or grant access. `models` returns the

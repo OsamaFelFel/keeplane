@@ -35,6 +35,13 @@ def issuer():
         token_body=None,
         before_callback=None,
         callback_extra={},
+        device_code="synthetic-device-code-" + "d" * 32,
+        user_code="ABCD1234",
+        device_body=None,
+        device_status=200,
+        device_errors=[],
+        device_starts=0,
+        device_polls=[],
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -81,6 +88,45 @@ def issuer():
                     self.rfile.read(int(self.headers["Content-Length"])).decode()
                 ).items()
             }
+            if self.path == "/oauth/device/":
+                state.device_starts += 1
+                state.device_headers = dict(self.headers)
+                self.respond(
+                    state.device_status,
+                    state.device_body
+                    or {
+                        "verification_uri": state.url + "/oauth/confirm-device/",
+                        "user_code": state.user_code,
+                        "device_code": state.device_code,
+                        "expires_in": 1800,
+                        "interval": 5,
+                        "future_secret": "must_not_be_saved",
+                    },
+                )
+                return
+            if form.get("grant_type") == "urn:ietf:params:oauth:grant-type:device_code":
+                state.device_polls.append((form, dict(self.headers)))
+                if state.device_errors:
+                    self.respond(400, state.device_errors.pop(0))
+                    return
+                if (
+                    form.get("device_code") != state.device_code
+                    or form.get("client_id") != "keeplane-cli-device"
+                ):
+                    self.respond(400, {"error": "invalid_grant"})
+                    return
+                self.respond(
+                    state.token_status,
+                    state.token_body
+                    or {
+                        "access_token": state.access,
+                        "refresh_token": state.refresh,
+                        "token_type": "Bearer",
+                        "scope": "runtime",
+                        "expires_in": 3600,
+                    },
+                )
+                return
             params = state.codes.pop(form.get("code"), {})
             challenge = (
                 base64.urlsafe_b64encode(

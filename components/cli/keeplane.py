@@ -11,6 +11,7 @@ if __package__:
         account_session,
         browser_login,
         coding,
+        device_login,
         opencode_adapter,
         provider_keys,
     )
@@ -21,6 +22,7 @@ else:
     import account_session
     import browser_login
     import coding
+    import device_login
     import opencode_adapter
     import provider_keys
     from credential_profile import ProfileError, opened
@@ -55,6 +57,7 @@ def main():
     login.add_argument("--server", required=True)
     login.add_argument("--profile", required=True)
     login.add_argument("--timeout", type=int, default=120)
+    login.add_argument("--device", action="store_true", help="Sign in using a code on another browser")
     code = commands.add_parser("code", help="Run a local coding turn through the protected gateway")
     for flag in ("profile", "project", "name", "model", "runtime", "gateway"):
         code.add_argument("--" + flag, required=True)
@@ -88,8 +91,11 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "login":
-            print("Opening Keeplane sign-in in your browser.")
-            browser_login.login(args.server, args.profile, timeout=args.timeout)
+            if args.device:
+                device_login.login(args.server, args.profile, timeout=args.timeout)
+            else:
+                print("Opening Keeplane sign-in in your browser.")
+                browser_login.login(args.server, args.profile, timeout=args.timeout)
             output = "Signed in to Keeplane."
         elif args.command in {"whoami", "logout", "forget"}:
             output = account_session.run(args.command, args.profile)

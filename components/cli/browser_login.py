@@ -158,7 +158,24 @@ def authorization_code(server, *, timeout, browser):
         }
 
 
-def exchange(server, form):
+class AuthorizationPending(ConnectionError):
+    """Only the reviewed, non-secret device polling conditions."""
+
+    def __init__(self, code):
+        super().__init__("CLI access is waiting for approval.")
+        self.code = code
+
+
+def unique(pairs):
+    result = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError
+        result[name] = value
+    return result
+
+
+def exchange(server, form, *, allow_pending=False, timeout=10):
     request = Request(
         server + "/oauth/token/",
         data=urlencode(form).encode(),
@@ -169,7 +186,7 @@ def exchange(server, form):
     )
     try:
         with build_opener(ProxyHandler({}), NoRedirects()).open(
-            request, timeout=10
+            request, timeout=timeout
         ) as response:
             if (
                 response.status != 200
@@ -179,14 +196,6 @@ def exchange(server, form):
                     "The sign-in server returned an unexpected response."
                 )
             raw = response.read(4097)
-
-        def unique(pairs):
-            result = {}
-            for name, value in pairs:
-                if name in result:
-                    raise ValueError
-                result[name] = value
-            return result
 
         data = json.loads(raw, object_pairs_hook=unique)
         if (
@@ -220,12 +229,44 @@ def exchange(server, form):
         )
         return checked.access_token, checked.refresh_token
     except HTTPError as error:
-        error.close()
+        try:
+            if (
+                allow_pending
+                and error.code == 400
+                and error.headers.get_content_type() == "application/json"
+            ):
+                raw = error.read(4097)
+                if len(raw) <= 4096:
+                    data = json.loads(raw, object_pairs_hook=unique)
+                    if isinstance(data, dict) and data.get("error") in {
+                        "authorization_pending",
+                        "slow_down",
+                    }:
+                        raise AuthorizationPending(data["error"])
+        except (OSError, ValueError, RecursionError, TypeError):
+            pass
+        finally:
+            error.close()
         raise ConnectionError("The sign-in server refused the exchange.") from None
     except (URLError, OSError, ValueError, OverflowError, RecursionError, ProfileError):
         raise ConnectionError(
             "Cannot complete sign-in securely; no credential was saved."
         ) from None
+
+
+def save_login(profile, server, access, refresh):
+    try:
+        actor = account(server, access)
+        profile.save(Credential(server, actor["id"], access, refresh))
+    except BaseException:
+        # A later admission/storage failure must not silently leave a valid pair.
+        try:
+            logout(server, access)
+        except (ConnectionError, ValueError):
+            raise ConnectionError(
+                "Sign-in was not saved reliably; server revocation could not be confirmed."
+            ) from None
+        raise
 
 
 def login(server, path, *, timeout=120, browser=None):
@@ -239,18 +280,7 @@ def login(server, path, *, timeout=120, browser=None):
             server, timeout=timeout, browser=browser or webbrowser.open
         )
         access, refresh = exchange(server, form)
-        try:
-            actor = account(server, access)
-            profile.save(Credential(server, actor["id"], access, refresh))
-        except BaseException:
-            # A later admission/storage failure must not silently leave a valid pair.
-            try:
-                logout(server, access)
-            except (ConnectionError, ValueError):
-                raise ConnectionError(
-                    "Sign-in was not saved reliably; server revocation could not be confirmed."
-                ) from None
-            raise
+        save_login(profile, server, access, refresh)
 
 
 def main():
