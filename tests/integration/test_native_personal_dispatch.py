@@ -18,4 +18,4 @@ def test_real_oauth_personal_key_native_dispatch(tmp_path, report_file):
     )
     assert report["uid"] == 65532 and report["real_validation_contacts"] == 4
     assert report["ordinary_logs_contain_secret"] is False
-    assert len(report["checks"]) == 16
+    assert len(report["checks"]) == 18

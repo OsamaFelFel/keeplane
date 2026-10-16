@@ -67,7 +67,7 @@ def run_trial(directory):
             "database": {"url": "sqlite:///data/gateway.db"},
             "sensitiveHeaders": ["authorization", "x-keeplane-gateway-credential"],
         },
-        "gateways": {"default": {"port": 4000, "bindAddress": "127.0.0.1"}},
+        "gateways": {"default": {"port": 4000}},
         "ui": {
             "gateways": "default",
             "policies": {
@@ -84,7 +84,22 @@ def run_trial(directory):
                 }
             },
         },
-        "llm": {"models": []},
+        "llm": {
+            "models": [],
+            "policies": {
+                "apiKey": {
+                    "mode": "strict",
+                    "keys": [
+                        {
+                            "keyHash": "sha256:"
+                            + hashlib.sha256(
+                                (directory / "admin").read_bytes()
+                            ).hexdigest()
+                        }
+                    ],
+                }
+            },
+        },
         "binds": [
             {
                 "port": 5000,
@@ -112,7 +127,22 @@ def run_trial(directory):
                     }
                 },
                 "policy": {"backendAuth": {"oauthTokenExchange": exchange}},
-            }
+            },
+            {
+                "name": {"name": "personal-strip", "namespace": ""},
+                "target": {
+                    "backend": {
+                        "backend": {"name": "llm:model:personal", "namespace": ""}
+                    }
+                },
+                "policy": {
+                    "transformations": {
+                        "request": {
+                            "replace": '{"content-type": "application/json", "authorization": request.headers["authorization"]}'
+                        }
+                    }
+                },
+            },
         ],
     }
     (directory / "gateway.json").write_text(json.dumps(config))
