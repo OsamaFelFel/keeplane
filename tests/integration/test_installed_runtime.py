@@ -223,7 +223,15 @@ def test_new_enrollment_still_refuses_old_selected_overlay(installed):
 
 
 @pytest.mark.parametrize(
-    "change", ["headers", "inline-key", "provider-credentials", "wildcard"]
+    "change",
+    [
+        "headers",
+        "inline-key",
+        "provider-credentials",
+        "wildcard",
+        "url-tab",
+        "url-newline",
+    ],
 )
 def test_trusted_fingerprint_does_not_admit_unsupported_shapes(installed, change):
     value = installed.resources[0]["value"]
@@ -233,10 +241,28 @@ def test_trusted_fingerprint_does_not_admit_unsupported_shapes(installed, change
         value["auth"] = {"key": {"value": "untrusted"}}
     elif change == "provider-credentials":
         value["params"]["baseUrl"] = "https://user:secret@provider.invalid/v1"
+    elif change in ("url-tab", "url-newline"):
+        value["params"]["baseUrl"] = (
+            "https://provider.invalid/" + ("\t" if change == "url-tab" else "\n") + "v1"
+        )
     else:
         value["name"] = "private*"
     installed.enroll()
     assert send(installed).status_code == 503
+
+
+@pytest.mark.parametrize("auth", [False, 0, "", []])
+def test_keyless_falsy_malformed_auth_is_not_a_supported_empty_value(installed, auth):
+    installed.resources[0]["value"]["auth"] = auth
+    installed.enroll()
+    assert send(installed).status_code == 503
+
+
+@pytest.mark.parametrize("auth", [None, {}])
+def test_keyless_explicit_null_or_empty_object_remains_supported(installed, auth):
+    installed.resources[0]["value"]["auth"] = auth
+    installed.enroll()
+    assert send(installed).status_code == 200
 
 
 @pytest.mark.parametrize(

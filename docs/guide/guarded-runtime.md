@@ -9,6 +9,9 @@ regular JSON file owned by root or the application user. The file must not be
 writable by other users or groups. Use mode `0600`. The application reads it
 again for every decision. A missing, disabled, malformed or changed declaration
 stops the protected request.
+Any model registration, removal or other change to the complete effective
+topology disables this fixed enrollment until its guards are reinstalled and
+verified. This first installation does not update enrollment automatically.
 
 The declaration has exactly these fields:
 

@@ -169,6 +169,12 @@ class DjangoInstalledRuntimeGate:
             raise ModelPolicyUnavailable("Installed model format is unsupported")
         try:
             base = params.get("baseUrl", "https://provider.invalid")
+            if (
+                not isinstance(base, str)
+                or not 0 < len(base) <= 2048
+                or any(ord(char) < 33 or ord(char) > 126 for char in base)
+            ):
+                raise ValueError()
             url = urlsplit(base)
             if (
                 url.scheme not in ("http", "https")
@@ -185,7 +191,8 @@ class DjangoInstalledRuntimeGate:
                 "Installed provider address is unsupported"
             ) from None
         if expected["key_choice"] == "none":
-            if value.get("auth"):
+            auth = value.get("auth")
+            if auth is not None and (not isinstance(auth, dict) or auth):
                 raise ModelPolicyUnavailable("Installed key choice changed")
         else:
             path = str(Path(self.key_directory) / expected["key_name"])
