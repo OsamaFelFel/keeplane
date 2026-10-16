@@ -3,6 +3,7 @@
 import getpass
 import json
 import sys
+import uuid
 import warnings
 
 if __package__:
@@ -57,6 +58,57 @@ def unique(pairs):
             raise ValueError
         result[name] = value
     return result
+
+
+def list_keys(profile_path, project_id):
+    try:
+        project_id = str(uuid.UUID(str(project_id)))
+    except (ValueError, TypeError, AttributeError):
+        raise ConnectionError("Use a valid project UUID.") from None
+    with opened(profile_path) as profile:
+        credential = profile.load()
+        actor = account(credential.issuer, credential.access_token)
+        if actor["id"] != credential.actor_id:
+            raise ProfileError("The server account changed; sign in again.")
+        body = request(
+            credential.issuer,
+            "/api/runtime/projects/" + project_id + "/provider-keys",
+            credential.access_token,
+        )
+        try:
+            data = json.loads(body, object_pairs_hook=unique)
+            if (
+                not isinstance(data, dict)
+                or set(data) != {"project_id", "models"}
+                or data["project_id"] != project_id
+                or not isinstance(data["models"], list)
+            ):
+                raise ValueError
+            ids = []
+            for row in data["models"]:
+                if (
+                    not isinstance(row, dict)
+                    or set(row) != {"id", "own_key_required", "status"}
+                    or not isinstance(row["id"], str)
+                    or not 0 < len(row["id"]) <= 256
+                    or any(ord(c) < 32 or ord(c) == 127 for c in row["id"])
+                    or type(row["own_key_required"]) is not bool
+                    or (
+                        row["own_key_required"]
+                        and row["status"] not in {"added", "missing"}
+                    )
+                    or (not row["own_key_required"] and row["status"] is not None)
+                ):
+                    raise ValueError
+                ids.append(row["id"])
+            if ids != sorted(set(ids)):
+                raise ValueError
+        except (ValueError, TypeError, RecursionError):
+            raise ConnectionError("Keeplane returned an invalid key list.") from None
+        output = json.dumps(data, indent=2)
+        for secret in (credential.access_token, credential.refresh_token):
+            output = output.replace(secret, "[redacted]")
+        return output
 
 
 def run(action, profile_path, model_id, *, key_stdin=False):
