@@ -6,7 +6,8 @@ model definition, sends one fixed provider request, then checks the definition
 again. Success returns `VerifiedProviderKey` with those IDs and the definition
 fingerprint. This result is internal metadata, not an authentication credential.
 The [internal key store](developer-key-storage.md) consumes this verification.
-No public route, CLI command or task dispatch is connected here.
+The [first-party CLI endpoint](../guide/cli-provider-keys.md) composes this check
+with owner-scoped storage. Task dispatch remains disconnected.
 
 Supported definitions are the existing `openAI` and `anthropic` cloud formats,
 with only `model` and optional `baseUrl` parameters and no configured provider
