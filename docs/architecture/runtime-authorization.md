@@ -171,3 +171,10 @@ flowchart LR
   A --> MockA[Private mock A]
   B --> MockB[Private mock B]
 ```
+
+The [installed-runtime gate](../../tests/integration/installed-runtime-cases.md)
+adds fresh operator enrollment to separate entry and selected-model callbacks.
+It binds exact raw definitions, immutable shared-key files and complete file and
+effective baselines without modifying model resources. It remains disabled by
+default. [Managed installation](../guide/guarded-runtime.md) must verify applied
+native guards before exposing and enabling the protected listener.

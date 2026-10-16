@@ -1,5 +1,6 @@
 """Verify local availability of a server-managed shared provider key."""
 
+import hashlib
 import os
 import stat
 from pathlib import Path
@@ -12,8 +13,8 @@ from .models import ModelApproval
 from .policy import ModelPolicyUnavailable, registry_rows
 
 
-def managed_key_available(directory, path):
-    """Open only a managed basename under the configured directory; return no key."""
+def managed_key_digest(directory, path):
+    """Read a bounded valid managed key; return only its content digest."""
     if (
         not directory
         or not Path(directory).is_absolute()
@@ -38,15 +39,20 @@ def managed_key_available(directory, path):
                 value = raw.decode("utf-8")
                 # Preserve storage's character limit, including padding. Native
                 # injection trims it; a blank secret or invalid HTTP field cannot work.
-                return (
+                valid = (
                     12 <= len(value) <= 512
                     and bool(value.strip())
                     and all(byte == 9 or (byte >= 32 and byte != 127) for byte in raw)
                 )
+                return hashlib.sha256(raw).hexdigest() if valid else None
         finally:
             os.close(root)
     except (OSError, UnicodeDecodeError, ValueError):
         return False
+
+
+def managed_key_available(directory, path):
+    return bool(managed_key_digest(directory, path))
 
 
 @storage_service

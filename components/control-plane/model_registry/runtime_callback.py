@@ -22,6 +22,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
+from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
 from .policy import ModelPolicyUnavailable
 from .provider_keys import DjangoSharedKeyAvailability
 from .runtime_views import model_policy
@@ -43,6 +44,52 @@ def gateway_key():
     return key
 
 
+def callback_metadata(request, *, selected=False):
+    expected = gateway_key()
+    supplied = request.headers.get("X-Keeplane-Gateway-Credential", "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", supplied) or not hmac.compare_digest(
+        supplied.encode("ascii"), expected
+    ):
+        return Response({"error": "Gateway credential is invalid"}, status=403)
+    if request.content_type != "application/json":
+        return Response({"error": "Send JSON metadata"}, status=415)
+    raw = request.read(4097)
+    if len(raw) > 4096:
+        return Response({"error": "Authorization metadata is too large"}, status=413)
+    try:
+        body = json.loads(raw, object_pairs_hook=unique_pairs)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        return Response({"error": "Send valid JSON metadata"}, status=400)
+    fields = {"project_id", "model_id"}
+    if selected:
+        fields.add("definition_fingerprint")
+    if (
+        not isinstance(body, dict)
+        or set(body) != fields
+        or not isinstance(body["project_id"], str)
+        or not 0 < len(body["project_id"]) <= 64
+        or not isinstance(body["model_id"], str)
+        or not 0 < len(body["model_id"]) <= 256
+        or (
+            selected
+            and (
+                not isinstance(body["definition_fingerprint"], str)
+                or not re.fullmatch(r"[a-f0-9]{64}", body["definition_fingerprint"])
+            )
+        )
+    ):
+        return Response({"error": "Send only a project ID and model ID"}, status=400)
+    return body
+
+
+def authorized_model(request, body):
+    return DjangoModelAuthorization(
+        RuntimeIdentity(IDENTITY),
+        model_policy(),
+        project_access=organization_project_access,
+    ).authorize(request.auth, body["project_id"], body["model_id"])
+
+
 @never_cache
 @runtime_bearer_only
 @api_view(["POST"])
@@ -50,42 +97,39 @@ def gateway_key():
 @permission_classes([IsAuthenticated])
 def authorize(request):
     try:
-        expected = gateway_key()
-        supplied = request.headers.get("X-Keeplane-Gateway-Credential", "")
-        if not re.fullmatch(
-            r"[A-Za-z0-9_-]{32,256}", supplied
-        ) or not hmac.compare_digest(supplied.encode("ascii"), expected):
-            return Response({"error": "Gateway credential is invalid"}, status=403)
-        if request.content_type != "application/json":
-            return Response({"error": "Send JSON metadata"}, status=415)
-        raw = request.read(4097)
-        if len(raw) > 4096:
-            return Response(
-                {"error": "Authorization metadata is too large"}, status=413
-            )
-        try:
-            body = json.loads(raw)
-        except (ValueError, UnicodeDecodeError, RecursionError):
-            return Response({"error": "Send valid JSON metadata"}, status=400)
-        if (
-            not isinstance(body, dict)
-            or set(body) != {"project_id", "model_id"}
-            or not isinstance(body["project_id"], str)
-            or not 0 < len(body["project_id"]) <= 64
-            or not isinstance(body["model_id"], str)
-            or not 0 < len(body["model_id"]) <= 256
-        ):
-            return Response(
-                {"error": "Send only a project ID and model ID"}, status=400
-            )
-        result = DjangoModelAuthorization(
-            RuntimeIdentity(IDENTITY),
-            model_policy(),
-            project_access=organization_project_access,
-        ).authorize(request.auth, body["project_id"], body["model_id"])
+        body = callback_metadata(request)
+        if isinstance(body, Response):
+            return body
+        result = authorized_model(request, body)
         DjangoSharedKeyAvailability(
             MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")
         ).require_available(result["model_id"])
+    except ModelAccessDenied as error:
+        return Response({"error": error.message}, status=error.status)
+    except (ModelPolicyUnavailable, StorageUnavailable):
+        return Response({"error": "Gateway authorization is unavailable"}, status=503)
+    return Response(result)
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["POST"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def authorize_installed(request, *, selected=False):
+    """Fixed operator enrollment only; this does not install a public listener."""
+    try:
+        body = callback_metadata(request, selected=selected)
+        if isinstance(body, Response):
+            return body
+        if os.environ.get("GATEWAY_MODE", "managed") != "managed":
+            raise ModelPolicyUnavailable("Managed runtime installation is required")
+        DjangoInstalledRuntimeGate(
+            MODEL_GATEWAY,
+            settings.RUNTIME_GUARD_MANIFEST_FILE,
+            os.environ.get("PROVIDER_KEY_DIR", ""),
+        ).require_installed(body["model_id"], body.get("definition_fingerprint"))
+        result = authorized_model(request, body)
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
     except (ModelPolicyUnavailable, StorageUnavailable):
