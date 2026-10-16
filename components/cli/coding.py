@@ -1,0 +1,52 @@
+"""Run a local coding turn with the signed-in account and requested project."""
+
+import uuid
+from pathlib import Path
+from urllib.parse import urlsplit
+
+if __package__:
+    from . import opencode_adapter
+    from .credential_profile import ProfileError, opened
+    from .project_registration import register
+    from .server_connection import ConnectionError, account, models, origin
+else:
+    import opencode_adapter
+    from credential_profile import ProfileError, opened
+    from project_registration import register
+    from server_connection import ConnectionError, account, models, origin
+
+
+def gateway_endpoint(value):
+    url = urlsplit(value)
+    if url.path.rstrip("/") != "/v1" or url.query or url.fragment:
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
+    return origin(value[:len(value) - len(url.path)]) + "/v1"
+
+
+def run(profile_path, project_id, name, model, binary, directory, gateway, prompt,
+        timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None):
+    gateway = gateway_endpoint(gateway)
+    directory = Path(directory).expanduser().resolve(strict=True)
+    if not directory.is_dir():
+        raise ValueError("Choose a working repository directory.")
+    project_id = str(uuid.UUID(str(project_id)))
+    with opened(profile_path) as profile:
+        credential = profile.load()
+        actor = account(credential.issuer, credential.access_token)
+        if actor["id"] != credential.actor_id:
+            raise ProfileError("The server account changed; sign in again.")
+        register(credential.issuer, project_id, name, credential.access_token)
+        catalog = models(credential.issuer, project_id, credential.access_token)
+        if model not in {row["id"] for row in catalog["models"]}:
+            raise ConnectionError("This model is not currently allowed for the project.")
+        result = opencode_adapter.run(
+            binary, directory, gateway, model, prompt, credential.access_token,
+            timeout, cancelled=cancelled, instructions=instructions,
+            state_dir=state_dir, session=session,
+            account_context={"issuer": credential.issuer, "actor_id": actor["id"],
+                             "project_id": project_id},
+        )
+        for secret in (credential.access_token, credential.refresh_token):
+            result.stdout = result.stdout.replace(secret, "[redacted]")
+            result.stderr = result.stderr.replace(secret, "[redacted]")
+        return result

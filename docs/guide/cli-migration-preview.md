@@ -10,7 +10,21 @@ flowchart LR
   Preview --> Review[Migration findings for review]
 ```
 
-From the Keeplane repository, run:
+With the [CLI installed](cli-install.md), run from your project:
+
+```sh
+keeplane init --preview
+```
+
+Or choose the root explicitly with `--directory /absolute/path/to/project`.
+`--preview` is required; omitting it does not start onboarding. No account or
+server connection is needed. From the Keeplane source tree, the same command is:
+
+```sh
+python3 components/cli/keeplane.py init --preview --directory /absolute/path/to/project
+```
+
+The original standalone entry point remains available:
 
 ```sh
 python3 components/cli/migration_preview.py /absolute/path/to/project
@@ -35,4 +49,5 @@ trees and build output are skipped. Each source is limited to 1 MiB.
 Exit 0 means discovery completed, even if conflicts need review. Exit 1 means a
 source is unreadable or malformed; valid inventory is still shown. Exit 2 means
 the selected root cannot be scanned. Fix blocked sources and rerun. There is no
-apply command, and all existing files remain untouched.
+apply command, and all existing files remain untouched. Other CLI commands still
+support Python 3.9+; this preview reports its Python 3.11 prerequisite when needed.
