@@ -307,6 +307,10 @@ before the same current actor/project/model and owner-key checks. The per-model
 native token exchange fixes the model/fingerprint and sends the requested project
 and current developer credential. It runs before outbound header stripping and
 does not recover an operator credential as a developer key.
+The installer derives the protocol from the validated complete raw resource:
+OpenAI receives injected Authorization, while Anthropic receives injected
+`x-api-key` with an empty prefix. Only that native provider credential and
+Content-Type survive the outbound replacement; the subject Bearer is removed.
 
 The installed entry callback first checks that a Personal key is available for
 the current owner and definition, returning metadata only. A missing key is denied

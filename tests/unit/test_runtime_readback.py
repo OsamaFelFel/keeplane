@@ -163,7 +163,7 @@ def test_custom_completions_requires_the_exact_native_null_path(fault):
 
 @pytest.mark.parametrize("cache", [None, {}, {"maxEntries": 1}, {"maxEntries": False}])
 def test_personal_generated_exchange_must_explicitly_disable_cache(cache):
-    config = personal_exchange("app:3000", "demo", "a" * 64)
+    config = personal_exchange("app:3000", "demo", "a" * 64, "openAI")
     expected = compiled_exchange(config)
     assert "cache" not in expected  # Native deliberately omits this from config_dump.
     assert expected["subjectToken"] == {
@@ -174,5 +174,15 @@ def test_personal_generated_exchange_must_explicitly_disable_cache(cache):
     assert expected["inlineBackend"] == "app:3000"
     assert expected["policies"][0]["backendAuth"]["key"]["value"] == "<redacted>"
     config["cache"] = cache
+    with pytest.raises(RuntimeInstallationUnavailable):
+        compiled_exchange(config)
+
+
+def test_anthropic_readback_keeps_the_exact_native_key_location():
+    config = personal_exchange("app:3000", "demo", "a" * 64, "anthropic")
+    assert compiled_exchange(config)["authorizationLocation"] == {
+        "header": {"name": "x-api-key", "prefix": ""}
+    }
+    config["authorizationLocation"]["header"]["prefix"] = "Bearer "
     with pytest.raises(RuntimeInstallationUnavailable):
         compiled_exchange(config)

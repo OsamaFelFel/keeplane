@@ -32,13 +32,16 @@ def compiled_exchange(config):
     auth["key"]["value"] = "<redacted>"
     result["policies"] = [{"backendAuth": auth}]
     bearer = {"header": {"name": "authorization", "prefix": "Bearer "}}
+    location = result.get("authorizationLocation", bearer)
+    if location not in (bearer, {"header": {"name": "x-api-key", "prefix": ""}}):
+        raise RuntimeInstallationUnavailable("The Personal key location is unsupported")
     result.update(
         grantType="tokenExchange",
         subjectToken={
             "source": bearer,
             "tokenType": "urn:ietf:params:oauth:token-type:access_token",
         },
-        authorizationLocation=deepcopy(bearer),
+        authorizationLocation=deepcopy(location),
     )
     return result
 
