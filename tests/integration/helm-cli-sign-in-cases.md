@@ -11,7 +11,8 @@
   at 503 without writes or row locks; disabled sign-in skips optional models.
 - Registration refuses drift rather than overwriting it. Authorization keeps
   its existing transactional locking check.
-- Invalid types, non-PostgreSQL settings and insecure origins refuse rendering.
+- Invalid types, unknown sign-in options, non-PostgreSQL settings and insecure
+  origins refuse rendering.
 
 Run `pytest tests/integration/test_cli_sign_in_chart.py tests/integration/test_readiness.py`.
 With the optional pinned Toolkit graph, also run

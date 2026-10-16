@@ -19,6 +19,7 @@
         "resources": {"type": "object"},
         "cliSignIn": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {"enabled": {"type": "boolean"}}
         }
       }

@@ -68,3 +68,8 @@ def test_external_migrations_remain_supported():
 ])
 def test_invalid_sign_in_settings_refuse_render(extra):
     assert render(*extra).returncode != 0
+
+
+def test_unknown_sign_in_option_refuses_render():
+    result = render("--set", "app.cliSignIn.enabeld=true")
+    assert result.returncode != 0 and "enabeld" in result.stderr
