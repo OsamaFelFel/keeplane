@@ -1,0 +1,29 @@
+# Managed host orchestration
+
+This opt-in check runs the actual `guarded_runtime.install()` subprocess flow.
+It does not run `up.py.main()`, download models, build images or retire an older
+preview. Use an immutable cached OAuth app image and a source snapshot containing
+the real issuer, stable model writer and installed CLI fixture dependencies:
+
+```sh
+KEEPLANE_ORCHESTRATION_SOURCE=/absolute/source/snapshot \
+KEEPLANE_INSTALLED_CLI_IMAGE=sha256:IMAGE_DIGEST \
+KEEPLANE_TEST_REPORT_DIR=/private/tmp/owned-runtime-report \
+pytest tests/integration/test_managed_runtime_orchestration.py -m live
+```
+
+The fixture copies that source into a private repository directory. Its base
+Compose topology has only a gateway, app, synthetic provider and initialization
+job. All volumes are local to a unique `COMPOSE_PROJECT_NAME`; a rendered-config
+check rejects the fixed external preview account volume before any container
+starts. Host ports are reserved loopback ports. The actual runtime override,
+launcher, private preparation scripts, migrations, client registration and
+management installer are unchanged.
+
+The cases use real admin HTTP model registration, real browser PKCE sign-in and
+a guarded provider request. Re-enrollment must preserve credentials, accounts,
+model approval and the current OAuth grant. A forced missing-model enrollment
+must stop the owned gateway while its app/provider keep running, with no extra
+provider contact. Safe stages/statuses and exact source/file hashes are saved
+before cleanup; credentials, request content and raw container logs are omitted.
+All owned containers, networks and volumes are removed afterward.
