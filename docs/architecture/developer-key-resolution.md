@@ -7,6 +7,14 @@ The fingerprint must come from the server's current full model definition.
 Never log, serialize or send that value to a client. There is no HTTP key-read
 route or inference integration.
 
+`DjangoPersonalDispatch.resolve()` adds current account, project and model
+authorization before the read, and repeats it under the key owner's lock.
+Its `AuthorizedProviderKey` identifies the account, canonical project, model
+and selected definition; its display still hides the key. A final-destination
+adapter must supply its fixed fingerprint and verify installed routing before
+using this internal service. No HTTP endpoint or Personal gateway route is
+enabled by this helper. See the [authorization cases](../../tests/integration/personal-dispatch-cases.md).
+
 ```mermaid
 flowchart LR
     caller[Trusted server caller] --> owner[Lock active owner]
@@ -14,6 +22,10 @@ flowchart LR
     binding --> file[Read private active file]
     file --> result[Redacted result for provider transport]
 ```
+
+The dispatch helper checks current identity and project/model access before
+this sequence, then repeats those checks while the owner lock is held. The
+definition check still runs afterward, before the private file is read.
 
 Resolution owns a database transaction and rejects an enclosing transaction.
 It locks the same owner as replacement and removal, then locks current approval
