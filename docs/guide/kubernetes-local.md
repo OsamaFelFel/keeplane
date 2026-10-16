@@ -142,6 +142,13 @@ a missing gateway database password needs the
 cluster deletes its local volumes. The gateway databases use temporary storage:
 replacing their database pods loses their catalogs unless you back up first.
 
+App startup repairs the provider-key volume's ownership and private permissions
+without moving or replacing keys. Its short init container runs as UID 0, mounts
+only that volume, and is not privileged. Clusters enforcing the Restricted Pod
+Security profile need an explicit exception for this initializer. Managed gateway
+pods must leave `fsGroup` unset so their restarts do not widen key permissions.
+Upgrade the app and gateway together; an older app image lacks the initializer.
+
 The [stack lock](../../deploy/local/stack.lock.json) pins trial images, chart and
 demo model. Local values are development inputs. The cluster's kindnet CNI does
 not enforce NetworkPolicy; TLS Ingress and gateway ingress policies are optional
