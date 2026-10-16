@@ -1,8 +1,8 @@
 """Copy private host credentials for the non-root local app without widening access."""
 
 import os
-import shutil
 import secrets
+import shutil
 from pathlib import Path
 
 
@@ -11,6 +11,7 @@ def prepare():
         directory = Path(name)
         for path in (directory, *directory.rglob("*")):
             os.chown(path, 65532, 65532)
+    Path("/provider-keys").chmod(0o700)
     signing_key = Path("/state/django-secret-key")
     if not signing_key.exists():
         signing_key.write_text(secrets.token_urlsafe(64) + "\n")

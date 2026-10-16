@@ -1,4 +1,4 @@
-"""Fresh operator enrollment for a fixed, managed keyless/shared runtime trial."""
+"""Fresh operator enrollment for the fixed, managed runtime trial."""
 
 import hashlib
 import json
@@ -92,9 +92,9 @@ def manifest(path):
                 or set(row) != {"fingerprint", "key_choice", "key_name", "key_digest"}
                 or not isinstance(row["fingerprint"], str)
                 or not HEX.fullmatch(row["fingerprint"])
-                or row["key_choice"] not in ("none", "shared")
+                or row["key_choice"] not in ("none", "shared", "personal")
                 or (
-                    row["key_choice"] == "none"
+                    row["key_choice"] in ("none", "personal")
                     and (row["key_name"] != "" or row["key_digest"] != "")
                 )
                 or (
@@ -160,6 +160,7 @@ class DjangoInstalledRuntimeGate:
                 raise AppliedStateUnavailable()
         except AppliedStateUnavailable:
             raise ModelPolicyUnavailable("Applied runtime wiring changed") from None
+        return expected
 
     def require_definition(self, model_id, expected, selected_fingerprint=None):
         """Installer preflight only; this alone never authorizes inference."""
@@ -220,7 +221,11 @@ class DjangoInstalledRuntimeGate:
             raise ModelPolicyUnavailable(
                 "Installed provider address is unsupported"
             ) from None
-        if expected["key_choice"] == "none":
+        if expected["key_choice"] == "personal" and (
+            value["provider"] not in ("openAI", "anthropic") or url.scheme != "https"
+        ):
+            raise ModelPolicyUnavailable("Installed personal provider is unsupported")
+        if expected["key_choice"] in ("none", "personal"):
             auth = value.get("auth")
             if auth is not None and (not isinstance(auth, dict) or auth):
                 raise ModelPolicyUnavailable("Installed key choice changed")

@@ -4,6 +4,11 @@ from . import personal_transport, runtime_callback, runtime_keys, runtime_views
 
 urlpatterns = [
     path("internal/runtime/provider-token", personal_transport.provider_token),
+    path(
+        "internal/runtime/installed-provider-token",
+        personal_transport.provider_token,
+        {"installed": True},
+    ),
     path("internal/runtime/authorize", runtime_callback.authorize),
     path("internal/runtime/installed/entry", runtime_callback.authorize_installed),
     path(

@@ -10,6 +10,7 @@ from accounts.authentication import runtime_bearer_only
 from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
+from django.conf import settings
 from django.views.decorators.cache import never_cache
 from projects.access import organization_project_access
 from rest_framework.authentication import BaseAuthentication
@@ -23,6 +24,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .authorization import ModelAccessDenied
+from .installed_runtime import DjangoInstalledRuntimeGate
 from .personal_dispatch import DjangoPersonalDispatch
 from .policy import ModelPolicyUnavailable
 from .runtime_callback import gateway_key
@@ -101,13 +103,21 @@ def metadata(request):
 @api_view(["POST"])
 @authentication_classes([GatewayTransportAuthentication])
 @permission_classes([IsAuthenticated])
-def provider_token(request):
+def provider_token(request, *, installed=False):
     """Trusted native adapter only: no public model/listener is activated here."""
     try:
         body = metadata(request)
     except (ValueError, UnicodeError):
         return Response({"error": "invalid_request"}, status=400)
     try:
+        if installed:
+            if os.environ.get("GATEWAY_MODE", "managed") != "managed":
+                raise ModelPolicyUnavailable("Managed runtime installation is required")
+            DjangoInstalledRuntimeGate(
+                MODEL_GATEWAY,
+                settings.RUNTIME_GUARD_MANIFEST_FILE,
+                os.environ.get("PROVIDER_KEY_DIR", ""),
+            ).require_installed(body["model_id"], body["definition_fingerprint"])
         credential = DjangoPersonalDispatch(
             RuntimeIdentity(IDENTITY),
             model_policy(),
