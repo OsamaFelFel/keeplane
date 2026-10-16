@@ -14,3 +14,9 @@
 These HTTP and process-boundary checks use a synthetic account server and a
 controlled runtime process. Actual Django sign-in, native tool execution and
 protected-gateway withdrawal require the separate integration cases.
+
+The optional [native case](../e2e/test_cli_signed_in_coding_native.py) runs two
+actual V2 processes through the shared `code` command. It checks read/edit tools,
+the project header, retained tool history, fresh credentials for the same account,
+another-account refusal and withdrawal before another launch. Its account server
+is synthetic; it does not prove Django issuance or native gateway enforcement.
