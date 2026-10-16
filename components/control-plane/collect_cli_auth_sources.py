@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import tarfile
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from zipfile import BadZipFile, ZipFile
@@ -49,6 +50,114 @@ def check_requirements(pins, requirements):
             raise ValueError("Optional requirement inventory changed")
 
 
+def rust_components(pins, records):
+    inventory = pins.get("rust_inventory")
+    if not inventory:
+        return []
+    declared = inventory["declared_by"]
+    sbom = json.loads(records[(declared["package"], declared["member"])])
+    registry = [
+        row
+        for row in sbom["components"]
+        if row["bom-ref"].startswith(
+            "registry+https://github.com/rust-lang/crates.io-index#"
+        )
+    ]
+    selected = inventory["registry_components"]
+    identity = lambda row: (row["name"], row["version"])
+    if len({identity(row) for row in selected}) != len(selected) or {
+        identity(row) for row in selected
+    } != {identity(row) for row in registry}:
+        raise ValueError("Rust registry inventory does not match the wheel SBOM")
+    for row in selected:
+        match = next(item for item in registry if identity(item) == identity(row))
+        name, version = row["name"], row["version"]
+        if (
+            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*", version)
+            or row["scope"] != match.get("scope")
+            or row["licenses"] != match.get("licenses")
+            or match.get("purl") != f"pkg:cargo/{name}@{version}"
+            or {"alg": "SHA-256", "content": row["source"]["sha256"]}
+            not in match.get("hashes", [])
+            or row["source"]["file"] != f"{name}-{version}.crate"
+            or row["source"]["url"]
+            != f"https://static.crates.io/crates/{name}/{name}-{version}.crate"
+            or not row["source_notices"]
+        ):
+            raise ValueError("Rust source does not match the wheel SBOM")
+        for filename in row["source_notices"]:
+            relative(filename)
+    fields = ("name", "version", "scope", "licenses")
+    workspace = [
+        {field: row[field] for field in fields}
+        for row in sbom["components"]
+        if row not in registry
+    ]
+    if sorted(workspace, key=identity) != sorted(
+        inventory["workspace_components"], key=identity
+    ):
+        raise ValueError("Rust workspace inventory does not match the wheel SBOM")
+    return selected
+
+
+def original_members(path, members):
+    pending = []
+    with tarfile.open(path, "r:gz") as archive:
+        for filename, digest in members.items():
+            relative(filename)
+            member = archive.getmember(filename)
+            if not member.isfile() or member.size > 1024 * 1024:
+                raise ValueError("Source notice must be a bounded regular file")
+            original = archive.extractfile(member).read()
+            if hashlib.sha256(original).hexdigest() != digest:
+                raise ValueError("Source notice checksum mismatch")
+            pending.append((relative(filename), original))
+    return pending
+
+
+def rust_lock(pins, output, crates):
+    inventory = pins["rust_inventory"]
+    lock = inventory["cargo_lock"]
+    package = next(row for row in pins["packages"] if row["name"] == lock["package"])
+    original = original_members(
+        output / package["name"] / package["source"]["file"],
+        {lock["member"]: lock["sha256"]},
+    )[0][1]
+    rows = tomllib.loads(original.decode())["package"]
+    identity = lambda row: (row["name"], row["version"])
+    declared = inventory["declared_by"]
+    sbom = json.loads(
+        (
+            output / "build-records" / declared["package"] / declared["member"]
+        ).read_text()
+    )
+    expected = {
+        *map(identity, crates),
+        *map(identity, inventory["workspace_components"]),
+        identity(sbom["metadata"]["component"]),
+    }
+    if (
+        len({identity(row) for row in rows}) != len(rows)
+        or {identity(row) for row in rows} != expected
+    ):
+        raise ValueError("Cargo lock package inventory changed")
+    for crate in crates:
+        match = next(row for row in rows if identity(row) == identity(crate))
+        if match.get("checksum") != crate["source"]["sha256"] or match.get(
+            "source"
+        ) != ("registry+https://github.com/rust-lang/crates.io-index"):
+            raise ValueError("Cargo lock crate checksum changed")
+    for row in rows:
+        if identity(row) not in {identity(crate) for crate in crates} and (
+            row.get("source") or row.get("checksum")
+        ):
+            raise ValueError("Cargo workspace source changed")
+    target = output / "build-records" / lock["package"] / lock["member"]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(original)
+
+
 def collect(pins, wheels, output, source_cache=None):
     # Verify every cache input before creating output or starting downloads.
     notices, tasks, build_records = [], [], {}
@@ -86,6 +195,8 @@ def collect(pins, wheels, output, source_cache=None):
     tasks.extend(
         ("license-texts", artifact) for artifact in pins["supplemental_license_texts"]
     )
+    crates = rust_components(pins, build_records)
+    tasks.extend(("rust-" + row["name"], row["source"]) for row in crates)
     for native in pins.get("native_sources", []):
         if len(relative(native["name"]).parts) != 1:
             raise ValueError("Invalid native component name")
@@ -143,29 +254,67 @@ def collect(pins, wheels, output, source_cache=None):
         results = list(pool.map(obtain, tasks))
     source_notices, failures = [], []
     accepted = {(item["origin"], item["name"]) for item in results if item["verified"]}
+    cargo_verified = False
+    if crates:
+        try:
+            rust_lock(pins, output, crates)
+            cargo_verified = True
+        except (OSError, ValueError, KeyError, tarfile.TarError) as error:
+            failures.append(
+                {"component": "rust-cargo-lock", "error_class": type(error).__name__}
+            )
     for native in pins.get("native_sources", []):
         if (native["name"], native["source"]["file"]) not in accepted:
             continue
         try:
-            pending = []
-            with tarfile.open(
-                output / native["name"] / native["source"]["file"], "r:gz"
-            ) as archive:
-                for filename, digest in native["source_notices"].items():
-                    member = archive.getmember(filename)
-                    if not member.isfile() or member.size > 1024 * 1024:
-                        raise ValueError("Source notice must be a bounded regular file")
-                    original = archive.extractfile(member).read()
-                    if hashlib.sha256(original).hexdigest() != digest:
-                        raise ValueError("Source notice checksum mismatch")
-                    pending.append(
-                        (relative(native["name"]) / relative(filename), original)
-                    )
-            source_notices.extend(pending)
+            source_notices.extend(
+                (relative(native["name"]) / name, original)
+                for name, original in original_members(
+                    output / native["name"] / native["source"]["file"],
+                    native["source_notices"],
+                )
+            )
         except (OSError, ValueError, KeyError, tarfile.TarError) as error:
             failures.append(
                 {"component": native["name"], "error_class": type(error).__name__}
             )
+    rust_notice_count = 0
+    if cargo_verified:
+        for crate in crates:
+            origin = "rust-" + crate["name"]
+            if (origin, crate["source"]["file"]) not in accepted:
+                continue
+            try:
+                members = original_members(
+                    output / origin / crate["source"]["file"], crate["source_notices"]
+                )
+                with tarfile.open(
+                    output / origin / crate["source"]["file"], "r:gz"
+                ) as archive:
+                    entry = archive.getmember(
+                        f"{crate['name']}-{crate['version']}/Cargo.toml"
+                    )
+                    if not entry.isfile() or entry.size > 1024 * 1024:
+                        raise ValueError(
+                            "Cargo manifest must be a bounded regular file"
+                        )
+                    package = tomllib.loads(archive.extractfile(entry).read().decode())[
+                        "package"
+                    ]
+                    if (
+                        package["name"] != crate["name"]
+                        or package["version"] != crate["version"]
+                        or package.get("license") != crate["source_manifest_license"]
+                    ):
+                        raise ValueError("Cargo manifest changed")
+                source_notices.extend(
+                    (relative(origin) / name, original) for name, original in members
+                )
+                rust_notice_count += len(members)
+            except (OSError, ValueError, KeyError, tarfile.TarError) as error:
+                failures.append(
+                    {"component": origin, "error_class": type(error).__name__}
+                )
     for name, data in source_notices:
         target = output / "notices" / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -179,6 +328,9 @@ def collect(pins, wheels, output, source_cache=None):
         "source_notice_files": len(source_notices),
         "native_source_records": pins.get("native_sources", []),
         "native_notice_failures": failures,
+        "rust_inventory": pins.get("rust_inventory"),
+        "rust_cargo_lock_verified": cargo_verified,
+        "rust_source_notice_files": rust_notice_count,
         "sources_and_license_texts": results,
         "complete_native_inventory": False,
         "open_native_review": pins["open_native_review"],
