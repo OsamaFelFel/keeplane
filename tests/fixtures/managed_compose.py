@@ -294,11 +294,18 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
         self.validated = True
 
     def ready(self):
-        for _ in range(150):
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
             try:
-                with urlopen(self.server + "/health/ready", timeout=2) as response:
+                remaining = max(0.01, deadline - time.monotonic())
+                with urlopen(
+                    self.server + "/health/ready", timeout=min(2, remaining)
+                ) as response:
                     assert response.status == 200
-                with urlopen(self.server + "/health", timeout=3) as response:
+                remaining = max(0.01, deadline - time.monotonic())
+                with urlopen(
+                    self.server + "/health", timeout=min(3, remaining)
+                ) as response:
                     if response.status == 200:
                         return
             except (OSError, AssertionError):
