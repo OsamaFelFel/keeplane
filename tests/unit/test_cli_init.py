@@ -63,8 +63,10 @@ def test_unified_preview_preserves_report_boundaries_and_exit_codes(
         )
 
 
-@pytest.mark.parametrize("flags", [[], ["--preview", "--apply"]])
-def test_preview_flag_required_and_apply_unavailable(monkeypatch, flags):
+@pytest.mark.parametrize("flags", [[], ["--preview", "--apply", "plan.json"],
+                                  ["--preview", "--source", "CLAUDE.md"],
+                                  ["--apply", "plan.json", "--source", "CLAUDE.md"]])
+def test_explicit_mode_required_and_ambiguous_options_refused(monkeypatch, flags):
     monkeypatch.setattr("sys.argv", ["keeplane", "init", *flags])
     with pytest.raises(SystemExit) as result:
         keeplane.main()

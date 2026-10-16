@@ -61,8 +61,12 @@ def main():
     login.add_argument("--timeout", type=int, default=120)
     login.add_argument("--device", action="store_true", help="Sign in using a code on another browser")
     init = commands.add_parser("init", help="Preview existing project instructions and settings")
-    init.add_argument("--preview", action="store_true", required=True)
+    init_mode = init.add_mutually_exclusive_group(required=True)
+    init_mode.add_argument("--preview", action="store_true")
+    init_mode.add_argument("--apply", type=Path, metavar="PLAN", help="Confirm one saved root-instruction migration")
     init.add_argument("--directory", type=Path, default=Path.cwd())
+    init.add_argument("--source", choices=("CLAUDE.md", "QWEN.md"))
+    init.add_argument("--plan", type=Path, help="Save a selected instruction preview outside the repository")
     code = commands.add_parser("code", help="Run a local coding turn through the protected gateway")
     for flag in ("profile", "project", "name", "model", "runtime", "gateway"):
         code.add_argument("--" + flag, required=True)
@@ -100,6 +104,23 @@ def main():
             if sys.version_info < (3, 11):
                 print("Migration preview requires Python 3.11 or newer.", file=sys.stderr)
                 return 2
+            if args.apply or args.source or args.plan:
+                if args.apply and (args.source or args.plan) or bool(args.source) != bool(args.plan):
+                    parser.error("Use --preview with both --source and --plan, or --apply PLAN.")
+                if __package__:
+                    from . import migration_apply
+                else:
+                    import migration_apply
+                try:
+                    result = migration_apply.apply(args.directory, args.apply) if args.apply else migration_apply.review(args.directory, args.source, args.plan)
+                except migration_apply.MigrationError as error:
+                    print(str(error), file=sys.stderr)
+                    return 2
+                except (OSError, ValueError, TypeError, RecursionError):
+                    print("Cannot safely complete this migration. Check the plan and repository files.", file=sys.stderr)
+                    return 2
+                print(json.dumps(result, indent=2))
+                return 0
             if __package__:
                 from .migration_preview import report
             else:
