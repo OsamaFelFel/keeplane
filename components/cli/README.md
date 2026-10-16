@@ -1,5 +1,8 @@
 # Use the Keeplane CLI
 
+Follow the [installed CLI quickstart](../../docs/guide/cli-quickstart.md) for
+sign-in, reviewed instructions, coding, resume, keys and sign-out in one place.
+
 Start with the installed `keeplane` command:
 
 1. [Install the CLI wheel](../../docs/guide/cli-install.md). It contains Keeplane's
