@@ -3,6 +3,8 @@
 Entry checks the current owner's bound key before native backend selection;
 missing → added can proceed without altering backend health. Selection returns
 metadata only, and the final private handoff reads the current key again.
+Local initialization makes an existing provider-key volume private (0700),
+preserving saved keys; the resolver continues to reject an exposed directory.
 
 - Enroll only an exact approved API model with a stable ID, a fixed HTTPS
   OpenAI/Anthropic definition and no global provider key. Installation does not
