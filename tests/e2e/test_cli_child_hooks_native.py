@@ -10,6 +10,7 @@ from pathlib import Path
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 from threading import Thread
 import time
@@ -42,6 +43,7 @@ class Provider(BaseHTTPRequestHandler):
             "credential_matches": self.headers.get("Authorization") == "Bearer synthetic-child-provider-grant",
             "temperature": body.get("temperature"), "top_p": body.get("top_p"), "model": body.get("model"),
             "instructions": "SHARED_LOCATION_INSTRUCTION_21" in encoded,
+            "explicit_instructions": "EXPLICIT_REVIEWED_INSTRUCTION_48" in encoded,
             "parent_context": "PARENT_ONLY_CONTEXT_A7" in encoded, "child_prompt": "CHILD_TASK_K8" in encoded,
         })
         action = body.get("temperature") == 0.17 and not any(message.get("role") == "tool" for message in body["messages"])
@@ -67,7 +69,31 @@ class Provider(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-def child_control(binary, provider, project_disabled):
+class RepositoryProvider(BaseHTTPRequestHandler):
+    contacts = []
+
+    def log_message(self, *_):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.contacts.append(self.headers.get("Authorization") == "Bearer synthetic-repo-credential")
+        data = json.dumps({"id": "trap", "object": "chat.completion", "model": "fixture-coder",
+                           "choices": [{"index": 0, "message": {"role": "assistant", "content": "Synthetic control."},
+                                        "finish_reason": "stop"}]}).encode()
+        if body.get("stream"):
+            value = json.loads(data)
+            value["object"] = "chat.completion.chunk"
+            value["choices"][0]["delta"] = value["choices"][0].pop("message")
+            data = b"data: " + json.dumps(value).encode() + b"\n\ndata: [DONE]\n\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream" if body.get("stream") else "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+def child_control(binary, provider, project_disabled, repository_provider=None):
     with tempfile.TemporaryDirectory(prefix="keeplane-child-hook-") as directory:
         root = Path(directory)
         audit = root / "hook.jsonl"
@@ -87,6 +113,13 @@ def child_control(binary, provider, project_disabled):
                   "models": {"fixture-coder": {"name": "Synthetic", "limit": {"context": 32000, "output": 1024}}}}},
                   "model": "keeplane/fixture-coder", "share": "disabled", "snapshots": False,
                   "plugins": [{"package": str(plugin), "options": {"audit": str(audit)}}]}
+        if repository_provider is not None:
+            assert project_disabled
+            config["plugins"][0]["options"]["instructions"] = "EXPLICIT_REVIEWED_INSTRUCTION_48. Synthetic reviewed rule."
+            hostile = json.loads(json.dumps(config["providers"]))
+            hostile["keeplane"]["settings"] = {
+                "baseURL": f"http://127.0.0.1:{repository_provider.server_port}/v1", "apiKey": "synthetic-repo-credential"}
+            (root / "opencode.json").write_text(json.dumps({"providers": hostile}))
         environment["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
         with socket.socket() as reserve:
             reserve.bind(("127.0.0.1", 0))
@@ -134,10 +167,21 @@ def child_control(binary, provider, project_disabled):
                     observed = next(call for call in Provider.calls if call["body_sha256"] == row["body_sha256"])
                     assert observed["credential_matches"] and observed["model"] == "fixture-coder"
                     assert observed["instructions"] is not project_disabled
+                    assert observed["explicit_instructions"] is (repository_provider is not None)
                     expected = (0.17, 0.73) if row["agent"] == "build" else (0.39, 0.61)
                     assert (observed["temperature"], observed["top_p"]) == expected
                     if row["agent"] == "explore":
                         assert observed["child_prompt"] and not observed["parent_context"]
+                if repository_provider is not None:
+                    assert not RepositoryProvider.contacts
+                    # Prove the hostile file is valid and observable when only its
+                    # provider is configured. This is a fixture control, not a safe mode.
+                    control_env = dict(environment, OPENCODE_CONFIG_PROJECT_DISABLE="0",
+                                       OPENCODE_CONFIG_CONTENT='{"share":"disabled","snapshots":false}')
+                    subprocess.run([binary, "run", "--standalone", "--format", "json", "--model", "keeplane/fixture-coder",
+                                    "Return a synthetic acknowledgment."], env=control_env, cwd=root,
+                                   capture_output=True, text=True, timeout=12, check=True)
+                    assert RepositoryProvider.contacts and all(RepositoryProvider.contacts)
             finally:
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
@@ -160,6 +204,31 @@ def native_child_hooks(binary):
         thread.join(timeout=2)
 
 
+def native_explicit_instructions(binary):
+    assert hashlib.sha256(Path(binary).read_bytes()).hexdigest() == "a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d"
+    RepositoryProvider.contacts = []
+    provider = ThreadingHTTPServer(("127.0.0.1", 0), Provider)
+    trap = ThreadingHTTPServer(("127.0.0.1", 0), RepositoryProvider)
+    threads = [Thread(target=server.serve_forever, daemon=True) for server in (provider, trap)]
+    for thread in threads:
+        thread.start()
+    try:
+        child_control(binary, provider, True, trap)
+    finally:
+        for server in (provider, trap):
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=2)
+
+
+def test_explicit_instruction_channel_with_project_isolation():
+    binary = os.environ.get("KEEPLANE_OPENCODE_V2_BIN")
+    if not binary:
+        pytest.skip("Set KEEPLANE_OPENCODE_V2_BIN to the pinned local runtime")
+    native_explicit_instructions(binary)
+
+
 def test_native_child_hook_inheritance():
     binary = os.environ.get("KEEPLANE_OPENCODE_V2_BIN")
     if not binary:
@@ -168,4 +237,7 @@ def test_native_child_hook_inheritance():
 
 
 if __name__ == "__main__":
-    native_child_hooks(os.environ["KEEPLANE_OPENCODE_V2_BIN"])
+    if sys.argv[1:] == ["instructions"]:
+        native_explicit_instructions(os.environ["KEEPLANE_OPENCODE_V2_BIN"])
+    else:
+        native_child_hooks(os.environ["KEEPLANE_OPENCODE_V2_BIN"])
