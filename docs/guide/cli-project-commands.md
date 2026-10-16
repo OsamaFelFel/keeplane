@@ -40,4 +40,5 @@ Explicit refresh, logout and local `forget` follow the [profile recovery behavio
 Use the [key commands](cli-provider-key-commands.md) to manage your own stored
 provider keys. The [coding command](cli-coding.md) joins this profile to local
 tool turns and account-bound resume history through an operator's protected
-gateway. Initialization and migration apply remain separate work.
+gateway. Use [init preview](cli-migration-preview.md) to inventory an existing Git project
+without changing it; applying a migration remains separate work.

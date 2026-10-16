@@ -129,12 +129,9 @@ def preview(directory):
     return {"mode": "preview-only", "inventory": inventory, "findings": findings, "writes": []}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("directory", nargs="?", type=Path, default=Path.cwd())
-    args = parser.parse_args()
+def report(directory):
     try:
-        result = preview(args.directory)
+        result = preview(directory)
     except (OSError, ValueError):
         print("Cannot scan this path. Choose a readable repository root containing .git, without symlinks.", file=sys.stderr)
         return 2
@@ -142,6 +139,13 @@ def main():
     return 1 if any(entry["status"] == "blocked" for entry in result["inventory"]) or any(
         finding["kind"] == "unreadable-directory" for finding in result["findings"]
     ) else 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", nargs="?", type=Path, default=Path.cwd())
+    args = parser.parse_args()
+    return report(args.directory)
 
 
 if __name__ == "__main__":

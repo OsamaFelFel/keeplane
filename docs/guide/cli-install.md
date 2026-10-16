@@ -29,7 +29,8 @@ command can instead use the installed `keeplane` executable from any directory.
 Coding still requires an independently installed OpenCode V2 2.0.27 binary and
 an operator-configured protected gateway. The wheel does not select or download
 a native runtime, and the server's optional sign-in trial remains separate.
-The separate read-only migration preview module still needs Python 3.11+ for TOML.
+`keeplane init --preview` needs Python 3.11+ for TOML; see the
+[read-only migration preview](cli-migration-preview.md).
 
 To replace the trial wheel, stop active CLI commands and install the replacement
 with the same interpreter and `--force-reinstall --no-index --no-deps`. Account

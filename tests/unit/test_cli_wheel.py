@@ -131,6 +131,29 @@ def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issu
     assert "--device" in run([command, "login", "--help"])
     assert "--instructions" in run([command, "code", "--help"])
     assert "--profile" in run([command, "refresh", "--help"])
+    assert "--preview" in run([command, "init", "--help"])
+    version = json.loads(
+        run(
+            [
+                runtime,
+                "-I",
+                "-c",
+                "import json, sys; print(json.dumps(list(sys.version_info[:2])))",
+            ]
+        )
+    )
+    if version >= [3, 11]:
+        repository = away / "repository"
+        (repository / ".git").mkdir(parents=True)
+        (repository / "CLAUDE.md").write_text("PRIVATE_INSTRUCTION")
+        output = run([command, "init", "--preview", "--directory", repository])
+        result = json.loads(output)
+        assert result["mode"] == "preview-only" and result["writes"] == []
+        assert result["inventory"][0]["proposed_target"] == "AGENTS.md"
+        assert (
+            "PRIVATE_INSTRUCTION" not in output
+            and not (repository / "AGENTS.md").exists()
+        )
     profile = tmp_path / "profile"
     output = run(
         [
