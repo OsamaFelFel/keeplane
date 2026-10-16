@@ -4,6 +4,9 @@
 {{- if and .Values.app.postgres.enabled .Values.app.localTrial.enabled }}
 {{- fail "app.postgres and app.localTrial are mutually exclusive" }}
 {{- end }}
+{{- if and .Values.app.cliSignIn.enabled (not .Values.app.postgres.enabled) }}
+{{- fail "app.cliSignIn requires app.postgres.enabled" }}
+{{- end }}
 {{- if and .Values.app.localTrial.enabled (ne (int .Values.app.replicaCount) 1) }}
 {{- fail "SQLite localTrial requires exactly one app replica" }}
 {{- end }}
@@ -111,12 +114,16 @@ spec:
               value: {{ .Values.app.runnerUrls | quote }}
             {{- if .Values.app.postgres.enabled }}
             {{- include "keeplane.postgres.env" . | nindent 12 }}
+            {{- if .Values.app.cliSignIn.enabled }}
+            - name: KEEPLANE_CLI_OAUTH_ENABLED
+              value: "1"
+            {{- end }}
             - name: KEEPLANE_DATABASE_USER
               value: {{ required "app.postgres.user is required" .Values.app.postgres.user | quote }}
             - name: FIRST_ADMIN_PASSWORD_FILE
               value: /run/keeplane-identity/first-admin-password
             - name: PUBLIC_ORIGIN
-              value: {{ if .Values.ingress.enabled }}{{ printf "https://%s" (required "ingress.host is required" .Values.ingress.host) | quote }}{{ else }}{{ .Values.app.postgres.publicOrigin | quote }}{{ end }}
+              value: {{ include "keeplane.postgres.publicOrigin" . | quote }}
             - name: PUBLIC_ORIGIN_ALIASES
               value: {{ .Values.app.postgres.publicOriginAliases | quote }}
             - name: PROVIDER_KEY_DIR
