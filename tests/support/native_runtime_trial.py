@@ -14,7 +14,9 @@ IMAGES = json.loads((ROOT / "deploy/local/stack.lock.json").read_text())["images
 
 
 @contextmanager
-def native_runtime_trial(tmp_path, existing, config, *, fallback=False, protocol=False):
+def native_runtime_trial(
+    tmp_path, existing, config, *, fallback=False, protocol=False, actor_keys=False
+):
     project = "keeplane-native-" + uuid.uuid4().hex[:10]
     trial = tmp_path / "trial"
     trial.mkdir(mode=0o755)
@@ -72,6 +74,8 @@ def native_runtime_trial(tmp_path, existing, config, *, fallback=False, protocol
                 str(ROOT / "tests/fixtures/runtime_authorizer.py") + ":/fixture.py:ro",
                 str(ROOT / "tests/fixtures/runtime_protocol.py")
                 + ":/runtime_protocol.py:ro",
+                str(ROOT / "tests/fixtures/runtime_actor_keys.py")
+                + ":/runtime_actor_keys.py:ro",
             ],
             "environment": {
                 "PYTHONPATH": "/app",
@@ -84,7 +88,8 @@ def native_runtime_trial(tmp_path, existing, config, *, fallback=False, protocol
                 "GATEWAY_ADMIN_KEY_FILE": "/trial/admin",
                 "GATEWAY_RUNTIME_KEY_FILE": "/trial/admin",
                 "RUNTIME_AUTHORIZER_KEY_FILE": "/trial/gateway-key",
-                "FIXTURE_SHARED_PROVIDER_KEY": "1",
+                "FIXTURE_SHARED_PROVIDER_KEY": "0" if actor_keys else "1",
+                "FIXTURE_NATIVE_ACTOR_KEYS": "1" if actor_keys else "0",
                 "FIXTURE_NATIVE_FALLBACK": "1" if fallback else "0",
                 "FIXTURE_NATIVE_PROTOCOL": "1" if protocol else "0",
                 "FIXTURE_PROVIDER_KEY_NAME": names[0],
@@ -130,6 +135,20 @@ def native_runtime_trial(tmp_path, existing, config, *, fallback=False, protocol
             dc("exec", "-T", "client", "python", "/client.py", json.dumps(options))
         )
 
+    def select_actor(label):
+        assert actor_keys and label in ("a", "b")
+        seed = dc("exec", "-T", "fixture", "cat", "/state/credential-" + label)
+        values["session-" + label] = json.loads(seed)["token"]
+        dc(
+            "exec",
+            "-T",
+            "client",
+            "python",
+            "-c",
+            "from pathlib import Path; import sys; Path('/client/credential').write_bytes(sys.stdin.buffer.read())",
+            input=seed,
+        )
+
     try:
         dc("up", "-d")
         dc(
@@ -154,6 +173,7 @@ def native_runtime_trial(tmp_path, existing, config, *, fallback=False, protocol
         yield SimpleNamespace(
             call=call,
             probe=probe,
+            select_actor=select_actor,
             public_key_file=trial / names[1],
             before=call("config"),
         )
