@@ -131,6 +131,13 @@ wiring digest separate. Failed and retired generations remain recorded. This
 factory writes no gateway configuration and enables no dispatch; native final
 readback and approval/key validation remain required before integration.
 
+The [internal publisher](../../tests/integration/definition-publication-cases.md)
+can submit that candidate to explicitly declared, operator-controlled targets.
+It requires trusted complete file and effective baselines before writing.
+It retains failed/partial attempts and rereads every target after all writes,
+recording each complete protected revision/fingerprint separately. This confirms
+management desired state; it changes no approvals or keys and enables no traffic.
+
 Native [external authorization](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/external-authz/)
 and [file-backed backend credentials](https://agentgateway.dev/docs/standalone/latest/documentation/configuration/security/backend-authn/key/)
 provide the transport. These fixture checks do not install production isolation
