@@ -315,10 +315,18 @@ Content-Type survive the outbound replacement; the subject Bearer is removed.
 The installed entry callback first checks that a Personal key is available for
 the current owner and definition, returning metadata only. A missing key is denied
 before native backend selection. The final private token exchange still resolves
-the key afresh. A genuine backend/provider failure changes native health state
-and requires fresh enrollment in this fixed trial; health and eviction remain
-part of the applied binding. Concurrent withdrawal after entry can also fail
-at that final boundary; this is not an in-flight availability guarantee.
+the key afresh. The applied signature omits validated health scores and
+consecutive-failure counts only inside active native EndpointInfo records,
+alongside the existing request measurements. Normal provider errors can recover
+on the next request. Endpoint membership, eviction deadlines/counts, capacity,
+destinations, guards, authentication and unknown fields remain bound. Concurrent
+withdrawal after entry can still fail at the final boundary; this is not an
+in-flight availability guarantee.
+
+This changes the applied signature calculation. Existing installations stay
+denied until an operator starts a fresh gateway and reruns enrollment. No previous
+signature is accepted automatically. The fixed installation still requires one
+provider group, one active endpoint and no rejected endpoints for each model.
 
 Token caching is explicitly disabled in the complete file/effective configuration.
 The pinned native applied serializer omits that setting: readback verifies the

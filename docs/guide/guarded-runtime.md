@@ -34,8 +34,10 @@ to make a failed check pass. Ordinary startup without runtime flags is unchanged
 
 After changing a model, shared key or gateway configuration, rerun the opt-in
 command so a fresh gateway verifies the new state. Personal key changes apply
-to the next request. A provider/backend failure also requires fresh enrollment
-because this fixed trial binds native health state.
+to the next request. Normal provider failures can recover on the next request;
+endpoint eviction or wiring changes still require fresh enrollment.
+After upgrading to the new health signature, rerun the launcher once to enroll
+a fresh gateway. Existing manifests are not accepted automatically.
 
 This is an opt-in managed local trial. Virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its

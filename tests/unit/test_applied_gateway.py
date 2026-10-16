@@ -65,21 +65,38 @@ def dump():
     }
 
 
-def test_only_three_evidenced_request_measurements_are_excluded():
+def test_only_evidenced_request_measurements_are_excluded():
     before = dump()
     after = deepcopy(before)
     info = after["backends"][0]["backend"]["ai"]["target"]["providers"][0]["active"][
         "model"
     ]["info"]
-    info.update(requestLatency=0.03, pendingRequests=2, totalRequests=123)
+    info.update(
+        requestLatency=0.03,
+        pendingRequests=2,
+        totalRequests=123,
+        health=0.7,
+        consecutiveFailures=1,
+    )
     assert applied_fingerprint(before) == applied_fingerprint(after)
     assert before == dump()
 
 
 @pytest.mark.parametrize(
-    "field", ["endpoint", "capacity", "health", "unknown", "policy", "created"]
+    "field",
+    [
+        "endpoint",
+        "capacity",
+        "timesEjected",
+        "evictedUntil",
+        "unknown",
+        "policy",
+        "created",
+        "membership",
+        "health-policy",
+    ],
 )
-def test_definition_health_policy_and_unknown_fields_remain_bound(field):
+def test_definition_eviction_policy_and_unknown_fields_remain_bound(field):
     before = dump()
     after = deepcopy(before)
     endpoint = after["backends"][0]["backend"]["ai"]["target"]["providers"][0][
@@ -89,10 +106,15 @@ def test_definition_health_policy_and_unknown_fields_remain_bound(field):
         endpoint["endpoint"]["hostOverride"] = "changed.invalid:443"
     elif field == "capacity":
         endpoint["capacity"] = 2
-    elif field == "health":
-        endpoint["info"]["health"] = 0.3
+    elif field in ("timesEjected", "evictedUntil"):
+        endpoint["info"][field] = 1
     elif field == "unknown":
         endpoint["info"]["unknown"] = True
+    elif field == "membership":
+        group = after["backends"][0]["backend"]["ai"]["target"]["providers"][0]
+        group["rejected"]["model"] = group["active"].pop("model")
+    elif field == "health-policy":
+        after["policies"].append({"health": {"eviction": {"consecutiveFailures": 2}}})
     else:
         after[field] = {"changed": True}
     if field in ("policy", "created"):
@@ -105,7 +127,13 @@ def test_definition_health_policy_and_unknown_fields_remain_bound(field):
 def test_same_named_measurements_outside_exact_info_path_are_not_removed(location):
     before = dump()
     after = deepcopy(before)
-    values = {"requestLatency": 1, "pendingRequests": 2, "totalRequests": 3}
+    values = {
+        "requestLatency": 1,
+        "pendingRequests": 2,
+        "totalRequests": 3,
+        "health": 0.7,
+        "consecutiveFailures": 1,
+    }
     if location == "policy":
         after["policies"].append(values)
     elif location == "config":
@@ -117,6 +145,46 @@ def test_same_named_measurements_outside_exact_info_path_are_not_removed(locatio
     else:
         after["backends"][0]["unknown"] = values
     assert applied_fingerprint(before) != applied_fingerprint(after)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("health", value)
+        for value in (None, True, "0.7", {}, -0.1, 1.1, float("nan"), float("inf"))
+    ]
+    + [
+        ("consecutiveFailures", value)
+        for value in (None, True, 1.0, "1", {}, -1, 2**64)
+    ],
+)
+def test_malformed_health_measurements_fail_closed(field, value):
+    changed = dump()
+    info = changed["backends"][0]["backend"]["ai"]["target"]["providers"][0]["active"][
+        "model"
+    ]["info"]
+    info[field] = value
+    with pytest.raises(AppliedStateUnavailable):
+        applied_fingerprint(changed)
+
+
+@pytest.mark.parametrize("field", ["health", "consecutiveFailures"])
+def test_missing_health_measurement_is_not_silently_ignored(field):
+    changed = dump()
+    del changed["backends"][0]["backend"]["ai"]["target"]["providers"][0]["active"][
+        "model"
+    ]["info"][field]
+    with pytest.raises(AppliedStateUnavailable):
+        applied_fingerprint(changed)
+
+
+@pytest.mark.parametrize("health,failures", [(0, 0), (1, 2**64 - 1), (0.3, 5)])
+def test_native_health_measurement_bounds_are_supported(health, failures):
+    changed = dump()
+    changed["backends"][0]["backend"]["ai"]["target"]["providers"][0]["active"][
+        "model"
+    ]["info"].update(health=health, consecutiveFailures=failures)
+    assert applied_fingerprint(changed) == applied_fingerprint(dump())
 
 
 @pytest.mark.parametrize(
