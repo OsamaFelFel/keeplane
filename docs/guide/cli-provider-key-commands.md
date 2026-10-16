@@ -1,6 +1,6 @@
 # Manage your provider keys from the CLI
 
-Use Python 3.12+, a signed-in private Keeplane profile and a server with the
+Use macOS or Linux, Python 3.9+, a signed-in private Keeplane profile and a server with the
 runtime provider-key endpoints. An admin must have set up the model to accept
 developers' own keys before you can add one. Browser sign-in and personal-model
 setup/dispatch are still integration work; these commands manage registration.

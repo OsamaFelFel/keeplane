@@ -32,5 +32,6 @@ flowchart LR
 ```
 
 Logout and explicit local `forget` retain the [profile recovery behavior](cli-account-profile.md).
-This slice does not join coding dispatch, resume history, personal keys or init
-apply. The controlled HTTP checks do not prove the real Django browser issuer.
+Use the [key commands](cli-provider-key-commands.md) to manage your own stored
+provider keys. Coding dispatch, resume history and init apply remain separate
+integration work. Controlled HTTP checks do not prove the real Django browser issuer.
