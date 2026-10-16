@@ -113,6 +113,17 @@ tests per-request header injection from a trusted final callback. Its synthetic
 server-only key map checks actor isolation and withdrawal; production personal-key
 storage and selection remain separate work.
 
+The [definition-generation check](../../tests/integration/native-definition-binding-cases.md)
+stops a stale selected resource before key delivery, even when its model ID and
+provider address match the current one. It depends on a controlled publisher
+using a fresh generation for every complete definition; the native gateway does
+not attest arbitrary definitions. Production publication remains separate work.
+
+The [fallback generation check](../../tests/integration/native-fallback-definition-binding-cases.md)
+uses a bounded map of current markers for two candidates. Each selected resource
+checks its own marker before key delivery; a stale fallback cannot use the first
+model's marker. This is a fixed disposable protocol, not production publication.
+
 The [internal definition factory](../../tests/integration/definition-generation-factory-cases.md)
 persists a fresh generation before building a guarded model candidate. It keeps
 the approved raw fingerprint, generated envelope digest and complete global
