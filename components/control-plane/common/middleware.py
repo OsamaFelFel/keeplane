@@ -44,6 +44,16 @@ class PublicSchemeMiddleware(MiddlewareMixin):
 
 class BrowserCsrfMiddleware(CsrfViewMiddleware):
     def process_view(self, request, callback, callback_args, callback_kwargs):
+        from accounts import oauth_views
+
+        if (
+            callback is oauth_views.token
+            and settings.CLI_OAUTH_ENABLED
+            and request.method == "POST"
+            and request.content_type == "application/x-www-form-urlencoded"
+        ):
+            # Only the dedicated grant endpoint: cookies never authenticate it.
+            return None
         if getattr(callback, "runtime_bearer_only", False):
             from accounts.authentication import RuntimeSessionAuthentication
             from rest_framework.permissions import IsAuthenticated

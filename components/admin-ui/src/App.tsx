@@ -4,6 +4,7 @@ import { api, type Identity } from '@/app/api'
 import { Shell } from '@/app/Shell'
 import { DeveloperPage } from '@/app/DeveloperPage'
 import { SignInPage } from '@/features/auth/SignInPage'
+import { signInReturn } from '@/features/auth/signInReturn'
 
 const UsersPage = lazy(() => import('@/features/users/UsersPage').then(module => ({ default: module.UsersPage })))
 const ProjectsPage = lazy(() => import('@/features/projects/ProjectsPage').then(module => ({ default: module.ProjectsPage })))
@@ -16,6 +17,12 @@ export default function App() {
   const [identity, setIdentity] = useState<Identity | null | undefined>(undefined)
   const refresh = useCallback(() => { api<Identity>('/api/identity').then(setIdentity).catch(() => setIdentity(null)) }, [])
   useEffect(refresh, [refresh])
+  useEffect(() => {
+    if (identity && window.location.pathname === '/sign-in') {
+      const target = signInReturn(window.location.search, window.location.origin)
+      if (target) window.location.assign(target)
+    }
+  }, [identity])
   if (identity === undefined) return <main className="p-8" role="status">Loading Keeplane…</main>
   if (identity === null) return <SignInPage onSignedIn={refresh} />
   if (identity.role === 'developer') return <DeveloperPage identity={identity} />
