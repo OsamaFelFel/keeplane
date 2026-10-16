@@ -1003,5 +1003,34 @@
         "source_manifest_license": "MIT/Apache-2.0"
       }
     ]
-  }
+  },
+  "recipe_declared_sources": [
+    {
+      "name": "libffi",
+      "version": "3.4.6",
+      "attribution": "release-recipe-only",
+      "wheel_build_attested": false,
+      "declared_by": {
+        "package": "cffi",
+        "version": "2.1.1",
+        "wheel_sha256": "e0bcb7e0f677f543555d2adff3bf19c05f66cdb4796e5ff602442ab2fe3c4ef7",
+        "recipe": {
+          "file": "cffi-2.1.1-release-workflow.yaml",
+          "url": "https://raw.githubusercontent.com/python-cffi/cffi/fd33e7700f0ebafe6f30bd5053f13327221b77a2/.github/workflows/ci.yaml",
+          "sha256": "b1910ddbfc69d2fbe41f1493cb564658d0970522bfeb5e6fe93d3288c802736c",
+          "bytes": 25212
+        }
+      },
+      "source": {
+        "file": "libffi-3.4.6.tar.gz",
+        "url": "https://github.com/libffi/libffi/archive/v3.4.6.tar.gz",
+        "sha256": "9ac790464c1eb2f5ab5809e978a1683e9393131aede72d1b0a0703771d3c6cda",
+        "bytes": 598175
+      },
+      "source_notices": {
+        "libffi-3.4.6/LICENSE": "67894089811f93fca47a76f85e017da6f8582d4ba0905963c6e0f1ad6df7a195",
+        "libffi-3.4.6/LICENSE-BUILDTOOLS": "e67978cd18816c0cb7d29aaaacde7b7447402c2fb321a051698890a8eaedda94"
+      }
+    }
+  ]
 }

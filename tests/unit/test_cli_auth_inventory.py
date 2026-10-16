@@ -96,6 +96,138 @@ def test_pinned_graph_matches_requirements_and_detects_drift():
 
 
 @pytest.fixture
+def recipe_artifacts(artifacts):
+    cache, pins, output = artifacts
+    original = b"Original libffi notice\n"
+    source = cache / "libffi-3.4.6.tar.gz"
+    with tarfile.open(source, "w:gz") as archive:
+        member = tarfile.TarInfo("libffi-3.4.6/LICENSE")
+        member.size = len(original)
+        archive.addfile(member, io.BytesIO(original))
+    url = "https://github.com/libffi/libffi/archive/v3.4.6.tar.gz"
+    recipe = cache / "release-workflow.yaml"
+    recipe.write_text("build:\n  run: curl " + url + "\n")
+    package = pins["packages"][0]
+    pins["recipe_declared_sources"] = [
+        {
+            "name": "libffi",
+            "version": "3.4.6",
+            "attribution": "release-recipe-only",
+            "wheel_build_attested": False,
+            "declared_by": {
+                "package": package["name"],
+                "version": package["version"],
+                "wheel_sha256": package["wheel"]["sha256"],
+                "recipe": {
+                    "file": recipe.name,
+                    "url": "https://raw.githubusercontent.com/example/project/"
+                    + "a" * 40
+                    + "/.github/workflows/ci.yaml",
+                    "sha256": hashlib.sha256(recipe.read_bytes()).hexdigest(),
+                },
+            },
+            "source": {
+                "file": source.name,
+                "url": url,
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            },
+            "source_notices": {
+                "libffi-3.4.6/LICENSE": hashlib.sha256(original).hexdigest()
+            },
+        }
+    ]
+    return cache, pins, output
+
+
+def test_recipe_originals_are_preserved_without_attesting_wheel_equivalence(
+    recipe_artifacts,
+):
+    cache, pins, output = recipe_artifacts
+    result = inventory.collect(pins, cache, output, source_cache=cache)
+    assert result["artifacts_verified"] and result["recipe_source_notice_files"] == 1
+    assert result["recipe_declared_source_records"] == pins["recipe_declared_sources"]
+    assert not result["recipe_declared_source_records"][0]["wheel_build_attested"]
+    assert (
+        not result["complete_native_inventory"] and not result["archive_trees_unpacked"]
+    )
+    assert (
+        output / "notices/recipe-libffi/libffi-3.4.6/LICENSE"
+    ).read_bytes() == b"Original libffi notice\n"
+    assert (output / "recipe-libffi/release-workflow.yaml").read_bytes() == (
+        cache / "release-workflow.yaml"
+    ).read_bytes()
+
+
+@pytest.mark.parametrize("artifact", ["recipe", "source"])
+def test_corrupt_recipe_or_source_retains_failed_report_without_notices(
+    recipe_artifacts, artifact
+):
+    cache, pins, output = recipe_artifacts
+    row = pins["recipe_declared_sources"][0]
+    record = row["declared_by"]["recipe"] if artifact == "recipe" else row["source"]
+    (cache / record["file"]).write_bytes(b"Changed bytes")
+    result = inventory.collect(pins, cache, output, source_cache=cache)
+    assert (
+        not result["artifacts_verified"] and result["recipe_source_notice_files"] == 0
+    )
+    assert not (output / "notices/recipe-libffi").exists()
+    assert json.loads((output / "inventory.json").read_text()) == result
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "package-version",
+        "component-version",
+        "wheel-subject",
+        "mutable-recipe",
+        "attestation",
+        "duplicate",
+        "unsafe-notice",
+    ],
+)
+def test_recipe_attribution_drift_is_refused_before_output(recipe_artifacts, mutation):
+    cache, pins, output = recipe_artifacts
+    row = pins["recipe_declared_sources"][0]
+    if mutation == "package-version":
+        row["declared_by"]["version"] = "other"
+    elif mutation == "component-version":
+        row["version"] = "4.0.0"
+    elif mutation == "wheel-subject":
+        row["declared_by"]["wheel_sha256"] = "f" * 64
+    elif mutation == "mutable-recipe":
+        row["declared_by"]["recipe"]["url"] = row["declared_by"]["recipe"][
+            "url"
+        ].replace("a" * 40, "main")
+    elif mutation == "attestation":
+        row["wheel_build_attested"] = True
+    elif mutation == "duplicate":
+        pins["recipe_declared_sources"].append(copy.deepcopy(row))
+    else:
+        row["source_notices"] = {"../LICENSE": "a" * 64}
+    with pytest.raises(ValueError):
+        inventory.collect(pins, cache, output, source_cache=cache)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("occurrences", [0, 2])
+def test_recipe_must_declare_the_exact_source_url_once(recipe_artifacts, occurrences):
+    cache, pins, output = recipe_artifacts
+    row = pins["recipe_declared_sources"][0]
+    record = row["declared_by"]["recipe"]
+    raw = (row["source"]["url"] + "\n").encode() * occurrences
+    (cache / record["file"]).write_bytes(raw)
+    record["sha256"] = hashlib.sha256(raw).hexdigest()
+    result = inventory.collect(pins, cache, output, source_cache=cache)
+    assert (
+        not result["artifacts_verified"] and result["recipe_source_notice_files"] == 0
+    )
+    assert result["native_notice_failures"] == [
+        {"component": "recipe-libffi", "error_class": "ValueError"}
+    ]
+
+
+@pytest.fixture
 def native_artifacts(artifacts):
     cache, pins, output = artifacts
     original = b"Original native licence\n"
