@@ -1,21 +1,20 @@
 """Real Keeplane APIs on two app copies and one disposable PostgreSQL database."""
 
-import pytest
-
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
 import re
-from pathlib import Path
 import secrets
 import shutil
 import subprocess
 import tempfile
 import time
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 POSTGRES = (
@@ -49,7 +48,7 @@ def run_cases():
     image = project + ":local"
     base_tag = project + ":base"
     result = {
-        "time_utc": datetime.now(timezone.utc).isoformat(),
+        "time_utc": datetime.now(timezone.utc).isoformat(),  # noqa: UP017 - standalone Python 3.9 fixture
         "project": project,
         "postgres_image": POSTGRES,
         "cases": [],
@@ -66,7 +65,7 @@ def run_cases():
 
     def run(command, input_data=None, check=True):
         item = subprocess.run(
-            command, input=input_data, capture_output=True, timeout=420
+            command, input=input_data, capture_output=True, timeout=420, check=False
         )
         if check and item.returncode:
             # Keep enough context to diagnose CI failures, with fixture secrets removed.
@@ -483,7 +482,7 @@ def run_cases():
             record("PGAPI-15", lambda: probe("class-invariants"))
             record("PGAPI-18", owner_key_suite)
             result["completed"] = True
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - retain fixture failure before owned cleanup
             result["fixture_error"] = type(error).__name__ + ": " + str(error)
         finally:
             cleanup = dc("down", "--volumes", "--remove-orphans", check=False)

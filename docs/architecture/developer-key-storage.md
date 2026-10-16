@@ -4,7 +4,11 @@
 account and model. `put(model_id, value)` adds or replaces it; `remove(model_id)`
 withdraws it; `status(model_id)` reports `added` or `missing` and
 `cleanup_pending`. Results contain no key, filename or other account's state.
-This service has no HTTP route, CLI command or inference integration.
+The [first-party runtime endpoint](../guide/cli-provider-keys.md) composes this
+service for the current bearer owner. Its live authentication recheck runs under
+the owner lock before provider validation and commit. Native logout takes the
+same lock. GET reports stored registration only, including old/unbound records;
+it reads neither provider nor gateway. Inference integration remains separate.
 An [internal resolver](developer-key-resolution.md) gives a trusted server caller
 the active key after checking its current validation binding and private file.
 

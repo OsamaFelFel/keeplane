@@ -146,7 +146,14 @@ class DjangoIdentity:
 
     def logout(self, token):
         if token and isinstance(token, str) and len(token) <= 200:
-            SessionStore(session_key=token).delete()
+            with transaction.atomic():
+                owner_id = SessionOwner.objects.filter(session_id=token).values_list("user_id", flat=True).first()
+                if owner_id is None:
+                    owner = self.authenticated_user(token)
+                    owner_id = owner.pk if owner else None
+                if owner_id is not None:
+                    User.objects.select_for_update().filter(pk=owner_id).first()
+                SessionStore(session_key=token).delete()
 
     def users(self, query):
         page, size = pagination(query)
