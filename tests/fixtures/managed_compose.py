@@ -227,6 +227,8 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
                 arguments[0] if arguments else "unknown",
             )
             row = {"operation": step}
+            if step == "stop":
+                row["services"] = arguments[1:]
             self.launch_steps.append(row)
             try:
                 result = subprocess.run(command, **kwargs)  # noqa: PLW1510 - preserve the original helper's explicit check argument.

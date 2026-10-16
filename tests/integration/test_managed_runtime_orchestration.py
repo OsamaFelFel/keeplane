@@ -188,8 +188,18 @@ def test_owned_host_runtime_launcher_preserves_state_and_stops_on_failure(
         )
 
         report["stage"] = "forced-enrollment-failure"
+        failure_start = len(fixture.launch_steps)
         with pytest.raises(RuntimeError, match="managed gateway is stopped"):
             fixture.install(["missing-owned-model"])
+        failure_steps = fixture.launch_steps[failure_start:]
+        assert not any("error_class" in row for row in failure_steps)
+        assert [row for row in failure_steps if row["exit_code"]] == [failure_steps[-2]]
+        assert failure_steps[-2]["operation"] == "install_runtime_guard"
+        assert failure_steps[-1] == {
+            "operation": "stop",
+            "services": ["gateway"],
+            "exit_code": 0,
+        }
         assert (
             not fixture.running("gateway")
             and fixture.running("app")

@@ -24,6 +24,7 @@ The cases use real admin HTTP model registration, real browser PKCE sign-in and
 a guarded provider request. Re-enrollment must preserve credentials, accounts,
 model approval and the current OAuth grant. A forced missing-model enrollment
 must stop the owned gateway while its app/provider keep running, with no extra
-provider contact. Safe stages/statuses and exact source/file hashes are saved
+provider contact. The failing subprocess must be the actual enrollment command,
+followed by a successful stop of only that gateway. Safe stages/statuses and exact source/file hashes are saved
 before cleanup; credentials, request content and raw container logs are omitted.
 All owned containers, networks and volumes are removed afterward.
