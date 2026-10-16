@@ -4,7 +4,8 @@ Use this explicit fallback when your terminal cannot open a browser. It needs
 macOS or Linux, Python 3.9+, and a trial Keeplane server with device authorization
 enabled. The operator must register the fixed device client with
 `python manage.py register_cli_client --device`. The trial server and CLI are
-not yet packaged together.
+not yet packaged together. The [CLI wheel](cli-install.md) installs `keeplane`
+without the server or native coding runtime.
 
 Choose a private profile outside Git, with an existing parent directory:
 

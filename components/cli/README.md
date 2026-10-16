@@ -1,5 +1,6 @@
 # Try a local coding turn
 
+Install the `keeplane` command with the [wheel installation guide](../../docs/guide/cli-install.md).
 For the experimental sign-in and project commands, use the
 [shared CLI entry point](../../docs/guide/cli-project-commands.md).
 Use [device sign-in](../../docs/guide/cli-device-login.md) when a browser cannot open here.

@@ -2,8 +2,9 @@
 
 The experimental CLI entry point joins browser sign-in, private account storage,
 project registration, model discovery and logout. It needs the trial sign-in
-server described in [browser login](cli-browser-login.md); it is not yet a
-packaged command. Use macOS or Linux and Python 3.9+.
+server described in [browser login](cli-browser-login.md). Use macOS or Linux and
+Python 3.9+. [Install the wheel](cli-install.md) to replace the source-tree
+invocation below with `keeplane` from any directory.
 
 ```sh
 python3 components/cli/keeplane.py login --server https://keeplane.example --profile /absolute/private/keeplane-account
