@@ -1,4 +1,4 @@
-# Check or sign out a CLI account
+# Manage your CLI sign-in
 
 This is the private credential storage part of the browser sign-in trial. Use
 [browser sign-in](cli-browser-login.md) to create the profile; do not construct
@@ -11,6 +11,32 @@ check its current account or sign out:
 python3 components/cli/account_session.py whoami --profile /private/keeplane-account
 python3 components/cli/account_session.py logout --profile /private/keeplane-account
 ```
+
+To explicitly rotate a signed-in credential pair:
+
+```sh
+python3 components/cli/keeplane.py refresh --profile /private/keeplane-account
+```
+
+Refresh makes one exchange with the saved issuer and sign-in client, checks that
+the new credential belongs to the same current account, then atomically replaces
+the pair. It can refresh an expired access token while its refresh token remains
+valid. There is no automatic retry or refresh during a coding turn. An uncertain
+exchange retains the old local profile, but the server may already have rotated
+it; recover with logout or operator withdrawal and sign in again. Do not blindly
+retry a lost rotation response: the trial server withdraws the rotated family
+when a previously used refresh token is replayed.
+
+New profiles use format v2 and store only the fixed browser or device client ID.
+Strict v1 profiles are read as browser-issued and upgrade on save. Device profiles
+created before v2 need logout and a new device sign-in before refresh. Client IDs
+and account IDs are metadata, not authority; the server rechecks the grant.
+
+If account verification or saving fails after rotation, the CLI attempts to
+revoke the new pair. A failed write before replacement preserves old local state;
+a failed directory sync after replacement can leave the revoked new pair locally.
+Unconfirmed cleanup requires server-side withdrawal. Cancellation or a crash can
+also lose an exchange response; local storage cannot undo server issuance.
 
 `whoami` reads the current account from Keeplane and requires the same account ID
 saved at sign-in. Roles are read fresh. `logout` revokes that credential and its
@@ -41,5 +67,6 @@ The OS user and trusted processes running as that user can read them. Server
 HTTPS is required except for loopback testing; redirects, ambient proxies and
 cookies cannot carry the credential elsewhere. Transport uses a ten-second
 socket timeout, not a total request deadline. No credentials are imported from
-vendor profiles. The coding adapter still takes its separate gateway grant;
-account-aware runtime integration and automatic refresh remain separate steps.
+vendor profiles. The [signed-in coding command](cli-coding.md) uses this account
+profile and checks current authorization. The standalone adapter's test grant
+remains separate. Automatic refresh is not implemented.
