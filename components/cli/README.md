@@ -78,10 +78,12 @@ This prototype accepts credentials made of letters, digits, `.`, `_`, `~` and `-
 The adapter prints the runtime's JSON events when the turn ends. Review its edits and run the
 project's tests. A denied request or native error exits unsuccessfully; a timeout
 exits with 124; Ctrl+C exits with 130; SIGTERM during a turn exits with 143.
-All three terminate the runtime's process
-group and bound cleanup without waiting for inherited output pipes to close.
-Children that create independent sessions are outside that cleanup boundary;
-this prototype does not sandbox or terminate detached workloads.
+All three ask the pinned runtime to interrupt its session, allowing up to four
+seconds for native tool cleanup before force-killing the owned process group.
+Parent reaping is bounded by a further second; inherited output pipes cannot
+extend cleanup. Independently detached or unmanaged workloads remain outside
+that boundary; this prototype is not a sandbox. An unresponsive runtime can
+still leave tools in separate groups when force-kill is required.
 SIGTERM during process creation is deferred until the adapter owns the child.
 The version probe retains its separate ten-second limit. The prior SIGTERM handler
 is restored when the CLI's coding invocation ends. SIGKILL cannot run cleanup.

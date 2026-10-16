@@ -25,7 +25,7 @@ def configured(name):
     return value
 
 
-def test_installed_oauth_coding_tools_resume_refresh_logout(tmp_path):
+def installed_trial(tmp_path, *, cancellation=False):
     source = Path(configured("KEEPLANE_INSTALLED_CLI_SOURCE")).resolve(strict=True)
     image = configured("KEEPLANE_INSTALLED_CLI_IMAGE")
     wheel = Path(configured("KEEPLANE_INSTALLED_CLI_WHEEL")).resolve(strict=True)
@@ -45,6 +45,8 @@ def test_installed_oauth_coding_tools_resume_refresh_logout(tmp_path):
         "installed_cli_server.py",
         "installed_cli_tls.py",
     ]
+    if cancellation:
+        fixtures += ["installed_cli_cancel.py", "installed_cli_cancel_provider.py"]
     for filename in fixtures + ["cli_coding_provider.py"]:
         assert (source / "tests/fixtures" / filename).read_bytes() == (
             ROOT / "tests/fixtures" / filename
@@ -200,6 +202,7 @@ for name in ('cert.pem','key.pem'):
                 "KEY_NAME": "provider-seed",
                 "KEEPLANE_CLI_OAUTH_ENABLED": "1",
                 "PREVIEW_OPENAI_BASE_URL": "http://127.0.0.1:18080/v1",
+                "FIXTURE_CLI_CANCELLATION": "1" if cancellation else "0",
             },
         },
         "front": {
@@ -231,6 +234,11 @@ for name in ('cert.pem','key.pem'):
             ],
         },
     }
+    if cancellation:
+        services["client"]["volumes"].append(
+            str(source / "tests/fixtures/installed_cli_cancel.py")
+            + ":/installed_cli_cancel.py:ro"
+        )
     for name, service in services.items():
         service.update(
             pull_policy="never", read_only=True, security_opt=["no-new-privileges:true"]
@@ -285,6 +293,19 @@ for name in ('cert.pem','key.pem'):
                 dc + ["exec", "-T", "client", "cat", "/client/command-failure.json"],
                 check=False,
             )
+            if cancellation:
+                command(
+                    "cancellation-result",
+                    dc
+                    + [
+                        "exec",
+                        "-T",
+                        "client",
+                        "cat",
+                        "/client/cancellation-result.json",
+                    ],
+                    check=False,
+                )
         assert result.returncode == 0 and report["journey"]["passed"], (
             "Installed CLI journey failed; see the private stage report"
         )
@@ -325,3 +346,7 @@ for name in ('cert.pem','key.pem'):
             )
             (tmp_path / "installed-cli-report.json").write_text(json.dumps(report))
     assert report["cleaned"]
+
+
+def test_installed_oauth_coding_tools_resume_refresh_logout(tmp_path):
+    installed_trial(tmp_path)

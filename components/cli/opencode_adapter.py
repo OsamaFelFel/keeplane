@@ -66,9 +66,19 @@ def coding_turn(command, *, input, env, cwd, timeout, cancelled=None, pass_fds=(
             if cancelled is not None:
                 cancelled.active = False
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+                # The pinned runtime interrupts its session and cleans up
+                # managed shell tools on SIGINT, including separate groups.
+                process.send_signal(signal.SIGINT)
+                process.wait(timeout=4)
+            except (ProcessLookupError, subprocess.TimeoutExpired, KeyboardInterrupt):
                 pass
+            finally:
+                # Also stop remaining members of our group if the runtime
+                # exited early, ignored interruption or cleanup was interrupted.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             # Detached children may keep inherited pipes open. Wait only for
             # the owned parent; closing our pipes below never waits for EOF.
             try:
