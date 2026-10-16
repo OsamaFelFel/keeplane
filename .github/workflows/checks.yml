@@ -86,7 +86,21 @@ jobs:
           tar -xzf /tmp/helm.tar.gz -C /tmp
           echo "KEEPLANE_HELM_BIN=/tmp/linux-amd64/helm" >> "$GITHUB_ENV"
       - name: Discover and run unit and integration checks
-        run: .venv/bin/python -m pytest tests/unit tests/integration --junitxml=test-results/backend/junit.xml
+        run: |
+          mkdir -p test-results/backend
+          KEEPLANE_TEST_REPORT_DIR="$GITHUB_WORKSPACE/test-results/backend/unit" .venv/bin/python -m pytest tests/unit --basetemp="$RUNNER_TEMP/backend-unit" -o cache_dir="$RUNNER_TEMP/backend-unit-cache" --junitxml=test-results/backend/unit.xml >test-results/backend/unit.log 2>&1 &
+          unit_pid=$!
+          KEEPLANE_TEST_REPORT_DIR="$GITHUB_WORKSPACE/test-results/backend/integration" .venv/bin/python -m pytest tests/integration --basetemp="$RUNNER_TEMP/backend-integration" -o cache_dir="$RUNNER_TEMP/backend-integration-cache" --junitxml=test-results/backend/integration.xml >test-results/backend/integration.log 2>&1 &
+          integration_pid=$!
+          unit_status=0
+          wait "$unit_pid" || unit_status=$?
+          integration_status=0
+          wait "$integration_pid" || integration_status=$?
+          cat test-results/backend/unit.log
+          cat test-results/backend/integration.log
+          if [ "$unit_status" -ne 0 ] || [ "$integration_status" -ne 0 ]; then
+            exit 1
+          fi
       - name: Check Python source
         run: .venv/bin/ruff check components/control-plane --select F,E9
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
