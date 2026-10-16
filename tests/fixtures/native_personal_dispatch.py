@@ -87,10 +87,18 @@ class Endpoint(BaseHTTPRequestHandler):
                 "key_label": label,
                 "inference": payload["messages"][0]["content"]
                 == "personal-native-check",
-                "credential_header_leak": any(
-                    value in str(self.headers)
+                "credential_header_leak": len(self.headers.get_all("Authorization", []))
+                != 1
+                or any(
+                    name.lower().startswith("x-keeplane-")
+                    or name.lower() in ("x-api-key", "x-provider-authorization")
+                    for name in self.headers
+                )
+                or any(
+                    value in header_value
+                    for name, header_value in self.headers.items()
+                    if name.lower() != "authorization"
                     for value in OBSERVED["secrets"]
-                    if value not in KEYS.values()
                 ),
             }
         )
@@ -117,7 +125,7 @@ class Endpoint(BaseHTTPRequestHandler):
 
 
 def issue(identity, username):
-    """Use actual CSRF login, consent and S256 code exchange; never seed tokens."""
+    """Django test client drives actual CSRF/consent/S256 views; no network browser."""
     from django.test import Client
 
     client = Client(
@@ -196,6 +204,13 @@ def check(name, token, project, *, key=None):
             "Authorization": "Bearer " + token,
             "X-Keeplane-Project-ID": project,
             "Content-Type": "application/json",
+            "X-API-Key": KEYS["b"] if key in ("a", "next") else KEYS["a"],
+            "X-Provider-Authorization": "Bearer " + KEYS["b"],
+            "X-Keeplane-Gateway-Credential": CALLBACK,
+            "X-Keeplane-Actor-ID": "forged-other-owner",
+            "X-Keeplane-Class": "Public",
+            "X-Keeplane-Installed-Runtime": "operator",
+            "X-Keeplane-Definition-Fingerprint": "b" * 64,
         },
     )
     try:
@@ -407,6 +422,42 @@ def main():
     check("secret-unavailable", tokens["b"], project)
     path.chmod(0o600)
     check("recovered-private-secret", tokens["b"], project, key="b")
+    changed = json.loads(json.dumps(DEFINITION["value"]))
+    changed["params"]["model"] = "synthetic-updated"
+    status, _ = gateway.request(
+        "/api/config/resources/llm.model",
+        {"resources": [{"value": changed}]},
+        method="PUT",
+        timeout=5,
+    )
+    REPORT["definition_update_status"] = status
+    assert status == 200
+    status, registry = gateway.resources()
+    changed_digest = fingerprint("personal", registry["resources"])
+    assert status == 200 and changed_digest and changed_digest != DEFINITION["digest"]
+    # Wait for the actual compiled provider definition, without inference warmup.
+    for _ in range(100):
+        with urlopen("http://127.0.0.1:15000/config_dump", timeout=2) as response:
+            applied = json.load(response)
+        definitions = [
+            row["backend"]["ai"]
+            for row in applied["backends"]
+            if "ai" in row["backend"]
+            and row["backend"]["ai"]["name"] == "llm:model:personal"
+        ]
+        if len(definitions) == 1 and any(
+            item["endpoint"]["provider"]["openAI"]["model"] == "synthetic-updated"
+            for group in definitions[0]["target"]["providers"]
+            for item in group["active"].values()
+        ):
+            break
+        time.sleep(0.1)
+    else:
+        raise RuntimeError("Changed native provider definition not active")
+    assert DEFINITION["digest"] in json.dumps(applied["policies"])
+    check("actual-native-definition-changed", tokens["b"], project)
+    ModelApproval.objects.update(gateway_fingerprint=changed_digest)
+    check("fresh-reapproval-with-old-target-fingerprint", tokens["b"], project)
     REPORT["real_validation_contacts"] = sum(
         not item["inference"] for item in OBSERVED["provider"]
     )
