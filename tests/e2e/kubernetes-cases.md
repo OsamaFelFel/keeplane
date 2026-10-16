@@ -14,6 +14,7 @@ the supplied gateway.
 
 | ID | What to do | Expected result |
 | --- | --- | --- |
+| K8S-START-01 | Start local setup with a required tool missing, an unsupported Node.js version or Docker unavailable. | A short prerequisite error stops setup before credentials, dependency installation, builds or cluster changes. The unit startup controls use isolated command stubs. |
 | K8S-01 | Install Keeplane with its managed gateway and inspect the gateway Deployment. | Two gateway copies are ready. |
 | K8S-02 | Register `second-local` through Keeplane, then request the model list from each gateway copy directly without a key and with the app's runtime key. | Both copies refuse the anonymous request and list `second-local` only for the app key; registration is shared. |
 | K8S-03 | Delete one gateway pod, observe the Service remove it as a ready endpoint, then send ten new questions to `second-local`. | All ten return the fixed answer. A call aimed at the stopped pod during endpoint propagation, including an active stream, may fail visibly and be retried. |
