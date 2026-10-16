@@ -74,6 +74,11 @@ def run(action, profile_path, model_id, *, key_stdin=False):
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
         key = read_key(key_stdin=key_stdin) if action == "set" else None
+        if key is not None and key in {
+            credential.access_token,
+            credential.refresh_token,
+        }:
+            raise ConnectionError("Enter the model provider's key.")
         try:
             body = request(
                 credential.issuer,

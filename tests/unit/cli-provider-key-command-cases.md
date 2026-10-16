@@ -12,6 +12,7 @@ credentials. It does not run the Django issuer, real provider or gateway.
   There is one write attempt; a later status call reconciles the stored state.
 - Hidden input cannot fall back to echo. An explicit pipe accepts one bounded
   ASCII key; oversized, injected-newline and non-ASCII values never reach the API.
+  Pasting either saved Keeplane credential as a provider key is refused locally.
 
 Actual OAuth/Django/key-store composition and personal dispatch are separate
 acceptance checks; no result from this fixture proves them.

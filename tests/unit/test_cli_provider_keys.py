@@ -209,6 +209,18 @@ def test_hidden_input_cannot_fall_back_to_echo(api, monkeypatch, capsys):
     assert "hidden" in capsys.readouterr().err and len(api.calls) == 1
 
 
+@pytest.mark.parametrize("attribute", ["access", "refresh"])
+def test_profile_credential_cannot_be_submitted_as_provider_key(
+    api, monkeypatch, capsys, attribute
+):
+    secret = getattr(api, attribute)
+    monkeypatch.setattr(provider_keys.getpass, "getpass", lambda _: secret)
+    assert command(api, monkeypatch, "set") == 1
+    assert len(api.calls) == 1
+    output = capsys.readouterr()
+    assert secret not in output.out + output.err
+
+
 def test_explicit_pipe_is_bounded_and_private(api, monkeypatch, capsys):
     secret = b"synthetic-provider-key-12"
     monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(secret + b"\r\n")))
