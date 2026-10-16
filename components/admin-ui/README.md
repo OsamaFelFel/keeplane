@@ -12,3 +12,15 @@ Run `npm ci`, then `npm run build`, `npm run lint` or `npm run test:unit` here.
 Tests live in the repository's `tests/` directory. Start the complete application
 with `python3 deploy/local/up.py` from the repository root. `npm run dev` starts
 Vite with API requests proxied to the local application.
+
+Production builds retain original bundled dependency notices in
+`dist/assets/THIRD_PARTY_LICENSES.txt`, served at
+`/app/assets/THIRD_PARTY_LICENSES.txt`. Vite identifies bundled JavaScript;
+the build also retains the package CSS imports' notices and separate copyright
+files. Font notices remain at `/fonts/LICENSE.txt`. Run `npm run test:notices`
+after building to verify the shipped text. Generated `dist/` stays out of Git.
+
+`react-remove-scroll-bar` 2.3.8 omits its license file from npm. Its original
+project MIT notice is retained under `licenses/` with a pinned source and hash.
+That source declares 2.3.7; correspondence to the 2.3.8 release remains unresolved.
+The notice records this exception and does not establish distribution clearance.

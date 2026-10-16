@@ -27,3 +27,23 @@ clearance for the Python/Alpine base image. Native package source, Alpine patche
 and all required base-image notices still need to accompany the final release.
 The disposable integration fixture's binary wheels have a separate inventory.
 Community and Enterprise application licenses are unchanged.
+
+## Collect pinned base sources
+
+`runtime-sources.json` pins the current Python base build recipe, Python source
+and 20 Alpine package recipes, including optional libpq. With Python 3.10 or
+newer and network access, collect them into a fresh directory outside Git:
+
+```sh
+python3 components/control-plane/collect_runtime_sources.py \
+  --output /tmp/keeplane-runtime-sources
+```
+
+The collector verifies recipe hashes and their literal source checksums. It
+keeps archives, Alpine patches, configuration and public keys. Original notices
+remain inside verified archives; recipes are never executed or archives extracted.
+Downloads have a four-minute
+deadline, three workers, a 64 MiB file limit and a 256 MiB total limit. Failures
+appear in `collection.json` and return a nonzero exit status. This covers the
+pinned source inputs; complete binary, bundled-code and notice review remains
+separate release work. Keep downloaded files and reports outside Git.

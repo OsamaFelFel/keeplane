@@ -3,6 +3,7 @@
 import json
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import URLError
@@ -10,12 +11,12 @@ from urllib.error import URLError
 from tests.support.client import BASE, Browser, RUNTIME
 from tests.support.reporting import report_path
 from tests.support.restart_preview import restart_app
+from tests.support.gateway import RESOURCE_PATH, gateway_call
 
 
 REPO = Path(__file__).resolve().parents[2]
 REPORT = report_path("2026-10-09-model-approval.json")
 MODEL = "local-fixture"
-DYNAMIC_MODEL = "second-local"
 
 
 def run_cases():
@@ -23,6 +24,8 @@ def run_cases():
     browser.login("first-admin", (RUNTIME / "first-admin-password").read_text().strip())
     cases = []
     touched = set()
+    dynamic_model = "model-approval-" + uuid.uuid4().hex[:10]
+    dynamic_attempted = False
     cleanup = "not run"
 
     def record(identifier, passed, observed):
@@ -188,26 +191,24 @@ def run_cases():
             },
         )
 
-        dynamic = wait_model(DYNAMIC_MODEL)
-        if dynamic["approved"]:
-            reset_status, _, _ = browser.fetch(
-                f"/api/models/{DYNAMIC_MODEL}/setup", {}, method="DELETE"
-            )
-            if reset_status != 200:
-                raise RuntimeError("Could not reset the failover test model approval")
-            dynamic = wait_model(DYNAMIC_MODEL)
-            if dynamic["approved"]:
-                raise RuntimeError(
-                    "The dynamic gateway model stayed approved after reset"
-                )
-        dynamic_path = f"/api/models/{DYNAMIC_MODEL}/setup"
+        dynamic_attempted = True
+        resource = {
+            "name": dynamic_model,
+            "provider": {"custom": {"formats": [{"type": "completions"}]}},
+            "params": {"model": "mock-local", "baseUrl": "http://model:18080/v1"},
+        }
+        created, _ = gateway_call(
+            "PUT", RESOURCE_PATH, {"resources": [{"value": resource}]}
+        )
+        if created != 200:
+            raise RuntimeError("Could not create the disposable gateway model")
+        dynamic_path = f"/api/models/{dynamic_model}/setup"
+        touched.add(dynamic_model)
         setup_status, _, _ = browser.fetch(dynamic_path, payload, method="POST")
-        if setup_status == 200:
-            touched.add(DYNAMIC_MODEL)
         restart_app(BASE)
-        dynamic = wait_model(DYNAMIC_MODEL)
+        dynamic = wait_model(dynamic_model)
         answer_status, answer, _ = browser.fetch(
-            "/api/ask", {"model": DYNAMIC_MODEL, "prompt": "Reply OK."}, method="POST"
+            "/api/ask", {"model": dynamic_model, "prompt": "Reply OK."}, method="POST"
         )
         record(
             "MODEL-09",
@@ -233,14 +234,22 @@ def run_cases():
                         )
                     except (URLError, ConnectionError):
                         status = 0
-                    if status == 200:
+                    if status in (200, 404):
                         break
                     time.sleep(1)
-                if status != 200:
+                if status not in (200, 404):
                     failures += 1
             cleanup = "complete" if not failures else f"{failures} approvals remained"
         except Exception as error:
             cleanup = f"failed: {type(error).__name__}"
+        finally:
+            if dynamic_attempted:
+                try:
+                    status, _ = gateway_call("DELETE", RESOURCE_PATH + "/" + dynamic_model)
+                    if status not in (200, 404):
+                        cleanup = "failed: disposable gateway model remained"
+                except Exception as error:
+                    cleanup = f"failed: gateway cleanup {type(error).__name__}"
         report = {
             "suite": "Spec 004 outside-model approval Docker trial",
             "time_utc": datetime.now(timezone.utc).isoformat(),

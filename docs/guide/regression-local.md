@@ -50,6 +50,13 @@ required environment is a failure or an explicitly unrun group.
 The full-chart tests load the current `keeplane-preview:kind-local` image into
 that disposable cluster before installation, so an older cached build is not used.
 
+Component checks include both packaged runtime images. Use `--preview-image` and
+`--app-image` for different preview and PostgreSQL builds. The runner resolves
+their local image IDs, records them and supplies both to the checks; a missing
+image stops the run before live tests begin.
+Keep a local tag on each source image. The PostgreSQL fixture builds through its
+own temporary tag pinned to the resolved ID, then removes that temporary tag.
+
 Use a fresh output filename. JUnit reports, case reports, stdout and stderr are
 retained beside it, including failures. Each browser run has its own trace and
 screenshot directory. The runner records the tested revision and original
@@ -65,14 +72,45 @@ not measure response speed. On slower CPUs, set
 those assertions. Optional native Qwen3 trials are selected separately
 with `pytest -m optional`.
 
+To check packaged runtime imports, retained notices, SQLite migrations and
+Gunicorn startup without a gateway, supply both image names:
+
+```sh
+KEEPLANE_RUNTIME_PREVIEW_IMAGE=keeplane-preview:kind-local \
+KEEPLANE_RUNTIME_POSTGRES_IMAGE=keeplane-preview:postgres-local \
+  .venv/bin/python -m pytest -m optional tests/integration/test_runtime_image.py
+```
+
+The PostgreSQL variant also imports its native driver and checks retained source
+archives. This check does not connect to a PostgreSQL server.
+
 ## CI and evidence
 
-PR checks run frontend checks, pytest unit/integration checks, documented Docker
+PRs and updates to `main` run frontend checks, pytest unit/integration checks, documented Docker
 startup on default and custom ports, Linux browser behavior and a disposable
 PostgreSQL API/restore fixture. macOS visual baselines and full Kubernetes
 acceptance have separate environments. Green CI covers only its selected checks.
 
-Reports are retained as CI artifacts for 30 days, including failures. State the
+Failed private gateway commands write `gateway-command-*.json` beside the case
+reports. These contain the exit code and exception types, without command
+arguments, credentials or raw output. A command failure still fails its check.
+
+Reports are retained as CI artifacts for 30 days. State the
 tested revision, results and unrun checks in the PR. Release evidence needs a
 longer retention policy. Commit fixtures, readable cases and deliberate visual
 baselines; keep routine generated output outside source control.
+
+## Check image file permissions
+
+After building the admin UI, run:
+
+```sh
+.venv/bin/python -m pytest tests/integration/test_app_image_permissions.py -m live
+```
+
+The disposable fixture packages the actual app and UI with restrictive input
+permissions. The non-root image user must read the app, compiled UI and fonts
+and must be unable to change them. It reuses cached base and
+requirements layers where available, runs without network access, and removes
+its own container and image. No running
+preview or private credential is included.

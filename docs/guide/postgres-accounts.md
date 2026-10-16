@@ -9,11 +9,21 @@ in progress.
 
 ## Configure a clean installation
 
-Install the pinned API requirements and
-`components/control-plane/requirements-postgres.txt`. The latter uses the
-replaceable pure-Python Psycopg 3.3.6 distribution and needs an installed `libpq`.
-The default preview image does not include that optional driver. Build the
-`postgres` target for chart integration:
+PostgreSQL mode adds `components/control-plane/requirements-postgres.txt` to the
+pinned API requirements. For a direct Python installation, install both sets and
+`libpq` for Psycopg 3.3.6. The default preview image omits the optional driver.
+
+For a manual image build, install Node.js 22.12 or newer with npm and prepare the
+web UI first. The image copies the generated `components/admin-ui/dist` assets;
+rebuild them whenever the UI changes. From the repository root:
+
+```sh
+npm --prefix components/admin-ui ci
+npm --prefix components/admin-ui run build
+```
+
+The [local launcher](local-preview.md) prepares those assets automatically.
+Build the `postgres` target for chart integration:
 
 ```sh
 docker build --target postgres -t keeplane-postgres:local \
@@ -27,6 +37,11 @@ inventory under `/usr/share/keeplane/`. Retain these when distributing it and
 allow replacement of the drivers. Complete native/base-image source and notice
 inventory remains release work. See the [package records](../../components/control-plane/licenses/README.md)
 and [Psycopg installation choices](https://www.psycopg.org/psycopg3/docs/basic/install.html).
+
+The final `preview` and `postgres` images omit `pip` and `ensurepip`. Install
+dependencies while building an image, then rebuild to update them. Installer
+notices remain under `/usr/share/keeplane/licenses/pip-<version>/`. The pinned
+base layers still carry their original distribution obligations.
 
 Configure every app replica and the one-off migration process:
 
@@ -78,13 +93,26 @@ replicas that may restart.
 Back up the complete database and retain the matching signing secret separately.
 Restore into a fresh database and point all replicas at it. Integration cases
 prove identity, sessions, settings, approvals and Audit survive this operation.
+The database backup does not include provider-key files, gateway registrations,
+mounted credentials or certificates. Recover those separately before admitting
+model calls. A restore also returns accounts, sessions and policy to the backup's
+state; review later account revocations and approval changes before reopening
+access. The database fixture does not prove a complete deployment recovery.
 Production backup scheduling, retention, database availability, volume semantics
 and review-preview cutover remain release work.
 
 ## Install the chart against an operated database
 
-Use [the example values](../../deploy/postgres/values.example.yaml). Provision a
-private database owned by a migration role and a separate app login. Neither
+Use [the example values](../../deploy/postgres/values.example.yaml). Set
+`app.image` to your packaged PostgreSQL image's registry reference and immutable
+manifest digest, such as `registry.example.test/keeplane@sha256:<64 hex characters>`.
+Use the digest reported by your registry after publishing the image; the local
+Docker image ID is not the registry manifest digest. Helm refuses tags in
+PostgreSQL mode. App copies, migration Jobs and supplied-gateway preflight use
+that same image. Make it available from the customer's internal registry before
+closing install-time registry access. Local SQLite trials can still use tags.
+
+Provision a private database owned by a migration role and a separate app login. Neither
 role needs superuser, database creation or role creation permission. Revoke
 `PUBLIC` database access and schema creation. Grant the app only `CONNECT` on
 this database, `USAGE` on its schema, and table `SELECT, INSERT, UPDATE, DELETE`
@@ -112,11 +140,13 @@ coordinate old-worker shutdown and backup before running it; automatic schema
 rollback is not supplied. Set `app.postgres.migration.enabled=false` only when
 an external migration process has already prepared the schema.
 
-`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` checks the
-shared settings table and returns 503 during database loss; `/health/app` keeps
-the process alive for recovery. Database failure does not trigger a liveness
-restart. SQLite trial mode requires one copy and cannot be combined with
-PostgreSQL.
+`app.replicaCount` may exceed one in PostgreSQL mode. `/health/ready` returns 503
+when the database is unavailable or a migration known to this app is pending.
+Run the migration Job before admitting the new app copies. The probe only reads
+migration history; it never changes the schema. Extra migrations from a newer
+app version do not make an old worker unready. `/health/app` keeps the process
+alive for recovery, so database failure does not trigger a liveness restart.
+SQLite trial mode requires one copy and cannot be combined with PostgreSQL.
 
 Supply an existing provider-key PVC. Multiple nodes need a volume that supports
 the required shared reads/writes; the single-node test's RWO claim does not prove
