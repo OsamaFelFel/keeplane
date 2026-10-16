@@ -11,6 +11,7 @@ colocated tests.
 | UI-CSRF-02 | Fail token bootstrap. | No mutation request is sent. |
 | UI-CSRF-03 | Refuse or disconnect a mutation. | The write is not repeated automatically. |
 | UI-CSRF-04 | Supply a different-origin URL. | No token or request is sent to that origin. |
+| MO-UI-COUNT | Open Models with zero, one and two personal-key registrations. | Each personal row shows its server count below “Each developer's own”; shared models show no count. |
 
 ## Projects
 

@@ -1,21 +1,28 @@
 """Model registration and setup use case, independent of the HTTP transport."""
 
 import json
-from common.errors import StorageUnavailable
 import time
 import uuid
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from accounts.contracts import IdentityError
-from model_registry.fingerprints import fingerprint
+from common.errors import StorageUnavailable
 from integrations.gateway.keys import (
-    save as save_provider_key,
-    remove as remove_provider_key,
     from_resource as provider_key_file,
+)
+from integrations.gateway.keys import (
     is_managed as managed_provider_key,
 )
+from integrations.gateway.keys import (
+    remove as remove_provider_key,
+)
+from integrations.gateway.keys import (
+    save as save_provider_key,
+)
 from integrations.runners import local_runner
+
+from model_registry.fingerprints import fingerprint
 
 
 class ModelManagement:
@@ -254,6 +261,7 @@ class ModelManagement:
         check_name = "keeplane-keycheck-" + uuid.uuid4().hex
         check_resource = json.loads(json.dumps(updated))
         check_resource["name"] = check_name
+        check_resource["id"] = check_name
 
         # A model already in service may still answer with its old route just
         # after a management update. A unique model proves the new key first.
@@ -420,7 +428,7 @@ class ModelManagement:
         params = {"model": model}
         if self.cloud_base_urls[source]:
             params["baseUrl"] = self.cloud_base_urls[source]
-        resource = {"name": name, "provider": provider, "params": params}
+        resource = {"id": name, "name": name, "provider": provider, "params": params}
         if key_path:
             resource["auth"] = {"key": {"value": {"file": key_path}}}
         status, _ = self.gateway.request(
@@ -496,6 +504,8 @@ class ModelManagement:
     def setup(self, model_id, body):
         choice = body.get("key_choice")
         previous = self.catalog.get(model_id)
+        if previous and previous["key_choice"] == "personal":
+            return self.reply(400, {"error": "Developer-owned provider key setup is not available yet"})
         if choice not in ("none", "shared") or (
             choice == "shared" and (not previous or previous["key_choice"] != "shared")
         ):
@@ -734,6 +744,7 @@ class ModelManagement:
             )
         # External endpoints and credentials need account and policy controls.
         resource = {
+            "id": name,
             "name": name,
             "provider": {"custom": {"formats": [{"type": "completions"}]}},
             "params": {"model": model, "baseUrl": sources[source]},

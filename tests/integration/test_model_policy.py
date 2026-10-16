@@ -4,10 +4,9 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
-from django.db import DatabaseError, transaction
-
 from common.errors import StorageUnavailable
 from data_classes.models import ProjectClass, Settings
+from django.db import DatabaseError, transaction
 from model_registry.fingerprints import fingerprint
 from model_registry.models import ModelApproval
 from model_registry.policy import DjangoModelPolicy, ModelPolicyUnavailable
@@ -65,6 +64,20 @@ def test_only_current_set_up_gateway_models_are_eligible(policy):
     assert service.eligible_model_ids("unclassified") == set()
 
 
+def test_personal_setup_keeps_class_and_definition_gates_without_blocking_other_models(policy):
+    service, state, stores = policy
+    stores.catalog.approve(
+        "external-model", ["Public"],
+        fingerprint("external-model", state.registry["resources"]), key_choice="personal",
+    )
+    assert service.eligible_model_ids("project-a") == {"private-model"}
+    assert service.eligible_model_ids("unclassified") == {
+        "public-model", "private-model", "external-model",
+    }
+    state.registry["resources"][2]["revision"] = 2
+    assert service.eligible_model_ids("unclassified") == {"public-model", "private-model"}
+
+
 def test_withdrawal_is_rechecked_by_another_service_instance(policy):
     service, _, stores = policy
     other = DjangoModelPolicy(service.gateway)
@@ -82,10 +95,9 @@ def test_withdrawal_is_rechecked_by_another_service_instance(policy):
 
 def test_rolled_back_policy_change_does_not_withdraw_access(policy):
     service, _, stores = policy
-    with pytest.raises(RuntimeError):
-        with transaction.atomic():
-            stores.catalog.remove("private-model")
-            raise RuntimeError("Abort the policy edit")
+    with pytest.raises(RuntimeError), transaction.atomic():
+        stores.catalog.remove("private-model")
+        raise RuntimeError("Abort the policy edit")
     assert service.eligible_model_ids("project-a") == {"private-model"}
 
 

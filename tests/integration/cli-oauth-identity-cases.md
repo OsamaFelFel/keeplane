@@ -64,3 +64,17 @@ Set `KEEPLANE_BROWSER_NODE` to Node with the locked `tests/browser` Playwright
 dependencies and Chromium installed. Set `KEEPLANE_BROWSER_UI` to the admin-ui
 directory containing its compiled `dist`. The helper blocks non-loopback URLs
 and suppresses browser errors and callback URLs in test output.
+
+`test_cli_oauth_key_journey.py` uses a real browser-issued CLI profile against the
+runtime key API. Compose that API with the issuer and reviewed CLI to run it:
+
+- Add, read, replace and remove a personal key. Only validation contacts the
+  synthetic provider; status reads do not. Replacing a key removes its old file.
+- A changed model definition prevents another validation request while allowing
+  the developer to read and remove their old key.
+- Logout after initial request authentication is checked again under the owner
+  lock, before contacting the provider or storing a key. The access and refresh
+  pair are withdrawn, and the failed command retains the local profile.
+
+The fixture checks private file permissions and that command output contains no
+provider or account credential. It does not prove personal-key model dispatch.

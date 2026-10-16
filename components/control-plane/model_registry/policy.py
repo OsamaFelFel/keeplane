@@ -3,12 +3,12 @@
 This is an internal policy query, not authentication or a gateway dispatch gate.
 """
 
-from django.db import connection, transaction
-
 from common.storage import storage_service
 from data_classes.models import DataClass, ProjectClass, Settings
+from django.db import connection, transaction
+
 from .fingerprints import fingerprint
-from .models import ModelApproval
+from .models import ModelApproval, ProviderKeyChoice
 
 
 class ModelPolicyUnavailable(Exception):
@@ -86,7 +86,7 @@ class DjangoModelPolicy:
                     not isinstance(classes, list)
                     or any(not isinstance(name, str) for name in classes)
                     or len(set(classes)) != len(classes)
-                    or approval.key_choice not in ("none", "shared")
+                    or approval.key_choice not in ProviderKeyChoice.values
                 ):
                     raise ModelPolicyUnavailable("Model setup is incomplete")
                 current = fingerprint(approval.pk, resources, self.file_config)

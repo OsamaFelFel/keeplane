@@ -12,6 +12,7 @@ type Model = {
   kind: string
   approved?: boolean
   key_choice?: 'none' | 'shared' | 'personal' | null
+  developer_key_count?: number
   approved_classes?: string[]
   owned_by_keeplane?: boolean
 }
@@ -163,7 +164,12 @@ export function ModelsPage() {
             models.map(model => <TableRow key={model.id}>
               <TableCell><span className="font-medium">{model.id}</span>{model.approved === false && <span className="block text-[14px] text-muted-foreground">Added outside Keeplane</span>}</TableCell>
               <TableCell>{model.provider}</TableCell><TableCell>{model.kind === 'cloud' ? 'Cloud' : model.kind === 'unknown' ? 'Unknown' : 'Local'}</TableCell>
-              <TableCell>{model.approved === false ? 'Not set' : model.key_choice === 'shared' ? 'Shared' : model.key_choice === 'personal' ? "Each developer's own" : 'None'}</TableCell>
+              <TableCell>{model.approved === false ? 'Not set' : model.key_choice === 'shared' ? 'Shared' : model.key_choice === 'personal' ? <>
+                Each developer's own
+                {typeof model.developer_key_count === 'number' && <span className="block text-[14px] leading-5 text-muted-foreground">
+                  {model.developer_key_count} {model.developer_key_count === 1 ? 'developer has' : 'developers have'} added a key
+                </span>}
+              </> : 'None'}</TableCell>
               {classes?.enabled && <TableCell>{model.approved === false ? 'Not set · gets no work' : model.approved_classes?.join(', ') || 'None'}</TableCell>}
               <TableCell>{model.approved !== undefined && <Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" onClick={() => openEdit(model)}>{model.approved ? 'Edit' : 'Set up'}</Button>}</TableCell>
             </TableRow>)}
