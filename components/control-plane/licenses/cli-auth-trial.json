@@ -1,0 +1,249 @@
+{
+  "scope": "Optional Linux musl x86-64 CPython 3.13 sign-in trial; excludes the existing Django/base-image graph and other wheel platforms.",
+  "packages": [
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "declared_license": "MPL-2.0",
+      "wheel": {
+        "file": "certifi-2026.7.22-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+        "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+      },
+      "source": {
+        "file": "certifi-2026.7.22.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz",
+        "sha256": "741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55"
+      },
+      "notices": {
+        "certifi-2026.7.22.dist-info/licenses/LICENSE": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7"
+      }
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "declared_license": "MIT-0",
+      "wheel": {
+        "file": "cffi-2.1.1-cp313-cp313-musllinux_1_2_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/34/34/a95870b9221e09cf4f2ce3178b1a210abdfe63a1bd357da940418d7b8d15/cffi-2.1.1-cp313-cp313-musllinux_1_2_x86_64.whl",
+        "sha256": "e0bcb7e0f677f543555d2adff3bf19c05f66cdb4796e5ff602442ab2fe3c4ef7"
+      },
+      "source": {
+        "file": "cffi-2.1.1.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz",
+        "sha256": "dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be"
+      },
+      "notices": {
+        "cffi-2.1.1.dist-info/licenses/LICENSE": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63"
+      }
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "declared_license": "MIT",
+      "wheel": {
+        "file": "charset_normalizer-3.5.2-cp313-cp313-musllinux_1_2_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/79/ba/57adc269824e8658f1a0f97a9e514c247445a9632b3419b97e0ba37f16dc/charset_normalizer-3.5.2-cp313-cp313-musllinux_1_2_x86_64.whl",
+        "sha256": "e243bd13217235fc7290c621941c3f5cc8b66e4872495be821d7436ba2fb838d"
+      },
+      "source": {
+        "file": "charset_normalizer-3.5.2.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/33/1c/f41d4e74c28ab327ff3acd36053f7ea506c55872d7a90b0fa71aa3ab0c89/charset_normalizer-3.5.2.tar.gz",
+        "sha256": "39de2a259fc954455c57274dc94c79d5842774e1247a016aff30bc0efed0f4ef"
+      },
+      "notices": {
+        "charset_normalizer-3.5.2.dist-info/licenses/LICENSE": "6d0d41bfe170ac6c7dc248c9a63e254d0fb45a60d50a8257d0af92c6e249b887"
+      }
+    },
+    {
+      "name": "cryptography",
+      "version": "48.0.1",
+      "declared_license": "Apache-2.0 OR BSD-3-Clause",
+      "wheel": {
+        "file": "cryptography-48.0.1-cp311-abi3-musllinux_1_2_x86_64.whl",
+        "url": "https://files.pythonhosted.org/packages/47/a2/e5079a032fb85cf6005046ca92bbd78b0c82dad2b5751ab8c311659da06f/cryptography-48.0.1-cp311-abi3-musllinux_1_2_x86_64.whl",
+        "sha256": "9bd3f92d76217892b15df84ca256c2c113d386fdda7a7d8691aeeced976507c6"
+      },
+      "source": {
+        "file": "cryptography-48.0.1.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/12/45/870e7f4bef50e5f53b9f51d4428aee5290eedf58ba443f16b1ebb7ab8e66/cryptography-48.0.1.tar.gz",
+        "sha256": "266f4ee051abb2f725b74ef8072b521ce1feacf685a3364fa6a6b45548db791a"
+      },
+      "notices": {
+        "cryptography-48.0.1.dist-info/licenses/LICENSE": "3e0c7c091a948b82533ba98fd7cbb40432d6f1a9acbf85f5922d2f99a93ae6bb",
+        "cryptography-48.0.1.dist-info/licenses/LICENSE.APACHE": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe",
+        "cryptography-48.0.1.dist-info/licenses/LICENSE.BSD": "602c4c7482de6479dd2e9793cda275e5e63d773dacd1eca689232ab7008fb4fb"
+      }
+    },
+    {
+      "name": "django-oauth-toolkit",
+      "version": "3.4.1",
+      "declared_license": "BSD-2-Clause",
+      "wheel": {
+        "file": "django_oauth_toolkit-3.4.1-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/c4/16/11cf2eacd7ac1c32908288b6d56fadef5676071a4ac0af7e626fd1abd3ef/django_oauth_toolkit-3.4.1-py3-none-any.whl",
+        "sha256": "c47f2a70e83bade0a47a5e9b20e86030d8ed9c0a8f10ec4ed30446cad7291f2d"
+      },
+      "source": {
+        "file": "django_oauth_toolkit-3.4.1.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/66/42/b3c6a5d7e204011a702cc02ababb756d10538645dfd188ea441e4c65a082/django_oauth_toolkit-3.4.1.tar.gz",
+        "sha256": "c4de73c0765eed55a99ea0fa8433b20664dcc1f43930149cff569abed166c5c2"
+      },
+      "notices": {
+        "django_oauth_toolkit-3.4.1.dist-info/licenses/AUTHORS": "91e3a96ed5eded671583235dc6ea0fb6124a7c62926069a926ede121741a1c97",
+        "django_oauth_toolkit-3.4.1.dist-info/licenses/LICENSE": "9969ff5210c7dea29295304bc5fcd3693aa81ce07e6893897c20653eb8e71bdc"
+      }
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "declared_license": "BSD-3-Clause",
+      "wheel": {
+        "file": "idna-3.20-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+        "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c"
+      },
+      "source": {
+        "file": "idna-3.20.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/f5/08/8eea9d4b8302028f3abb2c0813953f7aec26d33b7a8960ed760e65ff29fa/idna-3.20.tar.gz",
+        "sha256": "a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44"
+      },
+      "notices": {
+        "idna-3.20.dist-info/licenses/LICENSE.md": "1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04"
+      }
+    },
+    {
+      "name": "jwcrypto",
+      "version": "1.5.8",
+      "declared_license": "LGPL-3.0-or-later",
+      "wheel": {
+        "file": "jwcrypto-1.5.8-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/6e/7c/f87c5db042c4f7b4476346fc0d22f1025a777fee08eebde3720d3b9c4eb5/jwcrypto-1.5.8-py3-none-any.whl",
+        "sha256": "85aeb475f808d56bbc2f2ed1f6f73e6a317c4011a4321505f02f0aed695a3742"
+      },
+      "source": {
+        "file": "jwcrypto-1.5.8.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/de/7e/53c14813521693e931e420d9db00efe317419ff194495903bce03402275e/jwcrypto-1.5.8.tar.gz",
+        "sha256": "c3d7114b6f6e65b52f6b7da817eb8cb8423e1da31e1ef13508447c81ecbdcc34"
+      },
+      "notices": {
+        "jwcrypto-1.5.8.data/data/share/doc/jwcrypto/LICENSE": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768",
+        "jwcrypto-1.5.8.dist-info/licenses/LICENSE": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+      }
+    },
+    {
+      "name": "oauthlib",
+      "version": "4.0.0",
+      "declared_license": "BSD-3-Clause",
+      "wheel": {
+        "file": "oauthlib-4.0.0-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/d9/f4/78229a1066068ca14fc60fb26cf7381cabe4382261392b90e5f9552722d4/oauthlib-4.0.0-py3-none-any.whl",
+        "sha256": "624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd"
+      },
+      "source": {
+        "file": "oauthlib-4.0.0.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/7a/d8/a1bcc8ba112a627f8ffbdc212a78ce18d3ac07e91a5ca65d27918eee25a1/oauthlib-4.0.0.tar.gz",
+        "sha256": "efb274799819440f95b4ab3b818869f1ce9ae26c5beacba0201d1a1b76b54f86"
+      },
+      "notices": {
+        "oauthlib-4.0.0.dist-info/licenses/LICENSE": "0028aa4763a8a0b09ca4c68d585263474cf9aaa6ec69ffbef3a31a9eccdd3b91"
+      }
+    },
+    {
+      "name": "pycparser",
+      "version": "3.11",
+      "declared_license": "BSD-3-Clause",
+      "wheel": {
+        "file": "pycparser-3.11-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/90/11/0e6f11117525ff0eec40ebac3d313376f102df93ca44ad9e893ee85e4f89/pycparser-3.11-py3-none-any.whl",
+        "sha256": "51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80"
+      },
+      "source": {
+        "file": "pycparser-3.11.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/da/a8/c5fdbeee588bb8ada9458774f43adf1bdd30bd59157055142183e769a024/pycparser-3.11.tar.gz",
+        "sha256": "d875f09c3507d00e1aba0eecc6dcadc1352f30fff09dc6bff2f1c2935e97c2bc"
+      },
+      "notices": {
+        "pycparser-3.11.dist-info/licenses/LICENSE": "0a9e78156ae8b96caf1b4f11ac2df424b83de29736f9e757630548a6272fdf90"
+      }
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "declared_license": "Apache-2.0",
+      "wheel": {
+        "file": "requests-2.34.2-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+        "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"
+      },
+      "source": {
+        "file": "requests-2.34.2.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz",
+        "sha256": "f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"
+      },
+      "notices": {
+        "requests-2.34.2.dist-info/licenses/LICENSE": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b",
+        "requests-2.34.2.dist-info/licenses/NOTICE": "f5110972dedad2b4e9d314518daf3b7d72d6e02e499acd802181de6f74571dcc"
+      }
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "declared_license": "PSF-2.0",
+      "wheel": {
+        "file": "typing_extensions-4.16.0-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+        "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+      },
+      "source": {
+        "file": "typing_extensions-4.16.0.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz",
+        "sha256": "dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5"
+      },
+      "notices": {
+        "typing_extensions-4.16.0.dist-info/licenses/LICENSE": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+      }
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "declared_license": "MIT",
+      "wheel": {
+        "file": "urllib3-2.8.0-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+        "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3"
+      },
+      "source": {
+        "file": "urllib3-2.8.0.tar.gz",
+        "url": "https://files.pythonhosted.org/packages/e3/05/b17359e1cefb4f909b5e40b1b90a496d987258916dbbf88e842c729f510e/urllib3-2.8.0.tar.gz",
+        "sha256": "63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63"
+      },
+      "notices": {
+        "urllib3-2.8.0.dist-info/licenses/LICENSE.txt": "130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686"
+      }
+    }
+  ],
+  "supplemental_license_texts": [
+    {
+      "file": "GPL-3.0.txt",
+      "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-14.2.0/COPYING3",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+      "file": "GCC-RUNTIME-EXCEPTION-3.1.txt",
+      "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-14.2.0/COPYING.RUNTIME",
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+    },
+    {
+      "file": "MPL-2.0.txt",
+      "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
+      "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+    }
+  ],
+  "open_native_review": [
+    "cryptography wheel: corresponding OpenSSL 4.0.1 build, Rust dependency notices and bundled libgcc source/patch provenance are not established by these Python sdists.",
+    "Bundled cryptography.libs/libgcc_s-0cd532bd.so.1 has SHA256 c8f934f958f22b3b9c8e790fde6bc2d2f55ab9ae8b9f5eea65425b20271782d0 and Alpine GCC 14.2.0 compiler metadata; this is separate from the current app base GCC source inventory.",
+    "CFFI backend native/libffi provenance and charset-normalizer compiled-code provenance still need exact shipped-artifact review."
+  ],
+  "complete_native_inventory": false
+}
