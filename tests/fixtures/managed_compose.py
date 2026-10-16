@@ -201,7 +201,7 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
                             "gateway-data",
                         )
                     },
-                    "networks": {"default": {"internal": True}},
+                    "networks": {"default": {"driver": "bridge"}},
                 }
             )
         )
@@ -295,7 +295,8 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
         assert all(
             not row.get("external")
             and row["name"].startswith(self.project + "_")
-            and row.get("internal")
+            and not row.get("internal")
+            and row.get("driver") == "bridge"
             for row in config["networks"].values()
         )
         for name, service in config["services"].items():

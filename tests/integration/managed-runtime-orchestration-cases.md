@@ -16,7 +16,8 @@ The fixture copies that source into a private repository directory. Its base
 Compose topology has only a gateway, app, synthetic provider and initialization
 job. All volumes are local to a unique `COMPOSE_PROJECT_NAME`; a rendered-config
 check rejects the fixed external preview account volume before any container
-starts. Host ports are reserved loopback ports. The actual runtime override,
+starts. Its project-owned bridge matches local Compose; this check does not prove
+egress isolation. Host ports are reserved loopback ports. The actual runtime override,
 launcher, private preparation scripts, migrations, client registration and
 management installer are unchanged. The fixture supplies `/app` as the working
 directory, runs the real Gunicorn configuration and includes `/opt/oauth` on
