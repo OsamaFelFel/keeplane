@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
+from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from django.conf import settings
@@ -78,7 +79,9 @@ def authorize(request):
                 {"error": "Send only a project ID and model ID"}, status=400
             )
         result = DjangoModelAuthorization(
-            IDENTITY, model_policy(), project_access=organization_project_access
+            RuntimeIdentity(IDENTITY),
+            model_policy(),
+            project_access=organization_project_access,
         ).authorize(request.auth, body["project_id"], body["model_id"])
         DjangoSharedKeyAvailability(
             MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")

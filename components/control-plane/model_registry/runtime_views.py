@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
+from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from projects.access import organization_project_access
@@ -46,14 +47,22 @@ def project_models(request, project_id):
 
 @never_cache
 @runtime_bearer_only
-@api_view(["DELETE"])
+@api_view(["GET", "DELETE"])
 @authentication_classes([RuntimeSessionAuthentication])
 @permission_classes([IsAuthenticated])
 def session(request):
-    """Revoke only the exact credential authenticated for this request."""
+    """Return the current account or revoke this request's exact credential."""
+    if request.method == "GET":
+        return Response(
+            {
+                "id": str(request.user.pk),
+                "username": request.user.username,
+                "role": request.user.role,
+            }
+        )
     if request.body:
         return Response({"error": "Send an empty logout request"}, status=400)
-    IDENTITY.logout(request.auth)
+    RuntimeIdentity(IDENTITY).logout(request.auth)
     return Response(status=204)
 
 
