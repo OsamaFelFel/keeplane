@@ -122,3 +122,34 @@ def test_changed_or_ambiguous_provider_cannot_activate(fault):
         providers[0]["rejected"]["outside"] = deepcopy(active)
     with pytest.raises(RuntimeInstallationUnavailable):
         verify(dump, resources)
+
+
+@pytest.mark.parametrize("fault", ["path", "format", "method", "missing-path"])
+def test_custom_completions_requires_the_exact_native_null_path(fault):
+    dump, resources = fixture()
+    resources[0]["value"]["provider"] = {
+        "custom": {"formats": [{"type": "completions"}]}
+    }
+    endpoint = dump["backends"][0]["backend"]["ai"]["target"]["providers"][0]["active"][
+        "demo"
+    ]["endpoint"]
+    # Pinned ProviderFormatConfig serializes its optional path without skipping
+    # None. The raw resource remains unchanged and forbids a path override.
+    endpoint["provider"] = {
+        "custom": {
+            "model": "upstream",
+            "formats": [{"type": "completions", "path": None}],
+        }
+    }
+    verify(dump, resources)
+    formats = endpoint["provider"]["custom"]["formats"]
+    if fault == "path":
+        formats[0]["path"] = "/outside"
+    elif fault == "format":
+        formats.append({"type": "responses", "path": None})
+    elif fault == "method":
+        formats[0]["method"] = "GET"
+    else:
+        del formats[0]["path"]
+    with pytest.raises(RuntimeInstallationUnavailable):
+        verify(dump, resources)

@@ -207,7 +207,7 @@ def require_applied_models(dump, resources, models, targets):
             else {
                 "custom": {
                     "model": value["params"]["model"],
-                    "formats": [{"type": "completions"}],
+                    "formats": [{"type": "completions", "path": None}],
                 }
             }
         )
