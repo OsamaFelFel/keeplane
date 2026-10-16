@@ -1,6 +1,8 @@
 """Django configuration for the local preview and shared PostgreSQL deployment."""
 
 import os
+from importlib.metadata import version
+from importlib.util import find_spec
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -40,6 +42,34 @@ INSTALLED_APPS = [
     "projects",
     "audit",
 ]
+CLI_OAUTH_ENABLED = os.environ.get("KEEPLANE_CLI_OAUTH_ENABLED", "0") == "1"
+if find_spec("oauth2_provider"):
+    if version("django-oauth-toolkit") != "3.4.1":
+        raise RuntimeError("The CLI sign-in trial requires Django OAuth Toolkit 3.4.1")
+    # Retain ORM cascade ownership when acceptance is switched off after migration.
+    INSTALLED_APPS.append("oauth2_provider")
+elif CLI_OAUTH_ENABLED:
+    raise RuntimeError("Install the CLI sign-in trial dependencies before enabling it")
+
+OAUTH2_PROVIDER = {
+    "SCOPES": {"runtime": "Use Keeplane from the CLI"},
+    "DEFAULT_SCOPES": ["runtime"],
+    "ACCESS_TOKEN_GENERATOR": "accounts.cli_credentials.access_token",
+    "PKCE_REQUIRED": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
+    "COMPLIANT_BCP_RFC9700_PASSWORD_GRANT": True,
+    "COMPLIANT_BCP_RFC9700_IMPLICIT_GRANT": True,
+    "COMPLIANT_BCP_RFC9700_ACCESS_TOKEN_TRANSPORT": True,
+    "COMPLIANT_BCP_RFC9700_TOKEN_STORAGE": True,
+    "REFRESH_TOKEN_REUSE_PROTECTION": True,
+    "ROTATE_REFRESH_TOKEN": True,
+    "REFRESH_TOKEN_GRACE_PERIOD_SECONDS": 0,
+    # Match the existing account session lifetime during the bounded trial.
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 8 * 60 * 60,
+    "REFRESH_TOKEN_EXPIRE_SECONDS": 8 * 60 * 60,
+    "ALLOW_URI_WILDCARDS": False,
+    "ALLOW_LOCALHOST_LOOPBACK": False,
+}
 MIDDLEWARE = [
     "common.middleware.StorageFailureMiddleware",
     "common.middleware.RequestLimitMiddleware",
