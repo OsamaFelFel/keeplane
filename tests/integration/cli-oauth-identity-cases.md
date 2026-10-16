@@ -51,3 +51,17 @@ Device protocol, PostgreSQL concurrent issuance, a real browser and the complete
 installed native gateway journey remain separate acceptance checks. Set both
 `KEEPLANE_CLI_SOURCE` to the reviewed coding CLI repository snapshot and
 `KEEPLANE_OPENCODE_V2_BIN` to the pinned runtime to run the native case.
+
+`test_cli_oauth_key_journey.py` uses a real browser-issued CLI profile against the
+runtime key API. Compose that API with the issuer and reviewed CLI to run it:
+
+- Add, read, replace and remove a personal key. Only validation contacts the
+  synthetic provider; status reads do not. Replacing a key removes its old file.
+- A changed model definition prevents another validation request while allowing
+  the developer to read and remove their old key.
+- Logout after initial request authentication is checked again under the owner
+  lock, before contacting the provider or storing a key. The access and refresh
+  pair are withdrawn, and the failed command retains the local profile.
+
+The fixture checks private file permissions and that command output contains no
+provider or account credential. It does not prove personal-key model dispatch.

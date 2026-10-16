@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from django.apps import apps
 
+from tests.integration.test_cli_oauth_browser import browser_flow  # noqa: F401
 from tests.integration.test_cli_oauth_journey import signed_in_cli  # noqa: F401
 
 HAS_KEY_API = importlib.util.find_spec("model_registry.runtime_keys") is not None
