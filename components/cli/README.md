@@ -6,8 +6,8 @@ Manage your own provider keys with the [key commands](../../docs/guide/cli-provi
 Run a turn and resume private history with the [signed-in coding command](../../docs/guide/cli-coding.md).
 
 This experimental adapter connects OpenCode V2 **2.0.27** to an explicitly
-configured protected gateway. It exercises the local coding loop while the
-CLI sign-in and project-registration flows are being built. It does not select
+configured protected gateway. The standalone command below exercises the coding
+loop with an operator-supplied test credential. It does not select
 the runtime for the release. No runtime binary is bundled or downloaded.
 
 ```mermaid
