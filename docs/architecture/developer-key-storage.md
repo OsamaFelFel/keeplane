@@ -43,6 +43,12 @@ current-definition checks as other choices. This does not admit model work:
 public Add, editing those records, preview Ask and the runtime callback still
 refuse personal-key use. Other models remain available.
 
+On Models and routing, personal models show how many active accounts have added
+a key bound to the current definition. Removed, unbound, withdrawn and inactive
+registrations do not count. Admin accounts that use the CLI count too. This is a
+registration count; it does not probe providers or promise a working model.
+The response exposes no account identity, key value, filename or fingerprint.
+
 Status describes stored metadata, not current dispatch permission. Before public
 submission or dispatch, follow-up work must check the actual selected native
 definition against this binding, implement personal-key model setup, and handle
@@ -70,3 +76,5 @@ Run the [isolated storage cases](../../tests/integration/test_developer_key_stor
 and [binding cases](../../tests/integration/test_developer_key_binding.py) with
 `python -m pytest tests/integration/test_developer_key_store.py tests/integration/test_developer_key_binding.py`.
 The binding cases use actual HTTP against synthetic providers, not paid cloud APIs.
+The [admin count cases](../../tests/integration/personal-key-count-cases.md) cover
+the read-only count and its access checks.
