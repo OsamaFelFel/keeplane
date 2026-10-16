@@ -91,7 +91,11 @@ startup on default and custom ports, Linux browser behavior and a disposable
 PostgreSQL API/restore fixture. macOS visual baselines and full Kubernetes
 acceptance have separate environments. Green CI covers only its selected checks.
 
-Reports are retained as CI artifacts for 30 days, including failures. State the
+Failed private gateway commands write `gateway-command-*.json` beside the case
+reports. These contain the exit code and exception types, without command
+arguments, credentials or raw output. A command failure still fails its check.
+
+Reports are retained as CI artifacts for 30 days. State the
 tested revision, results and unrun checks in the PR. Release evidence needs a
 longer retention policy. Commit fixtures, readable cases and deliberate visual
 baselines; keep routine generated output outside source control.
