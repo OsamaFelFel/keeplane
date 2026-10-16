@@ -13,6 +13,8 @@ from model_registry.installed_runtime import digest
 from model_registry.models import ModelApproval
 from model_registry.provider_keys import managed_key_digest
 
+from tests.unit.test_applied_gateway import dump
+
 pytest_plugins = ("tests.integration.test_runtime_callback",)
 
 
@@ -380,3 +382,117 @@ def test_existing_gateway_installation_is_not_enabled_by_a_manifest(
     monkeypatch.setenv("GATEWAY_MODE", "existing")
     assert send(installed).status_code == 503
     assert not installed.requests
+
+
+@pytest.fixture
+def health_snapshot(installed):
+    f = installed
+    f.applied = dump()
+    f.group = f.applied["backends"][0]["backend"]["ai"]["target"]["providers"][0]
+    f.group["active"]["private"] = f.group["active"].pop("model")
+    f.info = f.group["active"]["private"]["info"]
+    f.applied["policies"] = [{"extAuthz": {"failureMode": "deny"}}]
+    f.enroll()
+    return f
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_failure_and_recovery_measurements_do_not_require_manifest_rewrite(
+    health_snapshot, selected
+):
+    f = health_snapshot
+    original = f.manifest_file.read_bytes()
+    f.info.update(health=0.7, consecutiveFailures=1, totalRequests=1)
+    assert send(f, selected).status_code == 200
+    f.info.update(
+        health=0.79, consecutiveFailures=0, requestLatency=0.02, totalRequests=2
+    )
+    assert send(f, selected).status_code == 200
+    assert f.manifest_file.read_bytes() == original
+
+
+@pytest.mark.parametrize("selected", [False, True])
+@pytest.mark.parametrize(
+    "change",
+    [
+        "membership",
+        "timesEjected",
+        "evictedUntil",
+        "capacity",
+        "target",
+        "guard",
+        "auth",
+        "unknown",
+        "bad-health",
+        "bad-count",
+        "missing-health",
+    ],
+)
+def test_health_normalization_does_not_hide_wiring_eviction_or_malformed_state(
+    health_snapshot, selected, change
+):
+    f = health_snapshot
+    endpoint = f.group["active"]["private"]
+    f.info.update(health=0.7, consecutiveFailures=1)
+    if change == "membership":
+        f.group["rejected"]["private"] = f.group["active"].pop("private")
+    elif change in ("timesEjected", "evictedUntil"):
+        f.info[change] = 1
+    elif change == "capacity":
+        endpoint["capacity"] = 2
+    elif change == "target":
+        endpoint["endpoint"]["hostOverride"] = "changed.invalid:443"
+    elif change == "guard":
+        f.applied["policies"][0]["extAuthz"]["failureMode"] = "allow"
+    elif change == "auth":
+        f.applied["backends"][0]["inlinePolicies"] = [{"backendAuth": {}}]
+    elif change == "bad-health":
+        f.info["health"] = float("nan")
+    elif change == "bad-count":
+        f.info["consecutiveFailures"] = True
+    elif change == "missing-health":
+        del f.info["health"]
+    else:
+        f.info["unknown"] = True
+    assert send(f, selected).status_code == 503
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_current_class_and_approval_still_withdraw_during_health_drift(
+    health_snapshot, selected
+):
+    f = health_snapshot
+    f.info.update(health=0.7, consecutiveFailures=1)
+    ProjectClass.objects.filter(pk=f.project).update(data_class_id="public")
+    assert send(f, selected).status_code == 403
+    ModelApproval.objects.filter(pk="private").delete()
+    assert send(f, selected).status_code == 503
+
+
+def test_shared_key_withdrawal_still_denies_during_health_drift(health_snapshot):
+    f = health_snapshot
+    path = f.key_directory / ("key-" + "a" * 32)
+    path.write_text("synthetic-managed-provider-key")
+    f.resources[0]["value"]["auth"] = {"key": {"value": {"file": str(path)}}}
+    f.fp = f.enroll(
+        "shared", path.name, managed_key_digest(str(f.key_directory), str(path))
+    )
+    f.info.update(health=0.7, consecutiveFailures=1)
+    assert send(f, True).status_code == 200
+    path.unlink()
+    assert send(f, True).status_code == 503
+
+
+def test_old_signature_denies_until_explicit_reenrollment(health_snapshot):
+    f = health_snapshot
+    old_dump = deepcopy(f.applied)
+    info = old_dump["backends"][0]["backend"]["ai"]["target"]["providers"][0]["active"][
+        "private"
+    ]["info"]
+    for field in ("requestLatency", "pendingRequests", "totalRequests"):
+        del info[field]
+    f.declaration["applied_digest"] = digest(old_dump)
+    f.write()
+    assert send(f).status_code == 503
+    f.enroll()
+    assert send(f).status_code == 200

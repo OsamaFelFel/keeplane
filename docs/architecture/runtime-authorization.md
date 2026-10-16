@@ -189,6 +189,17 @@ filesystem publication reports an unconfirmed state and the launcher must stop
 the gateway. The opt-in Compose launcher owns this workflow; its full host execution remains
 unverified. Ordinary preview deployment remains unchanged.
 
+The internal [per-model binding reader](../../tests/unit/runtime-binding-cases.md)
+is a prerequisite for automatic model activation. It keeps complete shared
+entry/private wiring and the selected model's provider, authentication and final
+guards, while excluding only provably disjoint stable-ID model targets. This
+lets a publisher distinguish an unrelated registry update from a change to the
+model being used. Ambiguous or unsupported routing fails closed. The existing
+installed gate still uses its complete snapshot; this reader enables no traffic.
+The remaining integration must publish and verify each copy automatically when
+an admin adds or edits a model, preserve other models' access, and withdraw stale
+bindings before acknowledging stricter changes.
+
 ## Managed operator contract
 
 An operator can configure `RUNTIME_GUARD_MANIFEST_FILE` as an absolute path to a
@@ -328,10 +339,18 @@ Content-Type survive the outbound replacement; the subject Bearer is removed.
 The installed entry callback first checks that a Personal key is available for
 the current owner and definition, returning metadata only. A missing key is denied
 before native backend selection. The final private token exchange still resolves
-the key afresh. A genuine backend/provider failure changes native health state
-and requires fresh enrollment in this fixed trial; health and eviction remain
-part of the applied binding. Concurrent withdrawal after entry can also fail
-at that final boundary; this is not an in-flight availability guarantee.
+the key afresh. The applied signature omits validated health scores and
+consecutive-failure counts only inside active native EndpointInfo records,
+alongside the existing request measurements. Normal provider errors can recover
+on the next request. Endpoint membership, eviction deadlines/counts, capacity,
+destinations, guards, authentication and unknown fields remain bound. Concurrent
+withdrawal after entry can still fail at the final boundary; this is not an
+in-flight availability guarantee.
+
+This changes the applied signature calculation. Existing installations stay
+denied until an operator starts a fresh gateway and reruns enrollment. No previous
+signature is accepted automatically. The fixed installation still requires one
+provider group, one active endpoint and no rejected endpoints for each model.
 
 Token caching is explicitly disabled in the complete file/effective configuration.
 The pinned native applied serializer omits that setting: readback verifies the

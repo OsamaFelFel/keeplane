@@ -101,7 +101,7 @@ def unique_pairs(pairs):
 
 
 def applied_fingerprint(value):
-    """Bind the complete dump, except three evidenced per-request measurements."""
+    """Bind the complete dump, except validated request measurements."""
     try:
         if not isinstance(value, dict) or set(value) != {
             "workloads",
@@ -123,9 +123,24 @@ def applied_fingerprint(value):
             for provider in ai["target"]["providers"]:
                 for endpoint in provider["active"].values():
                     info = endpoint["info"]
-                    # Pinned EndpointInfo records these on every request. Health,
-                    # eviction, capacity, endpoints, policies and unknown fields remain.
-                    for field in ("requestLatency", "pendingRequests", "totalRequests"):
+                    health = info["health"]
+                    failures = info["consecutiveFailures"]
+                    if (
+                        type(health) not in (int, float)
+                        or not 0 <= health <= 1  # Also rejects NaN and infinities.
+                        or type(failures) is not int
+                        or not 0 <= failures <= 2**64 - 1
+                    ):
+                        raise ValueError()
+                    # These change when requests finish. Eviction state, membership,
+                    # capacity, destinations, policies and unknown fields stay bound.
+                    for field in (
+                        "requestLatency",
+                        "pendingRequests",
+                        "totalRequests",
+                        "health",
+                        "consecutiveFailures",
+                    ):
                         del info[field]
         canonical = json.dumps(
             result, sort_keys=True, separators=(",", ":"), allow_nan=False
