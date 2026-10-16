@@ -1,0 +1,37 @@
+# Sign in and list a project's models
+
+The experimental CLI entry point joins browser sign-in, private account storage,
+project registration, model discovery and logout. It needs the trial sign-in
+server described in [browser login](cli-browser-login.md); it is not yet a
+packaged command. Use macOS or Linux and Python 3.9+.
+
+```sh
+python3 components/cli/keeplane.py login --server https://keeplane.example --profile /absolute/private/keeplane-account
+python3 components/cli/keeplane.py whoami --profile /absolute/private/keeplane-account
+python3 components/cli/keeplane.py register-project --profile /absolute/private/keeplane-account --project PROJECT_UUID --name 'My project'
+python3 components/cli/keeplane.py models --profile /absolute/private/keeplane-account --project PROJECT_UUID
+python3 components/cli/keeplane.py logout --profile /absolute/private/keeplane-account
+```
+
+Replace `PROJECT_UUID` with an explicit project UUID. Registration records that
+your account uses the project and returns its server-preserved name. It does not
+initialize files, derive Git identity or grant access. `models` returns the
+server's current allowed model IDs; an empty list is valid.
+
+Each project command checks the current server account against the saved ID
+before making its project request. A changed, withdrawn or unavailable account
+stops the command. The issuer comes only from the private profile, so there is no
+second server argument that can forward its credential elsewhere. The server
+still checks every request and remains authoritative for project/model access.
+
+```mermaid
+flowchart LR
+  CLI[CLI command] --> Profile[Private issuer and account]
+  Profile --> Check[Current server account]
+  Check --> Project[Register use or list allowed models]
+```
+
+Logout and explicit local `forget` retain the [profile recovery behavior](cli-account-profile.md).
+Use the [key commands](cli-provider-key-commands.md) to manage your own stored
+provider keys. Coding dispatch, resume history and init apply remain separate
+integration work. Controlled HTTP checks do not prove the real Django browser issuer.

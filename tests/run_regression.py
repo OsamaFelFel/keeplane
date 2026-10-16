@@ -148,7 +148,7 @@ def main():
         "components": pytest_group(
             "components",
             ["tests/integration"],
-            "live",
+            "live and not optional",
             env={
                 f"KEEPLANE_RUNTIME_{variant.upper()}_IMAGE": image
                 for variant, image in runtime_images.items()

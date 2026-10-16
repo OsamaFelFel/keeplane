@@ -8,6 +8,9 @@ import pytest
 
 from components.cli.server_connection import ConnectionError, LIMIT, models, main, logout
 from components.cli import session_logout
+from components.cli import account_session
+from components.cli.credential_profile import Credential, ProfileError, opened
+from components.cli.server_connection import account, origin
 
 
 @pytest.fixture
@@ -110,3 +113,67 @@ def test_logout_does_not_report_success_on_refusal_or_unknown_result(server, sta
     with pytest.raises(ConnectionError) as error:
         logout(server.url, "synthetic-session")
     assert "SECRET" not in str(error.value) and "synthetic-session" not in str(error.value)
+
+
+@pytest.mark.parametrize("status,removed", [(204, True), (401, True), (503, False), (302, False)])
+def test_profile_logout_retains_credentials_on_ambiguous_failure(server, tmp_path, status, removed):
+    path = tmp_path / "profile"
+    credential = Credential(server.url, str(uuid.uuid4()), "kpc_" + "a" * 43, "r" * 32)
+    with opened(path, create=True) as profile:
+        profile.save(credential)
+    server.status, server.payload = status, b""
+    if removed:
+        assert "removed" in account_session.run("logout", path)
+    else:
+        with pytest.raises(ConnectionError):
+            account_session.run("logout", path)
+    assert (path / "credential.json").exists() is not removed
+    assert server.requests == [("/api/runtime/session", "Bearer " + credential.access_token, None, "DELETE")]
+
+
+def test_profile_whoami_checks_current_actor_and_forget_is_local(server, tmp_path):
+    path, actor = tmp_path / "profile", str(uuid.uuid4())
+    credential = Credential(server.url, actor, "kpc_" + "a" * 43, "r" * 32)
+    with opened(path, create=True) as profile:
+        profile.save(credential)
+    server.payload = json.dumps({"id": actor, "username": "developer", "role": "admin"}).encode()
+    assert json.loads(account_session.run("whoami", path))["role"] == "admin"
+    server.payload = server.payload.replace(actor.encode(), str(uuid.uuid4()).encode())
+    with pytest.raises(ProfileError, match="account changed"):
+        account_session.run("whoami", path)
+    count = len(server.requests)
+    assert "not requested" in account_session.run("forget", path)
+    assert len(server.requests) == count
+    assert not (path / "credential.json").exists()
+
+
+@pytest.mark.parametrize("body", [{"id": "invalid", "username": "developer", "role": "developer"},
+                                  {"id": str(uuid.uuid4()), "username": "developer", "role": "root"},
+                                  {"id": str(uuid.uuid4()), "username": "developer", "role": "admin", "token": "SECRET"}])
+def test_account_response_requires_exact_contract(server, body):
+    server.payload = json.dumps(body).encode()
+    with pytest.raises(ConnectionError, match="invalid account"):
+        account(server.url, "synthetic-session")
+
+
+def test_issuer_normalization():
+    assert origin("https://KEEPPlane.example:443/") == "https://keepplane.example"
+    assert origin("http://[::1]:8080") == "http://[::1]:8080"
+
+
+def test_profile_command_never_prints_saved_credentials(server, tmp_path, monkeypatch, capsys):
+    path, actor = tmp_path / "profile", str(uuid.uuid4())
+    credential = Credential(server.url, actor, "kpc_" + "a" * 43, "r" * 32)
+    with opened(path, create=True) as profile:
+        profile.save(credential)
+    server.payload = json.dumps({"id": actor, "username": credential.access_token, "role": "developer"}).encode()
+    monkeypatch.setattr("sys.argv", ["account_session", "whoami", "--profile", str(path)])
+    assert account_session.main() == 0
+    output = capsys.readouterr()
+    assert credential.access_token not in output.out + output.err
+    assert credential.refresh_token not in output.out + output.err
+    assert "[redacted]" in output.out
+    server.status = 503
+    assert account_session.main() == 1
+    assert "temporarily unavailable" in capsys.readouterr().err
+    assert (path / "credential.json").exists()

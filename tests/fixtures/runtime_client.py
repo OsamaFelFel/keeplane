@@ -28,7 +28,8 @@ body = options.get(
 request = Request(
     "http://"
     + os.environ.get("FIXTURE_GATEWAY_HOST", "gateway")
-    + ":5000"
+    + ":"
+    + str(options.get("port", 5000))
     + options.get("path", "/v1/chat/completions"),
     data=json.dumps(body).encode(),
     headers=headers,

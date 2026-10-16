@@ -8,6 +8,7 @@ from rest_framework.authentication import BaseAuthentication, get_authorization_
 from rest_framework.exceptions import APIException, AuthenticationFailed
 
 from common.api import IDENTITY
+from .cli_credentials import RuntimeIdentity
 
 
 class RuntimeAuthenticationUnavailable(APIException):
@@ -34,7 +35,7 @@ class RuntimeSessionAuthentication(BaseAuthentication):
         ):
             raise AuthenticationFailed("Sign in to Keeplane")
         token = parts[1].decode("ascii")
-        user = IDENTITY.authenticated_user(token)
+        user = RuntimeIdentity(IDENTITY).authenticated_user(token)
         if user is None:
             raise AuthenticationFailed("Sign in to Keeplane")
         return user, token

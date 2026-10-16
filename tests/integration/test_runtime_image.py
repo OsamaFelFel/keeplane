@@ -47,4 +47,4 @@ def test_runtime_image(variant):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-pytestmark = [pytest.mark.live, pytest.mark.infrastructure, pytest.mark.optional]
+pytestmark = [pytest.mark.live, pytest.mark.infrastructure]
