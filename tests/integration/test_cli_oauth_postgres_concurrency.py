@@ -46,12 +46,15 @@ def exchange(form, label):
         connections.close_all()
 
 
-def wait_for_database_lock(future, label):
+def wait_for_database_lock(future, label, *, blocking_pid=None):
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT wait_event_type FROM pg_stat_activity WHERE application_name = %s", [label])
-            if any(row[0] == "Lock" for row in cursor.fetchall()):
+            # Activity reads otherwise retain a snapshot inside the owner's transaction.
+            cursor.execute("SELECT pg_stat_clear_snapshot()")
+            cursor.execute("SELECT wait_event_type, pg_blocking_pids(pid) FROM pg_stat_activity WHERE application_name = %s", [label])
+            if any(row[0] == "Lock" and (blocking_pid is None or blocking_pid in row[1])
+                   for row in cursor.fetchall()):
                 assert not future.done(), "The second request must still be waiting"
                 return
         assert not future.done(), "The request finished without waiting on PostgreSQL"
@@ -129,8 +132,11 @@ def test_global_withdrawal_while_issuance_waits_prevents_new_tokens(channel, dev
     with ThreadPoolExecutor(max_workers=1) as pool:
         with transaction.atomic():
             owner = User.objects.select_for_update().get(pk=device.flow.owner.pk)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_backend_pid()")
+                blocking_pid = cursor.fetchone()[0]
             future = pool.submit(exchange, form, label)
-            wait_for_database_lock(future, label)
+            wait_for_database_lock(future, label, blocking_pid=blocking_pid)
             revoke(owner)
         assert future.result(timeout=20)[0] == 400
     assert not AccessToken.objects.exists() and not RefreshToken.objects.exists()
