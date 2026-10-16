@@ -38,7 +38,16 @@ Run `test_cli_oauth_identity.py` with the separate trial dependencies and
 sign-in/consent, callback, private profile, current account, first-use registration,
 authorized catalog and exact logout. The controlled browser submits real CSRF
 forms but does not render the React app. A synthetic gateway supplies metadata
-only; no provider request occurs. Token/runtime requests carry no browser cookie.
+only; no provider request occurs in that case. Token/runtime requests carry no browser cookie.
+
+Its optional native coding case uses the same real browser issuer and private
+profile, then actual V2 read/edit tools and resume. A synthetic model fixture
+calls the actual Django private authorizer for every model request. Withdrawing
+approval after the CLI precheck stops dispatch; logout also rejects a copied old
+token. Private history contains no account or gateway credential. This fixture
+does not implement or prove the installed native gateway listener.
 
 Device protocol, PostgreSQL concurrent issuance, a real browser and the complete
-protected coding journey remain separate acceptance checks.
+installed native gateway journey remain separate acceptance checks. Set both
+`KEEPLANE_CLI_SOURCE` to the reviewed coding CLI repository snapshot and
+`KEEPLANE_OPENCODE_V2_BIN` to the pinned runtime to run the native case.
