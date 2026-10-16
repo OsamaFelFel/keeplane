@@ -213,3 +213,180 @@ def test_native_archive_notice_symlink_is_never_followed(native_artifacts):
     assert not result["artifacts_verified"] and result["source_notice_files"] == 0
     assert not (output / "notices/native").exists()
     assert outside.read_bytes() == b"Never copy this target"
+
+
+@pytest.fixture
+def rust_artifacts(artifacts):
+    cache, pins, output = artifacts
+    digest = lambda data: hashlib.sha256(data).hexdigest()
+    components, crates = [], []
+    lock = 'version = 3\n[[package]]\nname = "wrapper"\nversion = "0.1.0"\n[[package]]\nname = "local"\nversion = "0.1.0"\n'
+    for name, scope in (("one", "required"), ("two", "excluded")):
+        path = cache / (name + "-1.0.crate")
+        with tarfile.open(path, "w:gz") as archive:
+            for member_name, data in (
+                ("LICENSE", b"Original crate copyright\n"),
+                (
+                    "Cargo.toml",
+                    f'[package]\nname = "{name}"\nversion = "1.0"\nlicense = "MIT/Apache-2.0"\n'.encode(),
+                ),
+            ):
+                member = tarfile.TarInfo(name + "-1.0/" + member_name)
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+        sha = digest(path.read_bytes())
+        components.append(
+            {
+                "name": name,
+                "version": "1.0",
+                "scope": scope,
+                "licenses": [{"expression": "MIT OR Apache-2.0"}],
+                "purl": f"pkg:cargo/{name}@1.0",
+                "bom-ref": f"registry+https://github.com/rust-lang/crates.io-index#{name}@1.0",
+                "hashes": [{"alg": "SHA-256", "content": sha}],
+            }
+        )
+        crates.append(
+            {
+                "name": name,
+                "version": "1.0",
+                "scope": scope,
+                "licenses": [{"expression": "MIT OR Apache-2.0"}],
+                "source_manifest_license": "MIT/Apache-2.0",
+                "source": {
+                    "file": path.name,
+                    "sha256": sha,
+                    "url": f"https://static.crates.io/crates/{name}/{path.name}",
+                },
+                "source_notices": {
+                    name + "-1.0/LICENSE": digest(b"Original crate copyright\n")
+                },
+            }
+        )
+        lock += f'[[package]]\nname = "{name}"\nversion = "1.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "{sha}"\n'
+    workspace = {
+        "name": "local",
+        "version": "0.1.0",
+        "scope": "required",
+        "licenses": [{"expression": "Apache-2.0"}],
+    }
+    components.append(dict(workspace, **{"bom-ref": "path+file:///local"}))
+    record = json.dumps(
+        {
+            "components": components,
+            "metadata": {"component": {"name": "wrapper", "version": "0.1.0"}},
+        }
+    ).encode()
+    package = pins["packages"][0]
+    source = cache / package["source"]["file"]
+    with tarfile.open(source, "w:gz") as archive:
+        member = tarfile.TarInfo("example-1.0/Cargo.lock")
+        member.size = len(lock.encode())
+        archive.addfile(member, io.BytesIO(lock.encode()))
+    package["source"]["sha256"] = digest(source.read_bytes())
+    wheel = cache / package["wheel"]["file"]
+    filename = "example.dist-info/sboms/rust.json"
+    with ZipFile(wheel, "a") as archive:
+        archive.writestr(filename, record)
+    package["wheel"]["sha256"] = digest(wheel.read_bytes())
+    package["build_records"] = {filename: digest(record)}
+    pins["rust_inventory"] = {
+        "declared_by": {"package": "example", "member": filename},
+        "cargo_lock": {
+            "package": "example",
+            "member": "example-1.0/Cargo.lock",
+            "sha256": digest(lock.encode()),
+        },
+        "registry_components": crates,
+        "workspace_components": [workspace],
+    }
+    return cache, pins, output
+
+
+def test_rust_original_notices_cargo_binding_and_excluded_scope(rust_artifacts):
+    cache, pins, output = rust_artifacts
+    result = inventory.collect(pins, cache, output, source_cache=cache)
+    assert result["artifacts_verified"] and result["rust_cargo_lock_verified"]
+    assert (
+        result["rust_source_notice_files"] == 2
+        and not result["complete_native_inventory"]
+    )
+    assert result["rust_inventory"]["registry_components"][1]["scope"] == "excluded"
+    assert (
+        result["rust_inventory"]["registry_components"][0]["source_manifest_license"]
+        == "MIT/Apache-2.0"
+    )
+    assert (
+        output / "notices/rust-two/two-1.0/LICENSE"
+    ).read_bytes() == b"Original crate copyright\n"
+    assert (output / "build-records/example/example-1.0/Cargo.lock").is_file()
+
+
+@pytest.mark.parametrize(
+    "change", ["omit", "duplicate", "scope", "checksum", "url", "workspace"]
+)
+def test_rust_sbom_drift_stops_before_downloads(rust_artifacts, change):
+    cache, pins, output = rust_artifacts
+    rust = pins["rust_inventory"]
+    if change == "omit":
+        rust["registry_components"].pop()
+    elif change == "duplicate":
+        rust["registry_components"].append(
+            copy.deepcopy(rust["registry_components"][0])
+        )
+    elif change == "workspace":
+        rust["workspace_components"] = []
+    elif change == "scope":
+        rust["registry_components"][1]["scope"] = "required"
+    else:
+        rust["registry_components"][0]["source"][
+            "sha256" if change == "checksum" else "url"
+        ] = "a" * 64 if change == "checksum" else "https://example.test/crate"
+    with pytest.raises(ValueError, match="Rust"):
+        inventory.collect(pins, cache, output, source_cache=cache)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("update_pin", [False, True])
+def test_cargo_lock_checksum_change_keeps_failed_inventory(rust_artifacts, update_pin):
+    cache, pins, output = rust_artifacts
+    package = pins["packages"][0]
+    source = cache / package["source"]["file"]
+    with tarfile.open(source) as archive:
+        original = archive.extractfile("example-1.0/Cargo.lock").read()
+    altered = original.replace(
+        pins["rust_inventory"]["registry_components"][0]["source"]["sha256"].encode(),
+        b"a" * 64,
+    )
+    with tarfile.open(source, "w:gz") as archive:
+        member = tarfile.TarInfo("example-1.0/Cargo.lock")
+        member.size = len(altered)
+        archive.addfile(member, io.BytesIO(altered))
+    package["source"]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+    if update_pin:
+        pins["rust_inventory"]["cargo_lock"]["sha256"] = hashlib.sha256(
+            altered
+        ).hexdigest()
+    result = inventory.collect(pins, cache, output, source_cache=cache)
+    assert not result["artifacts_verified"] and not result["rust_cargo_lock_verified"]
+    assert result["rust_source_notice_files"] == 0
+    assert result["native_notice_failures"] == [
+        {"component": "rust-cargo-lock", "error_class": "ValueError"}
+    ]
+    assert not (output / "notices/rust-one").exists()
+
+
+def test_rust_wrong_source_manifest_license_fails_without_copying_notice(
+    rust_artifacts,
+):
+    cache, pins, output = rust_artifacts
+    pins["rust_inventory"]["registry_components"][0]["source_manifest_license"] = (
+        "BSD-3-Clause"
+    )
+    result = inventory.collect(pins, cache, output, source_cache=cache)
+    assert not result["artifacts_verified"] and result["rust_cargo_lock_verified"]
+    assert result["rust_source_notice_files"] == 1
+    assert result["native_notice_failures"] == [
+        {"component": "rust-one", "error_class": "ValueError"}
+    ]
+    assert not (output / "notices/rust-one").exists()
