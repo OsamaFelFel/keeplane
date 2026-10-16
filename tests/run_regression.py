@@ -76,12 +76,12 @@ def main():
         ],
     )
     parser.add_argument("--app-image", default="keeplane-preview:postgres-local")
+    parser.add_argument("--preview-image", default="keeplane-preview:docker-local")
     args = parser.parse_args()
     output = args.output.resolve()
     directory = output.with_suffix("")
     if output.exists() or directory.exists():
         parser.error("Choose a new output path; previous results are retained")
-    directory.mkdir(parents=True)
     selected = args.group or [
         "fast",
         "components",
@@ -91,6 +91,25 @@ def main():
         "browser-docker",
         "browser-kind",
     ]
+    runtime_images = {}
+    if "components" in selected:
+        for variant, reference in (
+            ("preview", args.preview_image),
+            ("postgres", args.app_image),
+        ):
+            try:
+                runtime_images[variant] = subprocess.check_output(
+                    ["docker", "image", "inspect", reference, "--format", "{{.Id}}"],
+                    cwd=ROOT,
+                    text=True,
+                    timeout=30,
+                ).strip()
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                parser.error(
+                    f"Cannot inspect the {variant} runtime image: {reference}. "
+                    "Check Docker and build the image first."
+                )
+    directory.mkdir(parents=True)
     result = {
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "completed": False,
@@ -103,6 +122,7 @@ def main():
             )
         ),
         "selected_groups": selected,
+        "runtime_images": runtime_images,
         "groups": [],
         "preview_state_before": [],
     }
@@ -129,7 +149,11 @@ def main():
             "components",
             ["tests/integration"],
             "live",
-            extra=["--app-image", args.app_image],
+            env={
+                f"KEEPLANE_RUNTIME_{variant.upper()}_IMAGE": image
+                for variant, image in runtime_images.items()
+            },
+            extra=["--app-image", runtime_images.get("postgres", args.app_image)],
         ),
         "docker": pytest_group(
             "docker",

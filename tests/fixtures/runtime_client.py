@@ -1,6 +1,7 @@
 """Sibling client with only its synthetic developer credential and project ID."""
 
 import json
+import os
 import sys
 from pathlib import Path
 from urllib.error import HTTPError
@@ -25,15 +26,51 @@ body = options.get(
     },
 )
 request = Request(
-    "http://gateway:5000" + options.get("path", "/v1/chat/completions"),
+    "http://"
+    + os.environ.get("FIXTURE_GATEWAY_HOST", "gateway")
+    + ":5000"
+    + options.get("path", "/v1/chat/completions"),
     data=json.dumps(body).encode(),
     headers=headers,
 )
 try:
     with urlopen(request, timeout=5) as response:
-        response.read()
+        raw = response.read(65537)
+        if len(raw) > 65536:
+            raise RuntimeError("Disposable protocol response is too large")
         status = response.status
+        if options.get("observe_credentials"):
+            print(
+                json.dumps(
+                    {
+                        "status": status,
+                        "authorization_returned": "Authorization" in response.headers,
+                    }
+                )
+            )
+            raise SystemExit(0)
+        if options.get("observe_protocol"):
+            print(
+                json.dumps(
+                    {
+                        "status": status,
+                        "content_type": response.headers.get("Content-Type"),
+                        "body": raw.decode("utf-8"),
+                    }
+                )
+            )
+            raise SystemExit(0)
 except HTTPError as error:
     error.read()
     status = error.code
+    if options.get("observe_credentials"):
+        print(
+            json.dumps(
+                {
+                    "status": status,
+                    "authorization_returned": "Authorization" in error.headers,
+                }
+            )
+        )
+        raise SystemExit(0)
 print(json.dumps(status))

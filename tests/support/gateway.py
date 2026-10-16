@@ -2,8 +2,12 @@
 
 import json
 import os
-from pathlib import Path
+import re
 import subprocess
+import uuid
+from pathlib import Path
+
+from tests.support.reporting import report_path
 
 REPO = Path(__file__).resolve().parents[2]
 RESOURCE_PATH = "/api/config/resources/llm.model"
@@ -31,6 +35,34 @@ print(json.dumps({'status': status, 'body': body}))
 """
 
 
+def command_failure(code, stderr="", *, timed_out=False):
+    # Keep useful Python transport causes without copying messages or credentials.
+    allowed = (
+        "TimeoutError", "ConnectionRefusedError", "ConnectionResetError",
+        "BrokenPipeError", "RemoteDisconnected", "URLError", "HTTPError",
+        "FileNotFoundError", "PermissionError", "JSONDecodeError", "SSLError",
+        "SSLCertVerificationError", "KeyError", "ValueError", "OSError",
+    )
+    pattern = r"(?m)^(?:[A-Za-z_][A-Za-z0-9_]*\.)*(" + "|".join(allowed) + r")(?::|$)"
+    names = list(dict.fromkeys(re.findall(pattern, stderr)))
+    details = {
+        "failed": True,
+        "kind": "command_timeout" if timed_out else "remote_exit",
+        "exit_code": code,
+        "remote_exception_types": names,
+    }
+    summary = "timeout after 30 seconds" if timed_out else f"exit {code}"
+    if names:
+        summary += "; " + ", ".join(names)
+    try:
+        path = report_path("gateway-command-" + uuid.uuid4().hex + ".json")
+        path.write_text(json.dumps(details, indent=2) + "\n")
+        summary += "; diagnostic: " + str(path)
+    except OSError:
+        summary += "; diagnostic report could not be written"
+    return RuntimeError("Private gateway test command failed (" + summary + ")")
+
+
 def app_exec(*args):
     base = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:3000")
     if base.rstrip("/") == "http://127.0.0.1:3000":
@@ -56,28 +88,42 @@ def app_exec(*args):
         command = prefix + ["-n", "keeplane", "exec", "deployment/keeplane-app", "--"]
     else:
         raise RuntimeError("Refusing gateway test against an unknown preview")
-    process = subprocess.run(
-        command + list(args),
-        check=True,
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    try:
+        process = subprocess.run(
+            command + list(args),
+            check=False,
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        args = ()
+        raise command_failure(None, timed_out=True) from None
+    if process.returncode:
+        failure = command_failure(process.returncode, process.stderr)
+        # Pytest also renders function arguments; keep private payloads out of them.
+        args = ()
+        process = None
+        raise failure from None
     return process.stdout
 
 
 def gateway_call(method, path, body=None):
-    result = json.loads(
-        app_exec(
+    payload = "-" if body is None else json.dumps(body)
+    body = None
+    try:
+        output = app_exec(
             "python",
             "-c",
             GATEWAY_SCRIPT,
             method,
             path,
-            "-" if body is None else json.dumps(body),
+            payload,
         )
-    )
+    finally:
+        payload = None
+    result = json.loads(output)
     return result["status"], result["body"]
 
 

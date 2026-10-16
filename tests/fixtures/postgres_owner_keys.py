@@ -35,12 +35,10 @@ HELD, RELEASE, STARTED = Event(), Event(), Event()
 
 
 class SyntheticValidator:
-    def __init__(self, wait=False, announce=False):
-        self.wait, self.announce = wait, announce
+    def __init__(self, wait=False):
+        self.wait = wait
 
     def __call__(self, owner_id, model_id, value):
-        if self.announce:
-            STARTED.set()
         return VerifiedProviderKey(owner_id, model_id, DIGEST)
 
     def require_current(self, verification):
@@ -112,12 +110,17 @@ def run():
         ) == [DIGEST, DIGEST]
         record("PGKEY-01", uid=65532, isolated_owners=True, persistent_binding=True)
 
-        def writer(label, **options):
+        def writer(label, announce=False, **options):
             try:
                 with connection.cursor() as cursor:
                     cursor.execute(
                         "SELECT set_config('application_name', %s, false)", [label]
                     )
+                # Validation may itself wait on the owner lock. Announce the
+                # operation before entering it; the database oracle below still
+                # requires an observed PostgreSQL lock, not just this signal.
+                if announce:
+                    STARTED.set()
                 return store(alice, **options).put(MODEL, "synthetic-" + label)
             finally:
                 connections.close_all()

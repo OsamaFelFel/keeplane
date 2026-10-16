@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 POSTGRES = (
     "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
 )
+PYTHON_BUILD = (
+    "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a"
+)
 
 
 def run_cases():
@@ -44,6 +47,7 @@ def run_cases():
         parser.error("Use a valid packaged image reference without --wheels")
     project = "keeplane-postgres-api-" + uuid.uuid4().hex[:10]
     image = project + ":local"
+    base_tag = project + ":base"
     result = {
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "project": project,
@@ -148,20 +152,30 @@ def run_cases():
             .stdout.decode()
             .strip()
         )
+        # Removing our alias must not remove an otherwise untagged source image.
+        source_tags = json.loads(
+            run([
+                "docker", "image", "inspect", result["base_app_image"],
+                "--format", "{{json .RepoTags}}",
+            ]).stdout
+        )
+        if not source_tags:
+            raise ValueError("Tag the local app image before running this fixture")
         if args.app_image:
             result["limits"][2] = (
                 "This tests the packaged native driver; complete base-image source/notice work remains."
             )
         (build / "Dockerfile").write_text(
-            "FROM "
-            + base_image
-            + "\nUSER 0\n"
-            + (
+            (
                 ""
                 if args.app_image
-                else "COPY wheels /wheels/\n"
+                else "FROM " + PYTHON_BUILD + " AS driver\nCOPY wheels /wheels/\n"
                 "RUN pip install --no-index --find-links /wheels --require-hashes --no-deps --target /deps -r /wheels/trial-requirements.txt\n"
             )
+            + "FROM "
+            + base_tag
+            + "\nUSER 0\n"
+            + ("" if args.app_image else "COPY --from=driver /deps /deps\n")
             + "COPY app /app/\nCOPY tests /tests/\nCOPY fixture.py /fixture.py\n"
             "COPY fixture-config.yaml /fixture-config.yaml\n"
             # Source-only fixture trees must be traversable by non-root workers.
@@ -337,6 +351,8 @@ def run_cases():
             raise RuntimeError("Fixture database did not recover")
 
         try:
+            # BuildKit interprets a bare sha256 ID in FROM as a registry name.
+            run(["docker", "tag", result["base_app_image"], base_tag])
             if not args.wheels and not args.app_image:
                 run(
                     [
@@ -347,7 +363,7 @@ def run_cases():
                         "0",
                         "-v",
                         str(build / "wheels") + ":/wheels",
-                        "keeplane-preview:kind-local",
+                        PYTHON_BUILD,
                         "pip",
                         "--isolated",
                         "download",
@@ -402,6 +418,7 @@ def run_cases():
             )
             dc("up", "-d", "--wait", "--wait-timeout", "90", "app-a", "app-b")
             result["runtime_versions"] = probe("versions")
+            record("PGAPI-17", lambda: probe("schema-readiness"))
             record("PGAPI-01", lambda: existing_suite("test_accounts.py", 21))
             record("PGAPI-02", lambda: existing_suite("test_csrf.py", 8))
             record("PGAPI-03", lambda: probe("shared"))
@@ -486,11 +503,16 @@ def run_cases():
                 )
             ]
             run(["docker", "image", "rm", image], check=False)
+            run(["docker", "image", "rm", base_tag], check=False)
             image_absent = (
                 run(["docker", "image", "inspect", image], check=False).returncode != 0
             )
+            base_tag_absent = (
+                run(["docker", "image", "inspect", base_tag], check=False).returncode != 0
+            )
             result["fixture_removed"] = (
-                cleanup.returncode == 0 and not any(remaining) and image_absent
+                cleanup.returncode == 0 and not any(remaining)
+                and image_absent and base_tag_absent
             )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as output_file:
