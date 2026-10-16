@@ -36,7 +36,7 @@ Keep your [CLI profile](cli-account-profile.md) outside Git.
 
 ## Python development server
 
-An existing Python 3.12 development environment can install the optional graph
+An existing macOS Python 3.12 development environment can install the optional graph
 instead. Keep its database, signing secret, first-admin password and built UI:
 
 ```sh
