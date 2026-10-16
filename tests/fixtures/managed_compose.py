@@ -261,7 +261,9 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
         return self.command(self.prefix + list(args))
 
     def validate(self):
-        config = json.loads(self.compose("--profile", "*", "config", "--format", "json"))
+        config = json.loads(
+            self.compose("--profile", "*", "config", "--format", "json")
+        )
         assert {"runtime-init", "runtime-install"} <= config["services"].keys()
         assert config["name"] == self.project
         assert all(
@@ -269,7 +271,14 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
             for row in config["volumes"].values()
         )
         assert "keeplane-accounts-trial_model-approvals" not in json.dumps(config)
+        assert all(
+            not row.get("external")
+            and row["name"].startswith(self.project + "_")
+            and row.get("internal")
+            for row in config["networks"].values()
+        )
         for name, service in config["services"].items():
+            assert not service.get("build") and not service.get("container_name")
             for binding in service.get("ports", []):
                 assert binding["host_ip"] == "127.0.0.1"
                 assert (name, binding["target"]) in {("app", 3000), ("gateway", 5000)}
