@@ -4,9 +4,11 @@ Start with the installed `keeplane` command:
 
 1. [Install the CLI wheel](../../docs/guide/cli-install.md). It contains Keeplane's
    commands and instruction hook; install the coding runtime separately.
-2. [Preview an existing project](../../docs/guide/cli-migration-preview.md) with
-   `keeplane init --preview`. This reads supported instructions and settings;
-   it does not change or migrate files. Preview requires Python 3.11+.
+2. [Review existing project instructions](../../docs/guide/cli-migration-preview.md)
+   with `keeplane init --preview`, which leaves repository files unchanged.
+   The guide also explains how to save and review a plan, then copy one root
+   `CLAUDE.md` or `QWEN.md` to a new `AGENTS.md`. Originals and settings stay
+   unchanged. Init requires Python 3.11+.
 3. [Sign in through your browser](../../docs/guide/cli-browser-login.md), or use
    [a device code](../../docs/guide/cli-device-login.md). Check your account with
    `keeplane whoami`.
@@ -28,7 +30,8 @@ The [installed journey](../../tests/e2e/installed-cli-cases.md) covers real Djan
 sign-in, managed gateway installation, native read/edit tools, refreshed
 credentials, account/project-bound resume and logout with synthetic accounts.
 This remains an integration trial: release runtime selection and distribution
-checks are open. Migration apply and automatic refresh are not implemented.
+checks are open. Init supports only the reviewed root instruction copy; broader
+onboarding, settings conversion and automatic refresh remain separate work.
 [Personal key commands](../../docs/guide/cli-provider-key-commands.md) manage
 server-held registrations; personal-key coding is not enabled by this journey.
 Cancellation stops the owned runtime process group but cannot guarantee cleanup
@@ -137,5 +140,5 @@ After an interrupted coding turn, review edits before continuing; this slice
 proves completed text/tool turns, not safe replay of unfinished side effects or
 attachments from discarded caches. Built-in tool permission prompts remain enabled.
 This is not a sandbox or proof of project provenance. Use the installed commands
-above for sign-in and authorized-model discovery. Automatic routing, migration
-apply and release distribution remain separate work.
+above for sign-in and authorized-model discovery. Broader migration, automatic
+routing and release distribution remain separate work.
