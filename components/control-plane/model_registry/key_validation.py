@@ -72,7 +72,11 @@ class DjangoProviderKeyValidator:
             or set(params) - {"model", "baseUrl"}
             or not isinstance(params.get("model"), str)
             or not 0 < len(params["model"]) <= 256
-            or set(value) - {"name", "provider", "params", "auth"}
+            or set(value) - {"id", "name", "provider", "params", "auth"}
+            or (
+                "id" in value
+                and (not isinstance(value["id"], str) or value["id"] != model_id)
+            )
             or value.get("auth")
             or provider not in ("openAI", "anthropic")
         ):
