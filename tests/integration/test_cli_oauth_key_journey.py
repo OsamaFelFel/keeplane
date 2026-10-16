@@ -18,7 +18,7 @@ pytestmark = [pytest.mark.optional, pytest.mark.live, pytest.mark.django_db(tran
 
 if HAS_KEY_API:
     from tests.integration import test_provider_key_validation as validation
-    from tests.integration.test_provider_key_validation import provider  # noqa: F401 - pytest fixture
+    from tests.integration.test_provider_key_validation import provider
 else:
     @pytest.fixture
     def provider():
