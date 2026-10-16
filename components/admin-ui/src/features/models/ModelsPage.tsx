@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
+type ProviderKeyChoice = 'none' | 'shared' | 'personal'
 type Model = {
   id: string
   provider: string
   kind: string
   approved?: boolean
-  key_choice?: 'none' | 'shared' | 'personal' | null
+  key_choice?: ProviderKeyChoice | null
   developer_key_count?: number
   approved_classes?: string[]
   owned_by_keeplane?: boolean
@@ -47,7 +48,7 @@ export function ModelsPage() {
   const [runnerModels, setRunnerModels] = useState<RunnerModels | null>(null)
   const [finding, setFinding] = useState(false)
   const [modelName, setModelName] = useState('')
-  const [keyChoice, setKeyChoice] = useState<'shared' | 'none'>('shared')
+  const [keyChoice, setKeyChoice] = useState<ProviderKeyChoice>('shared')
   const [sharedKey, setSharedKey] = useState('')
   const [replacementKey, setReplacementKey] = useState('')
   const [approvedClasses, setApprovedClasses] = useState<string[]>([])
@@ -118,7 +119,7 @@ export function ModelsPage() {
     setBusy(true); setDialogError('')
     try {
       await action(`/api/models/${encodeURIComponent(editing.id)}/setup`, 'POST', {
-        key_choice: editing.key_choice === 'shared' ? 'shared' : 'none',
+        key_choice: editing.key_choice ?? 'none',
         ...(classes?.enabled ? { approved_classes: approvedClasses } : {}),
         ...(replacementKey ? { replace_shared_key: replacementKey } : {}),
       })
@@ -198,9 +199,10 @@ export function ModelsPage() {
           </> : <>
             <div><Label htmlFor="cloud-model" className="keeplane-field-label">Model</Label><Input id="cloud-model" required maxLength={100} value={modelName} disabled={busy} onChange={event => setModelName(event.target.value)} /></div>
             <fieldset><legend className="keeplane-field-label">Provider key</legend>
-              <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" checked={keyChoice === 'shared'} disabled={busy} onChange={() => setKeyChoice('shared')} />One shared key for the organization</label>
-              <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" disabled />Each developer adds their own key (not enabled in this preview)</label>
-              <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" checked={keyChoice === 'none'} disabled={busy} onChange={() => setKeyChoice('none')} />No key needed</label>
+              <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" name="provider-key" checked={keyChoice === 'shared'} disabled={busy} onChange={() => setKeyChoice('shared')} />One shared key for the organization</label>
+              <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" name="provider-key" checked={keyChoice === 'personal'} disabled={busy} onChange={() => setKeyChoice('personal')} />Each developer adds their own key</label>
+              <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" name="provider-key" checked={keyChoice === 'none'} disabled={busy} onChange={() => setKeyChoice('none')} />No key needed</label>
+              {keyChoice === 'personal' && <p className="text-[14px] leading-5 text-muted-foreground">Developers add their own keys from the CLI. Keys are never shown again.</p>}
             </fieldset>
             {keyChoice === 'shared' && <div><Label htmlFor="shared-key" className="keeplane-field-label">Shared key</Label><Input id="shared-key" type="password" autoComplete="new-password" required minLength={12} value={sharedKey} disabled={busy} onChange={event => setSharedKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Keys are never shown again.</p></div>}
           </>}
@@ -214,8 +216,9 @@ export function ModelsPage() {
     <Dialog open={!!editing} onOpenChange={open => { if (!open && !busy) setEditing(null) }}>
       <DialogContent showCloseButton={false}><DialogHeader><DialogTitle>{editing?.approved ? `Edit ${editing.id}` : `Set up ${editing?.id}`}</DialogTitle></DialogHeader>
         <form className="grid gap-5" onSubmit={event => void save(event)}>
-          <p className="text-[15px] text-muted-foreground">{editing?.provider} · {editing?.kind === 'cloud' ? 'Cloud' : 'Local'}. Keeplane checks that the model answers before saving.</p>
-          <div><Label className="keeplane-field-label">Provider key</Label><p className="text-[15px]">{editing?.key_choice === 'shared' ? 'Shared key' : 'No key needed'}</p></div>
+          <p className="text-[15px] text-muted-foreground">{editing?.provider} · {editing?.kind === 'cloud' ? 'Cloud' : 'Local'}. Keeplane checks that the {editing?.key_choice === 'personal' ? 'provider' : 'model'} answers before saving.</p>
+          <div><Label className="keeplane-field-label">Provider key</Label><p className="text-[15px]">{editing?.key_choice === 'shared' ? 'Shared key' : editing?.key_choice === 'personal' ? "Each developer adds their own key" : 'No key needed'}</p>
+            {editing?.key_choice === 'personal' && <p className="text-[14px] leading-5 text-muted-foreground">Developers add their own keys from the CLI. Keys are never shown again.</p>}</div>
           {editing?.key_choice === 'shared' && editing.owned_by_keeplane && editing.kind === 'cloud' && <div><Label htmlFor="replacement-key" className="keeplane-field-label">Replace shared key</Label><Input id="replacement-key" type="password" autoComplete="new-password" value={replacementKey} disabled={busy} onChange={event => setReplacementKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Leave it empty to keep the current key.</p></div>}
           {classes?.enabled && <ClassChoices choices={classes.classes.map(item => item.name)} selected={approvedClasses} onChange={setApprovedClasses} />}
           {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}

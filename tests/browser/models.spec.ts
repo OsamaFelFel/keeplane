@@ -132,3 +132,55 @@ test('MO-UI-05 MODEL-01 EDIT-01: setup and editing retain class choices after a 
   await expect(edit).not.toBeVisible()
   await expect(page.getByRole('row', { name: /outside-model/ })).toContainText('Public, Internal')
 })
+
+test('MO-UI-06: Personal add sends no shared key and keeps the choice after refusal', async ({ page }) => {
+  await mockModels(page)
+  let refuse = true
+  let submitted = 0
+  await page.route('**/api/models', route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    submitted += 1
+    expect(route.request().postDataJSON()).toEqual({ name: 'personal-coder', model: 'personal-coder', source: 'openai', key_choice: 'personal' })
+    expect(route.request().postData()).not.toContain('disposable-shared-key')
+    return route.fulfill(refuse ? { status: 503, json: { error: "OpenAI didn't answer. Nothing was saved." } } : { json: { name: 'personal-coder' } })
+  })
+  await page.goto('/app/models')
+  await page.getByRole('button', { name: 'Add model' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Add model' })
+  await dialog.getByLabel('Provider').selectOption('openai')
+  await dialog.getByLabel('Model', { exact: true }).fill('personal-coder')
+  await dialog.getByLabel('Shared key', { exact: true }).fill('disposable-shared-key')
+  await dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true }).check()
+  await expect(dialog.getByLabel('Shared key', { exact: true })).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Add model', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText("OpenAI didn't answer.")
+  await expect(dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true })).toBeChecked()
+  await expect(dialog.getByLabel('Model', { exact: true })).toHaveValue('personal-coder')
+  refuse = false
+  await dialog.getByRole('button', { name: 'Add model', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  expect(submitted).toBe(2)
+})
+
+test('MO-UI-07: editing a Personal model preserves its key choice and explains the provider check', async ({ page }) => {
+  const model: Model = { id: 'personal-coder', provider: 'OpenAI', kind: 'cloud', approved: true,
+    key_choice: 'personal', approved_classes: [], owned_by_keeplane: true }
+  await mockModels(page, [model])
+  await page.route('**/api/data-classes', route => route.fulfill({ json: {
+    enabled: true, classes: [{ name: 'Public' }],
+  } }))
+  await page.route('**/api/models/personal-coder/setup', route => {
+    expect(route.request().postDataJSON()).toEqual({ key_choice: 'personal', approved_classes: ['Public'] })
+    return route.fulfill({ json: { model_id: model.id, key_choice: 'personal', approved_classes: ['Public'] } })
+  })
+  await page.goto('/app/models')
+  await page.getByRole('row', { name: /personal-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit personal-coder' })
+  await expect(dialog.getByText('Each developer adds their own key', { exact: true })).toBeVisible()
+  await expect(dialog.getByText(/Keeplane checks that the provider answers/)).toBeVisible()
+  await expect(dialog.getByText('No key needed', { exact: true })).toHaveCount(0)
+  await expect(dialog.getByLabel('Replace shared key', { exact: true })).toHaveCount(0)
+  await dialog.getByRole('checkbox', { name: 'Public', exact: true }).check()
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+})
