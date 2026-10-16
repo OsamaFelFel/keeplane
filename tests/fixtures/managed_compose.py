@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -12,6 +13,7 @@ import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 PYTHON = (
@@ -375,6 +377,45 @@ result={'credentials':[hashlib.sha256(path.read_bytes()).hexdigest() for path in
 print(json.dumps(result,default=str))
 """
         return json.loads(self.compose("exec", "-T", "app", "python", "-c", script))
+
+    def failure_diagnostics(self, directory):
+        """Keep raw owned logs private; return only statuses and error classes."""
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory.chmod(0o700)
+        observations = {}
+        for path in ("/health/ready", "/health"):
+            try:
+                with urlopen(self.server + path, timeout=2) as response:
+                    observations[path] = {"status": response.status}
+            except HTTPError as error:
+                observations[path] = {"status": error.code}
+                error.close()
+            except OSError as error:
+                observations[path] = {"error_class": type(error).__name__}
+        for service in ("app", "gateway"):
+            identifier = self.compose("ps", "-aq", service)
+            state = json.loads(
+                self.command(
+                    ["docker", "inspect", identifier, "--format", "{{json .State}}"]
+                )
+            )
+            logs = self.compose("logs", "--no-color", "--tail", "100", service)
+            private = directory / (service + ".log")
+            private.write_text(logs)
+            private.chmod(0o600)
+            observations[service] = {
+                "running": state["Running"],
+                "exit_code": state["ExitCode"],
+                "oom": state["OOMKilled"],
+                "exception_classes": sorted(
+                    set(
+                        re.findall(
+                            r"^([A-Za-z_]\w*(?:Error|Exception)):", logs, re.MULTILINE
+                        )
+                    )
+                ),
+            }
+        return observations
 
     def cleanup(self):
         if self.validated:

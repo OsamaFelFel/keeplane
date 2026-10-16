@@ -236,6 +236,13 @@ def test_owned_host_runtime_launcher_preserves_state_and_stops_on_failure(
         ) from None
     finally:
         report["launcher_steps"] = fixture.launch_steps
+        if not report["passed"] and fixture.validated:
+            try:
+                report["diagnostics"] = fixture.failure_diagnostics(
+                    report_file.parent / (report_file.stem + "-private")
+                )
+            except Exception as error:  # noqa: BLE001 - diagnostic failure must not prevent owned cleanup.
+                report["diagnostic_error_class"] = type(error).__name__
         try:
             fixture.cleanup()
             report["cleaned"] = True

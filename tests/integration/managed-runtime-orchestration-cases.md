@@ -28,5 +28,7 @@ model approval and the current OAuth grant. A forced missing-model enrollment
 must stop the owned gateway while its app/provider keep running, with no extra
 provider contact. The failing subprocess must be the actual enrollment command,
 followed by a successful stop of only that gateway. Safe stages/statuses and exact source/file hashes are saved
-before cleanup; credentials, request content and raw container logs are omitted.
+before cleanup; the JSON report omits credentials, request content and raw logs.
+On failure, owned container logs are retained separately in a private directory
+with owner-only file permissions for diagnosis.
 All owned containers, networks and volumes are removed afterward.
