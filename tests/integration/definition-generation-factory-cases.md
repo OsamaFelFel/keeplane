@@ -39,7 +39,8 @@ Run `python -m pytest tests/integration/test_definition_generation_factory.py`.
 The restart case also reads the committed SQLite records from a fresh process;
 the migration case preserves existing model approval records.
 
-No route, registrar, key store or provider dispatch uses this factory yet.
+The [internal publisher](definition-publication-cases.md) can consume a candidate;
+no route, registrar, key store or provider dispatch uses this factory yet.
 `prepared` means ready for a separate native acceptance trial, not authorized
 traffic. Checking a candidate reads its still-raw source definition; publishing
 the envelope changes the full native fingerprint/revision and needs explicit
