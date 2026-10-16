@@ -11,6 +11,7 @@ These HTTP checks cover a private callback, not an installed listener.
 | Current runtime secret is unavailable or malformed | Fail closed with a generic response. |
 | Body contains project/actor/prompt fields, duplicate JSON, invalid fingerprint or excessive bytes | Refuse the request. |
 | Existing gateway mode, wrong method or content type | Refuse the request. |
+| Personal model | Deny before resolving a developer key; keyless/shared and preapproval validation remain available. |
 
 The pinned gateway source at revision
 `ea5608642b9d5c94c5baf5fd9f2f9849b808e963` supports CEL-computed HTTP

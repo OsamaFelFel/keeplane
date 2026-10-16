@@ -150,7 +150,7 @@ def test_both_stages_return_only_canonical_metadata_and_leave_resources_unchange
         "relative",
         "version",
         "extra",
-        "personal",
+        "unknown-key-choice",
     ],
 )
 def test_invalid_manifest_refuses_before_gateway_reads(installed, change):
@@ -180,8 +180,8 @@ def test_invalid_manifest_refuses_before_gateway_reads(installed, change):
         assert not f.requests
         return
     else:
-        if change == "personal":
-            f.declaration["models"]["private"]["key_choice"] = "personal"
+        if change == "unknown-key-choice":
+            f.declaration["models"]["private"]["key_choice"] = "unknown"
         else:
             f.declaration[change] = 1 if change == "version" else True
         f.write()

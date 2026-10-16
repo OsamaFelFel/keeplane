@@ -125,10 +125,10 @@ class DjangoRuntimeInstallation:
             if (
                 approval is None
                 or row is None
-                or approval.key_choice not in ("none", "shared")
+                or approval.key_choice not in ("none", "shared", "personal")
             ):
                 raise RuntimeInstallationUnavailable(
-                    "Choose a current approved keyless or shared model"
+                    "Choose a current approved supported model"
                 )
             key_name, key_digest = "", ""
             if approval.key_choice == "shared":
@@ -250,7 +250,18 @@ class DjangoRuntimeInstallation:
         for identifier, model in models.items():
             gate.require_definition(identifier, model)
         targets = model_backends(initial, identifiers)
-        generated = overlay(base, models, targets, callback_host=self.callback_host)
+        providers = {
+            row["id"]: row["value"]["provider"]
+            for row in resources
+            if row["id"] in models and models[row["id"]]["key_choice"] == "personal"
+        }
+        generated = overlay(
+            base,
+            models,
+            targets,
+            callback_host=self.callback_host,
+            personal_providers=providers,
+        )
         expected = deepcopy(generated)
         expected["llm"]["models"].extend(deepcopy([row["value"] for row in resources]))
         atomic_private(config_file, generated)
