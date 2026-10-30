@@ -1,6 +1,6 @@
 # Helm packaging cases
 
-Run `.venv/bin/python -m pytest tests/integration/test_chart_package.py` with Helm 3 available. Set `KEEPLANE_HELM_BIN` when it is outside `PATH`. The cases render charts locally; they do not claim a production installation.
+Run `.venv/bin/python -m pytest tests/integration/test_chart_package.py` with Helm 3.19 or newer available on macOS or Linux. The checks use `KEEPLANE_HELM_BIN` when it is set, otherwise `helm` on `PATH`. On Linux, install Helm 3 from your package manager or the [Helm release archive](https://helm.sh/docs/intro/install/), or set `KEEPLANE_HELM_BIN` to the extracted binary. Without Helm the cases are skipped and the skip reason names `KEEPLANE_HELM_BIN`; an unrun case is not a pass. A `KEEPLANE_HELM_BIN` that does not point to an executable fails the run. The cases render charts locally; they do not claim a production installation.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
