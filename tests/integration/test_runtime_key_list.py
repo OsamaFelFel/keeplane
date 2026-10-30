@@ -1,6 +1,7 @@
 """Project eligibility filters owner-only saved key metadata over real HTTP views."""
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from accounts.models import User
@@ -122,8 +123,14 @@ def test_role_withdrawal_revokes_the_previous_session(listing):
     assert get(listing, HTTP_X_ROLE="admin").status_code == 401
 
 
-def test_unknown_key_choice_returns_no_partial_metadata(listing):
-    ModelApproval.objects.filter(pk="private").update(key_choice="unknown")
+def test_incomplete_policy_snapshot_returns_no_partial_metadata(listing, monkeypatch):
+    monkeypatch.setattr(
+        runtime_keys.runtime_views,
+        "model_policy",
+        lambda: SimpleNamespace(
+            eligible_model_ids=lambda _: frozenset({"private", "unknown"})
+        ),
+    )
     response = get(listing)
     assert response.status_code == 503 and "models" not in response.json()
 
