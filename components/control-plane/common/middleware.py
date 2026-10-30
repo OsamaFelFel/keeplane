@@ -67,7 +67,7 @@ class BrowserCsrfMiddleware(CsrfViewMiddleware):
                 (OperatorValidationAuthentication,),
                 (GatewayTransportAuthentication,),
             ) and tuple(getattr(view, "permission_classes", ())) == (IsAuthenticated,):
-                # These views accept explicit header credentials only, never
+                # These views accept an explicit bearer credential only, never
                 # ambient browser cookies. DRF still authenticates every call.
                 return None
         # DRF's view exemption must not exempt anonymous sign-in or cookie writes.
