@@ -3,6 +3,8 @@
 Run `.venv/bin/python -m pytest tests/e2e/test_audit.py -m live` with the protected Docker preview up. The
 script writes a dated JSON result in `test-results/`. The authenticated cases
 use a temporary data class and clean it up; the test turns recording off again.
+[Persistence cases](../integration/audit-persistence-cases.md) check Show,
+search and paging across two app processes, a restart and an upgrade.
 
 | Case | Plain-English action | Expected observation |
 | --- | --- | --- |

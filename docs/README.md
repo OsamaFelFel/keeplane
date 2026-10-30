@@ -8,7 +8,7 @@
 | Create accounts and change roles | [Accounts](guide/accounts-local.md) |
 | Add, edit or remove a model | [Model setup](guide/model-add-local.md), [model approvals](guide/model-approval-local.md) |
 | Enable data classes | [Data classes](guide/data-classes-local.md) |
-| Find recorded events | [Audit](guide/audit-local.md) |
+| Find recorded events | [Audit](guide/audit-local.md), [Audit storage](architecture/audit-storage.md) |
 | Use a managed or customer-run gateway | [Gateway configuration](guide/gateway-configuration.md) |
 | Try Kubernetes deployment | [Kubernetes](guide/kubernetes-local.md) |
 | Configure PostgreSQL, credentials and recovery | [PostgreSQL](guide/postgres-accounts.md), [gateway database credentials](guide/gateway-database-secret.md) |

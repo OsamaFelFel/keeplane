@@ -16,15 +16,15 @@ developer-task flows. Do not use those switches as evidence that those flows
 already produce records. Request text and provider credentials are never
 written by the current settings producer.
 
-This slice uses the protected preview's persistent SQLite volume. The same
-transaction writes each data-class or model-approval change and its audit
-record. A break-glass session and its mandatory record commit in one attached
-SQLite transaction using rollback journals; if the audit file refuses the write,
-the sign-in fails. The record contains the account and time, not the password
-or session token. [SQLite's attachment rules](https://www.sqlite.org/lang_attach.html)
-explain the rollback-journal requirement. Production storage, retention,
-redaction and shared-state deployment
-remain to be designed and tested before a customer release.
+Records are stored in the application database: the preview's SQLite volume, or
+PostgreSQL when configured. The same transaction writes each data-class or
+model-approval change and its audit record. A break-glass session and its
+mandatory record commit together; if the record cannot be written, the sign-in
+fails. The record contains the account and time, not the password or session
+token. Every app copy finds the same records, and they survive restarts and
+upgrades. Nothing deletes them automatically. See
+[Audit storage](../architecture/audit-storage.md). Redaction for held-back
+requests remains to be designed before that producer is connected.
 
 The reusable [plain-English cases](../../tests/e2e/audit-cases.md) run with
 `.venv/bin/python -m pytest tests/e2e/test_audit.py -m live`; the isolated store check runs with
