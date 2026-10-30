@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import socket
 import subprocess
 import sys
@@ -18,17 +17,14 @@ from urllib.request import Request, urlopen
 from tests.support.gateway_database_fixture import database_secret
 from tests.support.protected_preview import curl_csrf_headers
 from tests.support.kubernetes import prepare_app_image
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
 KUBECONFIG = os.environ.get(
     "KEEPLANE_NETPOL_KUBECONFIG", "/private/tmp/keeplane-netpol-kubeconfig"
 )
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 PASSWORD = Path("/private/tmp/keeplane-accounts-trial/first-admin-password")
 KEYS = Path("/private/tmp/keeplane-accounts-trial")
 HOST = "keeplane.example.test"

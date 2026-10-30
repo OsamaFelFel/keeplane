@@ -5,12 +5,12 @@ import pytest
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from urllib.request import urlopen
 from tests.support.protected_preview import login_if_protected
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,11 +18,7 @@ LOCK = json.loads((ROOT / "deploy/local/stack.lock.json").read_text())
 KUBECONFIG = os.environ.get(
     "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
 )
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 
 
 def output(*command):

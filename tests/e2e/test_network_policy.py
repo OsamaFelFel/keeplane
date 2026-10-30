@@ -6,22 +6,18 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import time
 import uuid
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
 KUBECONFIG = os.environ.get(
     "KEEPLANE_NETPOL_KUBECONFIG", "/private/tmp/keeplane-netpol-kubeconfig"
 )
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 NAMESPACE = "keeplane-netpol-" + uuid.uuid4().hex[:8]
 PROBE = """import urllib.request
 try:

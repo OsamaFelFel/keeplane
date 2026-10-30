@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import shutil
 import socket
 import ssl
 import subprocess
@@ -26,17 +25,14 @@ from urllib.error import URLError
 
 from tests.support.client import Browser
 from tests.support.kind_images import pin_loaded_image
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
 KUBECONFIG = os.environ.get(
     "KEEPLANE_NETPOL_KUBECONFIG", "/private/tmp/keeplane-netpol-kubeconfig"
 )
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 IMAGE = "keeplane-preview:postgres-local"
 POSTGRES = (
     "postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"

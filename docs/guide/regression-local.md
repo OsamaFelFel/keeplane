@@ -11,7 +11,12 @@ python3 -m venv .venv
 
 The default selection runs unit and integration checks without changing a live
 application. Chart checks also require Helm 3.19 or newer on PATH, or
-`KEEPLANE_HELM_BIN` pointing to Helm. Use `pytest tests/unit` for Python unit checks
+`KEEPLANE_HELM_BIN` pointing to Helm, on macOS or Linux. On Linux, install Helm 3
+from your package manager or the [Helm release archive](https://helm.sh/docs/intro/install/)
+and either put it on PATH or set, for example,
+`KEEPLANE_HELM_BIN=/opt/helm/linux-amd64/helm`. Without Helm the chart checks are
+skipped and report `KEEPLANE_HELM_BIN` in the skip reason; a skipped chart check
+is unrun, not passed. Use `pytest tests/unit` for Python unit checks
 only and `pytest --collect-only` to inspect the selected tests.
 Reports use a new directory under `test-results/pytest/` for each invocation.
 Set `KEEPLANE_TEST_REPORT_DIR` to choose another fresh directory.

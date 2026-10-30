@@ -4,22 +4,17 @@ import pytest
 
 import argparse
 import json
-import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import uuid
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = "tests/fixtures/gateway-secret/compose.yaml"
 CONFIG = ROOT / "tests/fixtures/gateway-secret/config.yaml"
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 PYTHON = (
     "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a"
 )
