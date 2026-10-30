@@ -6,6 +6,9 @@ removed current key registration returns 403 with an instruction to add or repla
 the key, so the coding runtime does not retry it as an outage. Unreadable key files,
 database failures and unavailable policy still return 503. Selection returns
 metadata only, and the final private handoff reads the current key again.
+Before a turn, the CLI uses the [model choice](model-choice-cases.md) to move a
+task to another allowed model when the key is missing; this entry refusal remains
+for the requested model and for any request that reaches the gateway anyway.
 Local initialization makes an existing provider-key volume private (0700),
 preserving saved keys; the resolver continues to reject an exposed directory.
 

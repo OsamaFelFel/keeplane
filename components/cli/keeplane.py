@@ -153,6 +153,7 @@ def main():
                     args.directory, args.gateway, args.prompt, args.timeout,
                     cancelled=cancelled, instructions=args.instructions,
                     state_dir=args.state_dir, session=args.session,
+                    notify=lambda message: print(message, file=sys.stderr),
                 )
             print(result.stdout, end="")
             print(result.stderr, end="", file=sys.stderr)

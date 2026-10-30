@@ -3,6 +3,13 @@
 - A current profile account registers project use and reads the allowed model
   list before starting the runtime. The native configuration carries only the
   requested project header; its credential is absent from arguments and config.
+- After the catalog check the CLI asks the server for a model choice. When the
+  requested model needs the developer's own key and it is missing, refused or
+  outdated, the runtime starts with the other allowed model and stderr says why
+  and how to add the key. No other model, a choice outside the catalog, a
+  malformed choice, or a 403/503 stops before launch; an older server without
+  the route (404) keeps the requested model. See the
+  [model choice cases](../integration/model-choice-cases.md).
 - Changed account, withdrawn session, server outage or an unavailable model
   prevents runtime launch. Invalid gateway destinations stop before any request.
 - Private history records the issuer, account and project without credentials.

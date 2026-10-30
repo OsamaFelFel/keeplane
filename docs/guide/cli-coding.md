@@ -24,14 +24,17 @@ keeplane code \
 
 Use your installation's project ID, model and gateway URL. `code` checks the
 current account, records project use and checks the allowed model list before
-starting the runtime. A supplied project ID identifies requested context; it
+starting the runtime. If the model needs your own provider key and yours is
+missing or refused, the CLI uses another allowed model and says why; see
+[provider key commands](cli-provider-key-commands.md). A supplied project ID identifies requested context; it
 does not prove where repository contents came from. The gateway makes the final
 decision, including changes made after the CLI's initial checks.
 
 ```mermaid
 flowchart LR
   Profile[Signed-in account] --> Check[Register project and check models]
-  Check --> Local[Local coding runtime and tools]
+  Check --> Choice[Own key missing? Use another allowed model]
+  Choice --> Local[Local coding runtime and tools]
   Local --> Gateway[Protected gateway checks every request]
   Gateway --> Model[Allowed model]
 ```

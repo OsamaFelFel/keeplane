@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import personal_transport, runtime_callback, runtime_keys, runtime_views
+from . import model_choice, personal_transport, runtime_callback, runtime_keys, runtime_views
 
 urlpatterns = [
     path("internal/runtime/provider-token", personal_transport.provider_token),
@@ -26,4 +26,8 @@ urlpatterns = [
     path("api/runtime/projects/<str:project_id>/provider-keys", runtime_keys.project_provider_keys),
     path("api/runtime/provider-keys/check", runtime_keys.check_provider_key),
     path("api/runtime/projects/<str:project_id>/models", runtime_views.project_models),
+    path(
+        "api/runtime/projects/<str:project_id>/model-choice",
+        model_choice.project_model_choice,
+    ),
 ]
