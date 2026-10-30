@@ -6,18 +6,13 @@ import argparse
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
-import os
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 
 
 def run_cases():

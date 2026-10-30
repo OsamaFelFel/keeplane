@@ -12,6 +12,10 @@
 Python checks use pytest discovery. `pytest` runs checks that need no live
 application; checks marked `live`, `kubernetes` or `optional` require explicit
 selection and the prerequisites in the [test guide](../docs/guide/regression-local.md).
+Chart and Kubernetes checks find Helm 3 through `tests/support/helm.py`:
+`KEEPLANE_HELM_BIN` when set, otherwise `helm` on `PATH`. Without Helm they are
+skipped with a reason that names `KEEPLANE_HELM_BIN`; a wrong
+`KEEPLANE_HELM_BIN` fails the run.
 Readable cases stay beside their relevant suites. Fixtures contain test inputs;
 generated reports, logs and traces go under ignored `test-results/` or CI artifacts.
 Each pytest invocation gets a fresh `test-results/pytest/` subdirectory. Set

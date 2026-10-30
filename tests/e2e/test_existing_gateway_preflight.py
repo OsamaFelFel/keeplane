@@ -5,20 +5,16 @@ import pytest
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
 KUBECONFIG = os.environ.get(
     "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
 )
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 URL = "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000"
 KEY_DIR = Path("/private/tmp/keeplane-accounts-trial")
 

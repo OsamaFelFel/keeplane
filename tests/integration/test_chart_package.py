@@ -2,19 +2,14 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
+from tests.support.helm import require_helm
 
 
 ROOT = Path(__file__).resolve().parents[2]
-HELM = (
-    os.environ.get("KEEPLANE_HELM_BIN")
-    or shutil.which("helm")
-    or "/private/tmp/keeplane-helm/darwin-amd64/helm"
-)
+HELM = require_helm()
 CHART = "deploy/helm/keeplane"
 
 
