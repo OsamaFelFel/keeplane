@@ -23,5 +23,6 @@ urlpatterns = [
     path("api/runtime/projects", runtime_views.register_project_use),
     path("api/runtime/session", runtime_views.session),
     path("api/runtime/provider-keys", runtime_keys.provider_keys),
+    path("api/runtime/projects/<str:project_id>/provider-keys", runtime_keys.project_provider_keys),
     path("api/runtime/projects/<str:project_id>/models", runtime_views.project_models),
 ]

@@ -132,6 +132,7 @@ def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issu
     assert "--instructions" in run([command, "code", "--help"])
     assert "--profile" in run([command, "refresh", "--help"])
     assert "--preview" in run([command, "init", "--help"])
+    assert "--project" in run([command, "keys", "list", "--help"])
     version = json.loads(
         run(
             [

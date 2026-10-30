@@ -78,6 +78,9 @@ def main():
     code.add_argument("prompt")
     keys = commands.add_parser("keys", help="Manage your server-held model provider keys")
     key_commands = keys.add_subparsers(dest="key_action", required=True)
+    key_list = key_commands.add_parser("list", help="List allowed models and your saved key status")
+    key_list.add_argument("--profile", required=True)
+    key_list.add_argument("--project", required=True)
     for action in ("set", "status", "remove"):
         command = key_commands.add_parser(action)
         command.add_argument("--profile", required=True)
@@ -138,8 +141,11 @@ def main():
         elif args.command == "refresh":
             output = credential_refresh.refresh(args.profile)
         elif args.command == "keys":
-            output = provider_keys.run(args.key_action, args.profile, args.model,
-                                       key_stdin=getattr(args, "key_stdin", False))
+            if args.key_action == "list":
+                output = provider_keys.list_keys(args.profile, args.project)
+            else:
+                output = provider_keys.run(args.key_action, args.profile, args.model,
+                                           key_stdin=getattr(args, "key_stdin", False))
         elif args.command == "code":
             with opencode_adapter.termination_requested() as cancelled:
                 result = coding.run(

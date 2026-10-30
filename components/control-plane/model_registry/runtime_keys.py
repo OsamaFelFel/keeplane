@@ -2,11 +2,15 @@
 
 import json
 import os
+import uuid
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
+from accounts.models import User
 from common.api import MODEL_GATEWAY
 from common.errors import StorageUnavailable
+from django.db import DatabaseError, transaction
 from django.views.decorators.cache import never_cache
+from projects.access import organization_project_access
 from rest_framework.decorators import (
     api_view,
     authentication_classes,
@@ -16,6 +20,7 @@ from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from . import runtime_views
 from .developer_keys import (
     DeveloperKeyError,
     DeveloperKeyRefused,
@@ -23,7 +28,8 @@ from .developer_keys import (
     DjangoDeveloperKeyStore,
 )
 from .key_validation import DjangoProviderKeyValidator
-from .models import ModelApproval, ProviderKeyChoice
+from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
+from .policy import ModelPolicyUnavailable
 
 
 def strict_object(pairs):
@@ -125,3 +131,54 @@ def provider_keys(request):
             {"error": "The provider key request could not be completed"}, status=400
         )
     return Response(result)
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["GET"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def project_provider_keys(request, project_id):
+    """List allowed models and saved registrations, never provider health."""
+    if request.body or request.query_params:
+        return Response({"error": "Send an empty key-list request"}, status=400)
+    try:
+        project_id = str(uuid.UUID(project_id))
+    except (ValueError, TypeError, AttributeError):
+        raise PermissionDenied("This project is unavailable") from None
+    try:
+        with transaction.atomic():
+            User.objects.select_for_update().filter(pk=request.user.pk).first()
+            owner, token = RuntimeSessionAuthentication().authenticate(request)
+            if owner.pk != request.user.pk or token != request.auth:
+                raise AuthenticationFailed("Sign in to Keeplane")
+            if not organization_project_access(str(owner.pk), project_id):
+                raise PermissionDenied("This project is unavailable")
+            allowed = runtime_views.model_policy().eligible_model_ids(project_id)
+            choices = dict(
+                ModelApproval.objects.filter(pk__in=allowed).values_list(
+                    "pk", "key_choice"
+                )
+            )
+            if set(choices) != allowed or any(
+                choice not in ProviderKeyChoice.values for choice in choices.values()
+            ):
+                raise ModelPolicyUnavailable()
+            added = set(
+                DeveloperProviderKey.objects.filter(owner=owner, model_id__in=allowed)
+                .exclude(key_name="")
+                .values_list("model_id", flat=True)
+            )
+            rows = [
+                {
+                    "id": name,
+                    "own_key_required": choices[name] == ProviderKeyChoice.PERSONAL,
+                    "status": ("added" if name in added else "missing")
+                    if choices[name] == ProviderKeyChoice.PERSONAL
+                    else None,
+                }
+                for name in sorted(allowed)
+            ]
+    except (DatabaseError, StorageUnavailable, ModelPolicyUnavailable):
+        return Response({"error": "Key registration list is unavailable"}, status=503)
+    return Response({"project_id": project_id, "models": rows})

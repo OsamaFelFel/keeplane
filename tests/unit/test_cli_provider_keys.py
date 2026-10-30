@@ -29,6 +29,9 @@ def api(tmp_path, monkeypatch):
         write_status=200,
         pending=False,
         response_fault=False,
+        project=str(uuid.uuid4()),
+        key_list=[],
+        list_response=None,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -42,6 +45,8 @@ def api(tmp_path, monkeypatch):
                     state.account_status,
                     {"id": state.actor, "username": "developer", "role": "developer"},
                 )
+            elif self.path == f"/api/runtime/projects/{state.project}/provider-keys":
+                self.respond(200, state.list_response if state.list_response is not None else {"project_id": state.project, "models": state.key_list})
             else:
                 assert parse_qs(urlsplit(self.path).query) == {
                     "model_id": [state.model]
@@ -78,7 +83,7 @@ def api(tmp_path, monkeypatch):
             }
 
         def respond(self, status, value):
-            raw = json.dumps(value).encode()
+            raw = value if isinstance(value, bytes) else json.dumps(value).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))

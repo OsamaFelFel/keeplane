@@ -6,6 +6,19 @@ set up the model for developers' own keys and install its protected runtime befo
 coding. These commands manage your key registration; release readiness remains
 separate.
 
+List the models allowed for your registered project and your saved keys:
+
+```sh
+keeplane keys list --profile ~/.config/keeplane/dev --project PROJECT_UUID
+```
+
+Each row shows `id`, `own_key_required` and `status`. Personal models report
+`added` or `missing`; models using no key or a shared key report `false` and
+`null`. `added` means a saved registration, including one that may need checking
+again after a model changes. Listing does not test the provider or read key files;
+it cannot yet report a key the provider has subsequently refused. A model that
+is no longer allowed for this project disappears from the list. No key is shown.
+
 Add or replace a key with a hidden prompt:
 
 ```sh
