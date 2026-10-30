@@ -30,9 +30,22 @@ missing or refused, the CLI uses another allowed model and says why; see
 does not prove where repository contents came from. The gateway makes the final
 decision, including changes made after the CLI's initial checks.
 
+If your organization has not added any model yet, or none is approved for the
+project's data class, `code` stops before the runtime starts and sends nothing:
+
+```text
+No models are available for this project yet, so nothing was sent. Ask an admin to add a model, or approve one for this project's class, in Models and routing.
+```
+
+Settings your runtime sends with each request, such as temperature, reach the
+model unchanged: Keeplane adds none of its own. If the model fails during a turn,
+the turn shows the error; Keeplane does not yet move a running turn to another
+model when its model is down or the task is too big for it.
+
 ```mermaid
 flowchart LR
   Profile[Signed-in account] --> Check[Register project and check models]
+  Check -->|no models| Stop[No models are available yet; nothing sent]
   Check --> Choice[Own key missing? Use another allowed model]
   Choice --> Local[Local coding runtime and tools]
   Local --> Gateway[Protected gateway checks every request]

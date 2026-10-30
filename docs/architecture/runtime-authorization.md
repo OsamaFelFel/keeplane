@@ -350,6 +350,17 @@ other classes and withdrawn setup are never returned. The response is
 is allowed. It reads registration metadata only, never a key file, and is advice
 rather than a permit: both gateway checks still run for the chosen model.
 
+`DjangoModelChoice.next_allowed(session, owner, project, skip=...)` is the one
+candidate filter for every fallback: registered and set up with its current
+definition, allowed for the project's class, admitted by the mode's runtime gate
+including shared or own key availability, then rechecked for the developer and
+project. A later fallback passes every model it has already tried as `skip`. The
+missing-key choice is its only caller today. The gateway path has no fallback on
+provider outage or context overflow: a failed request or stream returns the
+error, and only the chosen model is contacted
+([protocol cases](../../tests/integration/native-runtime-protocol-cases.md)). An
+empty eligible set gives the CLI an empty catalog, and it stops before sending.
+
 ```mermaid
 flowchart LR
   CLI[CLI code] --> Choice[Model choice]

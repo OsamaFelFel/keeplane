@@ -126,6 +126,17 @@ def test_admin_cannot_bypass_class_and_withdrawn_models_disappear(catalog):
     assert get(catalog).json()["models"] == []
 
 
+@pytest.mark.parametrize("classes_enabled", [True, False])
+def test_no_registered_models_is_an_empty_catalog_not_an_error(catalog, classes_enabled):
+    # Spec 004 ST12: models listed only by the gateway are not registered.
+    catalog.stores.classes.set_enabled(classes_enabled)
+    for name in ("private", "public"):
+        catalog.stores.catalog.remove(name)
+    response = get(catalog)
+    assert response.status_code == 200
+    assert response.json() == {"project_id": catalog.project, "models": []}
+
+
 @pytest.mark.parametrize("context", ["not-a-uuid", str(uuid.uuid4())])
 def test_unknown_context_is_denied(catalog, context):
     catalog.path = f"/api/runtime/projects/{context}/models"

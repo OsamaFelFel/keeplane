@@ -247,7 +247,7 @@ def test_signed_in_coding_stops_before_runtime_when_current_access_is_unavailabl
     if withdrawal == "actor":
         connected.actor = str(uuid.uuid4())
     elif withdrawal == "model":
-        connected.model_ids = []
+        connected.model_ids = ["general"]
     else:
         connected.status = int(withdrawal)
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
@@ -401,3 +401,48 @@ def test_server_without_a_choice_route_keeps_the_gateway_check(
     assert (result == 0) is launched and bool(runtime[1]) is launched
     if launched:
         assert native_model(runtime) == "keeplane/coder"
+
+
+def test_no_models_yet_says_so_and_sends_nothing(
+    connected, runtime, monkeypatch, tmp_path, capsys
+):
+    # Spec 004 ST12: the organization has registered no models yet.
+    connected.model_ids = []
+    project = str(uuid.uuid4())
+    assert code(monkeypatch, connected, runtime, project, tmp_path) == 1
+    assert not runtime[1]
+    assert [(row[0], row[1]) for row in connected.calls][-1] == (
+        "GET", f"/api/runtime/projects/{project}/models"
+    )
+    assert all("/model-choice" not in row[1] for row in connected.calls)
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err.startswith(
+        "No models are available for this project yet, so nothing was sent."
+    )
+    assert connected.access not in output.err and connected.refresh not in output.err
+
+
+def test_a_model_outside_a_non_empty_catalog_keeps_the_not_allowed_message(
+    connected, runtime, monkeypatch, tmp_path, capsys
+):
+    connected.model_ids = ["general"]
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert not runtime[1]
+    assert capsys.readouterr().err == (
+        "This model is not currently allowed for the project.\n"
+    )
+
+
+def test_keeplane_sets_no_request_settings_of_its_own(
+    connected, runtime, monkeypatch, tmp_path
+):
+    # Spec 004 ST26: the runtime's own settings, such as temperature, are not
+    # replaced or added by Keeplane's generated configuration.
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
+    config = json.loads(runtime[1][0][1]["env"]["OPENCODE_CONFIG_CONTENT"])
+    provider = config["providers"]["keeplane"]
+    assert set(provider) == {"package", "env", "settings", "models", "headers"}
+    assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert provider["models"] == {"coder": {"name": "coder"}}
+    assert set(config) == {"providers", "model", "share", "snapshots"}

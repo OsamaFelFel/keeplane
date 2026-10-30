@@ -16,6 +16,10 @@ else:
     from server_connection import ConnectionError, account, model_choice, models, origin
 
 
+NO_MODELS = ("No models are available for this project yet, so nothing was sent. "
+             "Ask an admin to add a model, or approve one for this project's class, "
+             "in Models and routing.")
+
 REASONS = {
     "missing": "No provider key is added for {requested}",
     "refused": "The provider refused your key for {requested}",
@@ -67,6 +71,8 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             raise ProfileError("The server account changed; sign in again.")
         register(credential.issuer, project_id, name, credential.access_token)
         catalog = models(credential.issuer, project_id, credential.access_token)
+        if not catalog["models"]:
+            raise ConnectionError(NO_MODELS)
         if model not in {row["id"] for row in catalog["models"]}:
             raise ConnectionError("This model is not currently allowed for the project.")
         secrets = (credential.access_token, credential.refresh_token)

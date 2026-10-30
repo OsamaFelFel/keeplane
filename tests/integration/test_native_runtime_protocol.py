@@ -166,3 +166,137 @@ def test_native_protocol_and_next_request_withdrawal(
             )
             + "\n"
         )
+
+
+SETTINGS = {
+    "temperature": 0.37,
+    "top_p": 0.81,
+    "max_tokens": 123,
+    "stop": ["END"],
+    "seed": 7,
+    "presence_penalty": 0.25,
+    "frequency_penalty": -0.5,
+    "user": "synthetic-settings-check",
+}
+
+
+@pytest.mark.live
+@pytest.mark.infrastructure
+@pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
+@pytest.mark.parametrize("kind", ["json", "stream", "tool"])
+def test_request_settings_reach_the_model_unchanged(
+    tmp_path, report_file, existing, kind
+):
+    """Spec 004 ST26: settings the client sends arrive with the same values."""
+    body = {
+        "model": "private",
+        "messages": [{"role": "user", "content": "synthetic settings prompt"}],
+        **SETTINGS,
+    }
+    if kind == "stream":
+        body["stream"] = True
+    if kind == "tool":
+        body["tools"] = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        body["tool_choice"] = "auto"
+        body["parallel_tool_calls"] = False
+    sent = {
+        name: value
+        for name, value in body.items()
+        if name not in ("model", "messages", "tools")
+    }
+    with native_runtime_trial(
+        tmp_path, existing, protocol_config, protocol=True
+    ) as trial:
+        response = trial.probe({"body": body, "observe_protocol": True})
+        assert response["status"] == 200 and not response["incomplete"]
+        observed = trial.call("summary")
+        assert observed["calls"] == ["mock-private"]
+        received = observed["settings"][0]
+        # Setting names and values only; no prompt, answer or credential.
+        report_file.write_text(
+            json.dumps(
+                {
+                    "existing": existing,
+                    "kind": kind,
+                    "changed": sorted(
+                        name
+                        for name in sent
+                        if received["values"].get(name) != sent[name]
+                    ),
+                    "added_by_gateway": received["other_fields"],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        assert received["values"] == sent
+        assert trial.call("config") == trial.before
+
+
+@pytest.mark.live
+@pytest.mark.infrastructure
+@pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
+@pytest.mark.parametrize("failure", ["before", "mid"])
+def test_a_failed_stream_is_visible_and_reaches_no_other_model(
+    tmp_path, report_file, existing, failure
+):
+    """A provider failure is not shown as a finished answer or sent elsewhere.
+
+    No fallback is configured on this gateway path, so only the chosen model is
+    contacted; after recovery the next request is checked and answered again.
+    """
+    body = {
+        "model": "private",
+        "messages": [{"role": "user", "content": "synthetic failure prompt"}],
+        "stream": True,
+    }
+    with native_runtime_trial(
+        tmp_path, existing, protocol_config, protocol=True
+    ) as trial:
+        trial.call("protocol_failure", failure)
+        response = trial.probe({"body": body, "observe_protocol": True})
+        if isinstance(response, int):
+            status, incomplete, finished = response, None, False
+        else:
+            events = [
+                line[6:]
+                for line in response["body"].splitlines()
+                if line.startswith("data: ")
+            ]
+            status, incomplete = response["status"], response["incomplete"]
+            finished = (
+                status == 200 and not incomplete and bool(events)
+                and events[-1] == "[DONE]"
+            )
+        observed = trial.call("summary")
+        report_file.write_text(
+            json.dumps(
+                {
+                    "existing": existing,
+                    "failure": failure,
+                    "status": status,
+                    "incomplete": incomplete,
+                    "reported_as_finished": finished,
+                    "providers_contacted": observed["calls"],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        if failure == "before":
+            assert status >= 500
+        assert not finished
+        assert observed["calls"] == ["mock-private"]
+        trial.call("reset")
+        recovered = trial.probe({"body": body, "observe_protocol": True})
+        assert recovered["status"] == 200 and not recovered["incomplete"]
+        assert trial.call("summary")["calls"] == ["mock-private"]
+        assert trial.call("config") == trial.before

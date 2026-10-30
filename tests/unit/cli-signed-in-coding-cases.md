@@ -12,6 +12,15 @@
   [model choice cases](../integration/model-choice-cases.md).
 - Changed account, withdrawn session, server outage or an unavailable model
   prevents runtime launch. Invalid gateway destinations stop before any request.
+- No models yet (Spec 004 ST12): when the project's allowed model list is empty,
+  the CLI says “No models are available for this project yet, so nothing was
+  sent” and asks the developer to have an admin add or approve one. It asks for
+  no model choice and starts no runtime. A model missing from a non-empty list
+  keeps “This model is not currently allowed for the project.”
+- Request settings (ST26): Keeplane's generated runtime configuration holds only
+  the provider package, gateway URL, project header and model name, so it adds or
+  replaces no request setting such as temperature. The gateway side is covered by
+  the [native protocol cases](../integration/native-runtime-protocol-cases.md).
 - Private history records the issuer, account and project without credentials.
   Fresh credentials for the same account work; another account or project cannot
   reuse that history. Legacy unbound history is also refused.

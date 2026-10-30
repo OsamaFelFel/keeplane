@@ -2,6 +2,67 @@
 
 import json
 
+# Request settings, not content: the provider records these to compare them.
+SETTINGS = (
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "stop",
+    "seed",
+    "presence_penalty",
+    "frequency_penalty",
+    "user",
+    "stream",
+    "tool_choice",
+    "parallel_tool_calls",
+)
+
+
+def received_settings(body):
+    """Known settings with their exact values, plus the names of any other field."""
+    return {
+        "values": {name: body[name] for name in SETTINGS if name in body},
+        "other_fields": sorted(
+            set(body) - set(SETTINGS) - {"model", "messages", "tools"}
+        ),
+    }
+
+
+def send_failed_stream(handler, body, failure):
+    """Fail a request before any byte, or drop the stream after its first event."""
+    if failure == "before":
+        handler.send_response(503)
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+        return
+    first = (
+        "data: "
+        + json.dumps(
+            {
+                "id": "fixture",
+                "object": "chat.completion.chunk",
+                "model": body["model"],
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": "partial "},
+                        "finish_reason": None,
+                    }
+                ],
+            }
+        )
+        + "\n\n"
+    ).encode()
+    handler.send_response(200)
+    handler.send_header("Content-Type", "text/event-stream")
+    # Promise more than is sent, then close: the provider fails mid-stream.
+    handler.send_header("Content-Length", str(len(first) + 4096))
+    handler.end_headers()
+    handler.wfile.write(first)
+    handler.wfile.flush()
+    handler.close_connection = True
+    handler.connection.shutdown(2)
+
 
 def send_protocol_response(handler, body):
     messages = body.get("messages", [])
