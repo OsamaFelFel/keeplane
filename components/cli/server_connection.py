@@ -124,6 +124,34 @@ def models(server, project_id, credential):
     return {"project_id": project_id, "models": [{"id": value} for value in sorted(ids)]}
 
 
+def model_choice(server, project_id, model_id, credential):
+    """Ask which allowed model a task should use; the gateway still checks it."""
+    try:
+        project_id = str(uuid.UUID(str(project_id)))
+    except (ValueError, TypeError, AttributeError):
+        raise ConnectionError("Use a valid project UUID.") from None
+    body = request(server, "/api/runtime/projects/" + project_id + "/model-choice",
+                   credential, query={"model_id": model_id})
+
+    def valid_id(value):
+        return (isinstance(value, str) and 0 < len(value) <= 256
+                and not any(ord(c) < 32 or ord(c) == 127 for c in value))
+
+    try:
+        data = json.loads(body)
+        if (not isinstance(data, dict)
+                or set(data) != {"project_id", "requested_model_id", "model_id", "reason"}
+                or data["project_id"] != project_id or data["requested_model_id"] != model_id
+                or data["reason"] not in {None, "missing", "refused", "outdated"}
+                or (data["model_id"] is not None and not valid_id(data["model_id"]))
+                or (data["reason"] is None and data["model_id"] != model_id)
+                or (data["reason"] is not None and data["model_id"] == model_id)):
+            raise ValueError
+    except (ValueError, UnicodeError, RecursionError):
+        raise ConnectionError("The server returned an invalid model choice.") from None
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", required=True)

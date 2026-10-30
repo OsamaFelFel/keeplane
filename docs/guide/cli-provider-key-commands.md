@@ -25,10 +25,30 @@ Add or replace a key with a hidden prompt:
 keeplane keys set --profile ~/.config/keeplane/dev --model coder
 ```
 
-If coding says **“Add or replace your provider key”**, use the command above with
-the same model ID, then try again. You can also choose another allowed model from
-`keeplane models --profile ~/.config/keeplane/dev --project PROJECT_UUID`. Missing
-or removed keys stop promptly; storage or policy outages remain separate errors.
+If you run `keeplane code` with a model that needs your own key and you have not
+added one, removed it, or it was refused, the task goes to another model you are
+allowed to use for that project. Before the runtime starts, the CLI says why:
+
+```text
+No provider key is added for coder; using general instead. Add one with `keeplane keys set --model coder`.
+```
+
+A refused key says “The provider refused your key …”, and a key saved before the
+admin changed the model says it was saved for an earlier model setup; both ask you
+to replace it. Keeplane picks the first model, by model ID, that you could use for
+that project right now: it is set up and installed, allowed for the project's data
+class, and its shared key or your own key is available. A model that only exists in
+the gateway is never picked. The gateway still checks the chosen model on every
+request. Add or replace your key with the command above to use the original model
+again on your next task.
+
+If no other allowed model exists, coding stops before the runtime starts with
+**“Add or replace your provider key: … no other allowed model is available for this
+project.”** Storage or policy outages remain separate errors. If you resume a saved
+session (`--session`) and the model changed, the CLI refuses to mix models; start a
+new session or add your key first. With an older server that cannot choose a model,
+coding keeps your model and the gateway stops it with “Add or replace your provider
+key”.
 
 For automation, `--key-stdin` reads one key from a private pipe, with an optional
 trailing newline. Avoid putting the key in command arguments, shell history or

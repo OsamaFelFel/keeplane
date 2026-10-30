@@ -23,6 +23,8 @@ def connected(tmp_path):
         access="kpc_" + "a" * 43,
         refresh="r" * 32,
         model_ids=["coder"],
+        choice=None,
+        choice_status=200,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -38,6 +40,16 @@ def connected(tmp_path):
                     "role": "developer",
                 }
                 status = state.status
+            elif "/model-choice?" in self.path:
+                requested = self.path.split("model_id=")[-1]
+                value = {
+                    "project_id": self.path.split("/")[-2],
+                    "requested_model_id": requested,
+                    "model_id": requested,
+                    "reason": None,
+                    **(state.choice or {}),
+                }
+                status = state.choice_status
             else:
                 value = {
                     "project_id": self.path.split("/")[-2],
@@ -210,6 +222,7 @@ def test_signed_in_coding_registers_checks_catalog_and_passes_project_context(
     assert [(row[0], row[1]) for row in connected.calls] == [
         ("GET", "/api/runtime/session"), ("POST", "/api/runtime/projects"),
         ("GET", f"/api/runtime/projects/{project}/models"),
+        ("GET", f"/api/runtime/projects/{project}/model-choice?model_id=coder"),
     ]
     native_command, options = runtime[1][0]
     environment = options["env"]
@@ -308,3 +321,83 @@ def test_coding_exit_status_does_not_print_exception_credentials(
     output = capsys.readouterr()
     assert connected.access not in output.out + output.err
     assert connected.refresh not in output.out + output.err
+
+
+def native_model(runtime):
+    native_command, _ = runtime[1][-1]
+    return native_command[native_command.index("--model") + 1]
+
+
+@pytest.mark.parametrize(
+    "reason,text",
+    [
+        ("missing", "No provider key is added for coder; using general instead. Add one"),
+        ("refused", "The provider refused your key for coder; using general instead. Replace it"),
+        ("outdated", "saved for an earlier model setup; using general instead. Replace it"),
+    ],
+)
+def test_unusable_own_key_moves_the_task_to_another_allowed_model_and_says_why(
+    connected, runtime, monkeypatch, tmp_path, capsys, reason, text
+):
+    connected.model_ids = ["coder", "general"]
+    connected.choice = {"model_id": "general", "reason": reason}
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
+    assert native_model(runtime) == "keeplane/general"
+    output = capsys.readouterr()
+    assert output.out == "Coding finished.\n"
+    assert text in output.err and "`keeplane keys set --model coder`" in output.err
+    assert connected.access not in output.err and connected.refresh not in output.err
+
+
+def test_usable_key_keeps_the_requested_model_without_a_notice(
+    connected, runtime, monkeypatch, tmp_path, capsys
+):
+    connected.model_ids = ["coder", "general"]
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
+    assert native_model(runtime) == "keeplane/coder"
+    assert capsys.readouterr().err == ""
+
+
+def test_no_other_allowed_model_fails_with_the_missing_key_message(
+    connected, runtime, monkeypatch, tmp_path, capsys
+):
+    connected.choice = {"model_id": None, "reason": "missing"}
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert not runtime[1]
+    error = capsys.readouterr().err
+    assert error.startswith("Add or replace your provider key: No provider key is added for coder")
+    assert "no other allowed model" in error and "`keeplane keys set --model coder`" in error
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"model_id": "elsewhere", "reason": "missing"},
+        {"model_id": "general", "reason": None},
+        {"model_id": "coder", "reason": "missing"},
+        {"model_id": "general", "reason": "unknown"},
+        {"requested_model_id": "other"},
+        {"project_id": str(uuid.uuid4())},
+        {"extra": True},
+    ],
+)
+def test_fallback_outside_the_catalog_or_an_invalid_choice_never_starts_the_runtime(
+    connected, runtime, monkeypatch, tmp_path, capsys, change
+):
+    connected.model_ids = ["coder", "general"]
+    connected.choice = change
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert not runtime[1]
+    assert connected.access not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("status,launched", [(404, True), (403, False), (503, False)])
+def test_server_without_a_choice_route_keeps_the_gateway_check(
+    connected, runtime, monkeypatch, tmp_path, capsys, status, launched
+):
+    connected.choice_status = status
+    connected.choice = {"error": "unused"}
+    result = code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path)
+    assert (result == 0) is launched and bool(runtime[1]) is launched
+    if launched:
+        assert native_model(runtime) == "keeplane/coder"

@@ -1,0 +1,163 @@
+"""Choose another allowed model when a developer's own key is not usable.
+
+The choice reads only key registration metadata: it never reads, sends or
+changes a provider key. It is advice for the developer's client, not a permit:
+every gateway request still passes the entry and selected-model checks.
+"""
+
+import os
+import uuid
+
+from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
+from accounts.cli_credentials import RuntimeIdentity
+from common.api import IDENTITY, MODEL_GATEWAY
+from common.errors import StorageUnavailable
+from common.storage import storage_service
+from django.conf import settings
+from django.db import DatabaseError
+from django.views.decorators.cache import never_cache
+from projects.access import organization_project_access
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+)
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from . import runtime_views
+from .authorization import DjangoModelAuthorization, ModelAccessDenied
+from .installed_runtime import DjangoInstalledRuntimeGate
+from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
+from .policy import ModelPolicyUnavailable
+from .provider_keys import DjangoSharedKeyAvailability
+
+
+def key_problem(owner_id, model_id, definition_fingerprint):
+    """Why an owner's key cannot be used, matching the key resolver's rule.
+
+    The resolver uses only a registration bound to the current definition and
+    not confirmed as refused; anything else is reported as a missing key.
+    """
+    row = (
+        DeveloperProviderKey.objects.filter(owner_id=owner_id, model_id=model_id)
+        .values("key_name", "refused", "validation_fingerprint")
+        .first()
+    )
+    if row is None or not row["key_name"]:
+        return "missing"
+    if row["refused"]:
+        return "refused"
+    if not definition_fingerprint or row["validation_fingerprint"] != definition_fingerprint:
+        return "outdated"
+    return None
+
+
+@storage_service
+class DjangoModelChoice:
+    """Keep the requested model unless its owner key is not usable.
+
+    Another model is chosen only from the project's currently eligible models,
+    in model ID order, and only when the same runtime gate that admits a task
+    (installation, setup, shared or owner key, project class) accepts it.
+    """
+
+    def __init__(self, identity, policy, gateway, directory, *, project_access,
+                 managed, manifest_file):
+        self.authorization = DjangoModelAuthorization(
+            identity, policy, project_access=project_access
+        )
+        self.policy, self.gateway, self.directory = policy, gateway, directory
+        self.managed, self.manifest_file = managed, manifest_file
+
+    def _usable(self, owner_id, model_id):
+        """Return True only if the current runtime gate would admit this model."""
+        try:
+            if self.managed:
+                enrollment = DjangoInstalledRuntimeGate(
+                    self.gateway, self.manifest_file, self.directory
+                ).require_installed(model_id)
+                if enrollment["key_choice"] == ProviderKeyChoice.PERSONAL:
+                    return key_problem(owner_id, model_id, enrollment["fingerprint"]) is None
+                return True
+            DjangoSharedKeyAvailability(self.gateway, self.directory).require_available(
+                model_id
+            )
+            return True
+        except (ModelAccessDenied, ModelPolicyUnavailable):
+            return False
+
+    def choose(self, session_token, project_id, model_id):
+        decision = self.authorization.authorize(session_token, project_id, model_id)
+        owner_id, project_id = decision["actor_id"], decision["project_id"]
+        approval = (
+            ModelApproval.objects.filter(pk=model_id)
+            .values("key_choice", "gateway_fingerprint")
+            .first()
+        )
+        if approval is None:
+            raise ModelPolicyUnavailable("Model setup is unavailable")
+        reason = None
+        if approval["key_choice"] == ProviderKeyChoice.PERSONAL:
+            reason = key_problem(owner_id, model_id, approval["gateway_fingerprint"])
+        result = {
+            "project_id": project_id,
+            "requested_model_id": model_id,
+            "model_id": model_id,
+            "reason": reason,
+        }
+        if reason is None:
+            return result
+        result["model_id"] = None
+        for candidate in sorted(self.policy.eligible_model_ids(project_id) - {model_id}):
+            if self._usable(owner_id, candidate):
+                try:
+                    # Recheck the developer, project and class for the final choice.
+                    self.authorization.authorize(session_token, project_id, candidate)
+                except ModelAccessDenied as error:
+                    if error.status == 401:
+                        raise
+                    continue
+                result["model_id"] = candidate
+                break
+        return result
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["GET"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def project_model_choice(request, project_id):
+    """Tell the CLI which allowed model a task should use, and why it changed."""
+    if (
+        request.body
+        or set(request.query_params) != {"model_id"}
+        or len(request.query_params.getlist("model_id")) != 1
+    ):
+        return Response({"error": "Send one model ID"}, status=400)
+    model_id = request.query_params["model_id"]
+    if (
+        not 0 < len(model_id) <= 256
+        or any(ord(c) < 32 or ord(c) == 127 for c in model_id)
+    ):
+        return Response({"error": "Choose a model"}, status=400)
+    try:
+        project_id = str(uuid.UUID(project_id))
+    except (ValueError, TypeError, AttributeError):
+        return Response({"error": "This project is unavailable"}, status=403)
+    try:
+        result = DjangoModelChoice(
+            RuntimeIdentity(IDENTITY),
+            runtime_views.model_policy(),
+            MODEL_GATEWAY,
+            os.environ.get("PROVIDER_KEY_DIR", ""),
+            project_access=organization_project_access,
+            managed=os.environ.get("GATEWAY_MODE", "managed") == "managed",
+            manifest_file=settings.RUNTIME_GUARD_MANIFEST_FILE,
+        ).choose(request.auth, project_id, model_id)
+    except ModelAccessDenied as error:
+        return Response({"error": error.message}, status=error.status)
+    except (ModelPolicyUnavailable, StorageUnavailable, DatabaseError):
+        return Response({"error": "Model choice is unavailable"}, status=503)
+    return Response(result)

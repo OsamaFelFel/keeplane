@@ -336,6 +336,30 @@ OpenAI receives injected Authorization, while Anthropic receives injected
 `x-api-key` with an empty prefix. Only that native provider credential and
 Content-Type survive the outbound replacement; the subject Bearer is removed.
 
+Before starting a coding turn, the CLI asks
+`GET /api/runtime/projects/{project_id}/model-choice?model_id=ID` which model to
+use. The server keeps the requested model unless it is Personal and the caller's
+registration is missing, refused or bound to an earlier definition (the same rule
+the key resolver applies). It then returns the first other eligible model, by ID,
+that the current mode's gate admits: in managed mode the installed enrollment with
+its shared key or the caller's usable registration; otherwise the shared-key
+availability check, which never admits Personal models. Gateway-only models,
+other classes and withdrawn setup are never returned. The response is
+`{"project_id", "requested_model_id", "model_id", "reason"}` with `reason`
+`null`, `missing`, `refused` or `outdated`, and `model_id: null` when nothing else
+is allowed. It reads registration metadata only, never a key file, and is advice
+rather than a permit: both gateway checks still run for the chosen model.
+
+```mermaid
+flowchart LR
+  CLI[CLI code] --> Choice[Model choice]
+  Choice -->|own key usable or not needed| Same[Requested model]
+  Choice -->|own key missing/refused| Next[First allowed model by ID passing the runtime gate]
+  Choice -->|none left| Stop[Add or replace your provider key]
+  Same --> Gateway[Entry and selected-model checks]
+  Next --> Gateway
+```
+
 The installed entry callback first checks that a Personal key is available for
 the current owner and definition, returning metadata only. A missing key is denied
 before native backend selection. The final private token exchange still resolves
