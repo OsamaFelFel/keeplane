@@ -27,7 +27,7 @@ keeplane keys set --profile ~/.config/keeplane/dev --model coder
 
 If coding says **“Add or replace your provider key”**, use the command above with
 the same model ID, then try again. You can also choose another allowed model from
-`keeplane models --profile ~/.config/keeplane/dev --project PROJECT_ID`. Missing
+`keeplane models --profile ~/.config/keeplane/dev --project PROJECT_UUID`. Missing
 or removed keys stop promptly; storage or policy outages remain separate errors.
 
 For automation, `--key-stdin` reads one key from a private pipe, with an optional
