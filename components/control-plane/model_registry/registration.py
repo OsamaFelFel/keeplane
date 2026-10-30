@@ -23,6 +23,7 @@ from integrations.gateway.keys import (
 from integrations.runners import local_runner
 
 from model_registry.fingerprints import fingerprint
+from model_registry.provider_probe import provider_answers
 
 
 class ModelManagement:
@@ -38,6 +39,8 @@ class ModelManagement:
         runner_urls,
         cloud_base_urls,
         trial_key,
+        *,
+        provider_probe=None,
     ):
         self.catalog = catalog
         self.data_classes = data_classes
@@ -49,6 +52,7 @@ class ModelManagement:
         self.runner_urls = runner_urls
         self.cloud_base_urls = cloud_base_urls
         self.trial_key = trial_key
+        self.provider_probe = provider_probe or provider_answers
 
     def reply(self, status, body):
         return status, body
@@ -169,8 +173,10 @@ class ModelManagement:
         )
         return status == 200
 
-    def confirm_cloud_model(self, model_id, expected_resource, retry_refused=False):
-        """Verify management readback and one answer through the chosen gateway."""
+    def confirm_cloud_model(
+        self, model_id, expected_resource, retry_refused=False, personal=False
+    ):
+        """Verify registration; Personal setup probes without a developer key."""
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             status, listing = self.gateway.request("/v1/models", timeout=5)
@@ -192,6 +198,21 @@ class ModelManagement:
                     revision = self.model_fingerprint(model_id, raw)
                     if not revision:
                         return None, "The gateway didn't register it."
+                    if personal:
+                        if not self.provider_probe(expected_resource):
+                            return None, "The provider didn't answer."
+                        # The unauthenticated probe establishes reachability only.
+                        # Approval must still bind the unchanged complete definition.
+                        final_status, final_resources = self.gateway_model_resources()
+                        if (
+                            final_status == 200
+                            and self.model_fingerprint(
+                                model_id, final_resources.get("resources", [])
+                            )
+                            == revision
+                        ):
+                            return revision, None
+                        return None, "The gateway model changed."
                     for delay in (0, 0.2, 0.4, 0.8, 1.6, 3.2):
                         if delay:
                             time.sleep(delay)
@@ -384,8 +405,14 @@ class ModelManagement:
         source = body.get("source")
         provider = {"openai": "openAI", "anthropic": "anthropic"}[source]
         key_choice = body.get("key_choice")
-        if key_choice not in ("shared", "none"):
+        if key_choice not in ("shared", "none", "personal"):
             return self.reply(400, {"error": "Choose a supported provider key option"})
+        if key_choice == "personal" and (
+            body.get("shared_key") or body.get("replace_shared_key")
+        ):
+            return self.reply(
+                400, {"error": "Each developer adds their own key in the CLI"}
+            )
         if key_choice == "shared":
             if self.gateway_mode == "existing":
                 return self.reply(
@@ -451,7 +478,9 @@ class ModelManagement:
                     )
                 },
             )
-        revision, reason = self.confirm_cloud_model(name, resource)
+        revision, reason = self.confirm_cloud_model(
+            name, resource, personal=key_choice == "personal"
+        )
         if revision is None:
             removed = self.undo_cloud_model(name, resource)
             if key_path and removed:
@@ -504,9 +533,15 @@ class ModelManagement:
     def setup(self, model_id, body):
         choice = body.get("key_choice")
         previous = self.catalog.get(model_id)
-        if previous and previous["key_choice"] == "personal":
-            return self.reply(400, {"error": "Developer-owned provider key setup is not available yet"})
-        if choice not in ("none", "shared") or (
+        if previous and previous["key_choice"] == "personal" and choice != "personal":
+            return self.reply(
+                400, {"error": "Keep each developer's own key for this model"}
+            )
+        if choice == "personal" and body.get("shared_key"):
+            return self.reply(
+                400, {"error": "Each developer adds their own key in the CLI"}
+            )
+        if choice not in ("none", "shared", "personal") or (
             choice == "shared" and (not previous or previous["key_choice"] != "shared")
         ):
             return self.reply(400, {"error": "Choose a supported provider key option"})
@@ -591,19 +626,29 @@ class ModelManagement:
             return self.replace_shared_key(
                 model_id, resource, previous, classes, replacement
             )
-        answer_status, answer = self.gateway.request(
-            "/v1/chat/completions",
-            {
-                "model": model_id,
-                "messages": [{"role": "user", "content": "Reply OK."}],
-                "max_tokens": 1,
-            },
-            timeout=30,
-        )
-        if answer_status != 200 or not answer.get("choices"):
-            return self.reply(
-                503, {"error": "The model didn't answer. Nothing was saved."}
+        if choice == "personal":
+            revision, reason = self.confirm_cloud_model(
+                model_id, resource, personal=True
             )
+            if revision != current_fingerprint:
+                return self.reply(
+                    503,
+                    {"error": (reason or "The model changed.") + " Nothing was saved."},
+                )
+        else:
+            answer_status, answer = self.gateway.request(
+                "/v1/chat/completions",
+                {
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": "Reply OK."}],
+                    "max_tokens": 1,
+                },
+                timeout=30,
+            )
+            if answer_status != 200 or not answer.get("choices"):
+                return self.reply(
+                    503, {"error": "The model didn't answer. Nothing was saved."}
+                )
         try:
             # A definition replaced outside Keeplane loses its provenance.
             still_owned = bool(
@@ -635,6 +680,8 @@ class ModelManagement:
         name = body.get("name", "")
         model = body.get("model", "")
         source = body.get("source", "fixture")
+        if not isinstance(source, str):
+            return self.reply(400, {"error": "Choose a supported model source"})
         if (
             not isinstance(name, str)
             or not name

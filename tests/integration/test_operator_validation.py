@@ -7,8 +7,10 @@ from types import SimpleNamespace
 import pytest
 from django.test import Client, override_settings
 from model_registry import runtime_callback
+from model_registry.models import ModelApproval
 
 URL = "/internal/runtime/installed/operator-validation"
+pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
@@ -26,6 +28,7 @@ def operator(tmp_path, monkeypatch):
         raise AssertionError("Operator callback must not contact identity or gateway")
 
     monkeypatch.setattr(runtime_callback, "authorized_model", unexpected)
+    monkeypatch.setattr(runtime_callback.DjangoPersonalDispatch, "resolve", unexpected)
     monkeypatch.setattr(
         runtime_callback, "MODEL_GATEWAY", SimpleNamespace(request=unexpected)
     )
@@ -73,6 +76,18 @@ def test_private_validation_can_run_before_enrollment_without_claiming_user_acce
             "a" * 64,
         )
     )
+
+
+@pytest.mark.parametrize(
+    "choice,status", [("none", 200), ("shared", 200), ("personal", 403)]
+)
+def test_raw_personal_denies_without_resolving_keys_but_other_validation_remains(
+    operator, choice, status
+):
+    ModelApproval.objects.create(
+        model_id="private", key_choice=choice, gateway_fingerprint="a" * 64
+    )
+    assert send(operator).status_code == status and not operator.contacts
 
 
 @pytest.mark.parametrize("marker", ["", "1", "forged", "operator,1", "Operator"])

@@ -29,6 +29,10 @@ def api(tmp_path, monkeypatch):
         write_status=200,
         pending=False,
         response_fault=False,
+        key_status=None,
+        project=str(uuid.uuid4()),
+        key_list=[],
+        list_response=None,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -42,6 +46,8 @@ def api(tmp_path, monkeypatch):
                     state.account_status,
                     {"id": state.actor, "username": "developer", "role": "developer"},
                 )
+            elif self.path == f"/api/runtime/projects/{state.project}/provider-keys":
+                self.respond(200, state.list_response if state.list_response is not None else {"project_id": state.project, "models": state.key_list})
             else:
                 assert parse_qs(urlsplit(self.path).query) == {
                     "model_id": [state.model]
@@ -53,6 +59,13 @@ def api(tmp_path, monkeypatch):
 
         def do_DELETE(self):
             self.mutate(False)
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            state.calls.append((self.command, self.path, dict(self.headers), body))
+            assert self.path == "/api/runtime/provider-keys/check"
+            assert body == {"model_id": state.model}
+            self.respond(state.write_status, self.metadata())
 
         def mutate(self, stored):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -73,12 +86,12 @@ def api(tmp_path, monkeypatch):
         def metadata(self):
             return {
                 "model_id": state.model,
-                "status": "added" if state.stored else "missing",
+                "status": state.key_status or ("added" if state.stored else "missing"),
                 "cleanup_pending": state.pending,
             }
 
         def respond(self, status, value):
-            raw = json.dumps(value).encode()
+            raw = value if isinstance(value, bytes) else json.dumps(value).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
@@ -153,7 +166,7 @@ def test_hidden_key_set_status_remove_and_cleanup_metadata(api, monkeypatch, cap
 
 
 @pytest.mark.parametrize("withdrawal", ["actor", "401", "503"])
-@pytest.mark.parametrize("action", ["set", "status", "remove"])
+@pytest.mark.parametrize("action", ["set", "status", "check", "remove"])
 def test_recheck_precedes_prompt_and_key_contact(
     api, monkeypatch, capsys, withdrawal, action
 ):
@@ -228,6 +241,27 @@ def test_explicit_pipe_is_bounded_and_private(api, monkeypatch, capsys):
     assert api.calls[-1][3]["key"] == secret.decode()
     assert secret.decode() not in capsys.readouterr().out
     assert all(secret not in p.read_bytes() for p in api.profile.iterdir())
+
+
+def test_check_sends_no_key_and_status_displays_refusal(api, monkeypatch, capsys):
+    monkeypatch.setattr(provider_keys.getpass, "getpass", lambda _: pytest.fail("Never prompt for saved key"))
+    original = {p.name: p.read_bytes() for p in api.profile.iterdir()}
+    api.stored, api.key_status = True, "refused"
+    assert command(api, monkeypatch, "check") == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "refused"
+    assert api.calls[-1][0:2] == ("POST", "/api/runtime/provider-keys/check")
+    assert api.calls[-1][3] == {"model_id": api.model}
+    assert command(api, monkeypatch, "status") == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "refused"
+    assert original == {p.name: p.read_bytes() for p in api.profile.iterdir()}
+
+
+def test_failed_check_is_not_retried_or_reported_as_a_key_replacement(api, monkeypatch, capsys):
+    api.write_status = 503
+    assert command(api, monkeypatch, "check") == 1
+    output = capsys.readouterr()
+    assert not output.out and "may have completed" not in output.err
+    assert len(api.calls) == 2 and api.calls[-1][0] == "POST"
 
 
 @pytest.mark.parametrize(

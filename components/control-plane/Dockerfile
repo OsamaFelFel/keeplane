@@ -33,6 +33,14 @@ RUN apk add --no-cache libpq=18.6-r0 \
 ENV PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
 
+# Explicit local ADR 022 trial only; never selected by the default build.
+FROM core AS cli-auth-trial
+USER 0
+RUN pip install --no-cache-dir --only-binary=:all: --require-hashes --no-deps \
+        -r /app/requirements-cli-auth.txt \
+    && python /app/remove_runtime_installers.py
+USER 65532:65532
+
 # Optional sign-in dependencies, copied with their original wheel notices.
 FROM core AS cli-auth-dependencies
 USER 0

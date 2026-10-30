@@ -66,7 +66,7 @@ jobs:
     needs: scope
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       PYTHONPATH: components/control-plane
       KEEPLANE_CLI_BUILD_PYTHON: ${{ github.workspace }}/.venv/bin/python

@@ -164,13 +164,14 @@ def test_change_during_publication_leaves_disabled_config_for_inspection(
 
 
 @pytest.mark.parametrize(
-    "fault", ["personal", "legacy", "missing-key", "existing-mode", "changed-base"]
+    "fault",
+    ["unapproved", "legacy", "missing-key", "existing-mode", "changed-base"],
 )
 def test_unsupported_preflight_never_publishes(installation, fault):
     f = installation
     before = (f.directory / "gateway.json").read_bytes()
-    if fault == "personal":
-        ModelApproval.objects.filter(pk="demo").update(key_choice="personal")
+    if fault == "unapproved":
+        ModelApproval.objects.filter(pk="demo").delete()
     elif fault == "legacy":
         del f.resources[0]["value"]["id"]
         ModelApproval.objects.filter(pk="demo").update(
@@ -253,3 +254,25 @@ def test_post_replace_failure_attempts_disable_and_never_claims_ready(
             json.loads((f.directory / "manifest.json").read_text())["enabled"] is True
         )
     assert not (f.directory / "candidate.json").exists()
+
+
+def test_personal_installation_binds_definition_without_reading_developer_keys(
+    installation, monkeypatch
+):
+    from model_registry import developer_keys
+
+    def forbidden(*args):
+        raise AssertionError("Installation must not read an owner's key")
+
+    monkeypatch.setattr(developer_keys, "read_private_key", forbidden)
+    f = installation
+    ModelApproval.objects.filter(pk="demo").update(key_choice="personal")
+    f.service.install(["demo"])
+    row = installed_runtime.manifest(f.directory / "manifest.json")["models"]["demo"]
+    assert row == {
+        "fingerprint": fingerprint("demo", f.resources),
+        "key_choice": "personal",
+        "key_name": "",
+        "key_digest": "",
+    }
+    assert f.resources[0]["value"] not in f.read_file()["llm"]["models"]

@@ -10,6 +10,8 @@ flowchart LR
   L --> A[Recheck bearer and account]
   A --> S[Read own metadata or remove own key]
   A --> P[PUT: check current personal model and provider]
+  A --> V[POST check: verify the current saved key]
+  V --> R[Record accepted or refused; errors keep the previous state]
   P --> B[Recheck exact definition and commit bound key]
   B --> C[Retry old-file cleanup]
 ```

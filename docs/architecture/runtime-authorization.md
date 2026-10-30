@@ -1,6 +1,6 @@
 # Check a gateway policy decision
 
-This experimental internal endpoint checks current Keeplane records. It accepts
+The experimental policy-decision endpoint checks current Keeplane records. It accepts
 no prompt, forwards no model traffic and returns no provider key. Deployment and
 inference-route wiring are separate work; this does not select a release gateway.
 
@@ -189,6 +189,17 @@ filesystem publication reports an unconfirmed state and the launcher must stop
 the gateway. The opt-in Compose launcher owns this workflow; its full host execution remains
 unverified. Ordinary preview deployment remains unchanged.
 
+The internal [per-model binding reader](../../tests/unit/runtime-binding-cases.md)
+is a prerequisite for automatic model activation. It keeps complete shared
+entry/private wiring and the selected model's provider, authentication and final
+guards, while excluding only provably disjoint stable-ID model targets. This
+lets a publisher distinguish an unrelated registry update from a change to the
+model being used. Ambiguous or unsupported routing fails closed. The existing
+installed gate still uses its complete snapshot; this reader enables no traffic.
+The remaining integration must publish and verify each copy automatically when
+an admin adds or edits a model, preserve other models' access, and withdraw stale
+bindings before acknowledging stricter changes.
+
 ## Managed operator contract
 
 An operator can configure `RUNTIME_GUARD_MANIFEST_FILE` as an absolute path to a
@@ -214,7 +225,8 @@ The declaration has exactly these fields:
 
 Each model has `fingerprint`, `key_choice`, `key_name` and `key_digest`.
 The fingerprint includes the complete raw resource and its native revision.
-`key_choice` is `none` or `shared`. For `none`, both key fields are empty strings.
+`key_choice` is `none`, `shared` or `personal`. For `none` and `personal`, both key
+fields are empty strings; a Personal enrollment never registers an owner's key.
 For `shared`, the name is the existing managed `key-<32 lowercase hex>` basename;
 the digest binds its exact file contents. No provider key value belongs in the
 declaration. Configuration digests use UTF-8 JSON with sorted keys, no extra
@@ -222,8 +234,9 @@ spacing and no non-finite numbers.
 
 Enrollment is trusted operator configuration. Model approval, developer input
 and client headers cannot enroll a model. Only exact OpenAI, Anthropic and local
-custom-completions definitions are supported here. Personal keys, file-owned
-models, wildcard names and virtual or fallback aliases stay unavailable.
+custom-completions definitions are supported here. Personal enrollment supports
+only fixed HTTPS OpenAI/Anthropic definitions without provider authentication.
+File-owned models, wildcard names and virtual or fallback aliases stay unavailable.
 An enrolled raw model must have an explicit `id` equal to its API model ID.
 Name-only models remain unavailable: their compiled backend names contain an
 index that can change when unrelated models are added or removed.
@@ -268,6 +281,8 @@ Bearer credential and the separate private callback key, plus the exact
 and `definition_fingerprint`. Success returns `{"allowed": true}`; it does not
 attest developer access, approval or enrollment. Developer credentials cannot
 use it, and it never contacts a provider itself.
+Approved Personal models are denied at this callback before native token exchange;
+their administration check uses the separate keyless HTTPS provider probe.
 
 The native installation overwrites the marker on both listeners
 before authorization: `operator` on private port 4000 and `1` on protected port
@@ -276,13 +291,26 @@ chooses the callback path and constant metadata for that listener; a missing
 marker must fail. Client headers cannot select operator validation on port 5000.
 The protected route accepts only `POST /v1/chat/completions`. Outbound headers
 are replaced after final authorization and native provider authentication:
-keyless models retain only Content-Type; shared models also retain their native
+keyless models retain only Content-Type; shared and Personal models retain their native
 provider credential. Unknown Keeplane headers, cookies, developer credentials
 and operator credentials never belong upstream. Native administrator tracing
 can contain credentials; port 15000 stays on the gateway's loopback interface,
 and only the exact authenticated applied-state route is proxied.
 
 ## Private Personal key handoff
+
+The admin [Personal setup API](../guide/personal-model-setup.md) registers a fixed
+keyless cloud definition and checks provider reachability without borrowing a
+developer key. Its approval binds the complete raw definition and revision;
+developer-key validation remains a separate operation.
+
+```mermaid
+flowchart LR
+  A[Admin chooses Personal] --> R[Register keyless definition]
+  R --> P[Check provider without a key]
+  P --> V[Recheck complete definition]
+  V --> S[Save Personal approval]
+```
 
 `POST /internal/runtime/provider-token` is an internal adapter for the gateway's
 native token exchange. It requires the current private gateway credential and a
@@ -294,17 +322,54 @@ on every call; the response is never cached.
 The provider key is returned only across this trusted server boundary. Keep the
 callback credential and response away from developer clients, proxies that log
 bodies and public gateway routes. The native transport must disable token caching.
-This endpoint does not attest installed routing, enroll Personal models or enable
-their public inference. Builder, applied-state verification and the installed gate
-still need integration. See [the cases](../../tests/integration/personal-transport-cases.md).
+This route does not attest installed routing or enroll models; it preserves the
+separate private transport contract. See [the cases](../../tests/integration/personal-transport-cases.md).
+
+The managed installer uses a separate `POST /internal/runtime/installed-provider-token`
+route. It requires a fresh matching enrollment and full raw definition fingerprint
+before the same current actor/project/model and owner-key checks. The per-model
+native token exchange fixes the model/fingerprint and sends the requested project
+and current developer credential. It runs before outbound header stripping and
+does not recover an operator credential as a developer key.
+The installer derives the protocol from the validated complete raw resource:
+OpenAI receives injected Authorization, while Anthropic receives injected
+`x-api-key` with an empty prefix. Only that native provider credential and
+Content-Type survive the outbound replacement; the subject Bearer is removed.
+
+The installed entry callback first checks that a Personal key is available for
+the current owner and definition, returning metadata only. A missing key is denied
+before native backend selection. The final private token exchange still resolves
+the key afresh. The applied signature omits validated health scores and
+consecutive-failure counts only inside active native EndpointInfo records,
+alongside the existing request measurements. Normal provider errors can recover
+on the next request. Endpoint membership, eviction deadlines/counts, capacity,
+destinations, guards, authentication and unknown fields remain bound. Concurrent
+withdrawal after entry can still fail at the final boundary; this is not an
+in-flight availability guarantee.
+
+This changes the applied signature calculation. Existing installations stay
+denied until an operator starts a fresh gateway and reruns enrollment. No previous
+signature is accepted automatically. The fixed installation still requires one
+provider group, one active endpoint and no rejected endpoints for each model.
+
+Token caching is explicitly disabled in the complete file/effective configuration.
+The pinned native applied serializer omits that setting: readback verifies the
+visible compiled transport, but cannot attest the cache itself. Fresh-process
+enrollment and next-request replacement/withdrawal controls are required; no
+in-flight revocation or safe hot policy replacement is claimed.
 
 ```mermaid
 sequenceDiagram
   participant G as Trusted gateway adapter
   participant K as Private key handoff
+  participant I as Installed runtime gate
   participant P as Current account and model policy
   participant S as Owner's private key store
   G->>K: Private credential and fixed model metadata
+  opt Installed handoff route
+    K->>I: Recheck complete wiring and fixed definition
+    I-->>K: Current enrolled binding
+  end
   K->>P: Recheck developer and authorized project/model
   K->>S: Resolve current owner's definition-bound key
   K-->>G: Provider key, no-store

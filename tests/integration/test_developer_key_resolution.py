@@ -13,7 +13,7 @@ from accounts.models import User
 from common.errors import StorageUnavailable
 from django.db import DatabaseError, connection, connections
 from model_registry import developer_keys, resolved_keys
-from model_registry.developer_keys import DjangoDeveloperKeyStore
+from model_registry.developer_keys import DeveloperKeyMissing, DjangoDeveloperKeyStore
 from model_registry.fingerprints import fingerprint
 from model_registry.key_validation import (
     DjangoProviderKeyValidator,
@@ -92,6 +92,27 @@ def test_owner_isolation_redacted_result_and_next_reads_after_replace_remove(
     with pytest.raises(StorageUnavailable):
         resolve(owned.a, owned.digest)  # Pending old files are never selected.
     assert resolve(owned.b, owned.digest).for_provider() == NEXT
+
+
+@pytest.mark.parametrize("state", ["absent", "removed", "unbound"])
+def test_only_missing_current_registration_has_a_typed_safe_error(
+    owned, state, monkeypatch
+):
+    if state == "absent":
+        store = owned.b
+    else:
+        store = owned.a
+        field = "key_name" if state == "removed" else "validation_fingerprint"
+        DeveloperProviderKey.objects.filter(owner_id=store.owner_id).update(
+            **{field: ""}
+        )
+
+    def unexpected_read(*args):
+        raise AssertionError("A missing registration must not read a file")
+
+    monkeypatch.setattr(developer_keys, "read_private_key", unexpected_read)
+    with pytest.raises(DeveloperKeyMissing, match="^Provider key is unavailable$"):
+        resolve(store, owned.digest)
 
 
 @pytest.mark.parametrize("value", ["a" * 12, "b" * 512])
@@ -175,6 +196,7 @@ def test_unsafe_file_or_directory_is_refused(owned, unsafe):
     ) as error:
         resolve(owned.a, owned.digest)
     assert str(owned.root) not in str(error.value) and KEY not in str(error.value)
+    assert not isinstance(error.value, DeveloperKeyMissing)
 
 
 @pytest.mark.parametrize(

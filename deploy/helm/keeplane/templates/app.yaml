@@ -10,6 +10,11 @@
 {{- if and .Values.app.localTrial.enabled (ne (int .Values.app.replicaCount) 1) }}
 {{- fail "SQLite localTrial requires exactly one app replica" }}
 {{- end }}
+{{- if and (or .Values.app.localTrial.enabled .Values.app.postgres.enabled) .Values.gateway.install (hasKey (index .Values "agentgateway-standalone").podSecurityContext "fsGroup") }}
+{{- if ne (index .Values "agentgateway-standalone").podSecurityContext.fsGroup nil }}
+{{- fail "Leave the managed gateway fsGroup unset; it can widen provider-key permissions" }}
+{{- end }}
+{{- end }}
 {{- if .Values.app.postgres.enabled }}
 {{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.app.image) }}
 {{- fail "app.postgres requires app.image pinned as repository@sha256:<64 lowercase hex characters>" }}
@@ -45,8 +50,26 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.app.localTrial.enabled }}
+      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled }}
       initContainers:
+        - name: prepare-provider-keys
+          image: {{ .Values.app.image | quote }}
+          imagePullPolicy: {{ .Values.app.pullPolicy }}
+          command: [python, /app/prepare_provider_volume.py]
+          volumeMounts:
+            - name: provider-keys
+              mountPath: /provider-keys
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, FOWNER, DAC_OVERRIDE]
+      {{- if .Values.app.localTrial.enabled }}
         - name: migrate-local-database
           image: {{ .Values.app.image | quote }}
           imagePullPolicy: {{ .Values.app.pullPolicy }}
@@ -74,6 +97,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+      {{- end }}
       {{- end }}
       containers:
         - name: app

@@ -7,9 +7,9 @@ model is a deterministic local provider that requests real read/edit tools.
 
 | Case | Required result |
 | --- | --- |
-| ICJ-01 | Offline wheel install/help and `init --preview`; instruction contents stay private and repository bytes stay unchanged. |
+| ICJ-01 | Offline wheel install/help and `init --preview` preserve repository bytes; saving and confirming a plan copies root CLAUDE.md to absent AGENTS.md byte for byte, preserves original bytes/modes and omits instruction contents from the plan/output. |
 | ICJ-02 | Existing account signs in through the real CSRF-protected browser flow; current identity and allowed catalog agree. |
-| ICJ-03 | Protected coding reads/edits the file using the server-held shared key; explicit instruction hash reaches the provider. |
+| ICJ-03 | Protected coding reads/edits the file using the server-held shared key; the exact migrated instruction content/hash reaches the provider. |
 | ICJ-04 | Refresh withdraws old access; a fresh process resumes the same native session with preserved assistant/tool history and the new credential. |
 | ICJ-05 | Two independently allowed projects/accounts cannot reuse each other's local session history; denied attempts make zero provider calls. |
 | ICJ-06 | Logout removes local credentials and prevents both protected requests and further refresh; retained history contains no OAuth pair bytes. |
@@ -39,10 +39,11 @@ native runtime. A test-only TLS relay forwards bytes without authorizing request
 Safe reports and private failure diagnostics stay in pytest's temporary directory;
 cleanup runs in `finally`, and any cleanup failure fails the test.
 
-This covers browser sign-in and shared-key coding. Device mode, cancellation,
-destructive migration, personal-key dispatch, external TLS deployment and release
-runtime selection are separate checks. Project registration here repeats the
-explicit fixture seed; it does not invent repository identity or init defaults.
+This covers browser sign-in, one reviewed root instruction copy and shared-key
+coding. Configuration conversion, full onboarding defaults, device mode,
+cancellation, personal-key dispatch, external TLS deployment and release runtime
+selection are separate checks. Project registration here repeats the explicit
+fixture seed; it does not invent repository identity or init defaults.
 
 The separate `test_installed_cli_cancellation.py` case opts into two additional
 checks on a known saved session. It sends SIGINT/SIGTERM only after the provider

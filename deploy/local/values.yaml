@@ -35,7 +35,8 @@ agentgateway-standalone:
           name: keeplane-gateway-keys
           key: admin-key-hash
   podSecurityContext:
-    fsGroup: 65532
+    # Keys already belong to the gateway's UID. Do not widen this shared PVC.
+    fsGroup: null
   extraVolumes:
     - name: provider-keys
       persistentVolumeClaim:

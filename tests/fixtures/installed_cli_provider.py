@@ -8,7 +8,8 @@ from typing import ClassVar
 from tests.fixtures.cli_coding_provider import Handler
 
 RULE = "INSTALLED_CLI_RULE: preserve the addition function's interface."
-DIGEST = hashlib.sha256((RULE + "\n").encode()).hexdigest()
+MIGRATION_TEXT = RULE + "\nPRIVATE_MIGRATION_INSTRUCTION\n"
+DIGEST = hashlib.sha256(MIGRATION_TEXT.encode()).hexdigest()
 
 
 class InstalledCliProvider(Handler):
@@ -57,7 +58,8 @@ class InstalledCliProvider(Handler):
                 system = json.dumps(
                     [row for row in body["messages"] if row.get("role") == "system"]
                 )
-                assert f"SHA-256 {DIGEST})\\n{RULE}" in system
+                expected = json.dumps(f"SHA-256 {DIGEST})\n{MIGRATION_TEXT}")[1:-1]
+                assert expected in system
                 last = max(
                     index
                     for index, row in enumerate(body["messages"])

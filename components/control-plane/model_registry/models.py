@@ -32,6 +32,7 @@ class DeveloperProviderKey(models.Model):
     key_name = models.CharField(max_length=36, default="", blank=True)
     pending_key_name = models.CharField(max_length=36, default="", blank=True)
     validation_fingerprint = models.CharField(max_length=64, default="", blank=True)
+    refused = models.BooleanField(default=False)
 
     class Meta:
         constraints = [

@@ -121,10 +121,66 @@ def selected_callback(host, model_id, fingerprint):
     return result
 
 
-def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
+def personal_exchange(host, model_id, fingerprint, provider):
+    if provider not in ("openAI", "anthropic"):
+        raise RuntimeInstallationUnavailable("The Personal provider is unsupported")
+    result = {
+        "host": host,
+        "path": "/internal/runtime/installed-provider-token",
+        "cache": {"maxEntries": 0},
+        "additionalParams": {
+            "project_id": 'request.headers["x-keeplane-project-id"]',
+            "model_id": json.dumps(model_id),
+            "definition_fingerprint": json.dumps(fingerprint),
+        },
+        "policies": {
+            "backendAuth": {
+                "key": {
+                    "value": {"file": "/installed/callback-key"},
+                    "location": {
+                        "header": {
+                            "name": "x-keeplane-gateway-credential",
+                            "prefix": "",
+                        }
+                    },
+                }
+            }
+        },
+    }
+    if provider == "anthropic":
+        result["authorizationLocation"] = {
+            "header": {"name": "x-api-key", "prefix": ""}
+        }
+    return result
+
+
+def overlay(
+    base,
+    models,
+    targets,
+    *,
+    callback_host="app:3000",
+    port=5000,
+    personal_providers=None,
+):
     if not isinstance(base, dict) or set(models) != set(targets) or not models:
         raise RuntimeInstallationUnavailable(
             "Declare exact installed models and targets"
+        )
+    personal = {
+        model_id for model_id, row in models.items() if row["key_choice"] == "personal"
+    }
+    personal_providers = {} if personal_providers is None else personal_providers
+    if (
+        not isinstance(personal_providers, dict)
+        or set(personal_providers) != personal
+        or any(
+            value not in ("openAI", "anthropic")
+            for value in personal_providers.values()
+        )
+    ):
+        raise RuntimeInstallationUnavailable(
+            "Declare exact validated Personal providers"
         )
     result = deepcopy(base)
     gateway = result.get("gateways", {}).get("default", {})
@@ -150,6 +206,7 @@ def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
     config["sensitiveHeaders"] = sorted(
         set(config.get("sensitiveHeaders", []))
         | {"authorization", "x-keeplane-gateway-credential"}
+        | ({"x-api-key"} if "anthropic" in personal_providers.values() else set())
     )
     result.setdefault("binds", []).append(
         {
@@ -202,11 +259,33 @@ def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
                 },
             }
         )
+        if declaration["key_choice"] == "personal":
+            policies.append(
+                {
+                    "name": {"name": "keeplane-key-" + suffix, "namespace": ""},
+                    "target": deepcopy(target),
+                    "policy": {
+                        "backendAuth": {
+                            "oauthTokenExchange": personal_exchange(
+                                callback_host,
+                                model_id,
+                                declaration["fingerprint"],
+                                personal_providers[model_id],
+                            )
+                        }
+                    },
+                }
+            )
         # Backend transformations run after successful final auth and native
         # provider-key injection. Never carry caller headers to the provider.
         outbound = '{"content-type": "application/json"'
-        if declaration["key_choice"] == "shared":
-            outbound += ', "authorization": request.headers["authorization"]'
+        if declaration["key_choice"] in ("shared", "personal"):
+            header = (
+                "x-api-key"
+                if personal_providers.get(model_id) == "anthropic"
+                else "authorization"
+            )
+            outbound += f', "{header}": request.headers["{header}"]'
         outbound += "}"
         policies.append(
             {
@@ -218,4 +297,3 @@ def overlay(base, models, targets, *, callback_host="app:3000", port=5000):
             }
         )
     return result
-

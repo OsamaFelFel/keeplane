@@ -12,13 +12,14 @@ from zipfile import ZipFile
 import pytest
 
 from tests.unit import test_cli_browser_login as browser_cases
+from tests.unit.test_cli_provider_keys import api as api
 
 issuer = browser_cases.issuer
 ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.optional
-def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issuer):
+def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issuer, api):
     configured = os.environ.get("KEEPLANE_CLI_BUILD_PYTHON")
     if not configured:
         pytest.skip(
@@ -132,6 +133,8 @@ def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issu
     assert "--instructions" in run([command, "code", "--help"])
     assert "--profile" in run([command, "refresh", "--help"])
     assert "--preview" in run([command, "init", "--help"])
+    assert "--project" in run([command, "keys", "list", "--help"])
+    assert "--model" in run([command, "keys", "check", "--help"])
     version = json.loads(
         run(
             [
@@ -161,7 +164,7 @@ def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issu
         applied = json.loads(run([command, "init", "--apply", plan, "--directory", repository]))
         assert applied["mode"] == "partial-instruction-migration"
         assert (repository / "AGENTS.md").read_bytes() == (repository / "CLAUDE.md").read_bytes()
-    profile = tmp_path / "profile"
+    profile = tmp_path / "issuer-profile"
     output = run(
         [
             command,
@@ -195,6 +198,15 @@ def test_offline_wheel_install_commands_and_instruction_resources(tmp_path, issu
     )
     assert "removed" in run([command, "logout", "--profile", profile])
     assert issuer.revocations == 1 and not (profile / "credential.json").exists()
+
+    api.stored, api.key_status = True, "refused"
+    checked = json.loads(run([
+        command, "keys", "check", "--profile", api.profile,
+        "--model", api.model,
+    ]))
+    assert checked["status"] == "refused"
+    assert api.calls[-1][0:2] == ("POST", "/api/runtime/provider-keys/check")
+    assert api.calls[-1][3] == {"model_id": api.model}
 
     # Exercise the installed adapter's actual plugin path without a native runtime/provider.
     probe = away / "resources.py"

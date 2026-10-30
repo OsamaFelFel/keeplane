@@ -1,9 +1,12 @@
 # Guarded model access
 
 The managed local preview can expose a guarded model endpoint on loopback port
-5000. Start the normal preview and add an approved keyless or shared model in
-Models first. Only newly registered models with a stable native ID can be
-enrolled; existing name-only models are not rewritten.
+5000. Start the normal preview and add an approved model in Models first:
+keyless/shared models and Personal OpenAI/Anthropic models are supported.
+Only newly registered models with a stable native ID can be enrolled; existing
+name-only models are not rewritten. Developers
+[add their own key](cli-provider-key-commands.md) before using a Personal model;
+keys remain on the server.
 
 For browser CLI sign-in, supply an explicitly prepared OAuth-capable trial app
 image and the current first-party CLI. The default preview image does not include
@@ -29,12 +32,14 @@ Fix the reported setup problem, then rerun the same opt-in command. Existing
 accounts, API models and keys remain stored. Do not edit the generated manifest
 to make a failed check pass. Ordinary startup without runtime flags is unchanged.
 
-Changing a model, key or gateway configuration can stop access. After making
-changes through Models, rerun the opt-in command so a fresh gateway loads and
-verifies the new state. Health changes also stop this fixed enrollment until
-its declared and applied state match again.
+After changing a model, shared key or gateway configuration, rerun the opt-in
+command so a fresh gateway verifies the new state. Personal key changes apply
+to the next request. Normal provider failures can recover on the next request;
+endpoint eviction or wiring changes still require fresh enrollment.
+After upgrading to the new health signature, rerun the launcher once to enroll
+a fresh gateway. Existing manifests are not accepted automatically.
 
-This is an opt-in managed local trial. Personal keys, virtual/fallback models,
+This is an opt-in managed local trial. Virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its
 current scope. The installer, isolated CLI journey and host installation/restart
 flow have native acceptance. The host check does not run the full preview
