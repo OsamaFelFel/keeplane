@@ -89,7 +89,8 @@ class DjangoDeveloperKeyStore:
             raise StorageUnavailable("This provider key requires validation")
         if present and not registration_only and not managed_key_available(self.directory, self._path(row.key_name)):
             raise StorageUnavailable("Provider key file is unavailable")
-        return {"model_id": model_id, "status": "added" if present else "missing",
+        status = "refused" if present and row.refused else "added" if present else "missing"
+        return {"model_id": model_id, "status": status,
                 "cleanup_pending": bool(row and row.pending_key_name)}
 
     def status(self, model_id, *, registration_only=False):
@@ -117,7 +118,8 @@ class DjangoDeveloperKeyStore:
                     VerifiedProviderKey(str(owner.pk), model_id, digest)
                 )
                 row = DeveloperProviderKey.objects.select_for_update().filter(
-                    owner=owner, model_id=model_id, validation_fingerprint=digest
+                    owner=owner, model_id=model_id, validation_fingerprint=digest,
+                    refused=False,
                 ).first()
                 if not row or not row.key_name:
                     raise DeveloperKeyMissing
@@ -159,6 +161,49 @@ class DjangoDeveloperKeyStore:
             raise DeveloperKeyUnverified("The provider key could not be checked")
         return accepted
 
+    def _require_current(self, verification):
+        try:
+            self.validate_key.require_current(verification)
+        except Exception:
+            raise DeveloperKeyUnverified(
+                "The current model could not be verified; check the key again"
+            ) from None
+
+    def check(self, model_id):
+        """Explicitly recheck the saved key; status/list never contact a provider.
+
+        The owner lock orders checks with replacements and removal. Verify the
+        saved definition before secret contact and after the provider responds,
+        including refusals; a timeout or changed definition records no verdict.
+        """
+        model_id = self._model(model_id)
+        with transaction.atomic(durable=True):
+            owner = self._owner(lock=True)
+            row = DeveloperProviderKey.objects.select_for_update().filter(
+                owner=owner, model_id=model_id
+            ).first()
+            if not row or not row.key_name:
+                return self._status(model_id, row, registration_only=True)
+            digest = row.validation_fingerprint
+            if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+                raise DeveloperKeyUnverified("This provider key requires validation")
+            verification = VerifiedProviderKey(str(owner.pk), model_id, digest)
+            self._require_current(verification)
+            credential = read_private_key(self.directory, row.key_name)
+            try:
+                accepted = self._validate(model_id, credential.for_provider())
+            except DeveloperKeyRefused:
+                self._require_current(verification)
+                refused = True
+            else:
+                if accepted != verification:
+                    raise DeveloperKeyUnverified("The current model changed")
+                self._require_current(accepted)
+                refused = False
+            row.refused = refused
+            row.save(update_fields=["refused"])
+            return self._status(model_id, row, registration_only=True)
+
     def put(self, model_id, value):
         """Add/replace only after server-issued, definition-bound verification.
 
@@ -180,20 +225,16 @@ class DjangoDeveloperKeyStore:
             with transaction.atomic(durable=True):
                 owner = self._owner(lock=True)
                 accepted = self._validate(model_id, value)
-                try:
-                    self.validate_key.require_current(accepted)
-                except Exception:
-                    raise DeveloperKeyUnverified(
-                        "The current model could not be verified; check the key again"
-                    ) from None
+                self._require_current(accepted)
                 row, _ = DeveloperProviderKey.objects.get_or_create(owner=owner, model_id=model_id)
                 if not self._drain(row):
                     raise StorageUnavailable("Previous provider key cleanup is pending")
                 new_name = Path(save(self.directory, value)).name
                 row.pending_key_name, row.key_name = row.key_name, new_name
                 row.validation_fingerprint = accepted.definition_fingerprint
+                row.refused = False
                 row.save(
-                    update_fields=["key_name", "pending_key_name", "validation_fingerprint"]
+                    update_fields=["key_name", "pending_key_name", "validation_fingerprint", "refused"]
                 )
         except BaseException as error:
             if new_name and not self._remove(new_name):
@@ -212,5 +253,6 @@ class DjangoDeveloperKeyStore:
                 if not self._drain(row):
                     raise StorageUnavailable("Previous provider key cleanup is pending")
                 row.pending_key_name, row.key_name = row.key_name, ""
-                row.save(update_fields=["key_name", "pending_key_name"])
+                row.refused = False
+                row.save(update_fields=["key_name", "pending_key_name", "refused"])
         return self._finish(model_id)
