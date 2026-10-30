@@ -16,7 +16,7 @@ FROM python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d9
 USER 0
 COPY components/control-plane/licenses/ /usr/share/keeplane/licenses/
 COPY components/control-plane/package_postgres.py /tmp/package_postgres.py
-RUN apk add --no-cache libpq-dev=18.6-r0 gcc=15.2.0-r5 musl-dev=1.2.6-r2 \
+RUN apk add --no-cache libpq-dev=18.6-r0 gcc=15.2.0-r5 musl-dev=1.2.6-r3 \
     && pip install --no-cache-dir setuptools==80.9.0 \
     && python /tmp/package_postgres.py build
 
