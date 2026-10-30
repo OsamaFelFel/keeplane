@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+from http.client import IncompleteRead
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -36,7 +37,14 @@ request = Request(
 )
 try:
     with urlopen(request, timeout=5) as response:
-        raw = response.read(65537)
+        incomplete = False
+        try:
+            raw = response.read(65537)
+        except (IncompleteRead, ConnectionError, TimeoutError) as error:
+            # Only protocol checks expect a stream that ends early.
+            if not options.get("observe_protocol"):
+                raise
+            raw, incomplete = getattr(error, "partial", b""), True
         if len(raw) > 65536:
             raise RuntimeError("Disposable protocol response is too large")
         status = response.status
@@ -56,7 +64,8 @@ try:
                     {
                         "status": status,
                         "content_type": response.headers.get("Content-Type"),
-                        "body": raw.decode("utf-8"),
+                        "body": raw.decode("utf-8", "replace"),
+                        "incomplete": incomplete,
                     }
                 )
             )

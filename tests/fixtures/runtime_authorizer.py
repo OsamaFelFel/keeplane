@@ -115,8 +115,17 @@ class Model(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if self.protocol:
-            from runtime_protocol import send_protocol_response
+            from runtime_protocol import (
+                received_settings,
+                send_failed_stream,
+                send_protocol_response,
+            )
 
+            append("settings", received_settings(body))
+            failure = STATE / "protocol-failure"
+            if failure.exists():
+                send_failed_stream(self, body, failure.read_text())
+                return
             append("tool_result_seen", send_protocol_response(self, body))
             return
         data = json.dumps(
@@ -419,7 +428,11 @@ def command(action, arguments):
             "provider_actor": rows("provider_actor"),
             "forged_headers": rows("forged_headers"),
             "generation_forwarded": rows("generation_forwarded"),
+            "settings": rows("settings"),
         }
+    elif action == "protocol_failure":
+        assert arguments in ("before", "mid")
+        (STATE / "protocol-failure").write_text(arguments)
     elif action in ("actor_key_remove", "actor_key_replace", "actor_id"):
         from runtime_actor_keys import actors, change_key
 
@@ -485,6 +498,8 @@ def command(action, arguments):
             "provider_actor",
             "forged_headers",
             "generation_forwarded",
+            "settings",
+            "protocol-failure",
         ):
             (STATE / name).unlink(missing_ok=True)
 
