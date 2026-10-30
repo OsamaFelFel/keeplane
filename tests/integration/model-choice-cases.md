@@ -20,6 +20,8 @@ Spec 004 ST11 “No key yet” and “Replace or remove my key”. Run
 | MC-13 | CLI receives a fallback | The runtime starts with the other model; stderr explains why and shows `keeplane keys set --model <model>`, with credentials omitted. |
 | MC-14 | CLI receives a choice outside the allowed catalog or a malformed choice | The runtime never starts. |
 | MC-15 | Older server without the route (404) | The CLI keeps the requested model; the gateway still refuses a missing key. A 403 or 503 stops before the runtime. |
+| MC-16 | Spec 004 ST23: a model added outside Keeplane is removed from Keeplane | It stays in the gateway but is never chosen; the gateway entry check refuses it. Removing the last other model leaves `model_id` `null`. |
+| MC-17 | The shared fallback filter is asked again with every model already tried | Each call returns the next permitted model by ID, then `null`. A requested model with a usable own key is itself a candidate; without one it is not. |
 
 The server cases use real Django accounts, policy, enrollment files and
 owner-key registrations with synthetic provider admission, as in the

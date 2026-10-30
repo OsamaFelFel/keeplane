@@ -108,8 +108,21 @@ class DjangoModelChoice:
         }
         if reason is None:
             return result
-        result["model_id"] = None
-        for candidate in sorted(self.policy.eligible_model_ids(project_id) - {model_id}):
+        result["model_id"] = self.next_allowed(
+            session_token, owner_id, project_id, skip={model_id}
+        )
+        return result
+
+    def next_allowed(self, session_token, owner_id, project_id, *, skip):
+        """The one filter every fallback uses: the first permitted model, or None.
+
+        A candidate must be registered and set up in Keeplane with its current
+        definition (so a model only present in the gateway never qualifies),
+        allowed for the project's class, and pass this mode's runtime gate,
+        including shared or the developer's own key availability. The order is
+        model ID until complexity routing (task 004-03) sets a preference.
+        """
+        for candidate in sorted(self.policy.eligible_model_ids(project_id) - set(skip)):
             if self._usable(owner_id, candidate):
                 try:
                     # Recheck the developer, project and class for the final choice.
@@ -118,9 +131,8 @@ class DjangoModelChoice:
                     if error.status == 401:
                         raise
                     continue
-                result["model_id"] = candidate
-                break
-        return result
+                return candidate
+        return None
 
 
 @never_cache

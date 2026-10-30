@@ -3,11 +3,13 @@
 import hashlib
 
 import pytest
+from accounts.cli_credentials import RuntimeIdentity
 from accounts.models import User
 from model_registry import model_choice, runtime_views
 from model_registry.fingerprints import fingerprint
 from model_registry.models import DeveloperProviderKey, ModelApproval
 from model_registry.policy import DjangoModelPolicy
+from projects.access import organization_project_access
 
 from tests.integration.test_installed_personal_runtime import KEY
 from tests.integration.test_installed_runtime import send as entry
@@ -167,6 +169,49 @@ def test_candidates_are_tried_in_model_id_order(choice):
     assert ask(choice).json() == chosen(choice, "outside", "missing")
     ModelApproval.objects.filter(pk="outside").update(approved_classes=["Public"])
     assert ask(choice).json() == chosen(choice, "public", "missing")
+
+
+def test_a_removed_model_is_never_chosen_and_gets_no_work(choice):
+    # Spec 004 ST23: after removal, a model added outside Keeplane stays in the
+    # gateway, but it is gateway-only again and must get no work.
+    choice.install("public")
+    choice.install("outside")
+    choice.store.remove("private")
+    assert ask(choice).json() == chosen(choice, "outside", "missing")
+    choice.stores.catalog.remove("outside")
+    assert ask(choice).json() == chosen(choice, "public", "missing")
+    # Its stale enrollment no longer matches any setup, so the gateway entry
+    # check fails closed before any provider contact.
+    assert entry(choice, model_id="outside").status_code in (403, 503)
+    choice.stores.catalog.remove("public")
+    assert ask(choice).json() == chosen(choice, None, "missing")
+
+
+def chooser(f):
+    return model_choice.DjangoModelChoice(
+        RuntimeIdentity(f.stores.identity),
+        DjangoModelPolicy(f.gateway),
+        f.gateway,
+        str(f.key_directory),
+        project_access=organization_project_access,
+        managed=True,
+        manifest_file=str(f.manifest_file),
+    )
+
+
+def test_next_allowed_skips_every_model_already_tried(choice):
+    # The shared fallback filter: a later fallback passes all models it tried.
+    choice.install("public")
+    choice.install("outside")
+    actor = choice.actor["id"]
+    pick = chooser(choice).next_allowed
+    assert pick(choice.token, actor, choice.project, skip={"private"}) == "outside"
+    assert pick(choice.token, actor, choice.project, skip={"private", "outside"}) == "public"
+    assert pick(choice.token, actor, choice.project, skip={"private", "outside", "public"}) is None
+    # The developer's own usable key makes the requested model a candidate too.
+    assert pick(choice.token, actor, choice.project, skip=set()) == "outside"
+    choice.store.remove("private")
+    assert pick(choice.token, actor, choice.project, skip={"outside", "public"}) is None
 
 
 def test_requested_model_without_own_key_is_unchanged(choice):
