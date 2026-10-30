@@ -13,6 +13,37 @@ choose **Save**. The table shows the saved value. **Cancel** keeps the current
 assignment. If Keeplane cannot confirm the result, choose **Check** to read it
 back; the dialog does not send the change again automatically.
 
+## What a project's class does
+
+Once a project has a class, each of its tasks goes only to models approved for
+that class in **Models and routing**. Keeplane checks this when a task starts
+and again for the model the gateway selects, so a fallback, a model the
+developer names, or a model set in the repository's own runtime settings cannot
+reach a model approved only for another class. Admin accounts get the same
+restriction.
+
+If the project's approved models can't be used right now (for example a model
+is not installed or its shared provider key is gone), the developer's task
+stops before anything is sent and says so:
+
+```text
+coder is approved for this project but can't be used right now, so nothing was sent. Choose another model allowed for this project, or ask an admin to check it in Models and routing.
+```
+
+If no model is approved for the class at all, the task stops with "No models are
+available for this project yet". A project with no class, or any project while
+classes are off, may use any model that is set up.
+
+```mermaid
+flowchart LR
+  Task[Developer task] --> Class{Project class?}
+  Class -->|none| Any[Any set-up model]
+  Class -->|set| Approved[Only models approved for it]
+  Approved -->|none usable| Stop[Stop; nothing sent]
+  Approved --> Gateway[Gateway checks entry and selected model]
+  Any --> Gateway
+```
+
 For integration checks, a signed-in admin can read `/api/projects` on the
 Keeplane application. Use `search`, `page` and `page_size` to narrow the result;
 pages contain 25 projects by default and at most 50. Developers cannot read

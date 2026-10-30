@@ -30,8 +30,9 @@ The latest live suite records [HTTP evidence](https://github.com/OsamaFelFel/kee
 It creates and removes one trial class and one trial approval. It requires the
 `local-fixture` model to be present and unapproved before it starts, so it
 will refuse to overwrite your own approval. The isolated database suite checks
-the project-in-use rule; there is no Projects UI or API yet.
+the project-in-use rule.
 
-This is the starter-class part of Spec 005. Project class assignment, routing
-enforcement and personal-data detection remain to be built and tested. The
+Assign a class to a project in [Projects](projects.md); that page also explains
+how the class limits which models get the project's tasks. Personal-data
+detection is not built yet. The
 Docker model preview at port 3000 uses this same protected account session.

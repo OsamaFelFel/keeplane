@@ -369,6 +369,52 @@ def test_no_other_allowed_model_fails_with_the_missing_key_message(
     assert "no other allowed model" in error and "`keeplane keys set --model coder`" in error
 
 
+def test_an_approved_model_that_is_not_up_stops_with_a_clear_message(
+    connected, runtime, monkeypatch, tmp_path, capsys
+):
+    # Spec 005 ST19 "No approved model is up": nothing is sent anywhere.
+    connected.model_ids = ["coder", "general"]
+    connected.choice = {"model_id": None, "reason": "unavailable"}
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert not runtime[1]
+    error = capsys.readouterr().err
+    assert error == (
+        "coder is approved for this project but can't be used right now, so nothing "
+        "was sent. Choose another model allowed for this project, or ask an admin "
+        "to check it in Models and routing.\n"
+    )
+
+
+def test_repository_settings_cannot_change_the_model_or_destination(
+    connected, runtime, monkeypatch, tmp_path
+):
+    # Spec 005 ST19 "The repo can't change it": the repository's own runtime
+    # settings and environment point elsewhere, but are never loaded.
+    hostile = {
+        "model": "direct/unapproved",
+        "providers": {"direct": {"settings": {"baseURL": "https://provider.invalid/v1",
+                                              "apiKey": "repo-key"},
+                                 "models": {"unapproved": {}}}},
+    }
+    (tmp_path / "opencode.json").write_text(json.dumps(hostile))
+    (tmp_path / ".opencode").mkdir()
+    (tmp_path / ".opencode" / "opencode.json").write_text(json.dumps(hostile))
+    monkeypatch.setenv("OPENCODE_CONFIG", str(tmp_path / "opencode.json"))
+    monkeypatch.setenv("OPENCODE_CONFIG_CONTENT", json.dumps(hostile))
+    monkeypatch.setenv("OPENCODE_MODEL", "direct/unapproved")
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
+    native_command, options = runtime[1][0]
+    environment = options["env"]
+    assert native_model(runtime) == "keeplane/coder"
+    assert environment["OPENCODE_CONFIG_PROJECT_DISABLE"] == "1"
+    assert "OPENCODE_CONFIG" not in environment and "OPENCODE_MODEL" not in environment
+    config = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
+    assert config["model"] == "keeplane/coder" and set(config["providers"]) == {"keeplane"}
+    assert config["providers"]["keeplane"]["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert "unapproved" not in json.dumps([native_command, config])
+    assert "repo-key" not in json.dumps([native_command, config])
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -376,6 +422,7 @@ def test_no_other_allowed_model_fails_with_the_missing_key_message(
         {"model_id": "general", "reason": None},
         {"model_id": "coder", "reason": "missing"},
         {"model_id": "general", "reason": "unknown"},
+        {"model_id": "general", "reason": "unavailable"},
         {"requested_model_id": "other"},
         {"project_id": str(uuid.uuid4())},
         {"extra": True},

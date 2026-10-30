@@ -20,6 +20,10 @@ NO_MODELS = ("No models are available for this project yet, so nothing was sent.
              "Ask an admin to add a model, or approve one for this project's class, "
              "in Models and routing.")
 
+UNAVAILABLE = ("{requested} is approved for this project but can't be used right now, so "
+               "nothing was sent. Choose another model allowed for this project, or ask "
+               "an admin to check it in Models and routing.")
+
 REASONS = {
     "missing": "No provider key is added for {requested}",
     "refused": "The provider refused your key for {requested}",
@@ -37,6 +41,8 @@ def chosen_model(issuer, project_id, model, credential, notify):
         raise
     if choice["reason"] is None:
         return model
+    if choice["reason"] == "unavailable":
+        raise ConnectionError(UNAVAILABLE.format(requested=model), 503)
     why = REASONS[choice["reason"]].format(requested=model)
     fix = "keeplane keys set --model " + model
     action = "Add one" if choice["reason"] == "missing" else "Replace it"
