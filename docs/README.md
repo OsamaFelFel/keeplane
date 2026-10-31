@@ -17,6 +17,7 @@
 | Read the experimental allowed-model catalog | [Runtime catalog](guide/runtime-catalog.md) |
 | Test internal gateway policy decisions | [Runtime authorization](architecture/runtime-authorization.md) |
 | Understand the components | [Architecture](architecture/local-preview.md) |
+| Find the exact component versions tested together | [Component manifest](architecture/component-manifest.md) |
 
 Start with the guide for your task. These documents describe the current
 development application and identify unfinished behavior where it affects use.

@@ -97,7 +97,8 @@ only the current integration trial. Before exposing the two modes as a release
 contract, we need to:
 
 1. Select a gateway artifact that passes the license and capability checks.
-   Record its supported versions in the compatibility manifest.
+   Record its supported versions in the
+   [component manifest](../architecture/component-manifest.md).
 2. Extend the local existing-gateway preflight for the selected release gateway:
    check registration permission, TLS and authentication, and fail before
    changing the customer's gateway if any check fails. The current trial checks

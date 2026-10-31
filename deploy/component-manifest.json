@@ -1,0 +1,139 @@
+{
+  "manifest_version": 1,
+  "release_status": "pre-release",
+  "summary": "Component set the repository currently builds and tests. Nothing here is a supported release yet.",
+  "build": {
+    "keeplane_commit": null,
+    "app_image_digest": null,
+    "chart_package_digest": null,
+    "note": "Known only when a build runs. deploy/stamp_component_manifest.py writes a filled copy for that build; the committed file keeps null."
+  },
+  "chart": {
+    "path": "deploy/helm/keeplane",
+    "name": "keeplane",
+    "version": "0.1.0",
+    "app_version": "0.1.0-preview"
+  },
+  "app_image": {
+    "default_reference": "keeplane-preview:local",
+    "pinned": false,
+    "note": "Local preview tag built from components/control-plane/Dockerfile. No registry image is published. PostgreSQL installs must supply repository@sha256:<digest>.",
+    "base_image": "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a",
+    "python": "3.13.16",
+    "alpine_release": "v3.24"
+  },
+  "gateway": {
+    "status": "integration-trial",
+    "release_selected": false,
+    "note": "The current agentgateway preview is not a release choice. The release gateway is still being selected.",
+    "product": "agentgateway",
+    "runtime_version": "1.6.0",
+    "chart": {
+      "name": "agentgateway-standalone",
+      "version": "v1.6.0",
+      "repository": "oci://cr.agentgateway.dev/charts",
+      "archive": "deploy/helm/keeplane/charts/agentgateway-standalone-v1.6.0.tgz",
+      "archive_sha256": "2ea5a86c46e8e53693bda892ae7bea7040a83e4cdb41ee7398c2ac7b9740b715",
+      "lock_digest": "sha256:787d85989073cb626dd11b638c87279aa86ae87daf35574e95d8801684a6caeb"
+    },
+    "image": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c"
+  },
+  "components": {
+    "control_plane": {
+      "python_packages": {
+        "Django": "5.2.18",
+        "djangorestframework": "3.18.3",
+        "asgiref": "3.12.1",
+        "sqlparse": "0.6.0",
+        "gunicorn": "26.2.0",
+        "packaging": "26.1"
+      },
+      "optional": {
+        "postgres": {
+          "psycopg": "3.3.6",
+          "libpq": "18.6-r0"
+        },
+        "cli_sign_in": {
+          "django-oauth-toolkit": "3.4.1"
+        }
+      }
+    },
+    "admin_ui": {
+      "package_version": "0.0.0",
+      "runtime_dependencies": {
+        "@hookform/resolvers": "5.9.1",
+        "@radix-ui/react-icons": "1.3.2",
+        "@tailwindcss/vite": "4.3.3",
+        "@tanstack/react-table": "8.21.3",
+        "class-variance-authority": "0.7.1",
+        "cn": "0.4.0",
+        "radix-ui": "1.7.0",
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+        "react-hook-form": "7.89.0",
+        "react-router": "8.4.0",
+        "tailwindcss": "4.3.3",
+        "tw-animate-css": "1.4.0",
+        "zod": "4.6.5"
+      },
+      "note": "Resolved versions from package-lock.json; the lock file pins the full dependency tree."
+    },
+    "cli": {
+      "package": "keeplane-cli",
+      "version": "0.0.0",
+      "coding_runtime": {
+        "name": "OpenCode V2",
+        "version": "2.0.27"
+      }
+    }
+  },
+  "api": {
+    "declared_version": null,
+    "note": "HTTP API paths (/api/...) carry no version and there is no OpenAPI document yet. Pre-release changes may break them."
+  },
+  "database_schema": {
+    "migration_heads": {
+      "accounts": "0003_cli_credential_binding",
+      "audit": "0001_initial",
+      "data_classes": "0001_initial",
+      "gateway_publications": "0002_definitionpublication",
+      "model_registry": "0006_developer_key_refused",
+      "projects": "0001_initial"
+    },
+    "postgres_server": {
+      "supported_versions": [],
+      "note": "Tested only against the fixture image pinned in deploy/local/stack.lock.json. No supported server versions are declared."
+    }
+  },
+  "features": {
+    "on_by_default": [
+      "managed_gateway"
+    ],
+    "off_by_default": [
+      "cli_sign_in",
+      "data_classes",
+      "gateway_ingress_network_policy",
+      "ingress",
+      "local_trial",
+      "optional_audit_kinds",
+      "postgres"
+    ]
+  },
+  "existing_gateway": {
+    "supported_versions": [],
+    "tested_versions": [
+      {
+        "product": "agentgateway",
+        "version": "1.6.0",
+        "image": "cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c",
+        "where": "Local kind trial: a separately installed gateway in another namespace (deploy/local/supplied-gateway-values.yaml)."
+      }
+    ],
+    "preflight_expected_version": "1.6.0",
+    "note": "No customer-run gateway version is supported yet. The preflight accepts only the exact expected version."
+  },
+  "upgrade_paths": {
+    "tested": [],
+    "note": "No version has shipped, so no upgrade path is recorded."
+  }
+}
