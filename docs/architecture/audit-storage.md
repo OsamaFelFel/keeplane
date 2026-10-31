@@ -26,6 +26,17 @@ flowchart LR
 - **Optional kinds** (settings changes, held-back requests, model answers) are
   written only while their switch in `accounts_auditoption` is on. Each record
   commits in the same transaction as the change it describes.
+- **Settings changes** are written by the stores that make the change:
+  `DjangoModelCatalog.approve` and `remove` for models,
+  `DjangoDataClassStore` for the class mode and each class, and
+  `DjangoProjectClasses.assign` for a project's class. Each holds the
+  settings row lock, then calls `DjangoAuditStore.record_in_transaction`
+  before the transaction commits. A refused or unchanged request writes
+  nothing. A failed record write raises and rolls the change back. A model
+  change that also edits the gateway changes the gateway first. If the
+  database write then fails, Keeplane tries to undo a new model or a key
+  replacement in the gateway. A model already deleted from the gateway stays
+  deleted while the request reports that storage is unavailable.
 - **Break-glass sign-ins** are always written, in the same transaction as the
   session. If the record cannot be written, the sign-in fails.
 - A record holds its kind, UTC time, account ID, username and a short
@@ -73,4 +84,7 @@ file and keeps their original times.
 The [persistence cases](../../tests/integration/audit-persistence-cases.md) run
 Show, search and paging across two app processes, after a restart and after an
 upgrade, on SQLite and, when configured, PostgreSQL. The
+[settings-change cases](../../tests/integration/settings-change-record-cases.md)
+cover each model and data-class change, refused changes and failed record
+writes on the same databases. The
 [browser cases](../../tests/browser/audit-cases.md) cover the screen.

@@ -377,6 +377,7 @@ class ModelManagement:
                 self.actor(),
                 owned_by_keeplane=True,
                 key_choice="shared",
+                shared_key_replaced=True,
             )
         except (ValueError, IdentityError, StorageUnavailable):
             restored = restore_previous()

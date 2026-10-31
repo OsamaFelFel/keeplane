@@ -7,6 +7,39 @@ from django.db.models import Exists, OuterRef
 from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
 
 
+def _names(values):
+    return ", ".join(values) or "none"
+
+
+def describe_model_change(model_id, previous, values, shared_key_replaced=False):
+    """Say what an admin changed, naming no key, key file or prompt."""
+    if previous is None:
+        return (
+            f"Set up model {model_id}; provider key: {values['key_choice']}; "
+            f"approved classes: {_names(values['approved_classes'])}"
+        )
+    changes = []
+    if shared_key_replaced:
+        changes.append("replaced the shared provider key")
+    if previous["key_choice"] != values["key_choice"]:
+        changes.append(
+            f"provider key: {previous['key_choice']} to {values['key_choice']}"
+        )
+    if previous["approved_classes"] != values["approved_classes"]:
+        changes.append(
+            f"approved classes: {_names(previous['approved_classes'])} "
+            f"to {_names(values['approved_classes'])}"
+        )
+    if (
+        not shared_key_replaced
+        and previous["gateway_fingerprint"] != values["gateway_fingerprint"]
+    ):
+        changes.append("approved its changed gateway definition")
+    if not changes:
+        changes.append("set up again")
+    return f"Changed model {model_id}: " + "; ".join(changes)
+
+
 @storage_service
 class DjangoModelCatalog:
     def __init__(self, audit):
@@ -56,6 +89,7 @@ class DjangoModelCatalog:
         actor=None,
         owned_by_keeplane=False,
         key_choice="none",
+        shared_key_replaced=False,
     ):
         if key_choice not in ProviderKeyChoice.values:
             raise ValueError("Choose a supported provider key option")
@@ -88,7 +122,9 @@ class DjangoModelCatalog:
                 self.audit.record_in_transaction(
                     "settings",
                     *actor,
-                    f"Set up model {model_id}; key choice: {key_choice}; approved classes: {', '.join(ordered)}",
+                    describe_model_change(
+                        model_id, previous, values, shared_key_replaced
+                    ),
                 )
         return {
             "model_id": model_id,

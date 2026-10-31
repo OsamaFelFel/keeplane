@@ -37,7 +37,8 @@ class DjangoDataClassStore:
         if type(enabled) is not bool:
             raise DataClassError(400, "Choose whether to use data classes")
         with settings_change() as settings:
-            if enabled and not DataClass.objects.exists():
+            starters = enabled and not DataClass.objects.exists()
+            if starters:
                 DataClass.objects.bulk_create(
                     [
                         DataClass(id=identifier, name=name, position=position)
@@ -51,7 +52,14 @@ class DjangoDataClassStore:
                     self.audit.record_in_transaction(
                         "settings",
                         *actor,
-                        "Turned data classes " + ("on" if enabled else "off"),
+                        "Turned data classes "
+                        + ("on" if enabled else "off")
+                        + (
+                            "; added starter classes: "
+                            + ", ".join(name for _, name in STARTERS)
+                            if starters
+                            else ""
+                        ),
                     )
         return {"enabled": enabled}
 
@@ -134,13 +142,19 @@ class DjangoDataClassStore:
             row.name = name
             row.save(update_fields=["name"])
             self._set_models(old_name, name, body["approved_model_ids"])
-            if actor and (
-                name != old_name or set(body["approved_model_ids"]) != previous_models
-            ):
+            changes = []
+            if name != old_name:
+                changes.append(f"renamed to {name}")
+            if set(body["approved_model_ids"]) != previous_models:
+                changes.append(
+                    f"approved models: {', '.join(sorted(previous_models)) or 'none'}"
+                    f" to {', '.join(body['approved_model_ids']) or 'none'}"
+                )
+            if actor and changes:
                 self.audit.record_in_transaction(
                     "settings",
                     *actor,
-                    f"Changed data class {old_name} to {name}; approved models: {', '.join(body['approved_model_ids']) or 'none'}",
+                    f"Changed data class {old_name}: " + "; ".join(changes),
                 )
             count = ProjectClass.objects.filter(data_class_id=identifier).count()
         return {
@@ -160,11 +174,19 @@ class DjangoDataClassStore:
                 raise DataClassError(409, "Projects still use this class")
             if DataClass.objects.count() == 1:
                 raise DataClassError(409, "Keep at least one data class")
+            approved_for = [
+                model_id
+                for model_id, classes in self._approvals()
+                if row.name in classes
+            ]
             self._set_models(row.name, None, [])
             row.delete()
             if actor:
                 self.audit.record_in_transaction(
-                    "settings", *actor, f"Removed data class {row.name}"
+                    "settings",
+                    *actor,
+                    f"Removed data class {row.name}; it was approved for models: "
+                    + (", ".join(approved_for) or "none"),
                 )
         return {"removed": True}
 
