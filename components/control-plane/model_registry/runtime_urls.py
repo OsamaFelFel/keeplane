@@ -30,4 +30,8 @@ urlpatterns = [
         "api/runtime/projects/<str:project_id>/model-choice",
         model_choice.project_model_choice,
     ),
+    path(
+        "api/runtime/projects/<str:project_id>/model-alternatives",
+        model_choice.project_model_alternatives,
+    ),
 ]
