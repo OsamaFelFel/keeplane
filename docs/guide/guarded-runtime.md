@@ -39,6 +39,11 @@ endpoint eviction or wiring changes still require fresh enrollment.
 After upgrading to the new health signature, rerun the launcher once to enroll
 a fresh gateway. Existing manifests are not accepted automatically.
 
+The protected route retries a model that is down twice before returning the
+error, and never switches the model ([how it works](../architecture/runtime-authorization.md#a-model-that-is-down-or-too-small)).
+This changes the generated route: an earlier installation keeps working without
+the retry until you rerun the launcher once after upgrading.
+
 This is an opt-in managed local trial. Virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its
 current scope. The installer, isolated CLI journey and host installation/restart

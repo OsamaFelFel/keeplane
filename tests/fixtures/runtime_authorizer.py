@@ -11,6 +11,7 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.request import urlopen
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -47,6 +48,53 @@ def rows(name):
 class Silent(WSGIRequestHandler):
     def log_message(self, *args):
         pass
+
+
+OUTAGE_LOCK = threading.Lock()
+CONTEXT_TOO_BIG = {
+    "error": {
+        "message": "This model's maximum context length is 8 tokens.",
+        "type": "invalid_request_error",
+        "code": "context_length_exceeded",
+    }
+}
+
+
+def outage_step(handler, body):
+    """Play the next scripted provider failure; return True if it answered.
+
+    Steps are an HTTP status such as "503", "slow" (answer after the gateway's
+    per-attempt timeout), "context" (a context-length refusal), "mid" (drop a
+    stream after its first event) or "ok" (answer normally).
+    """
+    script = STATE / "outage-script"
+    with OUTAGE_LOCK:
+        steps = json.loads(script.read_text()) if script.exists() else []
+        if not steps:
+            return False
+        step = steps.pop(0)
+        script.write_text(json.dumps(steps))
+    append("outage_steps", step)
+    if step == "ok":
+        return False
+    if step == "slow":
+        time.sleep(6)
+        return False
+    if step == "mid":
+        from runtime_protocol import send_failed_stream
+
+        send_failed_stream(handler, body, "mid")
+        return True
+    status, data = (400, CONTEXT_TOO_BIG) if step == "context" else (int(step), None)
+    data = json.dumps(
+        data or {"error": {"message": "Synthetic outage", "type": "server_error"}}
+    ).encode()
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
+    return True
 
 
 class Model(BaseHTTPRequestHandler):
@@ -108,6 +156,8 @@ class Model(BaseHTTPRequestHandler):
             self.send_response(401)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if outage_step(self, body):
             return
         if self.fail_private and body["model"] == self.fail_private_model:
             self.send_response(503)
@@ -324,6 +374,8 @@ def serve():
                     "project_id": metadata.get("project_id"),
                     "model_id": metadata.get("model_id"),
                     "status": int(status.split(" ", 1)[0]),
+                    # Set by the gateway policy that called, never by the client.
+                    "check": environ.get("HTTP_X_FIXTURE_CHECK", "unnamed"),
                 },
             )
             return start_response(status, headers, exc_info)
@@ -429,7 +481,53 @@ def command(action, arguments):
             "forged_headers": rows("forged_headers"),
             "generation_forwarded": rows("generation_forwarded"),
             "settings": rows("settings"),
+            "outage_steps": rows("outage_steps"),
         }
+    elif action == "unreachable":
+        # Point Private at a local port where nothing listens: connection refused.
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        definition = next(r for r in body["resources"] if r["id"] == "private")["value"]
+        definition["params"]["baseUrl"] = "http://127.0.0.1:18089/v1"
+        status, _ = MODEL_GATEWAY.request(
+            "/api/config/resources/llm.model/private",
+            {"value": definition},
+            method="PUT",
+        )
+        assert status == 200
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        stores()[2].approve(
+            "private",
+            ["Confidential"],
+            fingerprint("private", body["resources"]),
+            key_choice="shared"
+            if os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
+            else "none",
+        )
+        # Management writes complete before native publication; wait for it.
+        deadline = time.monotonic() + 10
+        while True:
+            dump = json.loads(urlopen("http://127.0.0.1:15000/config_dump", timeout=2).read())
+            hosts = [
+                group["active"]["private"]["endpoint"].get("hostOverride")
+                for row in dump.get("backends", [])
+                if row.get("backend", {}).get("ai", {}).get("name") == "llm:model:private"
+                for group in row["backend"]["ai"]["target"]["providers"]
+                if "private" in group.get("active", {})
+            ]
+            if hosts == ["127.0.0.1:18089"]:
+                return {"applied": True}
+            if time.monotonic() >= deadline:
+                return {"applied": False, "hosts": hosts}
+            time.sleep(0.1)
+    elif action == "outage":
+        steps = json.loads(arguments)
+        allowed = {"ok", "slow", "context", "mid", "429"} | {
+            str(code) for code in range(500, 600)
+        }
+        assert isinstance(steps, list) and set(steps) <= allowed
+        (STATE / "outage-script").write_text(json.dumps(steps))
     elif action == "protocol_failure":
         assert arguments in ("before", "mid")
         (STATE / "protocol-failure").write_text(arguments)
@@ -500,6 +598,8 @@ def command(action, arguments):
             "generation_forwarded",
             "settings",
             "protocol-failure",
+            "outage-script",
+            "outage_steps",
         ):
             (STATE / name).unlink(missing_ok=True)
 

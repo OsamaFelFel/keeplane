@@ -360,11 +360,72 @@ candidate filter for every fallback: registered and set up with its current
 definition, allowed for the project's class, admitted by the mode's runtime gate
 including shared or own key availability, then rechecked for the developer and
 project. A later fallback passes every model it has already tried as `skip`. The
-missing-key choice is its only caller today. The gateway path has no fallback on
-provider outage or context overflow: a failed request or stream returns the
-error, and only the chosen model is contacted
-([protocol cases](../../tests/integration/native-runtime-protocol-cases.md)). An
+missing-key choice is the only caller that moves a task. An
 empty eligible set gives the CLI an empty catalog, and it stops before sending.
+
+### A model that is down or too small
+
+Owner decision of 31 October 2026 (Spec 004 ST16): Keeplane never switches the
+model for an outage or a context-length refusal. The managed installer adds a
+native route policy to the protected `keeplane-chat` route:
+
+```json
+{"retry": {"attempts": 2, "codes": [429, 500, 501, 502, "…", 599], "backoff": "500ms"},
+ "timeout": {"backendRequestTimeout": "60s"}}
+```
+
+The native policy takes exact codes, so the installer lists 429 and every code
+from 500 to 599 (101 codes). A provider that cannot be reached (connection
+refused) never started the request, and the native gateway retries that too.
+
+`attempts` counts retries after the first try, so a model is contacted at most
+three times. Each retry goes to the same route backend and its native model
+selection, and passes the selected-model check again before the provider is
+contacted (ADR 018 final destination). The per-attempt timeout covers the time
+up to the provider's response headers; it never cuts a stream that has started.
+A status decides the retry before any byte reaches the client, so a stream that
+has started is never retried. A context-length refusal is a 4xx other than 429
+and is returned at once. The native gateway buffers a request body to retry it
+and disables retries above its own size limit; such a request fails on its first
+error. The installer's readback requires exactly one entry check, one retry and
+one timeout on that route, and compares them with what it generated: the same
+attempts, the same set of codes, the same backoff and the same per-attempt
+timeout, with no other timeout set. It normalises only the native spelling:
+codes as numbers, text or text with a reason phrase, and durations such as
+`500ms`, `0.5s`, `1m0s` or seconds and nanoseconds. Anything else is refused.
+
+After the retries, the CLI reads the runtime's error event. A remaining 429 or
+5xx, or a context-length refusal, makes it ask
+`GET /api/runtime/projects/{project_id}/model-alternatives?model_id=ID`. The
+server authorizes the developer, project and requested model, then calls
+`next_allowed` repeatedly, each time skipping every model already listed, so
+the list uses the same filter as every fallback: at most 32 model IDs, never the
+requested model, never a gateway-only model. The response is
+`{"project_id", "model_id", "alternatives"}`; nothing is chosen or moved. The CLI
+prints which model is unavailable or too small and the listed models for
+`--model`, or the existing no-model message when the list is empty
+([CLI coding guide](../guide/cli-coding.md)). Errors are 400, 401, 403 and 503
+as for the model choice.
+
+```mermaid
+flowchart LR
+  CLI[CLI turn] --> Entry[Entry check]
+  Entry --> Selected[Selected-model check]
+  Selected --> Provider[Same model]
+  Provider -->|5xx, timeout or 429, no byte sent| Retry{Retries left?}
+  Retry -->|yes, at most two| Selected
+  Retry -->|no| Error[Error to the CLI]
+  Provider -->|too big for context| Error
+  Error --> List[Model alternatives: next_allowed with skip]
+  List --> Message[Wait and try again, or choose a listed model]
+```
+
+A stream that fails after its first byte returns the error and contacts no other
+model ([protocol cases](../../tests/integration/native-runtime-protocol-cases.md),
+[outage cases](../../tests/integration/native-runtime-outage-cases.md)). This
+retry is installed only by the managed Docker runtime installer; the Kubernetes
+chart does not yet install the protected listener. A customer-run gateway must
+set the same route policy itself; see [gateway modes](../guide/gateway-configuration.md#retry-a-model-that-is-down).
 
 ```mermaid
 flowchart LR

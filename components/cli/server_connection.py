@@ -153,6 +153,33 @@ def model_choice(server, project_id, model_id, credential):
     return data
 
 
+def model_alternatives(server, project_id, model_id, credential):
+    """List other allowed models a developer may choose; nothing is switched."""
+    try:
+        project_id = str(uuid.UUID(str(project_id)))
+    except (ValueError, TypeError, AttributeError):
+        raise ConnectionError("Use a valid project UUID.") from None
+    body = request(server, "/api/runtime/projects/" + project_id + "/model-alternatives",
+                   credential, query={"model_id": model_id})
+    try:
+        data = json.loads(body)
+        if (not isinstance(data, dict)
+                or set(data) != {"project_id", "model_id", "alternatives"}
+                or data["project_id"] != project_id or data["model_id"] != model_id
+                or not isinstance(data["alternatives"], list)):
+            raise ValueError
+        ids = data["alternatives"]
+        if (len(ids) > 32 or len(set(ids)) != len(ids) or model_id in ids
+                or not all(isinstance(value, str) and 0 < len(value) <= 256
+                           and not any(c.isspace() or ord(c) < 32 or ord(c) == 127
+                                       for c in value)
+                           for value in ids)):
+            raise ValueError
+    except (ValueError, UnicodeError, RecursionError, TypeError):
+        raise ConnectionError("The server returned invalid model alternatives.") from None
+    return ids
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", required=True)
