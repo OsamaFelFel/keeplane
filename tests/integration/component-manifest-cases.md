@@ -20,6 +20,6 @@ the full regression; each regression run reports that separately.
 | MANIFEST-09 | Load the Django migration graph. | Each app has exactly one head, and it is the recorded one. |
 | MANIFEST-10 | Search the URL files for a versioned API path. | None exists, matching the manifest's undeclared API version. |
 | MANIFEST-11 | Compare default features with chart switches and stored defaults. | Every chart switch is listed; on and off defaults match the chart values, Data Classes and optional Audit kinds. |
-| MANIFEST-12 | Stamp a build copy with a commit, app image digest and chart digest. | The copy has those values and is marked pinned; the committed manifest and every other field stay unchanged. |
+| MANIFEST-12 | Stamp a build copy with a commit, app image digest and chart digest. | The copy has those values under `build` only. `app_image` still names the chart's default reference and its pinned flag, and the committed manifest stays unchanged. |
 | MANIFEST-13 | Stamp with a short commit, a tag, a malformed digest, or over the committed file. | The stamp is refused. |
 | MANIFEST-14 | Read sample chart YAML with the test's file reader. | List items do not become mapping keys, so the checks above read the right values. |

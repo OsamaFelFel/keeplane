@@ -83,7 +83,9 @@ python3 deploy/stamp_component_manifest.py \
 ```
 
 The script accepts only a full 40-character commit and `@sha256:` references,
-not tags. It will not overwrite the committed manifest. `--chart-digest` is
+not tags. It will not overwrite the committed manifest. It changes only the
+`build` section; `app_image` keeps describing the chart's default reference,
+so a stamped copy can still show `"pinned": false` for that default. `--chart-digest` is
 optional until the chart is published as a package.
 
 ## What the check covers

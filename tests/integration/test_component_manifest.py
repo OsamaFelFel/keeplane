@@ -180,7 +180,7 @@ def test_existing_gateway_versions_match_the_tested_trial():
     ] == [("agentgateway", trial["gateway.expectedVersion"], supplied["image"])], UPDATE
 
 
-def test_app_image_is_recorded_as_unpinned_until_a_build_stamps_it():
+def test_app_image_is_recorded_as_unpinned_with_empty_build_fields():
     """MANIFEST-06"""
     app = MANIFEST["app_image"]
     build = MANIFEST["build"]
@@ -341,10 +341,11 @@ def test_stamp_fills_build_fields_without_changing_the_committed_manifest(tmp_pa
     assert stamped["build"]["keeplane_commit"] == COMMIT
     assert stamped["build"]["app_image_digest"] == IMAGE
     assert stamped["build"]["chart_package_digest"] == "sha256:" + "c" * 64
-    assert stamped["app_image"]["pinned"] is True
+    # The digest lives only under build; app_image still describes the chart default.
+    assert stamped["app_image"] == MANIFEST["app_image"]
     assert json.dumps(MANIFEST, sort_keys=True) == original
-    assert {k: v for k, v in stamped.items() if k not in {"build", "app_image"}} == {
-        k: v for k, v in MANIFEST.items() if k not in {"build", "app_image"}
+    assert {k: v for k, v in stamped.items() if k != "build"} == {
+        k: v for k, v in MANIFEST.items() if k != "build"
     }
 
 

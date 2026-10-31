@@ -2,7 +2,8 @@
 
 The committed deploy/component-manifest.json keeps these fields null. A build
 that produces an image or chart package runs this script and keeps the output
-with that build's results.
+with that build's results. Only the build section changes: app_image keeps
+describing the chart's default reference.
 """
 
 import argparse
@@ -32,7 +33,6 @@ def stamp(manifest, *, commit, app_image, chart_digest=None):
             "chart_package_digest": chart_digest,
         }
     )
-    stamped["app_image"]["pinned"] = True
     return stamped
 
 
