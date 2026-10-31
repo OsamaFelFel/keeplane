@@ -116,13 +116,15 @@ def test_a_task_too_big_for_the_model_names_the_problem_and_alternatives(
     )
 
 
-def test_too_big_without_an_alternative_uses_the_no_model_message(
+def test_too_big_without_an_alternative_says_no_other_model_is_allowed(
     connected, runtime, monkeypatch, tmp_path, capsys  # noqa: F811
 ):
     failed_turn(monkeypatch, runtime, TOO_BIG)
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert capsys.readouterr().err.endswith(
-        "This task is too big for coder's context, so it stopped. " + coding.NO_MODELS + "\n"
+        "This task is too big for coder's context and no other model is allowed for "
+        "this project. Make the task smaller, or ask your admin to set up a model with "
+        "a larger context.\n"
     )
 
 

@@ -46,7 +46,10 @@
   message itself is unchanged.
 - Task too big for the model's context: “This task is too big for coder's
   context, so it stopped. Run it with another model allowed for this project
-  using --model: …”, or the no-models message when no other model is allowed.
+  using --model: …”. When no other model is allowed: “This task is too big for
+  coder's context and no other model is allowed for this project. Make the task
+  smaller, or ask your admin to set up a model with a larger context.” (governance
+  issue #57).
 - An older server (404), an unavailable server (503) or a malformed list: the
   reason still shows and points to `keeplane models`; no list is printed.
 - A 400, 401 or 403 error, an error without a status, or a successful turn asks
