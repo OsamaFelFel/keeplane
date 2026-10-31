@@ -37,7 +37,9 @@ class Catalog:
     gateway step), "commit" (the commit fails after the gateway step),
     "landed" (the commit reports a failure but was kept), "changed" (another
     request changes the setup after the failed commit) or "gone" (another
-    request removed the approval first). approve_error makes re-pinning fail.
+    request removed the approval first) or "down" (the commit fails after the
+    gateway step and storage stays unavailable, so reading the approval again
+    fails too). approve_error makes re-pinning fail.
     """
 
     def __init__(
@@ -45,6 +47,7 @@ class Catalog:
     ):
         self.fail = fail
         self.approve_error = approve_error
+        self.storage_down = False
         self.repinned = []
         self.approval = {
             "gateway_fingerprint": fingerprint(
@@ -57,6 +60,8 @@ class Catalog:
         self.removals = []
 
     def get(self, model_id):
+        if self.storage_down:
+            raise StorageUnavailable("Keeplane storage is unavailable")
         return self.approval if model_id == MODEL else None
 
     def remove(self, model_id, actor, remove_from_gateway=None):
@@ -73,7 +78,9 @@ class Catalog:
             self.approval = None
         if self.fail == "changed":
             self.approval = dict(self.approval, approved_classes=["Internal"])
-        if self.fail in ("commit", "landed", "changed"):
+        if self.fail == "down":
+            self.storage_down = True
+        if self.fail in ("commit", "landed", "changed", "down"):
             raise StorageUnavailable("Keeplane storage is unavailable")
         self.removals.append((model_id, actor, bool(remove_from_gateway)))
         self.approval = None
@@ -82,6 +89,8 @@ class Catalog:
     def approve(self, model_id, classes, revision, actor, **options):
         if self.approve_error:
             raise self.approve_error
+        if self.storage_down:
+            raise StorageUnavailable("Keeplane storage is unavailable")
         self.repinned.append((model_id, classes, revision, actor, options))
         self.approval = dict(self.approval, gateway_fingerprint=revision)
 
@@ -309,7 +318,6 @@ class ModelRemovalTests(unittest.TestCase):
             ],
         )
 
-
     def assert_not_recorded(self, result, outcome):
         self.assertEqual(
             result, {"error": "Keeplane couldn't record the removal. " + outcome}
@@ -395,6 +403,21 @@ class ModelRemovalTests(unittest.TestCase):
         status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
         self.assertEqual((status, result), (404, {"error": "Model setup not found"}))
         self.assertEqual((gateway.deletions, gateway.restores), ([], []))
+
+    def test_mr_19_failed_reread_still_writes_the_model_back(self):
+        catalog, gateway = Catalog(fail="down"), Gateway()
+        previous = catalog.approval
+        status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
+        self.assertEqual(status, 503)
+        self.assert_not_recorded(
+            result, "The model is back in the gateway; check its setup in Models."
+        )
+        self.assertEqual(gateway.restores, [RESOURCE["value"]])
+        self.assertEqual(
+            [item["value"] for item in gateway.registry], [RESOURCE["value"]]
+        )
+        self.assertEqual(catalog.repinned, [])
+        self.assertIs(catalog.approval, previous)
 
 
 if __name__ == "__main__":
