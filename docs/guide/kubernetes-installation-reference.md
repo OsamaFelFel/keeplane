@@ -205,7 +205,20 @@ stays at zero replicas. Helm refuses an install that:
   copies that serve);
 - sets `gateway.copies` outside 1–32, or sets `gateway.copyUrls`;
 - sets `agentgateway-standalone.nameOverride`, `fullnameOverride`,
-  `namespaceOverride`, `extraContainers` or `oidc`.
+  `namespaceOverride`, `extraContainers` or `oidc`;
+- turns on `agentgateway-standalone.monitoring`. The copies declare no
+  metrics port, so the gateway's metrics stay private.
+
+The copies take the image and pull policy exactly as the bundled chart writes
+them: a registry/repository map with a bare version tag such as `1.6.0` becomes
+`v1.6.0`, and a map without a tag uses the bundled chart's version. Like the
+bundled chart, the copies restart only when a setting agentgateway reads at
+startup changes (the nested `config` section other than `config.modelCatalog`,
+and the database address); model and route changes are reloaded without a
+restart. With `agentgateway-standalone.podDisruptionBudget.enabled` and more
+than one copy, the chart adds the disruption budget `<release>-gateway` over
+the copies, using that setting's `minAvailable` or `maxUnavailable`. With one
+copy no budget renders, so a node drain is never blocked.
 
 The headless Service carries only port 4000, so the gateway's admin, stats and
 readiness ports stay private. The copies carry the bundled chart's pod labels,

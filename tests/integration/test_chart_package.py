@@ -346,13 +346,20 @@ def run_cases():
         "deploy/local/supplied-gateway-values.yaml",
     )
     db_fixture = (ROOT / "deploy/local/postgres-fixture.yaml").read_text()
+    # The managed gateway serves from the StatefulSet copies; the bundled
+    # chart's zero-replica Deployment must carry the same wiring.
+    gateway_workloads = (
+        (managed, "keeplane", "Deployment", "keeplane"),
+        (managed, "keeplane", "StatefulSet", "keeplane-gateway"),
+        (supplied, "supplied-gateway", "Deployment", "supplied-gateway"),
+    )
     secret_wiring = all(
-        "${KEEPLANE_DB_PASSWORD}" in named(result.stdout, "ConfigMap", name + "-config")
+        "${KEEPLANE_DB_PASSWORD}" in named(result.stdout, "ConfigMap", config + "-config")
         and "local-test-only" not in result.stdout
-        and "name: KEEPLANE_DB_PASSWORD" in named(result.stdout, "Deployment", name)
-        and "name: keeplane-gateway-db" in named(result.stdout, "Deployment", name)
-        and "key: password" in named(result.stdout, "Deployment", name)
-        for result, name in ((managed, "keeplane"), (supplied, "supplied-gateway"))
+        and "name: KEEPLANE_DB_PASSWORD" in named(result.stdout, kind, name)
+        and "name: keeplane-gateway-db" in named(result.stdout, kind, name)
+        and "key: password" in named(result.stdout, kind, name)
+        for result, config, kind, name in gateway_workloads
     )
     checks.append(
         case(

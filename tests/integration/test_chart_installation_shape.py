@@ -327,7 +327,127 @@ def copy_arguments(files):
     for label, url in BAD_COPY_URLS.items():
         arguments["existing-bad-" + label] = (
             *existing, "--set-json", "gateway.copyUrls=" + json.dumps([url]))
+    arguments.update(bundled_setting_arguments(managed))
     return arguments
+
+
+# A gateway image map is allowed only without app.postgres (the local trial).
+LOCAL = ("-f", "deploy/local/values.yaml")
+MAPPED_IMAGE = "agentgateway-standalone.image="
+OTHER_MODEL = {"name": "other-model",
+               "provider": {"custom": {"formats": [{"type": "completions"}]}},
+               "params": {"model": "mock-other", "baseUrl": "http://model:18080/v1"}}
+
+
+def bundled_setting_arguments(managed):
+    """Bundled gateway settings the copies must follow, or that Helm refuses."""
+    budget = ("--set", "agentgateway-standalone.podDisruptionBudget.enabled=true")
+    return {
+        "managed-local-bare-tag": (*LOCAL, "--set-json", MAPPED_IMAGE + json.dumps(
+            {"registry": "cr.agentgateway.dev", "repository": "agentgateway",
+             "tag": "1.6.0", "pullPolicy": "Always"})),
+        "managed-local-no-tag": (*LOCAL, "--set-json", MAPPED_IMAGE + json.dumps(
+            {"registry": "cr.agentgateway.dev", "repository": "agentgateway"})),
+        "managed-model-catalog": (*managed, "--set-json",
+                                  "agentgateway-standalone.config.config.modelCatalog="
+                                  + json.dumps({"models": [{"name": "catalog-entry"}]})),
+        "managed-model-list": (*managed, "--set-json",
+                               "agentgateway-standalone.config.llm.models="
+                               + json.dumps([OTHER_MODEL])),
+        "managed-database-change": (*managed, "--set",
+                                    "agentgateway-standalone.database.postgres.url="
+                                    "postgresql://keeplane:${KEEPLANE_DB_PASSWORD}"
+                                    "@other-db:5432/keeplane"),
+        "managed-budget": (*managed, *budget),
+        "managed-budget-max": (*managed, *budget, "--set",
+                               "agentgateway-standalone.podDisruptionBudget.maxUnavailable=1"),
+        "managed-budget-one": (*managed, *budget, "--set", "gateway.copies=1"),
+        "managed-monitoring": (*managed, "--set",
+                               "agentgateway-standalone.monitoring.enabled=true"),
+    }
+
+
+def gateway_pair(output):
+    """The serving copies and the bundled zero-replica Deployment."""
+    copies = next((d for d in of_kind(output, "StatefulSet") if name_of(d) == "pg-gateway"), "")
+    bundled = next((d for d in of_kind(output, "Deployment") if name_of(d) == "pg"), "")
+    return copies, bundled
+
+
+def bundled_setting_cases(results):
+    """SHAPE-12 and SHAPE-13: the copies follow the bundled gateway settings."""
+    rows = []
+    pulled = {}
+    for label in ("managed-local-bare-tag", "managed-local-no-tag"):
+        result = results[label]
+        copies, bundled = gateway_pair(result.stdout)
+        pulled[label] = {
+            "exit": result.returncode,
+            "copies": (images(copies), scalar(copies, "imagePullPolicy")),
+            "bundled": (images(bundled), scalar(bundled, "imagePullPolicy")),
+        }
+    restart = {}
+    for label in ("managed-default", "managed-model-catalog", "managed-model-list",
+                  "managed-database-change"):
+        result = results[label]
+        copies, bundled = gateway_pair(result.stdout)
+        restart[label] = {
+            "exit": result.returncode,
+            "copies": scalar(copies, "checksum/config"),
+            "bundled": scalar(bundled, "checksum/config"),
+        }
+    default = restart["managed-default"]["copies"]
+    rows.append(case(
+        "SHAPE-12",
+        all(found["exit"] == 0 and found["copies"] == found["bundled"]
+            for found in list(pulled.values()) + list(restart.values()))
+        and pulled["managed-local-bare-tag"]["copies"]
+        == (["cr.agentgateway.dev/agentgateway:v1.6.0"], "Always")
+        and pulled["managed-local-no-tag"]["copies"]
+        == (["cr.agentgateway.dev/agentgateway:v1.6.0"], "IfNotPresent")
+        and bool(default)
+        and restart["managed-model-catalog"]["copies"] == default
+        and restart["managed-model-list"]["copies"] == default
+        and restart["managed-database-change"]["copies"] not in (None, default),
+        {"image": pulled, "restart_hash": restart},
+    ))
+
+    budgets = {}
+    for label in ("managed-default", "managed-budget", "managed-budget-max",
+                  "managed-budget-one"):
+        result = results[label]
+        found = of_kind(result.stdout, "PodDisruptionBudget")
+        copies, _ = gateway_pair(result.stdout)
+        budget = found[0] if len(found) == 1 else ""
+        selector = labels(block(block(block(budget, "spec"), "selector"), "matchLabels"))
+        budgets[label] = {
+            "exit": result.returncode,
+            "names": sorted(name_of(doc) for doc in found),
+            "min_available": scalar(budget, "minAvailable"),
+            "max_unavailable": scalar(budget, "maxUnavailable"),
+            "selects_copies": bool(selector) and all(
+                pod_labels(copies).get(key) == value for key, value in selector.items()),
+        }
+    monitoring = results["managed-monitoring"]
+    refused = {"exit": monitoring.returncode,
+               "names_setting": "agentgateway-standalone.monitoring" in monitoring.stderr}
+    rows.append(case(
+        "SHAPE-13",
+        all(found["exit"] == 0 for found in budgets.values())
+        and budgets["managed-default"]["names"] == []
+        and budgets["managed-budget-one"]["names"] == []
+        and budgets["managed-budget"]["names"] == ["pg-gateway"]
+        and budgets["managed-budget"]["min_available"] == "1"
+        and budgets["managed-budget"]["max_unavailable"] is None
+        and budgets["managed-budget"]["selects_copies"]
+        and budgets["managed-budget-max"]["names"] == ["pg-gateway"]
+        and budgets["managed-budget-max"]["max_unavailable"] == "1"
+        and budgets["managed-budget-max"]["min_available"] is None
+        and budgets["managed-budget-max"]["selects_copies"]
+        and refused["exit"] != 0 and refused["names_setting"],
+        {"budgets": budgets, "monitoring": refused},
+    ))
+    return rows
 
 
 def app_variables(output, release="pg"):
@@ -838,6 +958,7 @@ def run_cases():
     ))
 
     rows.extend(copy_cases(copies))
+    rows.extend(bundled_setting_cases(copies))
 
     report = {"suite": "Keeplane chart installation shape", "results": rows,
               "release_package_approved": False}
