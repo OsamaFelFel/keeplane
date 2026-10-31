@@ -43,11 +43,15 @@ These use Django storage and an in-memory gateway with three set-up models
 | CL-INT-06 Guarded removal | Two levels were changed to one Keeplane-added model | Remove answers 409 listing Simple and Complex; the gateway is not asked; nothing is recorded. After the levels move, removal works. |
 | CL-INT-07 Outside model | An admin-changed level uses a model added outside Keeplane | Remove Keeplane setup is refused the same way. |
 | CL-INT-08 Settings lock | A caller skips the early check, or chooses a model whose setup is already gone | The catalog still refuses removal without calling the gateway, and refuses the level change. |
-| CL-INT-09 Refused requests | Unknown level, a non-text model, extra fields, a request without the admin-UI header, and a developer | 404, 400, 400, 403 and 403; nothing is stored or recorded. |
+| CL-INT-09 Refused requests | Unknown level, a non-text model, extra fields, a JSON array, string or null body, a request without the admin-UI header, and a developer | 404, 400, 400, 400 "Enter a JSON object", 403 and 403; nothing is stored or recorded. |
 | CL-INT-10 Record or storage fails | The settings record write fails; reading level choices fails | The change reports storage as unavailable and is not stored; Models answers 503. |
 | CL-INT-11 Gateway down | The gateway model list doesn't answer | The change is refused and nothing is stored. |
 | CL-INT-12 Runner context | A model is added from a runner that reports 16,384 tokens of active context | The approval records 16,384; an unknown model has no context window. |
 | CL-INT-13 Invalid context | A zero, negative, text, fractional or true context value | The approval is refused and not stored. |
+
+SC-12 and SC-13 in the [settings-change record cases](settings-change-record-cases.md)
+run the level-change record and the change/remove race in separate processes
+on SQLite and PostgreSQL.
 
 The removal guard's transaction edges without a database are MR-20 and MR-21 in
 the [removal cases](../unit/model-removal-cases.md). The React and browser

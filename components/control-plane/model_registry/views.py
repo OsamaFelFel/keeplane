@@ -61,6 +61,8 @@ def complexity_level(request, level):
     denied = action_error(request)
     if denied:
         return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a JSON object")
     if set(request.data) != {"model_id"}:
         return failure(400, "Choose a model or Keeplane's pick")
     try:

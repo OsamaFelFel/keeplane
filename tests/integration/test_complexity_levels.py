@@ -268,6 +268,15 @@ def test_cl_int_09_refused_requests_change_nothing(levels):
         HTTP_X_KEEPLANE_ACTION="1",
     )
     assert response.status_code == 400
+    for body in (["model_id"], "model_id", None):
+        response = levels.client.post(
+            "/api/levels/simple",
+            json.dumps(body),
+            content_type="application/json",
+            HTTP_X_KEEPLANE_ACTION="1",
+        )
+        assert response.status_code == 400, body
+        assert response.json() == {"error": "Enter a JSON object"}
     response = levels.client.post(
         "/api/levels/simple",
         json.dumps({"model_id": "small"}),
