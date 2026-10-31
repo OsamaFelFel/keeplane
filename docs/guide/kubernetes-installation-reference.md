@@ -77,8 +77,9 @@ is rendered.
 | Provider-key files (local trial) | Claim `<release>-provider-keys`, same size and access mode |
 | Managed gateway model catalog | PostgreSQL at `agentgateway-standalone.database.postgres.url`; the starting configuration is in ConfigMap `<release>-config` |
 
-All app and gateway containers run with a read-only root filesystem. The gateway
-also writes temporary files to an `emptyDir` at `/tmp`. The PostgreSQL mode
+All long-running app and gateway containers run with a read-only root
+filesystem. The local trial's `migrate-local-database` init container is the
+exception. The gateway also writes temporary files to an `emptyDir` at `/tmp`. The PostgreSQL mode
 renders no volume claims. The local trial allows one app copy; PostgreSQL mode
 allows several, and the managed gateway defaults to two copies.
 
@@ -96,7 +97,8 @@ retention for a production installation are **not decided**.
 | 15021 | Gateway readiness | No Service; used by the kubelet probe |
 
 The optional Ingress (`ingress.enabled`) has one host, requires TLS and routes
-only to the app Service. It refuses a `NodePort` app Service. The gateway is
+only to the app Service. It requires a `ClusterIP` app Service and refuses
+every other type, including `NodePort` and `LoadBalancer`. The gateway is
 never an Ingress backend.
 
 `networkPolicy.gatewayIngressEnabled=true` adds one policy in managed mode. It
