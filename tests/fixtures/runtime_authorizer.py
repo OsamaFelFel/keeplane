@@ -49,6 +49,53 @@ class Silent(WSGIRequestHandler):
         pass
 
 
+OUTAGE_LOCK = threading.Lock()
+CONTEXT_TOO_BIG = {
+    "error": {
+        "message": "This model's maximum context length is 8 tokens.",
+        "type": "invalid_request_error",
+        "code": "context_length_exceeded",
+    }
+}
+
+
+def outage_step(handler, body):
+    """Play the next scripted provider failure; return True if it answered.
+
+    Steps are an HTTP status such as "503", "slow" (answer after the gateway's
+    per-attempt timeout), "context" (a context-length refusal), "mid" (drop a
+    stream after its first event) or "ok" (answer normally).
+    """
+    script = STATE / "outage-script"
+    with OUTAGE_LOCK:
+        steps = json.loads(script.read_text()) if script.exists() else []
+        if not steps:
+            return False
+        step = steps.pop(0)
+        script.write_text(json.dumps(steps))
+    append("outage_steps", step)
+    if step == "ok":
+        return False
+    if step == "slow":
+        time.sleep(6)
+        return False
+    if step == "mid":
+        from runtime_protocol import send_failed_stream
+
+        send_failed_stream(handler, body, "mid")
+        return True
+    status, data = (400, CONTEXT_TOO_BIG) if step == "context" else (int(step), None)
+    data = json.dumps(
+        data or {"error": {"message": "Synthetic outage", "type": "server_error"}}
+    ).encode()
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
+    return True
+
+
 class Model(BaseHTTPRequestHandler):
     requires_key = False
     fail_private = False
@@ -108,6 +155,8 @@ class Model(BaseHTTPRequestHandler):
             self.send_response(401)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if outage_step(self, body):
             return
         if self.fail_private and body["model"] == self.fail_private_model:
             self.send_response(503)
@@ -429,7 +478,13 @@ def command(action, arguments):
             "forged_headers": rows("forged_headers"),
             "generation_forwarded": rows("generation_forwarded"),
             "settings": rows("settings"),
+            "outage_steps": rows("outage_steps"),
         }
+    elif action == "outage":
+        steps = json.loads(arguments)
+        allowed = {"ok", "slow", "context", "mid", "429", "500", "502", "503", "504"}
+        assert isinstance(steps, list) and set(steps) <= allowed
+        (STATE / "outage-script").write_text(json.dumps(steps))
     elif action == "protocol_failure":
         assert arguments in ("before", "mid")
         (STATE / "protocol-failure").write_text(arguments)
@@ -500,6 +555,8 @@ def command(action, arguments):
             "generation_forwarded",
             "settings",
             "protocol-failure",
+            "outage-script",
+            "outage_steps",
         ):
             (STATE / name).unlink(missing_ok=True)
 

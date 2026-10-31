@@ -11,6 +11,30 @@ PROTECTED = f'request.headers["{MARKER}"] == "1"'
 OPERATOR = f'request.headers["{MARKER}"] == "operator"'
 
 
+# Spec 004 ST16, owner decision of 31 October 2026: a model that is down gets
+# the same request twice more, then the developer is told. Native retries go to
+# the same route backend, and every attempt passes the selected-model check
+# again. A status is final before any byte of the answer reaches the client, so
+# a stream that has started is never retried. Keeplane never switches models here.
+RETRY_ATTEMPTS = 2
+RETRY_CODES = (429, 500, 502, 503, 504)
+RETRY_BACKOFF = "500ms"
+# Per attempt, up to the provider's response headers; a started stream is not cut.
+ATTEMPT_TIMEOUT = "60s"
+
+
+def outage_retry():
+    """The native route policies that retry a model that is down."""
+    return {
+        "retry": {
+            "attempts": RETRY_ATTEMPTS,
+            "codes": list(RETRY_CODES),
+            "backoff": RETRY_BACKOFF,
+        },
+        "timeout": {"backendRequestTimeout": ATTEMPT_TIMEOUT},
+    }
+
+
 class RuntimeInstallationUnavailable(ValueError):
     pass
 
@@ -236,6 +260,7 @@ def overlay(
                                     "/internal/runtime/installed/entry",
                                     "json(request.body).model",
                                 ),
+                                **outage_retry(),
                             },
                         }
                     ],

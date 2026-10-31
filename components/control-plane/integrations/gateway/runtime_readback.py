@@ -3,7 +3,12 @@
 from copy import deepcopy
 from urllib.parse import urlsplit
 
-from .runtime_config import MARKER, RuntimeInstallationUnavailable, model_backends
+from .runtime_config import (
+    MARKER,
+    RETRY_ATTEMPTS,
+    RuntimeInstallationUnavailable,
+    model_backends,
+)
 
 
 def compiled_callback(config):
@@ -44,6 +49,32 @@ def compiled_exchange(config):
         authorizationLocation=deepcopy(location),
     )
     return result
+
+
+def route_guard(inline, entry):
+    """Return the entry guard after checking the route's outage retry is applied.
+
+    The entry check must appear exactly once. The retry and per-attempt timeout
+    must each appear once, with the retry count Keeplane set. Their duration and
+    status-code spelling belongs to the native serializer and is bound by the
+    complete applied digest rather than restated here.
+    """
+    if not isinstance(inline, list) or not all(
+        isinstance(row, dict) and len(row) == 1 for row in inline
+    ):
+        raise RuntimeInstallationUnavailable("The native guard is not applied")
+    kinds = sorted(next(iter(row)) for row in inline)
+    if kinds != ["extAuthz", "retry", "timeout"]:
+        raise RuntimeInstallationUnavailable("The native guard is not applied")
+    by_kind = {next(iter(row)): row for row in inline}
+    retry = by_kind["retry"]["retry"]
+    if not isinstance(retry, dict) or retry.get("attempts") != RETRY_ATTEMPTS:
+        raise RuntimeInstallationUnavailable("The outage retry is not applied")
+    if not isinstance(by_kind["timeout"]["timeout"], dict):
+        raise RuntimeInstallationUnavailable("The outage retry is not applied")
+    if by_kind["extAuthz"] != {"extAuthz": entry}:
+        raise RuntimeInstallationUnavailable("The native guard is not applied")
+    return [by_kind["extAuthz"]]
 
 
 def require_applied_overlay(dump, generated, models, targets):
@@ -130,6 +161,15 @@ def require_applied_overlay(dump, generated, models, targets):
     listener_key = "default/default/bind/5000/keeplane-runtime"
     route_key = listener_key + "/default/keeplane-chat"
     route = generated["binds"][-1]["listeners"][0]["routes"][0]
+    bind = deepcopy(bind)
+    served = (
+        bind.get("listeners", {}).get(listener_key, {}).get("routes", {}).get(route_key)
+    )
+    if not isinstance(served, dict):
+        raise RuntimeInstallationUnavailable("The native guard is not applied")
+    served["inlinePolicies"] = route_guard(
+        served.get("inlinePolicies"), compiled_callback(route["policies"]["extAuthz"])
+    )
     same(
         bind,
         {
