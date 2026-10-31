@@ -28,6 +28,13 @@ protect the changed model. An admin can set up that definition again; Keeplane
 then treats it as an outside model and **Remove Keeplane setup** preserves it.
 Approvals saved before this ownership distinction also count as outside models.
 
+Removal either finishes in both places or changes nothing. If the gateway
+refuses the deletion, Keeplane keeps the model and shows the gateway's error.
+If Keeplane can't save the removal, the model stays in the gateway; when the
+database fails only after the gateway deleted it, Keeplane puts the same
+definition back and says so. If even that fails, the message asks you to
+check Models. Neither failure writes a settings-change record.
+
 The Docker preview stores approvals in a Docker volume, and the managed kind
 preview uses its own PersistentVolumeClaim. Restarting either app does not erase
 its approvals. Approval is bound to the gateway model definition as well

@@ -66,3 +66,11 @@ class AgentgatewayModelAdapter:
             "/api/config/resources/llm.model/" + quote(model_id, safe=""),
             method="DELETE",
         )
+
+    def restore_model(self, value):
+        """Write back a model definition removed by a removal that failed."""
+        return self.request(
+            "/api/config/resources/llm.model",
+            {"resources": [{"value": value}]},
+            "PUT",
+        )

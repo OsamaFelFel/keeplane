@@ -1,5 +1,6 @@
 """Only Keeplane approvals live here; the gateway remains the model registry."""
 
+from common.errors import GatewayRemovalFailed
 from common.storage import settings_change, storage_service
 from data_classes.models import DataClass
 from django.db.models import Exists, OuterRef
@@ -139,14 +140,26 @@ class DjangoModelCatalog:
             "owned_by_keeplane": bool(owned_by_keeplane),
         }
 
-    def remove(self, model_id, actor=None, gateway_removed=False):
+    def remove(self, model_id, actor=None, remove_from_gateway=None):
+        """Remove an approval; with remove_from_gateway, commit only after it succeeds.
+
+        remove_from_gateway runs inside the settings transaction, after the
+        approval deletion and its Audit record are written. A failed gateway
+        answer raises GatewayRemovalFailed and rolls both back.
+        """
         with settings_change():
             removed = bool(ModelApproval.objects.filter(pk=model_id).delete()[0])
             if removed and actor:
                 self.audit.record_in_transaction(
                     "settings",
                     *actor,
-                    f"Removed {'model' if gateway_removed else 'Keeplane setup for model'} {model_id}"
-                    + (" from the gateway" if gateway_removed else ""),
+                    f"Removed model {model_id} from the gateway"
+                    if remove_from_gateway
+                    else f"Removed Keeplane setup for model {model_id}",
                 )
+            if removed and remove_from_gateway:
+                status, result = remove_from_gateway()
+                if status != 200:
+                    raise GatewayRemovalFailed(status, result)
         return removed
+

@@ -132,6 +132,52 @@ def test_sc_06_a_failed_record_write_keeps_the_change_out(start_process):
     assert result["after"]["classes_enabled"] is True
 
 
+def test_sc_11_a_removal_that_cannot_finish_changes_nothing(start_process):
+    app = start_process()
+    app.ask("migrate")
+    result = app.ask("removal_rollbacks")
+    unchanged = {"in_gateway": True, "approved": True, "pinned_to_gateway": True}
+
+    failed = result["record write fails"]
+    assert failed["status"] == 503 and failed["error"] == "StorageUnavailable"
+    assert {key: failed[key] for key in unchanged} == unchanged
+
+    refused = result["gateway refuses"]
+    assert (refused["status"], refused["error"]) == (503, "Gateway unavailable")
+    assert {key: refused[key] for key in unchanged} == unchanged
+
+    restored = result["commit fails"]
+    assert restored["status"] == 503
+    assert restored["error"] == (
+        "Keeplane couldn't record the removal. "
+        "The model is back in the gateway and nothing changed."
+    )
+    assert {key: restored[key] for key in unchanged} == unchanged
+
+    outside_failed = result["outside, record write fails"]
+    assert outside_failed["status"] == 503
+    assert {key: outside_failed[key] for key in unchanged} == unchanged
+    outside = result["outside"]
+    assert (outside["status"], outside["in_gateway"], outside["approved"]) == (
+        200,
+        True,
+        False,
+    )
+
+    normal = result["normal"]
+    assert (normal["status"], normal["in_gateway"], normal["approved"]) == (
+        200,
+        False,
+        False,
+    )
+    # The outside model is never sent to the gateway for deletion.
+    assert "outside" not in result["gateway deletes"]
+    assert result["records"] == [
+        "Removed Keeplane setup for model outside",
+        "Removed model normal from the gateway",
+    ]
+
+
 # The cases below run in the test process on SQLite.
 
 

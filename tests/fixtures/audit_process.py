@@ -109,7 +109,7 @@ def settings_changes():
         ADMIN,
     )
     classes.remove(added["id"], ADMIN)
-    catalog.remove("beta", ADMIN, gateway_removed=True)
+    catalog.remove("beta", ADMIN, remove_from_gateway=lambda: (200, {}))
     catalog.remove("alpha", ADMIN)
     catalog.remove("alpha", ADMIN)
     classes.set_enabled(False, ADMIN)
@@ -240,6 +240,126 @@ def failed_record_writes():
     return {"outcome": outcome, "before": before, "after": snapshot()}
 
 
+class RemovalGateway:
+    """An in-memory gateway registry that keeps revisions like agentgateway."""
+
+    def __init__(self):
+        self.models, self.refuse_delete, self.deletes = {}, False, []
+        self.revision = 0
+
+    def add(self, model_id):
+        value = {"id": model_id, "name": model_id, "params": {"model": "upstream"}}
+        return self.restore_model(value)
+
+    def resources(self):
+        return 200, {"resources": json.loads(json.dumps(list(self.models.values())))}
+
+    def delete_model(self, model_id):
+        self.deletes.append(model_id)
+        if self.refuse_delete:
+            return 503, {"error": "Gateway unavailable"}
+        del self.models[model_id]
+        return 200, {}
+
+    def restore_model(self, value):
+        # Every write gets a new revision, so a restored model is a new revision.
+        self.revision += 1
+        self.models[value["id"]] = {
+            "id": value["id"],
+            "revision": self.revision,
+            "value": json.loads(json.dumps(value)),
+        }
+        return 200, {}
+
+
+def removal_rollbacks():
+    """Model removal keeps Keeplane and the gateway consistent when a step fails."""
+    from unittest.mock import patch
+
+    from audit.models import AuditRecord
+    from common.errors import StorageUnavailable
+    from django.db import OperationalError
+    from model_registry.fingerprints import fingerprint
+    from model_registry.models import ModelApproval
+    from model_registry.removal import remove_model_setup
+
+    audit, _, catalog = domain()
+    audit.set_option("settings", True)
+    gateway = RemovalGateway()
+
+    def set_up(model_id, owned=True):
+        gateway.add(model_id)
+        _, registry = gateway.resources()
+        catalog.approve(
+            model_id,
+            [],
+            fingerprint(model_id, registry["resources"]),
+            None,
+            owned_by_keeplane=owned,
+        )
+
+    def state(model_id):
+        _, registry = gateway.resources()
+        row = ModelApproval.objects.filter(pk=model_id).first()
+        return {
+            "in_gateway": model_id in gateway.models,
+            "approved": row is not None,
+            "pinned_to_gateway": row is not None
+            and row.gateway_fingerprint
+            == fingerprint(model_id, registry["resources"]),
+            "records": AuditRecord.objects.count(),
+        }
+
+    def remove(model_id):
+        try:
+            status, body = remove_model_setup(
+                model_id, ADMIN, catalog, gateway, None, ""
+            )
+        except StorageUnavailable:
+            status, body = 503, {"error": "StorageUnavailable"}
+        return {"status": status, "error": body.get("error"), **state(model_id)}
+
+    from django.db import connections
+
+    wrapper = connections["default"]
+    real_commit = wrapper.commit
+    commits = []
+
+    def commit_fails_once():
+        # The first commit is the removal's; the rollback's re-pin may commit.
+        if not commits:
+            commits.append("failed")
+            raise OperationalError("commit failed")
+        return real_commit()
+
+    result = {}
+    set_up("record-fails")
+    with patch.object(
+        AuditRecord.objects, "create", side_effect=OperationalError("audit down")
+    ):
+        result["record write fails"] = remove("record-fails")
+    set_up("gateway-refuses")
+    gateway.refuse_delete = True
+    result["gateway refuses"] = remove("gateway-refuses")
+    gateway.refuse_delete = False
+    set_up("commit-fails")
+    with patch.object(wrapper, "commit", commit_fails_once):
+        result["commit fails"] = remove("commit-fails")
+    set_up("outside", owned=False)
+    with patch.object(
+        AuditRecord.objects, "create", side_effect=OperationalError("audit down")
+    ):
+        result["outside, record write fails"] = remove("outside")
+    result["outside"] = remove("outside")
+    set_up("normal")
+    result["normal"] = remove("normal")
+    result["gateway deletes"] = gateway.deletes
+    result["records"] = [
+        row.description for row in AuditRecord.objects.order_by("pk")
+    ]
+    return result
+
+
 def services():
     from accounts.services import DjangoIdentity
     from audit.services import DjangoAuditStore
@@ -261,6 +381,8 @@ def handle(command):
         return refused_changes()
     if action == "failed_record_writes":
         return failed_record_writes()
+    if action == "removal_rollbacks":
+        return removal_rollbacks()
     audit, identity, password_file = services()
     if action == "audit_option":
         return audit.set_option(command["kind"], command["enabled"])
