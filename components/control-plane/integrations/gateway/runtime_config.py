@@ -17,7 +17,9 @@ OPERATOR = f'request.headers["{MARKER}"] == "operator"'
 # again. A status is final before any byte of the answer reaches the client, so
 # a stream that has started is never retried. Keeplane never switches models here.
 RETRY_ATTEMPTS = 2
-RETRY_CODES = (429, 500, 502, 503, 504)
+# Every 5xx, listed explicitly: the native policy takes exact codes, not ranges.
+# Connection failures before any request reaches the provider are retried natively.
+RETRY_CODES = (429, *range(500, 600))
 RETRY_BACKOFF = "500ms"
 # Per attempt, up to the provider's response headers; a started stream is not cut.
 ATTEMPT_TIMEOUT = "60s"

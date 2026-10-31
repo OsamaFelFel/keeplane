@@ -42,10 +42,20 @@ def test_the_protected_route_retries_the_same_model_twice():
     policies = protected_route(installed())["policies"]
     assert policies["retry"] == {
         "attempts": 2,
-        "codes": [429, 500, 502, 503, 504],
+        "codes": [429, *range(500, 600)],
         "backoff": "500ms",
     }
-    assert RETRY_ATTEMPTS == 2 and set(RETRY_CODES) == {429, 500, 502, 503, 504}
+    assert RETRY_ATTEMPTS == 2
+
+
+@pytest.mark.parametrize("code", [500, 501, 502, 503, 504, 505, 520, 524, 529, 599])
+def test_every_5xx_is_retried(code):
+    assert code in protected_route(installed())["policies"]["retry"]["codes"]
+
+
+@pytest.mark.parametrize("code", [400, 401, 403, 404, 408, 413, 422, 499, 600])
+def test_no_other_status_is_retried(code):
+    assert code not in RETRY_CODES
 
 
 def test_each_attempt_has_its_own_time_limit_before_the_answer_starts():
@@ -86,34 +96,76 @@ def test_the_policy_is_a_fresh_copy():
     assert 400 not in outage_retry()["retry"]["codes"]
 
 
-def served(config):
-    entry = compiled_callback(protected_route(config)["policies"]["extAuthz"])
-    return entry, [
+def served(config, codes=None, backoff="0.5s", timeout="60s"):
+    route = protected_route(config)
+    entry = compiled_callback(route["policies"]["extAuthz"])
+    codes = codes if codes is not None else [429, *range(500, 600)]
+    return entry, route["policies"], [
         {"extAuthz": entry},
-        {"retry": {"attempts": 2, "backoff": "0.5s", "codes": [429, 500, 502, 503, 504]}},
-        {"timeout": {"requestTimeout": None, "backendRequestTimeout": "60s"}},
+        {"retry": {"attempts": 2, "backoff": backoff, "codes": codes}},
+        {
+            "timeout": {
+                "requestTimeout": None,
+                "backendRequestTimeout": timeout,
+                "responseIdleTimeout": None,
+            }
+        },
     ]
 
 
-def test_applied_route_with_the_retry_is_accepted_in_any_order():
-    entry, inline = served(installed())
-    assert route_guard(inline, entry) == [{"extAuthz": entry}]
-    assert route_guard(list(reversed(inline)), entry) == [{"extAuthz": entry}]
+@pytest.mark.parametrize(
+    "codes,backoff,timeout",
+    [
+        (None, "0.5s", "60s"),
+        (None, "500ms", "1m"),
+        ([str(c) for c in [429, *range(500, 600)]], {"secs": 0, "nanos": 500000000}, "60s"),
+        (["429 Too Many Requests"] + [str(c) for c in range(500, 600)], "0.5s", "1m0s"),
+        (list(reversed([429, *range(500, 600)])), "500ms", {"secs": 60, "nanos": 0}),
+    ],
+    ids=["seconds", "milliseconds", "strings", "reason-phrase", "struct"],
+)
+def test_applied_route_with_the_generated_retry_is_accepted(codes, backoff, timeout):
+    entry, generated, inline = served(installed(), codes, backoff, timeout)
+    assert route_guard(inline, entry, generated) == [{"extAuthz": entry}]
+    assert route_guard(list(reversed(inline)), entry, generated) == [{"extAuthz": entry}]
 
 
 @pytest.mark.parametrize(
     "fault",
-    ["no-retry", "no-timeout", "other-count", "extra", "duplicate", "entry", "shape"],
+    [
+        "no-retry", "no-timeout", "other-count", "count-as-text", "missing-code",
+        "extra-code", "code-as-junk", "other-backoff", "bad-duration", "other-timeout",
+        "extra-timeout", "extra-retry-field", "extra", "duplicate", "entry", "shape",
+    ],
 )
 def test_applied_route_without_the_exact_retry_is_refused(fault):
-    entry, inline = served(installed())
+    entry, generated, inline = served(installed())
     inline = deepcopy(inline)
+    retry, timeout = inline[1]["retry"], inline[2]["timeout"]
     if fault == "no-retry":
         inline.pop(1)
     elif fault == "no-timeout":
         inline.pop(2)
     elif fault == "other-count":
-        inline[1]["retry"]["attempts"] = 3
+        retry["attempts"] = 3
+    elif fault == "count-as-text":
+        retry["attempts"] = "2"
+    elif fault == "missing-code":
+        retry["codes"].remove(529)
+    elif fault == "extra-code":
+        retry["codes"].append(400)
+    elif fault == "code-as-junk":
+        retry["codes"][0] = "four hundred"
+    elif fault == "other-backoff":
+        retry["backoff"] = "1s"
+    elif fault == "bad-duration":
+        retry["backoff"] = "500 ms"
+    elif fault == "other-timeout":
+        timeout["backendRequestTimeout"] = "30s"
+    elif fault == "extra-timeout":
+        timeout["requestTimeout"] = "10s"
+    elif fault == "extra-retry-field":
+        retry["predicate"] = "true"
     elif fault == "extra":
         inline.append({"transformations": {}})
     elif fault == "duplicate":
@@ -121,6 +173,6 @@ def test_applied_route_without_the_exact_retry_is_refused(fault):
     elif fault == "entry":
         inline[0]["extAuthz"] = dict(entry, failureMode="allow")
     else:
-        inline[1] = {"retry": inline[1]["retry"], "timeout": {}}
+        inline[1] = {"retry": retry, "timeout": {}}
     with pytest.raises(RuntimeInstallationUnavailable):
-        route_guard(inline, entry)
+        route_guard(inline, entry, generated)

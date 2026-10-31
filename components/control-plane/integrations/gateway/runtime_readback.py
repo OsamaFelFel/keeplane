@@ -1,11 +1,12 @@
 """Strict applied native readback for the opt-in managed installation."""
 
+import re
 from copy import deepcopy
+from fractions import Fraction
 from urllib.parse import urlsplit
 
 from .runtime_config import (
     MARKER,
-    RETRY_ATTEMPTS,
     RuntimeInstallationUnavailable,
     model_backends,
 )
@@ -51,13 +52,74 @@ def compiled_exchange(config):
     return result
 
 
-def route_guard(inline, entry):
+DURATION = re.compile(r"(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)")
+UNITS = {
+    "ns": Fraction(1, 10**9),
+    "us": Fraction(1, 10**6),
+    "µs": Fraction(1, 10**6),
+    "ms": Fraction(1, 1000),
+    "s": Fraction(1),
+    "m": Fraction(60),
+    "h": Fraction(3600),
+}
+
+
+def seconds(value):
+    """Normalise a native duration ("500ms", "0.5s", "1m0s", {secs, nanos})."""
+    if isinstance(value, dict) and set(value) == {"secs", "nanos"}:
+        if all(type(part) is int and part >= 0 for part in value.values()):
+            return value["secs"] + Fraction(value["nanos"], 10**9)
+    elif isinstance(value, str) and value:
+        parts = DURATION.findall(value)
+        if parts and "".join(a + b for a, b in parts) == value:
+            return sum(Fraction(number) * UNITS[unit] for number, unit in parts)
+    raise RuntimeInstallationUnavailable("The outage retry is not applied")
+
+
+def status_code(value):
+    """Normalise a native status code (503, "503" or "503 Service Unavailable")."""
+    if type(value) is int:
+        return value
+    if isinstance(value, str) and re.fullmatch(r"\d{3}( [^\n]*)?", value):
+        return int(value[:3])
+    raise RuntimeInstallationUnavailable("The outage retry is not applied")
+
+
+def require_retry(served, generated):
+    """The served retry and timeout must equal what Keeplane generated."""
+
+    def refuse():
+        raise RuntimeInstallationUnavailable("The outage retry is not applied")
+
+    retry, wanted = served["retry"], generated["retry"]
+    if not isinstance(retry, dict) or set(retry) != {"attempts", "codes", "backoff"}:
+        refuse()
+    codes = retry["codes"]
+    if type(retry["attempts"]) is not int or retry["attempts"] != wanted["attempts"]:
+        refuse()
+    if not isinstance(codes, list) or len(codes) != len(wanted["codes"]):
+        refuse()
+    if sorted(status_code(code) for code in codes) != sorted(wanted["codes"]):
+        refuse()
+    if seconds(retry["backoff"]) != seconds(wanted["backoff"]):
+        refuse()
+    timeout, wanted = served["timeout"], generated["timeout"]
+    if not isinstance(timeout, dict):
+        refuse()
+    # Unset native timeouts serialize as null; only the generated ones may be set.
+    if any(value is not None for key, value in timeout.items() if key not in wanted):
+        refuse()
+    for key, value in wanted.items():
+        if key not in timeout or seconds(timeout[key]) != seconds(value):
+            refuse()
+
+
+def route_guard(inline, entry, generated):
     """Return the entry guard after checking the route's outage retry is applied.
 
-    The entry check must appear exactly once. The retry and per-attempt timeout
-    must each appear once, with the retry count Keeplane set. Their duration and
-    status-code spelling belongs to the native serializer and is bound by the
-    complete applied digest rather than restated here.
+    The entry check, the retry and the per-attempt timeout must each appear
+    exactly once, and the retry and timeout must equal the generated policies
+    after normalising the native spelling of durations and status codes.
     """
     if not isinstance(inline, list) or not all(
         isinstance(row, dict) and len(row) == 1 for row in inline
@@ -66,15 +128,11 @@ def route_guard(inline, entry):
     kinds = sorted(next(iter(row)) for row in inline)
     if kinds != ["extAuthz", "retry", "timeout"]:
         raise RuntimeInstallationUnavailable("The native guard is not applied")
-    by_kind = {next(iter(row)): row for row in inline}
-    retry = by_kind["retry"]["retry"]
-    if not isinstance(retry, dict) or retry.get("attempts") != RETRY_ATTEMPTS:
-        raise RuntimeInstallationUnavailable("The outage retry is not applied")
-    if not isinstance(by_kind["timeout"]["timeout"], dict):
-        raise RuntimeInstallationUnavailable("The outage retry is not applied")
-    if by_kind["extAuthz"] != {"extAuthz": entry}:
+    by_kind = {next(iter(row)): row[next(iter(row))] for row in inline}
+    require_retry(by_kind, generated)
+    if by_kind["extAuthz"] != entry:
         raise RuntimeInstallationUnavailable("The native guard is not applied")
-    return [by_kind["extAuthz"]]
+    return [{"extAuthz": entry}]
 
 
 def require_applied_overlay(dump, generated, models, targets):
@@ -168,7 +226,9 @@ def require_applied_overlay(dump, generated, models, targets):
     if not isinstance(served, dict):
         raise RuntimeInstallationUnavailable("The native guard is not applied")
     served["inlinePolicies"] = route_guard(
-        served.get("inlinePolicies"), compiled_callback(route["policies"]["extAuthz"])
+        served.get("inlinePolicies"),
+        compiled_callback(route["policies"]["extAuthz"]),
+        route["policies"],
     )
     same(
         bind,
