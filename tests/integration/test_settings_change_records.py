@@ -12,6 +12,8 @@ from django.test import Client
 from model_registry import registration
 from model_registry.registration import ModelManagement
 from tests.integration import test_audit_persistence as persistence
+from audit.models import AuditRecord
+from django.db import OperationalError
 from tests.unit.test_model_registration_ids import Gateway
 
 # Reuse the separate-process SQLite and PostgreSQL harness.
@@ -87,6 +89,12 @@ def test_sc_03_one_kind_on_leaves_the_others_off(start_process):
         "held_requests": True,
         "model_answers": False,
     }
+    app.ask("audit_option", kind="held_requests", enabled=False)
+    assert app.ask("audit_option", kind="model_answers", enabled=True) == {
+        "settings": False,
+        "held_requests": False,
+        "model_answers": True,
+    }
     app.ask("settings_changes")
     assert app.records()["total"] == 0
 
@@ -126,6 +134,21 @@ def test_sc_06_a_failed_record_write_keeps_the_change_out(start_process):
 
 # The cases below run in the test process on SQLite.
 
+
+class FlakyGateway(Gateway):
+    """A gateway whose model check fails a set number of times for one model."""
+
+    def __init__(self):
+        super().__init__()
+        self.refuse = {}
+
+    def request(self, path, body=None, method=None, **options):
+        if path == "/v1/chat/completions" and self.refuse.get(body["model"]):
+            self.refuse[body["model"]] -= 1
+            return 500, {"error": "synthetic provider failure"}
+        return super().request(path, body, method, **options)
+
+
 ADMIN = ("admin-id", "first-admin")
 ORIGINAL_KEY = "synthetic-original-provider-key-4f1c"
 REPLACEMENT_KEY = "synthetic-replacement-provider-key-9d2e"
@@ -155,7 +178,7 @@ def management(domain_services, tmp_path, monkeypatch):
     result = ModelManagement(
         domain_services.catalog,
         domain_services.classes,
-        Gateway(),
+        FlakyGateway(),
         ADMIN,
         "managed",
         None,
@@ -262,3 +285,102 @@ def test_sc_07_admin_screens_record_class_changes_through_the_api(domain_service
     ]
     assert {row["who"] for row in shown["records"]} == {"first-admin"}
     assert "first-test-password-123" not in str(shown)
+
+
+def add_shared_cloud_model(models):
+    return models.add(
+        {
+            "name": "cloud-model",
+            "model": "upstream",
+            "source": "openai",
+            "key_choice": "shared",
+            "shared_key": ORIGINAL_KEY,
+            "approved_classes": ["Public"],
+        }
+    )
+
+
+def replace_key(models):
+    return models.setup(
+        "cloud-model",
+        {
+            "key_choice": "shared",
+            "approved_classes": ["Public", "Internal"],
+            "replace_shared_key": REPLACEMENT_KEY,
+        },
+    )
+
+
+def test_sc_08_a_failed_key_replacement_writes_no_record(management):
+    services, models = management
+    services.audit.set_option("settings", True)
+    assert add_shared_cloud_model(models)[0] == 200
+    original = models.gateway.records["cloud-model"]["value"]
+    models.gateway.refuse["cloud-model"] = 1
+    status, body = replace_key(models)
+    assert status == 503
+    assert body["error"].endswith("The previous key is still active.")
+    assert models.gateway.records["cloud-model"]["value"] == original
+    approval = services.catalog.get("cloud-model")
+    assert approval["approved_classes"] == ["Public"]
+    assert [row["what"] for row in services.audit.records()["records"]] == [
+        "Set up model cloud-model; provider key: shared; approved classes: Public"
+    ]
+
+
+def test_sc_09_a_failed_record_write_undoes_the_gateway_step(management):
+    services, models = management
+    services.audit.set_option("settings", True)
+    assert add_shared_cloud_model(models)[0] == 200
+    original = models.gateway.records["cloud-model"]["value"]
+    before = services.audit.records()["total"]
+    failing = patch.object(
+        AuditRecord.objects, "create", side_effect=OperationalError("audit down")
+    )
+
+    with failing:
+        status, body = replace_key(models)
+    assert status == 503 and "previous key is still active" in body["error"]
+    assert models.gateway.records["cloud-model"]["value"] == original
+    assert services.catalog.get("cloud-model")["approved_classes"] == ["Public"]
+
+    with failing:
+        status, _ = models.add(
+            {"name": "local-model", "model": "upstream", "source": "fixture"}
+        )
+    assert status == 503
+    assert "local-model" not in models.gateway.records
+    assert services.catalog.get("local-model") is None
+
+    with failing:
+        status, _ = models.add(
+            {
+                "name": "second-cloud",
+                "model": "second-upstream",
+                "source": "openai",
+                "key_choice": "shared",
+                "shared_key": REPLACEMENT_KEY,
+            }
+        )
+    assert status == 503
+    assert "second-cloud" not in models.gateway.records
+    assert services.catalog.get("second-cloud") is None
+    assert services.audit.records()["total"] == before
+    assert all(not Path(path).exists() for path in models.saved_key_files[1:])
+
+
+def test_sc_10_a_change_of_owner_is_named(domain_services):
+    services = domain_services
+    services.classes.set_enabled(True)
+    services.audit.set_option("settings", True)
+    services.catalog.approve("gateway-model", [], "c" * 64, ADMIN)
+    services.catalog.approve(
+        "gateway-model", [], "c" * 64, ADMIN, owned_by_keeplane=True
+    )
+    services.catalog.approve("gateway-model", [], "d" * 64, ADMIN)
+    assert [row["what"] for row in services.audit.records()["records"]] == [
+        "Changed model gateway-model: approved its changed gateway definition; "
+        "no longer set up by Keeplane",
+        "Changed model gateway-model: now set up by Keeplane",
+        "Set up model gateway-model; provider key: none; approved classes: none",
+    ]

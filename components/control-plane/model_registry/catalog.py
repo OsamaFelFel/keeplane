@@ -35,6 +35,12 @@ def describe_model_change(model_id, previous, values, shared_key_replaced=False)
         and previous["gateway_fingerprint"] != values["gateway_fingerprint"]
     ):
         changes.append("approved its changed gateway definition")
+    if previous["owned_by_keeplane"] != values["owned_by_keeplane"]:
+        changes.append(
+            "now set up by Keeplane"
+            if values["owned_by_keeplane"]
+            else "no longer set up by Keeplane"
+        )
     if not changes:
         changes.append("set up again")
     return f"Changed model {model_id}: " + "; ".join(changes)

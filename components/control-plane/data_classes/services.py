@@ -148,7 +148,7 @@ class DjangoDataClassStore:
             if set(body["approved_model_ids"]) != previous_models:
                 changes.append(
                     f"approved models: {', '.join(sorted(previous_models)) or 'none'}"
-                    f" to {', '.join(body['approved_model_ids']) or 'none'}"
+                    f" to {', '.join(sorted(body['approved_model_ids'])) or 'none'}"
                 )
             if actor and changes:
                 self.audit.record_in_transaction(

@@ -338,11 +338,13 @@ class ModelManagement:
             if revision is None:
                 return False
             try:
+                # Restoring is a rollback, not an admin change: re-pin the
+                # restored definition without an Audit record.
                 self.catalog.approve(
                     model_id,
                     previous["approved_classes"],
                     revision,
-                    self.actor(),
+                    None,
                     owned_by_keeplane=True,
                     key_choice="shared",
                 )

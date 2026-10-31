@@ -27,7 +27,9 @@ change, when, and a short description such as these:
 | Remove a data class | `Removed data class Finance team; it was approved for models: alpha, beta` |
 | Choose a project's data class | `Changed data class for project Example (…) from none to Public` |
 
-A request that changes nothing, or that Keeplane refuses, adds no record. A
+A request that changes nothing, or that Keeplane refuses or rolls back, adds
+no record. For example, when a replacement shared key fails its check and
+Keeplane puts the previous key back, nothing is recorded. A
 record never contains a provider key, key file, password, session token or
 prompt text. Complexity picks are not recorded yet; their levels are still to
 be decided.
