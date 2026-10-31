@@ -50,6 +50,13 @@ gateway:
   # admin-key-hash. Required for the managed gateway: the chart refuses to
   # install it without this Secret and its hash variables in extraEnv below.
   keysSecret: ""
+  # Managed mode: how many gateway copies run (1-32). Each copy gets its own
+  # private address and the app reads every one back after a model change.
+  copies: 2
+  # Existing mode: every copy's own management origin, such as
+  # http://gateway-0.gateway.ai-gateway.svc:4000 (http or https, no path or
+  # credentials, at most 32). Leave empty when the gateway runs as one copy.
+  copyUrls: []
 
 networkPolicy:
   # Requires a Kubernetes CNI that enforces NetworkPolicy. The local kindnet
@@ -66,7 +73,9 @@ ingress:
 
 agentgateway-standalone:
   mode: database
-  replicaCount: 2
+  # Keeplane runs the gateway copies itself (gateway.copies) so each has a
+  # stable address. The bundled chart's own Deployment must stay at zero.
+  replicaCount: 0
   # The app initializes private provider files; gateway mounts must not widen them.
   podSecurityContext:
     fsGroup: null

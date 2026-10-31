@@ -30,7 +30,17 @@
         "mode": {"enum": ["managed", "existing"]},
         "install": {"type": "boolean"},
         "url": {"type": "string"},
-        "keysSecret": {"type": "string"}
+        "keysSecret": {"type": "string"},
+        "copies": {"type": "integer", "minimum": 1, "maximum": 32},
+        "copyUrls": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^https?://([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\\[[0-9A-Fa-f:.]+\\])(:[0-9]{1,5})?$"
+          }
+        }
       },
       "allOf": [
         {
@@ -41,7 +51,7 @@
         },
         {
           "if": {"properties": {"mode": {"const": "managed"}}},
-          "then": {"properties": {"install": {"const": true}}}
+          "then": {"properties": {"install": {"const": true}, "copyUrls": {"maxItems": 0}}}
         }
       ]
     },

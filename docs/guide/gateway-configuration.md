@@ -10,7 +10,7 @@ the current release scope.
 
 | Mode | Keeplane installs | Gateway address | Current trial |
 | --- | --- | --- | --- |
-| `managed` | Keeplane app and gateway | The chart's gateway Service | Two agentgateway replicas with shared PostgreSQL registration |
+| `managed` | Keeplane app and gateway | The chart's gateway Service | Two agentgateway copies (`gateway.copies`) with shared PostgreSQL registration |
 | `existing` | Keeplane app only | `gateway.url`, supplied by the operator | A separate agentgateway installation in another namespace |
 
 In `managed` mode the chart always requires keys on the gateway's model and
@@ -18,16 +18,26 @@ management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
 In `existing` mode the customer-run gateway keeps its own key setup.
 
-When the gateway runs as several copies, set `GATEWAY_COPY_URLS` on the app to
-every copy's own management address, for example
-`GATEWAY_COPY_URLS=http://gateway-0.gateway:4000,http://gateway-1.gateway:4000`.
-A model change that adds or widens access is then confirmed only when every
-copy reads it back within 5 seconds; withdrawals apply at once. If any entry
-is invalid, the app logs a warning and refuses every change that adds or
-widens access, telling the admin to ask whoever installed Keeplane to fix the
-list. See
+When the gateway runs as several copies, the app needs every copy's own
+management address in `GATEWAY_COPY_URLS`. A model change that adds or widens
+access is then confirmed only when every copy reads it back within 5 seconds;
+withdrawals apply at once. If any entry is invalid, the app logs a warning and
+refuses every change that adds or widens access, telling the admin to ask
+whoever installed Keeplane to fix the list. See
 [every gateway copy](../architecture/model-registration.md#every-gateway-copy).
-The chart doesn't set this yet.
+
+- **`managed`:** the chart sets the list. It runs `gateway.copies` gateway
+  copies (default 2) with stable private addresses,
+  `http://<release>-gateway-<N>.<release>-gateway-copies.<namespace>.svc:4000`,
+  and gives the app exactly those addresses.
+- **`existing`:** list each copy's own management origin in
+  `gateway.copyUrls`, for example
+  `http://gateway-0.gateway.ai-gateway.svc:4000`. Helm refuses an entry with
+  credentials, a path or another scheme, a repeated entry, or more than 32.
+  Leave it empty for a gateway that runs as one copy.
+
+See [gateway copies](kubernetes-installation-reference.md#gateway-copies) for
+the values and what Helm refuses.
 
 ## Try both modes locally
 
@@ -36,7 +46,7 @@ installs managed Keeplane in `keeplane` and a protected Keeplane app in
 `keeplane-existing`. Inspect what actually runs:
 
 ```sh
-kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane get deploy,svc
+kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane get deploy,sts,svc
 kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane-existing get deploy,svc
 kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n supplied-gateway get deploy,svc
 ```

@@ -28,7 +28,6 @@ def secret_env(name, secret, key):
 def gateway_values():
     """Managed gateway settings in the documented Secret-backed form."""
     return {
-        "replicaCount": 2,
         "database": {
             "postgres": {
                 "url": "postgresql://keeplane:${KEEPLANE_DB_PASSWORD}"
@@ -98,7 +97,7 @@ def postgres_values(mode):
             "tlsSecretName": "keeplane-tls",
         },
         "gateway": {"mode": "managed", "install": True,
-                    "keysSecret": "keeplane-gateway-keys"},
+                    "keysSecret": "keeplane-gateway-keys", "copies": 2},
         "networkPolicy": {"gatewayIngressEnabled": mode == "managed"},
         # Present in both modes: existing mode must ignore all of it.
         "agentgateway-standalone": gateway_values(),
@@ -167,7 +166,8 @@ def of_kind(output, kind):
 
 
 def workloads(output):
-    return [doc for doc in manifests(output) if kind_of(doc) in ("Deployment", "Job")]
+    return [doc for doc in manifests(output)
+            if kind_of(doc) in ("Deployment", "StatefulSet", "Job")]
 
 
 def containers(document, key="containers"):
@@ -278,6 +278,148 @@ def existing_keyless_arguments(files):
     }
 
 
+COPY_HOSTS = ("customer-gateway-0.customer-gateway.gateway.svc.cluster.local",
+              "customer-gateway-1.customer-gateway.gateway.svc.cluster.local")
+SUPPLIED_COPIES = [f"http://{host}:4000" for host in COPY_HOSTS]
+BAD_COPY_URLS = {
+    "credentials": "http://admin:secret@gateway-0.gateway:4000",
+    "path": "http://gateway-0.gateway:4000/api",
+    "query": "http://gateway-0.gateway:4000?x=1",
+    "scheme": "ftp://gateway-0.gateway:4000",
+    "space": "http://gateway 0:4000",
+    "trailing-comma-join": "http://gateway-0.gateway:4000,http://gateway-1.gateway:4000",
+}
+
+
+def managed_copy_urls(release, count, namespace="default"):
+    return ",".join(
+        f"http://{release}-gateway-{index}.{release}-gateway-copies.{namespace}.svc:4000"
+        for index in range(count)
+    )
+
+
+def copy_arguments(files):
+    """Managed copy counts and supplied copy lists, good and bad."""
+    managed = ("-f", str(files["managed"]))
+    existing = ("-f", str(files["existing"]))
+    arguments = {
+        "managed-default": managed,
+        "managed-three": (*managed, "--set", "gateway.copies=3",
+                          "--set", "networkPolicy.gatewayIngressEnabled=true"),
+        "managed-one": (*managed, "--set", "gateway.copies=1"),
+        "managed-zero": (*managed, "--set", "gateway.copies=0"),
+        "managed-too-many": (*managed, "--set", "gateway.copies=33"),
+        "managed-bundled-replicas": (*managed, "--set",
+                                     "agentgateway-standalone.replicaCount=2"),
+        "managed-autoscaling": (*managed, "--set",
+                                "agentgateway-standalone.autoscaling.enabled=true"),
+        "managed-supplied-list": (*managed, "--set-json",
+                                  "gateway.copyUrls=" + json.dumps(SUPPLIED_COPIES)),
+        "existing-list": (*existing, "--set-json",
+                          "gateway.copyUrls=" + json.dumps(SUPPLIED_COPIES)),
+        "existing-https": (*existing, "--set-json",
+                           'gateway.copyUrls=["https://10.0.0.7:8443"]'),
+        "existing-duplicate": (*existing, "--set-json",
+                               "gateway.copyUrls=" + json.dumps(SUPPLIED_COPIES[:1] * 2)),
+        "existing-too-many": (*existing, "--set-json", "gateway.copyUrls=" + json.dumps(
+            [f"http://gateway-{index}.gateway:4000" for index in range(33)])),
+    }
+    for label, url in BAD_COPY_URLS.items():
+        arguments["existing-bad-" + label] = (
+            *existing, "--set-json", "gateway.copyUrls=" + json.dumps([url]))
+    return arguments
+
+
+def app_variables(output, release="pg"):
+    app = next(d for d in workloads(output) if name_of(d) == release + "-app")
+    return {var: value for var, value, _ in env(containers(app)[0])}
+
+
+def copy_cases(results):
+    """SHAPE-10 and SHAPE-11: the app's gateway copy list."""
+    rows = []
+    managed = {}
+    for label, count in (("managed-default", 2), ("managed-three", 3), ("managed-one", 1)):
+        result = results[label]
+        output = result.stdout
+        copies = next((d for d in of_kind(output, "StatefulSet")
+                       if name_of(d) == "pg-gateway"), "")
+        headless = next((d for d in of_kind(output, "Service")
+                         if name_of(d) == "pg-gateway-copies"), "")
+        bundled = next((d for d in of_kind(output, "Deployment") if name_of(d) == "pg"), "")
+        policy = "\n".join(of_kind(output, "NetworkPolicy"))
+        policy_labels = labels(block(block(block(policy, "spec"), "podSelector"),
+                                     "matchLabels"))
+        copy_labels = pod_labels(copies) if copies else {}
+        managed[label] = {
+            "exit": result.returncode,
+            "copy_urls": app_variables(output).get("GATEWAY_COPY_URLS")
+            if result.returncode == 0 else None,
+            "expected": managed_copy_urls("pg", count),
+            "replicas": scalar(copies, "replicas"),
+            "service_name": scalar(copies, "serviceName"),
+            "headless_ports": sorted({scalar(p, "port") for p in
+                                      items(block(block(headless, "spec"), "ports"))}),
+            "headless": scalar(headless, "clusterIP") == "None",
+            "bundled_replicas": scalar(bundled, "replicas"),
+            "copy_labels": copy_labels,
+            "policy_selects_copies": bool(policy_labels)
+            and all(copy_labels.get(k) == v for k, v in policy_labels.items()),
+        }
+    refused_managed = {
+        label: {"exit": results[label].returncode,
+                "names_setting": any(name in results[label].stderr for name in
+                                     ("gateway.copies", "copies", "copyUrls",
+                                      "replicaCount", "autoscaling"))}
+        for label in ("managed-zero", "managed-too-many", "managed-bundled-replicas",
+                      "managed-autoscaling", "managed-supplied-list")
+    }
+    rows.append(case(
+        "SHAPE-10",
+        all(
+            found["exit"] == 0
+            and found["copy_urls"] == found["expected"]
+            and found["replicas"] == str(len(found["expected"].split(",")))
+            and found["service_name"] == "pg-gateway-copies"
+            and found["headless"] and found["headless_ports"] == ["4000"]
+            and found["bundled_replicas"] == "0"
+            and found["copy_labels"].get("app.kubernetes.io/component") == "standalone"
+            for found in managed.values()
+        )
+        and managed["managed-three"]["policy_selects_copies"]
+        and all(found["exit"] != 0 and found["names_setting"]
+                for found in refused_managed.values()),
+        {"managed": managed, "refused": refused_managed},
+    ))
+
+    supplied = {
+        label: {"exit": results[label].returncode,
+                "copy_urls": app_variables(results[label].stdout).get("GATEWAY_COPY_URLS")
+                if results[label].returncode == 0 else None,
+                "gateway_rendered": "agentgateway-standalone" in results[label].stdout}
+        for label in ("existing-list", "existing-https")
+    }
+    refused_supplied = {
+        label: {"exit": result.returncode,
+                "schema_names_list": "copyUrls" in result.stderr}
+        for label, result in results.items()
+        if label.startswith("existing-") and label not in supplied
+    }
+    rows.append(case(
+        "SHAPE-11",
+        supplied["existing-list"]["exit"] == 0
+        and supplied["existing-list"]["copy_urls"] == ",".join(SUPPLIED_COPIES)
+        and supplied["existing-https"]["exit"] == 0
+        and supplied["existing-https"]["copy_urls"] == "https://10.0.0.7:8443"
+        and not any(found["gateway_rendered"] for found in supplied.values())
+        and len(refused_supplied) == len(BAD_COPY_URLS) + 2
+        and all(found["exit"] != 0 and found["schema_names_list"]
+                for found in refused_supplied.values()),
+        {"supplied": supplied, "refused": refused_supplied},
+    ))
+    return rows
+
+
 def gateway_env_refs(container):
     """Variable -> (Secret name, key) for secretKeyRef env entries."""
     found = {}
@@ -343,6 +485,10 @@ def run_cases():
             label: run("template", "pg", CHART, *arguments)
             for label, arguments in existing_keyless_arguments(files).items()
         }
+        copies = {
+            label: run("template", "pg", CHART, *arguments)
+            for label, arguments in copy_arguments(files).items()
+        }
     managed, existing = renders["postgres-managed"], renders["postgres-existing"]
     managed_kinds = {"postgres-managed", "local-managed"}
     rows = []
@@ -364,7 +510,8 @@ def run_cases():
         and len(postgres_images["postgres-managed"]) >= 4
         and set(postgres_images["postgres-existing"]) == {IMAGE}
         and all(PINNED.fullmatch(image) for found in postgres_images.values() for image in found)
-        and local_images["local-managed"] == [GATEWAY_IMAGE]
+        # The gateway copies and the bundled zero-replica Deployment.
+        and local_images["local-managed"] == [GATEWAY_IMAGE, GATEWAY_IMAGE]
         and local_images["local-existing"] == []
         and tagged.returncode != 0 and refusal in tagged.stderr
         and mapped.returncode != 0 and refusal in mapped.stderr
@@ -394,6 +541,7 @@ def run_cases():
                                 | {scalar(p, "targetPort") for p in ports}),
                 "selects_gateway": "app.kubernetes.io/name: agentgateway-standalone"
                 in "\n".join(block(block(service, "spec"), "selector")),
+                "headless": scalar(service, "clusterIP") == "None",
             }
         backends = sorted(set(re.findall(
             r"service:\s*\n\s+name: (\S+)\s*\n\s+port:\s*\n\s+number: (\d+)", output
@@ -413,10 +561,16 @@ def run_cases():
         and not PRIVATE_GATEWAY_PORTS & set(seen["container_ports"])
         and not seen["listener_overrides"]
         and seen["services"][release[name] + "-app"]["ports"] == ["3000"]
-        and [s for s in seen["services"].values() if s["selects_gateway"]]
-        == ([{"type": "ClusterIP", "ports": ["4000"], "selects_gateway": True}]
-            if name in managed_kinds else [])
-        and set(seen["services"]) == ({release[name], release[name] + "-app"}
+        # Managed mode: the gateway Service plus the headless Service that
+        # gives each copy its own address; both carry only port 4000.
+        and {n: s for n, s in seen["services"].items() if s["selects_gateway"]}
+        == ({release[name]: {"type": "ClusterIP", "ports": ["4000"],
+                             "selects_gateway": True, "headless": False},
+             release[name] + "-gateway-copies": {"type": "ClusterIP", "ports": ["4000"],
+                                                 "selects_gateway": True, "headless": True}}
+            if name in managed_kinds else {})
+        and set(seen["services"]) == ({release[name], release[name] + "-app",
+                                       release[name] + "-gateway-copies"}
                                       if name in managed_kinds else {release[name] + "-app"})
         for name, seen in exposure.items()
     )
@@ -450,7 +604,8 @@ def run_cases():
     )
     pods = {name_of(doc): pod_labels(doc) for doc in workloads(managed)}
     admitted = [name for name, found in pods.items() if found.get("app") == "pg-app"]
-    gateway_pods = pods.get("pg", {})
+    # The serving copies: the policy must select every one of them.
+    gateway_pods = pods.get("pg-gateway", {})
     rows.append(case(
         "SHAPE-03",
         len(policies) == 1
@@ -494,12 +649,14 @@ def run_cases():
                 problems.append("connection URL carries a literal password")
         if name in managed_kinds:
             config = "\n".join(of_kind(output, "ConfigMap"))
-            gateway = next(d for d in workloads(output) if name_of(d) == release[name])
-            refs = {var for var, _, secret in env(containers(gateway)[0]) if secret}
             placeholders = set(re.findall(r"\$\{([A-Z_]+)\}", config))
             hashes = [h.strip("\"'") for h in re.findall(r"keyHash: (\S+)", config)]
-            if not placeholders or not placeholders <= refs:
-                problems.append("gateway placeholders lack Secret-backed variables")
+            # The serving copies and the bundled chart's zero-replica Deployment.
+            for gateway_name in (release[name] + "-gateway", release[name]):
+                gateway = next(d for d in workloads(output) if name_of(d) == gateway_name)
+                refs = {var for var, _, secret in env(containers(gateway)[0]) if secret}
+                if not placeholders or not placeholders <= refs:
+                    problems.append(gateway_name + " placeholders lack Secret-backed variables")
             if len(hashes) != 2 or not all(re.fullmatch(r"\$\{[A-Z_]+\}", h) for h in hashes):
                 problems.append("gateway key policies are not placeholders")
         secret_findings[name] = problems
@@ -515,7 +672,7 @@ def run_cases():
     shape = {}
     for name, output in renders.items():
         problems, state = [], []
-        for doc in of_kind(output, "Deployment"):
+        for doc in of_kind(output, "Deployment") + of_kind(output, "StatefulSet"):
             vols = volumes(doc)
             for container in containers(doc):
                 label = name_of(doc) + "/" + scalar(container, "name")
@@ -535,7 +692,8 @@ def run_cases():
         shape[name] = {"problems": problems, "writable_state": sorted(state),
                        "declared_claims": sorted(declared)}
     app_container = containers(next(d for d in workloads(managed) if name_of(d) == "pg-app"))[0]
-    gateway_container = containers(next(d for d in workloads(managed) if name_of(d) == "pg"))[0]
+    gateway_container = containers(
+        next(d for d in workloads(managed) if name_of(d) == "pg-gateway"))[0]
     gateway_config = "\n".join(of_kind(managed, "ConfigMap"))
     jobs = of_kind(managed, "Job") + of_kind(existing, "Job")
     rows.append(case(
@@ -558,7 +716,8 @@ def run_cases():
         and "path: /healthz/ready" in "\n".join(block(gateway_container, "readinessProbe"))
         and "startupProbe:" in gateway_container
         and "mode: hybrid" in gateway_config
-        and "replicas: 2" in next(d for d in workloads(managed) if name_of(d) == "pg")
+        and "replicas: 2" in next(d for d in workloads(managed) if name_of(d) == "pg-gateway")
+        and "replicas: 0" in next(d for d in workloads(managed) if name_of(d) == "pg")
         and "replicas: 2" in next(d for d in workloads(managed) if name_of(d) == "pg-app")
         and len(jobs) == 3
         and all("backoffLimit: 0" in job and "activeDeadlineSeconds:" in job
@@ -581,6 +740,7 @@ def run_cases():
             "gateway_url": variables.get("GATEWAY_URL"),
             "gateway_mode": variables.get("GATEWAY_MODE"),
             "file_config": "GATEWAY_FILE_CONFIG" in variables,
+            "copy_urls": variables.get("GATEWAY_COPY_URLS"),
         }
     rows.append(case(
         "SHAPE-06",
@@ -593,6 +753,7 @@ def run_cases():
             and not found["unrelated_model_rendered"]
             and found["gateway_mode"] == "existing"
             and not found["file_config"]
+            and found["copy_urls"] is None
             for name, found in supplied.items()
         )
         and supplied["postgres-existing"]["gateway_url"] == SUPPLIED_URL
@@ -604,7 +765,7 @@ def run_cases():
     wiring = {}
     for name in sorted(managed_kinds):
         output = renders[name]
-        gateway = next(d for d in workloads(output) if name_of(d) == release[name])
+        gateway = next(d for d in workloads(output) if name_of(d) == release[name] + "-gateway")
         config = "\n".join(of_kind(output, "ConfigMap"))
         wiring[name] = {
             "policies": key_policies(config),
@@ -675,6 +836,8 @@ def run_cases():
             and not found["keys_message"] for found in supplied_keyless.values()),
         supplied_keyless,
     ))
+
+    rows.extend(copy_cases(copies))
 
     report = {"suite": "Keeplane chart installation shape", "results": rows,
               "release_package_approved": False}
