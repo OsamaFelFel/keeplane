@@ -46,6 +46,9 @@ gateway:
   url: ""
   expectedVersion: "1.6.0"
   preflightModel: ""
+  # Installer-created Secret with runtime-key, admin-key, runtime-key-hash and
+  # admin-key-hash. Required for the managed gateway: the chart refuses to
+  # install it without this Secret and its hash variables in extraEnv below.
   keysSecret: ""
 
 networkPolicy:
@@ -80,11 +83,28 @@ agentgateway-standalone:
   database:
     postgres:
       url: ""
+  # The managed gateway must load GATEWAY_RUNTIME_KEY_HASH and
+  # GATEWAY_ADMIN_KEY_HASH from gateway.keysSecret (keys runtime-key-hash and
+  # admin-key-hash) with secretKeyRef entries here. Helm cannot pass the Secret
+  # name into this bundled chart, so the chart checks these entries instead.
+  extraEnv: []
   config:
     gateways:
       default:
         port: 4000
+    # Both key policies are part of the chart: management and model calls on
+    # port 4000 always require a key. Helm refuses an install that removes them.
     ui:
       gateways: default
+      policies:
+        apiKey:
+          mode: strict
+          keys:
+            - keyHash: ${GATEWAY_ADMIN_KEY_HASH}
     llm:
+      policies:
+        apiKey:
+          mode: strict
+          keys:
+            - keyHash: ${GATEWAY_RUNTIME_KEY_HASH}
       models: []

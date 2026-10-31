@@ -13,6 +13,11 @@ the current release scope.
 | `managed` | Keeplane app and gateway | The chart's gateway Service | Two agentgateway replicas with shared PostgreSQL registration |
 | `existing` | Keeplane app only | `gateway.url`, supplied by the operator | A separate agentgateway installation in another namespace |
 
+In `managed` mode the chart always requires keys on the gateway's model and
+management port and refuses to install without `gateway.keysSecret`; see
+[gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
+In `existing` mode the customer-run gateway keeps its own key setup.
+
 ## Try both modes locally
 
 Follow [the kind setup](kubernetes-local.md) to start the isolated trial. It

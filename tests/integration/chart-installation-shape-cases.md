@@ -7,7 +7,8 @@ with Helm 3.19 or newer. The checks find Helm through `KEEPLANE_HELM_BIN`, else
 Each case renders the chart with `helm template` in four installations: PostgreSQL
 with the managed gateway, PostgreSQL with an existing gateway, and the two local
 trial values in `deploy/local/`. The PostgreSQL values are written to a temporary
-file and use the documented Secret-backed gateway settings. Rendering proves what
+file and use the documented Secret-backed gateway settings. SHAPE-08 and SHAPE-09
+also render deliberately incomplete variants. Rendering proves what
 the chart asks Kubernetes to create. It does not prove that a cluster enforces it.
 
 | ID | Plain-English action | Expected result |
@@ -18,8 +19,11 @@ the chart asks Kubernetes to create. It does not prove that a cluster enforces i
 | SHAPE-04 | Inspect every container's environment and mounts, the gateway configuration and connection URLs. | The chart renders no Secret object. Each password, key or signing secret is either a `secretKeyRef` or a path to a file in a read-only Secret mount. The gateway configuration contains only `${...}` placeholders for its database password and key hashes, each loaded from a Secret. No URL contains a literal password. The existing-gateway app receives no gateway database credential. |
 | SHAPE-05 | Inspect every Deployment's probes, root filesystem and writable mounts. | Every long-running container has a readiness probe and a read-only root filesystem. The app also has a liveness probe; the gateway has a startup probe. In PostgreSQL mode the only writable app state is the operator's provider-key claim. The local trials declare their state and provider-key claims. The gateway writes only scratch `/tmp` and keeps its catalog in PostgreSQL. Both copies run twice in the managed PostgreSQL installation. Jobs are bounded install hooks. |
 | SHAPE-06 | Render existing-gateway mode while full managed-gateway settings, including an extra model, are still in the values. | Only the Keeplane app, its Service, Jobs, Ingress or trial claims render. No gateway Deployment, Service, configuration, account or policy appears, and the extra model is not written anywhere. The app points at the supplied gateway URL and gets no managed gateway configuration file. |
+| SHAPE-07 | Render the managed PostgreSQL installation and the managed local trial with `gateway.keysSecret` set, without writing any key policy in the values. | The gateway configuration requires a key for management (`ui`) and for model calls (`llm`) on port 4000: each is a strict policy with one `${...}` placeholder. The gateway reads both hashes with `secretKeyRef` from the Secret named in `gateway.keysSecret` (`runtime-key-hash` and `admin-key-hash`). The chart renders no Secret object and no literal key hash. Neither the test values nor `deploy/local/values.yaml` repeat the policy. |
+| SHAPE-08 | Try to install the managed gateway without `gateway.keysSecret` (bare default install, minimal values, PostgreSQL values, local values), without its hash variables, with a hash from another Secret, a literal hash or a duplicate variable, and with the model policy removed, the management policy loosened or an extra model key added. | Helm refuses every one before installation. Without the Secret the message tells the installer to create it and set `gateway.keysSecret`. A missing or wrong hash variable names `gateway.keysSecret` and the exact `extraEnv` entry to add. A weakened policy names the policy the chart sets. |
+| SHAPE-09 | Render existing-gateway mode with no `gateway.keysSecret`, and with gateway values that have no key policy or hash variables. | Both render. No managed gateway object appears and no managed-gateway key message is shown; a customer-run gateway keeps its own key setup. |
 
 Not covered here: live NetworkPolicy enforcement, readiness under failure,
-storage behaviour, and the managed gateway's key policies when an installer
-leaves them out. The chart does not add those policies itself (see the
+storage behaviour, and a live call proving the running gateway refuses a missing
+key. Those run in the Kubernetes regression (see the
 [installation reference](../../docs/guide/kubernetes-installation-reference.md)).

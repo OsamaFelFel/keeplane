@@ -37,7 +37,7 @@ names shown in brackets.
 | `app.postgres.migration.credentialsSecret` | `password` (migration role) | Migration Job only | Read-only file, mode 0440 |
 | `app.postgres.identitySecret` | `signing-secret`, `first-admin-password` | App copies; the Job receives only `signing-secret` | Read-only files, mode 0440 |
 | `app.postgres.caSecret` | `ca.crt` | App copies and migration Job | Read-only file, mode 0440 |
-| `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key` | App copies and preflight Job | Read-only directory `/run/gateway-keys` |
+| `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key`; with the managed gateway also `runtime-key-hash`, `admin-key-hash` | App copies and preflight Job; the managed gateway reads only the two hashes | Read-only directory `/run/gateway-keys`; the gateway gets the hashes through `secretKeyRef` |
 | `app.localTrial.firstAdminSecret` (`keeplane-first-admin`) | `first-admin-password` | Local trial app | Read-only file |
 | `ingress.tlsSecretName` | Standard TLS certificate and key | Your ingress controller | Referenced by the Ingress |
 | `app.imagePullSecrets` | Registry credentials | App and Job pods | Kubernetes pull secret |
@@ -45,14 +45,70 @@ names shown in brackets.
 The PostgreSQL app and migration Job need separate users and Secrets; Helm
 refuses a shared one. The app always connects with database TLS `verify-full`.
 
-The managed gateway reads Secrets only through the values you give it under
-`agentgateway-standalone`. Keep `${NAME}` placeholders in its database URL and
-key policies, and load each `NAME` with `extraEnv` and `secretKeyRef`. The local
-values load `password` from `keeplane-gateway-db`, and `runtime-key-hash` and
-`admin-key-hash` from `keeplane-gateway-keys`. The chart's own default gateway
-configuration sets no key policy for model calls or management, and does not
-read `gateway.keysSecret`. Add both policies in your values, as the local values
-do. In the local trial the app's signing key is generated on the state volume.
+The managed gateway reads Secrets only through `extraEnv` entries with
+`secretKeyRef` under `agentgateway-standalone`. Keep the `${NAME}` placeholder in
+its database URL and load `NAME` that way; the local values load `password` from
+`keeplane-gateway-db`. Its key policies are part of the chart: see
+[gateway access keys](#gateway-access-keys). In the local trial the app's
+signing key is generated on the state volume.
+
+## Gateway access keys
+
+The managed gateway always requires a key on port 4000. Management calls need
+the admin key and model calls need the runtime key. The chart sets both policies
+itself and refuses to install the managed gateway without them. The keys stay in
+a Secret you create; the chart only references it and never renders a key or
+key hash.
+
+1. Create the keys and their hashes, then the Secret, in the release namespace:
+
+   ```sh
+   umask 077
+   openssl rand -base64 32 | tr -d '\n' > runtime-key
+   openssl rand -base64 32 | tr -d '\n' > admin-key
+   for name in runtime admin; do
+     printf 'sha256:%s' "$(shasum -a 256 < $name-key | cut -d ' ' -f 1)" > $name-key-hash
+   done
+   kubectl -n <namespace> create secret generic keeplane-gateway-keys \
+     --from-file=runtime-key --from-file=admin-key \
+     --from-file=runtime-key-hash --from-file=admin-key-hash
+   ```
+
+   Keep the two keys separate. Delete the local files once the Secret exists, or
+   store them only where your other installation secrets live.
+2. Set `gateway.keysSecret` to the Secret's name.
+3. Load both hashes into the gateway. Helm cannot pass the Secret name into the
+   bundled gateway chart, so add these entries to `agentgateway-standalone.extraEnv`
+   next to your database password entry. The chart checks that they name the
+   Secret in `gateway.keysSecret`:
+
+   ```yaml
+   agentgateway-standalone:
+     extraEnv:
+       - name: GATEWAY_RUNTIME_KEY_HASH
+         valueFrom:
+           secretKeyRef:
+             name: keeplane-gateway-keys
+             key: runtime-key-hash
+       - name: GATEWAY_ADMIN_KEY_HASH
+         valueFrom:
+           secretKeyRef:
+             name: keeplane-gateway-keys
+             key: admin-key-hash
+   ```
+
+Helm refuses the managed install, before creating anything, when
+`gateway.keysSecret` is empty, when either hash variable is missing, repeated,
+given a literal value or read from another Secret, and when your values remove
+or loosen `agentgateway-standalone.config.ui.policies.apiKey` or
+`agentgateway-standalone.config.llm.policies.apiKey`. Do not set those two
+policies in your values; the chart's are used. The
+[`deploy/local/values.yaml`](../../deploy/local/values.yaml) file shows the full
+form. These keys apply to the managed gateway alongside the gateway
+NetworkPolicy below, so the gateway stays closed even where a cluster does not
+enforce NetworkPolicy. In existing-gateway mode none of this applies: the
+customer-run gateway keeps its own key setup, and `gateway.keysSecret` gives the
+app and preflight Job the keys that gateway accepts.
 
 ## Readiness
 
@@ -115,7 +171,7 @@ own installation.
 | Values | `gateway.mode=managed`, `gateway.install=true` | `gateway.mode=existing`, `gateway.install=false`, `gateway.url` |
 | Installs a gateway | Yes: Deployment, Service, ConfigMap and ServiceAccount from the bundled chart | No gateway objects at all; `agentgateway-standalone` values are ignored |
 | App reaches the gateway at | `http://<release>:4000` | `gateway.url` |
-| Before install | Nothing extra | Preflight Job checks the gateway version, model listing and management read access, and makes one call if `gateway.preflightModel` is set |
+| Before install | Create the [gateway key Secret](#gateway-access-keys); Helm refuses the install without it | Preflight Job checks the gateway version, model listing and management read access, and makes one call if `gateway.preflightModel` is set |
 | Gateway database credential | Yours, through `agentgateway-standalone` | None given to Keeplane |
 
 Helm refuses mismatched `mode` and `install` values. In existing mode the chart

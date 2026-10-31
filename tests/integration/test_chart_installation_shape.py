@@ -6,7 +6,9 @@ import re
 import sys
 import tempfile
 
-from tests.integration.test_chart_package import CHART, ROOT, case, manifests, run
+from tests.integration.test_chart_package import (
+    CHART, ROOT, case, gateway_key_env, manifests, run,
+)
 
 
 IMAGE = "registry.example.test/keeplane@sha256:" + "a" * 64
@@ -51,24 +53,9 @@ def gateway_values():
         "extraVolumeMounts": [
             {"name": "provider-keys", "mountPath": "/provider-keys", "readOnly": True}
         ],
+        # No key policies here: the chart supplies both (SHAPE-07).
         "config": {
-            "gateways": {"default": {"port": 4000}},
-            "ui": {
-                "gateways": "default",
-                "policies": {
-                    "apiKey": {
-                        "mode": "strict",
-                        "keys": [{"keyHash": "${GATEWAY_ADMIN_KEY_HASH}"}],
-                    }
-                },
-            },
             "llm": {
-                "policies": {
-                    "apiKey": {
-                        "mode": "strict",
-                        "keys": [{"keyHash": "${GATEWAY_RUNTIME_KEY_HASH}"}],
-                    }
-                },
                 "models": [
                     {
                         "name": UNRELATED_MODEL,
@@ -232,6 +219,89 @@ def images(output):
     return re.findall(r"^\s*(?:- )?image: \"?([^\"\s]+)\"?\s*$", output, re.M)
 
 
+KEYS_SECRET = "keeplane-gateway-keys"
+KEYS_MESSAGE = "Create a Secret in the release namespace"
+GATEWAY_DB_URL = (
+    "agentgateway-standalone.database.postgres.url="
+    "postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@db:5432/keeplane"
+)
+
+
+def key_refusal_arguments(managed_file):
+    """Managed installs that would leave port 4000 without a key check."""
+    managed = ("-f", str(managed_file))
+    other_secret = json.dumps([
+        secret_env("GATEWAY_RUNTIME_KEY_HASH", "other-keys", "runtime-key-hash"),
+        secret_env("GATEWAY_ADMIN_KEY_HASH", KEYS_SECRET, "admin-key-hash"),
+    ])
+    literal = json.dumps([
+        {"name": "GATEWAY_RUNTIME_KEY_HASH", "value": "sha256:" + "b" * 64},
+        secret_env("GATEWAY_ADMIN_KEY_HASH", KEYS_SECRET, "admin-key-hash"),
+    ])
+    duplicate = json.dumps(gateway_key_env(KEYS_SECRET) + [
+        {"name": "GATEWAY_ADMIN_KEY_HASH", "value": "sha256:" + "c" * 64},
+    ])
+    return {
+        "default-install": (),
+        "keyless-minimal": ("--set", GATEWAY_DB_URL),
+        "keyless-postgres": (*managed, "--set", "gateway.keysSecret="),
+        "keyless-local": ("-f", "deploy/local/values.yaml", "--set", "gateway.keysSecret="),
+        "no-hash-env": ("--set", GATEWAY_DB_URL, "--set", "gateway.keysSecret=" + KEYS_SECRET),
+        "hash-from-other-secret": (*managed, "--set-json",
+                                   "agentgateway-standalone.extraEnv=" + other_secret),
+        "literal-hash": (*managed, "--set-json",
+                         "agentgateway-standalone.extraEnv=" + literal),
+        "duplicate-hash-env": (*managed, "--set-json",
+                               "agentgateway-standalone.extraEnv=" + duplicate),
+        "model-policy-removed": (*managed, "--set",
+                                 "agentgateway-standalone.config.llm.policies=null"),
+        "management-policy-open": (*managed, "--set",
+                                   "agentgateway-standalone.config.ui.policies.apiKey.mode=optional"),
+        "extra-model-key": (*managed, "--set-json",
+                            'agentgateway-standalone.config.llm.policies.apiKey.keys='
+                            '[{"keyHash":"${GATEWAY_RUNTIME_KEY_HASH}"},'
+                            '{"keyHash":"sha256:' + "d" * 64 + '"}]'),
+    }
+
+
+def existing_keyless_arguments(files):
+    """Existing-gateway installs: the managed key rules must not apply."""
+    supplied = ("--set", "gateway.mode=existing", "--set", "gateway.install=false",
+                "--set", "gateway.url=" + SUPPLIED_URL)
+    return {
+        "existing-no-keys-secret": supplied,
+        "existing-gateway-values-without-policy": (
+            "-f", str(files["existing"]),
+            "--set", "agentgateway-standalone.config.llm.policies=null",
+            "--set", "agentgateway-standalone.extraEnv=null",
+        ),
+    }
+
+
+def gateway_env_refs(container):
+    """Variable -> (Secret name, key) for secretKeyRef env entries."""
+    found = {}
+    for item in items(block(container, "env")):
+        if "secretKeyRef:" in item:
+            reference = "\n".join(block(item, "secretKeyRef"))
+            found[scalar(item, "name")] = (scalar(reference, "name"), scalar(reference, "key"))
+    return found
+
+
+def key_policies(config):
+    """Section -> (mode, key hashes) for the apiKey policies in a gateway ConfigMap."""
+    lines = config.splitlines()
+    found = {}
+    for section in ("ui", "llm"):
+        policy = block(block(block(lines, section), "policies"), "apiKey")
+        text = "\n".join(policy)
+        found[section] = (
+            scalar(text, "mode"),
+            [h.strip("\"'") for h in re.findall(r"keyHash: (\S+)", text)],
+        )
+    return found
+
+
 def render(name, *args):
     result = run("template", name, CHART, *args)
     assert result.returncode == 0, result.stderr
@@ -265,6 +335,14 @@ def run_cases():
             "template", "pg", CHART, "-f", str(files["existing"]), "--set",
             "agentgateway-standalone.image=cr.agentgateway.dev/agentgateway:v1.6.0",
         )
+        refusals = {
+            label: run("template", "pg", CHART, *arguments)
+            for label, arguments in key_refusal_arguments(files["managed"]).items()
+        }
+        existing_keyless = {
+            label: run("template", "pg", CHART, *arguments)
+            for label, arguments in existing_keyless_arguments(files).items()
+        }
     managed, existing = renders["postgres-managed"], renders["postgres-existing"]
     managed_kinds = {"postgres-managed", "local-managed"}
     rows = []
@@ -520,6 +598,81 @@ def run_cases():
         and supplied["postgres-existing"]["gateway_url"] == SUPPLIED_URL
         and UNRELATED_MODEL in managed,
         supplied,
+    ))
+
+    # SHAPE-07: the chart itself closes the managed gateway with gateway.keysSecret.
+    wiring = {}
+    for name in sorted(managed_kinds):
+        output = renders[name]
+        gateway = next(d for d in workloads(output) if name_of(d) == release[name])
+        config = "\n".join(of_kind(output, "ConfigMap"))
+        wiring[name] = {
+            "policies": key_policies(config),
+            "hash_env": {
+                variable: reference
+                for variable, reference in gateway_env_refs(containers(gateway)[0]).items()
+                if variable.endswith("_KEY_HASH")
+            },
+            "secret_objects": len(of_kind(output, "Secret")),
+            "literal_hashes": len(re.findall(r"sha256:[0-9a-f]{64}", output)),
+        }
+    rows.append(case(
+        "SHAPE-07",
+        all(
+            found["policies"] == {
+                "ui": ("strict", ["${GATEWAY_ADMIN_KEY_HASH}"]),
+                "llm": ("strict", ["${GATEWAY_RUNTIME_KEY_HASH}"]),
+            }
+            and found["hash_env"] == {
+                "GATEWAY_RUNTIME_KEY_HASH": (KEYS_SECRET, "runtime-key-hash"),
+                "GATEWAY_ADMIN_KEY_HASH": (KEYS_SECRET, "admin-key-hash"),
+            }
+            and found["secret_objects"] == 0
+            and found["literal_hashes"] == 0
+            for found in wiring.values()
+        )
+        and "policies" not in json.dumps(gateway_values())
+        and "policies:" not in (ROOT / "deploy/local/values.yaml").read_text(),
+        wiring,
+    ))
+
+    # SHAPE-08: Helm refuses a managed gateway that would not check keys.
+    refused = {
+        label: {
+            "exit": result.returncode,
+            "names_keys_secret": "gateway.keysSecret" in result.stderr,
+            "says_create_secret": KEYS_MESSAGE in result.stderr,
+            "names_policy": "key policy must stay strict" in result.stderr,
+        }
+        for label, result in refusals.items()
+    }
+    keyless = ("default-install", "keyless-minimal", "keyless-postgres", "keyless-local")
+    unwired = ("no-hash-env", "hash-from-other-secret", "literal-hash", "duplicate-hash-env")
+    opened = ("model-policy-removed", "management-policy-open", "extra-model-key")
+    rows.append(case(
+        "SHAPE-08",
+        all(found["exit"] != 0 for found in refused.values())
+        and all(refused[label]["says_create_secret"] for label in keyless)
+        and all(refused[label]["names_keys_secret"] for label in keyless + unwired)
+        and all(refused[label]["names_policy"] for label in opened)
+        and all(KEYS_SECRET not in result.stdout for result in refusals.values()),
+        refused,
+    ))
+
+    # SHAPE-09: existing-gateway mode needs none of the managed gateway's key rules.
+    supplied_keyless = {
+        label: {
+            "exit": result.returncode,
+            "gateway_rendered": "agentgateway-standalone" in result.stdout,
+            "keys_message": KEYS_MESSAGE in result.stderr,
+        }
+        for label, result in existing_keyless.items()
+    }
+    rows.append(case(
+        "SHAPE-09",
+        all(found["exit"] == 0 and not found["gateway_rendered"]
+            and not found["keys_message"] for found in supplied_keyless.values()),
+        supplied_keyless,
     ))
 
     report = {"suite": "Keeplane chart installation shape", "results": rows,

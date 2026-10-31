@@ -18,6 +18,7 @@ gateway:
   keysSecret: keeplane-gateway-keys
 
 agentgateway-standalone:
+  # The chart requires both key-hash entries from gateway.keysSecret.
   extraEnv:
     - name: KEEPLANE_DB_PASSWORD
       valueFrom:
@@ -48,23 +49,9 @@ agentgateway-standalone:
   database:
     postgres:
       url: postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@postgres:5432/keeplane
+  # The chart adds the strict key policies for management and model calls.
   config:
-    gateways:
-      default:
-        port: 4000
-    ui:
-      gateways: default
-      policies:
-        apiKey:
-          mode: strict
-          keys:
-            - keyHash: ${GATEWAY_ADMIN_KEY_HASH}
     llm:
-      policies:
-        apiKey:
-          mode: strict
-          keys:
-            - keyHash: ${GATEWAY_RUNTIME_KEY_HASH}
       models:
         - name: local-fixture
           provider:

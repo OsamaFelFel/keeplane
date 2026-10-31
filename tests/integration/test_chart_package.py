@@ -13,6 +13,29 @@ HELM = require_helm()
 CHART = "deploy/helm/keeplane"
 
 
+def gateway_key_env(secret):
+    """The two extraEnv entries the chart requires from gateway.keysSecret."""
+    return [
+        {
+            "name": "GATEWAY_" + role + "_KEY_HASH",
+            "valueFrom": {
+                "secretKeyRef": {"name": secret, "key": role.lower() + "-key-hash"}
+            },
+        }
+        for role in ("RUNTIME", "ADMIN")
+    ]
+
+
+def gateway_key_args(secret):
+    """Helm arguments that give a managed gateway its key Secret."""
+    return (
+        "--set",
+        "gateway.keysSecret=" + secret,
+        "--set-json",
+        "agentgateway-standalone.extraEnv=" + json.dumps(gateway_key_env(secret)),
+    )
+
+
 def run(*args):
     return subprocess.run(
         (HELM, *args), cwd=ROOT, text=True, capture_output=True, timeout=30
