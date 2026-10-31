@@ -614,7 +614,8 @@ def run_cases():
                 if variable.endswith("_KEY_HASH")
             },
             "secret_objects": len(of_kind(output, "Secret")),
-            "literal_hashes": len(re.findall(r"sha256:[0-9a-f]{64}", output)),
+            # Image digests (`@sha256:`) are allowed; a key hash is not.
+            "literal_hashes": len(re.findall(r"(?<!@)sha256:[0-9a-f]{64}", output)),
         }
     rows.append(case(
         "SHAPE-07",
