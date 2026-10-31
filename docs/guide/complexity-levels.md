@@ -5,9 +5,11 @@ Keeplane has three complexity levels: **Simple**, **Standard** and
 the **Complexity** table under Models shows each level's model and whether it
 is **Keeplane's pick** or **changed by an admin**.
 
-Keeplane judging a task's complexity and sending the task to its level's model
-is still being built. The levels you set here are stored and shown, but no
-developer task is routed by level yet. Persona rules are not built yet either.
+Keeplane judging a task's complexity is still being built, so the CLI does not
+send a task's level yet. When a level is named, a
+[persona rule](persona-rules.md) for the task's persona and the developer's own
+switch both come before the level's model; the order is in
+[Persona rules](persona-rules.md#which-model-a-task-goes-to).
 
 ## Keeplane's pick
 
@@ -44,14 +46,15 @@ An admin's choice always wins over Keeplane's pick and does not move when
 models are added or removed. If its model stops being set up, for example
 because its gateway definition changed, the row says so and Keeplane's pick is
 shown until the model is set up again. Admin choices apply to the whole
-organization; a project with a data class still only uses models approved for
-its class once routing by level is built.
+organization; a project with a data class only uses models approved for its
+class, so when the admin's model isn't allowed there, the level uses Keeplane's
+pick among the models that project may use.
 
 ## Removing a model a level uses
 
-A model that an admin chose for a level can't be removed. **Remove model** (or
-**Remove Keeplane setup**) shows **[model] is still in use** and lists the
-levels. Change those levels to another model or back to Keeplane's pick first,
+A model that an admin chose for a level, or that a persona rule uses, can't be
+removed. **Remove model** (or **Remove Keeplane setup**) shows **[model] is
+still in use** and lists the levels and persona rules. Change those levels to another model or back to Keeplane's pick first,
 then remove it. Nothing is sent to the gateway while the model is in use.
 
 A model that is only Keeplane's pick for a level can be removed; Keeplane picks

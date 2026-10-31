@@ -355,6 +355,14 @@ CLIs treat that reason as an invalid choice and also stop. It reads registration
 reads a developer's own key or sends any key, and is advice
 rather than a permit: both gateway checks still run for the chosen model.
 
+`GET /api/runtime/projects/{project_id}/task-model` takes an optional
+`model_id` (the developer's switch), `persona` and `level`, and applies the
+routing order of Spec 004 ST17 (D150): the developer's switch through
+`DjangoModelChoice.choose`, then the persona rule's model, then the level's
+model, then `next_allowed`. Each rule or level candidate passes the same filter
+as `next_allowed` before it is returned; the CLI does not call it yet. Details
+are in [task routing](task-routing.md).
+
 `DjangoModelChoice.next_allowed(session, owner, project, skip=...)` is the one
 candidate filter for every fallback: registered and set up with its current
 definition, allowed for the project's class, admitted by the mode's runtime gate
