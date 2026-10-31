@@ -20,7 +20,7 @@ from integrations.gateway.keys import (
 from integrations.gateway.keys import (
     save as save_provider_key,
 )
-from integrations.runners import local_runner
+from integrations.runners import active_context, local_runner
 
 from model_registry.fingerprints import fingerprint
 from model_registry.provider_probe import provider_answers
@@ -68,6 +68,10 @@ class ModelManagement:
 
     def local_runner(self, address, model=None):
         return local_runner(address, self.runner_urls, model)
+
+    def runner_context(self, address, model):
+        """The runner's reported context window, used only to rank levels."""
+        return active_context(address, self.runner_urls, model)
 
     def confirm_new_model(self, model_id, expected_params):
         """Wait for management readback, then ask through the registered gateway path."""
@@ -738,6 +742,9 @@ class ModelManagement:
             if checked_status != 200:
                 return self.reply(checked_status, checked)
             sources["runner"] = address.rstrip("/") + "/v1"
+            context_tokens = self.runner_context(address, model)
+        else:
+            context_tokens = None
         if source not in sources:
             return self.reply(400, {"error": "Choose a supported local source"})
         if source in ("qwen", "guarded"):
@@ -842,7 +849,12 @@ class ModelManagement:
             )
         try:
             approval = self.catalog.approve(
-                name, classes, model_revision, self.actor(), owned_by_keeplane=True
+                name,
+                classes,
+                model_revision,
+                self.actor(),
+                owned_by_keeplane=True,
+                **({"context_tokens": context_tokens} if context_tokens else {}),
             )
         except (ValueError, IdentityError, StorageUnavailable):
             removed = self.undo_new_model(name, params)

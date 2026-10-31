@@ -15,6 +15,9 @@ class ModelApproval(models.Model):
     approved_classes = models.JSONField(default=list)
     gateway_fingerprint = models.CharField(max_length=128)
     owned_by_keeplane = models.BooleanField(default=False)
+    # The context window a local runner reported when Keeplane added the
+    # model, in tokens; null when Keeplane was not told. Admins never enter it.
+    context_tokens = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "accounts_modelapproval"
@@ -45,3 +48,26 @@ class DeveloperProviderKey(models.Model):
 class PendingProviderKeyDeletion(models.Model):
     directory = models.TextField()
     key_name = models.CharField(max_length=36)
+
+
+class ComplexityLevel(models.TextChoices):
+    SIMPLE = "simple", "Simple"
+    STANDARD = "standard", "Standard"
+    COMPLEX = "complex", "Complex"
+
+
+class ComplexityLevelChoice(models.Model):
+    """An admin's pick for one complexity level; absent means Keeplane picks."""
+
+    level = models.CharField(
+        max_length=16, primary_key=True, choices=ComplexityLevel.choices
+    )
+    model_id = models.CharField(max_length=256)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(level__in=ComplexityLevel.values),
+                name="complexity_level_valid",
+            )
+        ]

@@ -3,6 +3,9 @@
 Spec 006 ST21. The plain-English cases are in settings-change-record-cases.md.
 """
 
+import json
+import select
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -438,3 +441,105 @@ def test_sc_10_a_change_of_owner_is_named(domain_services):
         "Changed model gateway-model: now set up by Keeplane",
         "Set up model gateway-model; provider key: none; approved classes: none",
     ]
+
+
+LEVEL_RECORDS = [
+    "Changed complexity pick Complex: Keeplane's pick to model alpha",
+    "Changed complexity pick Complex: model alpha to model beta",
+    "Changed complexity pick Complex: model beta to Keeplane's pick",
+]
+
+
+def test_sc_12_complexity_pick_records_commit_with_the_change(start_process):
+    app = start_process()
+    app.ask("migrate")
+    assert app.ask("level_setup")["records"] == []
+    result = app.ask("level_changes")
+    assert result["refused"] == ["Complex"]
+    assert result["records"] == LEVEL_RECORDS
+    assert result["choices"] == {}
+    assert result["models"] == ["alpha", "beta"]
+    rows = settings_records(start_process())
+    assert [row["what"] for row in rows] == LEVEL_RECORDS
+    assert {row["who"] for row in rows} == {"settings-admin"}
+
+
+def send(process, **command):
+    """Send one command without waiting for its answer."""
+    process.child.stdin.write(json.dumps(command) + "\n")
+    process.child.stdin.flush()
+
+
+def answer(process, timeout):
+    """The process's next answer, or None if it doesn't answer in time."""
+    ready, _, _ = select.select([process.child.stdout], [], [], timeout)
+    if not ready:
+        return None
+    reply = json.loads(process.child.stdout.readline())
+    assert reply["ok"], reply.get("error")
+    return reply["result"]
+
+
+def wait_until(path, timeout=30):
+    deadline = time.monotonic() + timeout
+    while not path.exists():
+        assert time.monotonic() < deadline, "The first step never took the lock"
+        time.sleep(0.05)
+
+
+@pytest.mark.parametrize("first", ["remove", "change_level"])
+def test_sc_13_level_change_and_removal_on_two_connections(
+    start_process, tmp_path, first
+):
+    """change_level and remove serialize on the settings lock across processes."""
+    a, b = start_process(), start_process()
+    a.ask("migrate")
+    a.ask("level_setup")
+    held, release = tmp_path / "held", tmp_path / "release"
+    if first == "remove":
+        # A removes alpha and pauses at the gateway step, holding the lock;
+        # B tries to choose alpha for Complex at the same time.
+        send(
+            a,
+            action="level_race",
+            step="remove",
+            model="alpha",
+            held=str(held),
+            release=str(release),
+        )
+        wait_until(held)
+        send(
+            b, action="level_race", step="change_level", level="complex", model="alpha"
+        )
+    else:
+        # A chooses alpha for Complex and pauses after its record, holding
+        # the lock; B tries to remove alpha at the same time.
+        send(
+            a,
+            action="level_race",
+            step="change_level",
+            level="complex",
+            model="alpha",
+            held=str(held),
+            release=str(release),
+        )
+        wait_until(held)
+        send(b, action="level_race", step="remove", model="alpha")
+    # B waits for A's lock instead of deciding on what it read earlier.
+    assert answer(b, 1.5) is None
+    release.write_text("go")
+    first_result = answer(a, 30)
+    second_result = answer(b, 30)
+    assert first_result is not None and second_result is not None
+    if first == "remove":
+        assert first_result["removed"] is True
+        assert second_result["level_error"] == "Choose a model that is set up"
+        assert second_result["choices"] == {}
+        assert second_result["models"] == ["beta"]
+        assert second_result["records"] == ["Removed model alpha from the gateway"]
+    else:
+        assert first_result["changed"] is True
+        assert second_result["in_use"] == ["Complex"]
+        assert second_result["choices"] == {"complex": "alpha"}
+        assert second_result["models"] == ["alpha", "beta"]
+        assert second_result["records"] == [LEVEL_RECORDS[0]]

@@ -305,8 +305,7 @@ def removal_rollbacks():
             "in_gateway": model_id in gateway.models,
             "approved": row is not None,
             "pinned_to_gateway": row is not None
-            and row.gateway_fingerprint
-            == fingerprint(model_id, registry["resources"]),
+            and row.gateway_fingerprint == fingerprint(model_id, registry["resources"]),
             "records": AuditRecord.objects.count(),
         }
 
@@ -367,9 +366,7 @@ def removal_rollbacks():
     set_up("normal")
     result["normal"] = remove("normal")
     result["gateway deletes"] = gateway.deletes
-    result["records"] = [
-        row.description for row in AuditRecord.objects.order_by("pk")
-    ]
+    result["records"] = [row.description for row in AuditRecord.objects.order_by("pk")]
     return result
 
 
@@ -382,8 +379,113 @@ def services():
     return audit, DjangoIdentity(password_file, audit), password_file
 
 
+def level_state():
+    from audit.models import AuditRecord
+    from model_registry.models import ComplexityLevelChoice, ModelApproval
+
+    return {
+        "choices": dict(ComplexityLevelChoice.objects.values_list("level", "model_id")),
+        "models": sorted(ModelApproval.objects.values_list("model_id", flat=True)),
+        "records": [
+            row.description
+            for row in AuditRecord.objects.filter(kind="settings").order_by("pk")
+        ],
+    }
+
+
+def level_setup():
+    """Settings changes on and two set-up models, without records for the setup."""
+    audit, _, catalog = domain()
+    for model_id in ("alpha", "beta"):
+        catalog.approve(model_id, [], FIRST, owned_by_keeplane=True)
+    audit.set_option("settings", True)
+    return level_state()
+
+
+def level_changes():
+    """Change a level, repeat it, move it, go back, and guard a removal."""
+    from model_registry.levels import ModelInUse
+
+    _, _, catalog = domain()
+    models = {"alpha", "beta"}
+    catalog.change_level("complex", "alpha", models, ADMIN)
+    catalog.change_level("complex", "alpha", models, ADMIN)
+    catalog.change_level("complex", "beta", models, ADMIN)
+    try:
+        catalog.remove("beta", ADMIN)
+        refused = None
+    except ModelInUse as error:
+        refused = error.levels
+    catalog.change_level("complex", None, models, ADMIN)
+    catalog.change_level("complex", None, models, ADMIN)
+    return {"refused": refused, **level_state()}
+
+
+def wait_for(path, timeout=60):
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not Path(path).exists():
+        if time.monotonic() > deadline:
+            raise TimeoutError("The test never released the settings lock")
+        time.sleep(0.05)
+
+
+def level_race(command):
+    """Hold the settings lock in the middle of one level or removal step.
+
+    The step signals command["held"] while it holds the lock and continues once
+    command["release"] exists, so the test can start the other connection's
+    step in between.
+    """
+    from model_registry.levels import LevelError, ModelInUse
+
+    audit, _, catalog = domain()
+    held, release = command.get("held"), command.get("release")
+
+    def pause():
+        if held:
+            Path(held).write_text("held")
+            wait_for(release)
+
+    try:
+        if command["step"] == "remove":
+
+            def gateway_step():
+                pause()
+                return 200, {}
+
+            removed = catalog.remove(
+                command["model"], ADMIN, remove_from_gateway=gateway_step
+            )
+            return {"removed": removed, **level_state()}
+        if held:
+            recorded = audit.record_in_transaction
+
+            def record_then_pause(*args):
+                result = recorded(*args)
+                pause()
+                return result
+
+            audit.record_in_transaction = record_then_pause
+        catalog.change_level(
+            command["level"], command["model"], {command["model"]}, ADMIN
+        )
+        return {"changed": True, **level_state()}
+    except ModelInUse as error:
+        return {"in_use": error.levels, **level_state()}
+    except LevelError as error:
+        return {"level_error": error.message, **level_state()}
+
+
 def handle(command):
     action = command["action"]
+    if action == "level_setup":
+        return level_setup()
+    if action == "level_changes":
+        return level_changes()
+    if action == "level_race":
+        return level_race(command)
     if action == "migrate":
         return migrate([tuple(item) for item in command.get("target", [])])
     if action == "previous_records":
