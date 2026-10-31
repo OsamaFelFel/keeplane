@@ -19,6 +19,12 @@
 {{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.app.image) }}
 {{- fail "app.postgres requires app.image pinned as repository@sha256:<64 lowercase hex characters>" }}
 {{- end }}
+{{- if .Values.gateway.install }}
+{{- $gatewayImage := (index .Values "agentgateway-standalone").image }}
+{{- if not (and (kindIs "string" $gatewayImage) (regexMatch "^.+@sha256:[a-f0-9]{64}$" $gatewayImage)) }}
+{{- fail "app.postgres with a managed gateway requires agentgateway-standalone.image pinned as repository@sha256:<64 lowercase hex characters>" }}
+{{- end }}
+{{- end }}
 {{- if not .Values.gateway.keysSecret }}{{ fail "app.postgres requires gateway.keysSecret" }}{{- end }}
 {{- if and (not .Values.ingress.enabled) (not (hasPrefix "https://" .Values.app.postgres.publicOrigin)) }}
 {{- fail "app.postgres.publicOrigin must use HTTPS" }}

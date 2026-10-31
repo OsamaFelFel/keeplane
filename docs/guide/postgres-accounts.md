@@ -155,7 +155,9 @@ manifest digest, such as `registry.example.test/keeplane@sha256:<64 hex characte
 Use the digest reported by your registry after publishing the image; the local
 Docker image ID is not the registry manifest digest. Helm refuses tags in
 PostgreSQL mode. App copies, migration Jobs and supplied-gateway preflight use
-that same image. Make it available from the customer's internal registry before
+that same image. With the managed gateway, `agentgateway-standalone.image` must
+also be a `repository@sha256:<digest>` reference; the chart default already is.
+Make both images available from the customer's internal registry before
 closing install-time registry access. Local SQLite trials can still use tags.
 
 Provision a private database owned by a migration role and a separate app login. Neither
