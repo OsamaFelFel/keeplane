@@ -381,10 +381,11 @@ def services():
 
 def level_state():
     from audit.models import AuditRecord
-    from model_registry.models import ComplexityLevelChoice, ModelApproval
+    from model_registry.models import ComplexityLevelChoice, ModelApproval, PersonaRule
 
     return {
         "choices": dict(ComplexityLevelChoice.objects.values_list("level", "model_id")),
+        "rules": dict(PersonaRule.objects.values_list("persona", "model_id")),
         "models": sorted(ModelApproval.objects.values_list("model_id", flat=True)),
         "records": [
             row.description
@@ -418,6 +419,25 @@ def level_changes():
         refused = error.levels
     catalog.change_level("complex", None, models, ADMIN)
     catalog.change_level("complex", None, models, ADMIN)
+    return {"refused": refused, **level_state()}
+
+
+def rule_changes():
+    """Add a persona rule, repeat it, move it, guard a removal and remove it."""
+    from model_registry.levels import ModelInUse
+
+    _, _, catalog = domain()
+    models = {"alpha", "beta"}
+    catalog.set_persona_rule("architect", "alpha", models, ADMIN)
+    catalog.set_persona_rule("architect", "alpha", models, ADMIN)
+    catalog.set_persona_rule("architect", "beta", models, ADMIN)
+    try:
+        catalog.remove("beta", ADMIN)
+        refused = None
+    except ModelInUse as error:
+        refused = error.persona_rules
+    catalog.set_persona_rule("architect", None, models, ADMIN)
+    catalog.set_persona_rule("architect", None, models, ADMIN)
     return {"refused": refused, **level_state()}
 
 
@@ -479,13 +499,14 @@ def wait_for(path, timeout=60):
 
 
 def level_race(command):
-    """Hold the settings lock in the middle of one level or removal step.
+    """Hold the settings lock in the middle of one level, rule or removal step.
 
     The step signals command["held"] while it holds the lock and continues once
     command["release"] exists, so the test can start the other connection's
     step in between.
     """
     from model_registry.levels import LevelError, ModelInUse
+    from model_registry.persona_rules import PersonaRuleError
 
     audit, _, catalog = domain()
     held, release = command.get("held"), command.get("release")
@@ -515,13 +536,22 @@ def level_race(command):
                 return result
 
             audit.record_in_transaction = record_then_pause
-        catalog.change_level(
-            command["level"], command["model"], {command["model"]}, ADMIN
-        )
+        if command["step"] == "persona_rule":
+            catalog.set_persona_rule(
+                command["persona"], command["model"], {command["model"]}, ADMIN
+            )
+        else:
+            catalog.change_level(
+                command["level"], command["model"], {command["model"]}, ADMIN
+            )
         return {"changed": True, **level_state()}
     except ModelInUse as error:
-        return {"in_use": error.levels, **level_state()}
-    except LevelError as error:
+        return {
+            "in_use": error.levels,
+            "rules_in_use": error.persona_rules,
+            **level_state(),
+        }
+    except (LevelError, PersonaRuleError) as error:
         return {"level_error": error.message, **level_state()}
 
 
@@ -531,6 +561,8 @@ def handle(command):
         return level_setup()
     if action == "level_changes":
         return level_changes()
+    if action == "rule_changes":
+        return rule_changes()
     if action == "level_race":
         return level_race(command)
     if action == "migrate":

@@ -97,7 +97,7 @@
       "audit": "0001_initial",
       "data_classes": "0001_initial",
       "gateway_publications": "0002_definitionpublication",
-      "model_registry": "0007_complexity_levels",
+      "model_registry": "0008_persona_rules",
       "projects": "0001_initial"
     },
     "postgres_server": {

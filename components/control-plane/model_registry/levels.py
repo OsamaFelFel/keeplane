@@ -8,8 +8,8 @@ window Keeplane was not told ranks below every model with a known one.
 
 Keeplane's picks are worked out again on every read, so they follow models as
 they are added, set up or removed. An admin's change is stored and always wins
-while its model is set up. Nothing here judges a task's complexity or routes a
-task to a level.
+while its model is set up. Nothing here judges a task's complexity; routing.py
+sends a task to a level's model when the caller names the level.
 """
 
 from .models import ComplexityLevel
@@ -28,15 +28,16 @@ class LevelError(Exception):
 class ModelInUse(Exception):
     """Routing still uses a model, so it can't be removed."""
 
-    def __init__(self, model_id, levels):
+    def __init__(self, model_id, levels, persona_rules=()):
         super().__init__(model_id)
         self.model_id, self.levels = model_id, list(levels)
+        self.persona_rules = list(persona_rules)
 
     def body(self):
         return {
             "error": f"{self.model_id} is still in use. "
             "Move these to another model first, then remove it.",
-            "in_use": {"levels": self.levels, "persona_rules": []},
+            "in_use": {"levels": self.levels, "persona_rules": self.persona_rules},
         }
 
 

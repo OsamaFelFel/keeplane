@@ -10,8 +10,10 @@ from .models import (
     ComplexityLevelChoice,
     DeveloperProviderKey,
     ModelApproval,
+    PersonaRule,
     ProviderKeyChoice,
 )
+from .persona_rules import PERSONA_NAMES, PersonaRuleError, describe_rule_change
 
 
 def _names(values):
@@ -177,9 +179,65 @@ class DjangoModelCatalog:
         )
         return [name for level, name in LEVEL_NAMES.items() if level in levels]
 
+    def persona_rules(self):
+        """Each persona with a rule, with the model it routes to."""
+        return dict(PersonaRule.objects.values_list("persona", "model_id"))
+
+    def _personas_using(self, model_id):
+        personas = set(
+            PersonaRule.objects.filter(model_id=model_id).values_list(
+                "persona", flat=True
+            )
+        )
+        return [name for persona, name in PERSONA_NAMES.items() if persona in personas]
+
     def routing_uses(self, model_id):
-        """Names of the admin-changed levels that use a model."""
-        return self._levels_using(model_id)
+        """The admin-changed levels and persona rules that use a model."""
+        return {
+            "levels": self._levels_using(model_id),
+            "persona_rules": self._personas_using(model_id),
+        }
+
+    def set_persona_rule(self, persona, model_id, set_up_model_ids, actor=None):
+        """Send a persona's work to a model, or with None remove its rule.
+
+        set_up_model_ids are the models set up now with their current gateway
+        definition; gateway-only models are never among them. A persona that
+        already has a rule moves to the new model.
+        """
+        if persona not in PERSONA_NAMES:
+            raise PersonaRuleError(404, "Persona not found")
+        if model_id is not None and (
+            not isinstance(model_id, str) or model_id not in set_up_model_ids
+        ):
+            raise PersonaRuleError(400, "Choose a model that is set up")
+        with settings_change():
+            # Recheck under the settings lock that removal also takes.
+            if (
+                model_id is not None
+                and not ModelApproval.objects.filter(pk=model_id).exists()
+            ):
+                raise PersonaRuleError(400, "Choose a model that is set up")
+            previous = (
+                PersonaRule.objects.filter(pk=persona)
+                .values_list("model_id", flat=True)
+                .first()
+            )
+            if previous == model_id:
+                return {"persona": persona, "model_id": model_id, "changed": False}
+            if model_id is None:
+                PersonaRule.objects.filter(pk=persona).delete()
+            else:
+                PersonaRule.objects.update_or_create(
+                    pk=persona, defaults={"model_id": model_id}
+                )
+            if actor:
+                self.audit.record_in_transaction(
+                    "settings",
+                    *actor,
+                    describe_rule_change(persona, previous, model_id),
+                )
+        return {"persona": persona, "model_id": model_id, "changed": True}
 
     def change_level(self, level, model_id, set_up_model_ids, actor=None):
         """Store an admin's pick for a level, or None to use Keeplane's pick.
@@ -224,19 +282,19 @@ class DjangoModelCatalog:
     def remove(self, model_id, actor=None, remove_from_gateway=None):
         """Remove an approval; with remove_from_gateway, commit only after it succeeds.
 
-        A model that an admin-changed level uses is kept and ModelInUse is
-        raised; Keeplane's own picks never block removal (D121).
+        A model that an admin-changed level or a persona rule uses is kept and
+        ModelInUse is raised; Keeplane's own picks never block removal (D121).
 
         remove_from_gateway runs inside the settings transaction, after the
         approval deletion and its Audit record are written. A failed gateway
         answer raises GatewayRemovalFailed and rolls both back.
         """
         with settings_change():
-            # Checked under the settings lock, so a level can't be changed to
-            # this model while it is being removed.
-            in_use = self._levels_using(model_id)
-            if in_use:
-                raise ModelInUse(model_id, in_use)
+            # Checked under the settings lock, so a level or persona rule
+            # can't be changed to this model while it is being removed.
+            in_use = self.routing_uses(model_id)
+            if in_use["levels"] or in_use["persona_rules"]:
+                raise ModelInUse(model_id, **in_use)
             removed = bool(ModelApproval.objects.filter(pk=model_id).delete()[0])
             if removed and actor:
                 self.audit.record_in_transaction(

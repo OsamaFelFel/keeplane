@@ -71,3 +71,26 @@ class ComplexityLevelChoice(models.Model):
                 name="complexity_level_valid",
             )
         ]
+
+
+class Persona(models.TextChoices):
+    """The predefined personas an agent starts from (D24)."""
+
+    ARCHITECT = "architect", "Architect"
+    DEVELOPER = "developer", "Developer"
+    FRONTEND = "frontend", "Frontend"
+
+
+class PersonaRule(models.Model):
+    """An admin's rule sending one persona's work to one model (Spec 004 ST15)."""
+
+    persona = models.CharField(max_length=16, primary_key=True, choices=Persona.choices)
+    model_id = models.CharField(max_length=256)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(persona__in=Persona.values),
+                name="persona_rule_persona_valid",
+            )
+        ]

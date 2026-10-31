@@ -52,11 +52,16 @@ class Catalog:
         approve_error=None,
         in_use=(),
         late_in_use=(),
+        rules_in_use=(),
+        late_rules_in_use=(),
     ):
-        # in_use: admin-changed levels seen before removal starts.
-        # late_in_use: levels changed to this model after that first check,
-        # found again under the settings lock.
+        # in_use / rules_in_use: admin-changed levels and persona rules seen
+        # before removal starts. late_in_use / late_rules_in_use: levels and
+        # rules changed to this model after that first check, found again
+        # under the settings lock.
         self.in_use, self.late_in_use = list(in_use), list(late_in_use)
+        self.rules_in_use = list(rules_in_use)
+        self.late_rules_in_use = list(late_rules_in_use)
         self.fail = fail
         self.approve_error = approve_error
         self.storage_down = False
@@ -77,11 +82,13 @@ class Catalog:
         return self.approval if model_id == MODEL else None
 
     def routing_uses(self, model_id):
-        return list(self.in_use) if model_id == MODEL else []
+        if model_id != MODEL:
+            return {"levels": [], "persona_rules": []}
+        return {"levels": list(self.in_use), "persona_rules": list(self.rules_in_use)}
 
     def remove(self, model_id, actor, remove_from_gateway=None):
-        if self.late_in_use:
-            raise ModelInUse(model_id, self.late_in_use)
+        if self.late_in_use or self.late_rules_in_use:
+            raise ModelInUse(model_id, self.late_in_use, self.late_rules_in_use)
         if self.fail == "write":
             raise StorageUnavailable("Keeplane storage is unavailable")
         if self.fail == "gone":
@@ -435,6 +442,46 @@ class ModelRemovalTests(unittest.TestCase):
         )
         self.assertEqual(catalog.repinned, [])
         self.assertIs(catalog.approval, previous)
+
+    def test_mr_22_model_used_by_a_persona_rule_is_kept(self):
+        for owned in (True, False):
+            with self.subTest(owned=owned):
+                catalog = Catalog(
+                    owned=owned, in_use=["Complex"], rules_in_use=["Architect"]
+                )
+                gateway = Gateway()
+                status, result = remove_model_setup(
+                    MODEL, ACTOR, catalog, gateway, None, ""
+                )
+                self.assertEqual(status, 409)
+                self.assertEqual(
+                    result["in_use"],
+                    {"levels": ["Complex"], "persona_rules": ["Architect"]},
+                )
+                self.assertEqual(catalog.removals, [])
+                self.assertEqual((gateway.read_count, gateway.deletions), (0, []))
+                only_rule = Catalog(owned=owned, rules_in_use=["Frontend"])
+                status, result = remove_model_setup(
+                    MODEL, ACTOR, only_rule, Gateway(), None, ""
+                )
+                self.assertEqual(
+                    (status, result["in_use"]),
+                    (409, {"levels": [], "persona_rules": ["Frontend"]}),
+                )
+
+    def test_mr_23_rule_added_during_removal_still_keeps_the_model(self):
+        for owned in (True, False):
+            with self.subTest(owned=owned):
+                catalog = Catalog(owned=owned, late_rules_in_use=["Developer"])
+                gateway = Gateway()
+                status, result = remove_model_setup(
+                    MODEL, ACTOR, catalog, gateway, None, ""
+                )
+                self.assertEqual(
+                    (status, result["in_use"]["persona_rules"]), (409, ["Developer"])
+                )
+                self.assertEqual((catalog.removals, gateway.deletions), ([], []))
+                self.assertIsNotNone(catalog.approval)
 
 
 if __name__ == "__main__":

@@ -4,9 +4,11 @@ These cases cover Spec 004 ST13 (Keeplane's picks, Change a level, Use
 Keeplane's pick), the ST23 removal guard for admin-changed levels (D121) and
 the Spec 006 ST21 settings-change record for "a complexity pick". The owner's
 decision for this release sets three levels, Simple, Standard and Complex, and
-Keeplane's pick by context window. Judging a task's complexity and routing it
-to a level (ST14), persona rules (ST15) and the developer's override (ST17)
-are not built and not covered here.
+Keeplane's pick by context window. Judging a task's complexity (ST14) is not
+built. Persona rules (ST15) and the order that sends a task to the developer's
+switch, a persona rule or a level's model (ST17) are in the
+[persona rule cases](persona-rule-cases.md) and the
+[task routing cases](task-routing-cases.md).
 
 ## Picks (unit)
 

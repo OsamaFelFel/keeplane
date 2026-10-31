@@ -68,12 +68,12 @@ def remove_model_setup(
     approval = catalog.get(model_id)
     if approval is None:
         return 404, {"error": "Model setup not found"}
-    # A level an admin changed keeps its model (Spec 004 ST23, D121). This
-    # early answer sends nothing to the gateway; catalog.remove checks again
-    # under the settings lock.
+    # A level an admin changed or a persona rule keeps its model (Spec 004
+    # ST23, D121). This early answer sends nothing to the gateway;
+    # catalog.remove checks again under the settings lock.
     in_use = catalog.routing_uses(model_id)
-    if in_use:
-        return 409, ModelInUse(model_id, in_use).body()
+    if in_use["levels"] or in_use["persona_rules"]:
+        return 409, ModelInUse(model_id, **in_use).body()
     if not approval["owned_by_keeplane"]:
         try:
             removed = catalog.remove(model_id, actor)

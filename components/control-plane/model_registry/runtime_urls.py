@@ -1,6 +1,13 @@
 from django.urls import path
 
-from . import model_choice, personal_transport, runtime_callback, runtime_keys, runtime_views
+from . import (
+    model_choice,
+    personal_transport,
+    routing,
+    runtime_callback,
+    runtime_keys,
+    runtime_views,
+)
 
 urlpatterns = [
     path("internal/runtime/provider-token", personal_transport.provider_token),
@@ -33,5 +40,9 @@ urlpatterns = [
     path(
         "api/runtime/projects/<str:project_id>/model-alternatives",
         model_choice.project_model_alternatives,
+    ),
+    path(
+        "api/runtime/projects/<str:project_id>/task-model",
+        routing.project_task_model,
     ),
 ]
