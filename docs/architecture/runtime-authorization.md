@@ -403,7 +403,10 @@ the list uses the same filter as every fallback: at most 32 model IDs, never the
 requested model, never a gateway-only model. The response is
 `{"project_id", "model_id", "alternatives"}`; nothing is chosen or moved. The CLI
 prints which model is unavailable or too small and the listed models for
-`--model`, or the existing no-model message when the list is empty
+`--model`. When the list is empty, a down model gets "… is unavailable right now
+and no other model is allowed for this project. Wait and try again, or ask your
+admin to set up another model." (governance issue #52), and a task too big for
+its model gets the existing no-model message
 ([CLI coding guide](../guide/cli-coding.md)). Errors are 400, 401, 403 and 503
 as for the model choice.
 

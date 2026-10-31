@@ -38,10 +38,15 @@
   this project using --model: …” with the server's list. The runtime is started
   once, with the requested model only. Run
   `python -m pytest tests/unit/test_cli_model_outage.py`.
-- No alternative left: the message ends with the existing no-models message.
+- No other allowed model (owner decision, governance issue #52): after a 429 or
+  5xx, `code` prints “coder is unavailable right now and no other model is
+  allowed for this project. Wait and try again, or ask your admin to set up
+  another model.” with the requested model's name. The ST12 no-models message,
+  which says “so nothing was sent”, is not shown, because the task was sent; that
+  message itself is unchanged.
 - Task too big for the model's context: “This task is too big for coder's
   context, so it stopped. Run it with another model allowed for this project
-  using --model: …”, or the no-models message.
+  using --model: …”, or the no-models message when no other model is allowed.
 - An older server (404), an unavailable server (503) or a malformed list: the
   reason still shows and points to `keeplane models`; no list is printed.
 - A 400, 401 or 403 error, an error without a status, or a successful turn asks

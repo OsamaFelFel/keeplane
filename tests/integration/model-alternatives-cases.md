@@ -8,7 +8,7 @@ alternatives. Run `python -m pytest tests/integration/test_model_alternatives.py
 | --- | --- | --- |
 | ALT-01 | Two other models are allowed | Both are listed by model ID; the response is not cached. |
 | ALT-02 | Alternatives are listed | Nothing moves: the requested model still answers at the gateway and the next model choice keeps it. |
-| ALT-03 | No other model is allowed | The list is empty; the CLI shows the no-models message. |
+| ALT-03 | No other model is allowed | The list is empty; for a down model the CLI says “… is unavailable right now and no other model is allowed for this project. Wait and try again, or ask your admin to set up another model.” (governance issue #52). |
 | ALT-04 | The only other model is for another class, set up but not installed, gateway-only, needs a missing own key, or lost its shared key file | It is not listed; the shared fallback filter (`next_allowed`) decides. |
 | ALT-05 | Asking about another model | The requested model is never listed. A Personal model is listed only while the developer's own key is usable. |
 | ALT-06 | A model's class approval is withdrawn | It drops from the list. |

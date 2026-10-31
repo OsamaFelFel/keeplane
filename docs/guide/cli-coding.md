@@ -66,8 +66,12 @@ coder is unavailable right now, so this task stopped. Wait and try again, or run
 
 Run the same `code` command again later, or with one of the listed models in
 `--model`. The list is checked for you: only models set up in Keeplane, allowed
-for the project's class and with a usable key. If none is left, the message
-ends with the no-models message shown above instead of a list.
+for the project's class and with a usable key. If no other model is allowed
+for the project, `code` prints instead:
+
+```text
+coder is unavailable right now and no other model is allowed for this project. Wait and try again, or ask your admin to set up another model.
+```
 
 When the model refuses a task as too big for its context, nothing is retried
 and `code` prints:

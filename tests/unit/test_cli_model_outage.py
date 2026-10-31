@@ -63,15 +63,42 @@ def test_a_model_still_down_after_the_retries_names_the_alternatives(
     assert connected.access not in output.out + output.err
 
 
-def test_no_alternative_uses_the_existing_no_model_message(
+@pytest.mark.parametrize("status", [429, 503])
+def test_no_other_allowed_model_says_so_without_the_no_model_message(
+    connected, runtime, monkeypatch, tmp_path, capsys, status  # noqa: F811
+):
+    # Owner decision on governance issue #52: the task was sent and failed.
+    failed_turn(monkeypatch, runtime, api_error(status))
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    output = capsys.readouterr()
+    assert output.err.endswith(
+        "coder is unavailable right now and no other model is allowed for this "
+        "project. Wait and try again, or ask your admin to set up another model.\n"
+    )
+    assert "nothing was sent" not in output.err
+    assert coding.NO_MODELS not in output.err
+    assert len(runtime[1]) == 1 and native_model(runtime) == "keeplane/coder"
+
+
+def test_no_other_allowed_model_names_the_model_that_was_used(
     connected, runtime, monkeypatch, tmp_path, capsys  # noqa: F811
 ):
-    failed_turn(monkeypatch, runtime, api_error(503))
-    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
-    assert capsys.readouterr().err == (
-        "coder is unavailable right now, so this task stopped. Wait and try again. "
-        + coding.NO_MODELS
-        + "\n"
+    connected.model_ids = ["general"]
+    failed_turn(monkeypatch, runtime, api_error(502))
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path,
+                "--model", "general") == 1
+    assert native_model(runtime) == "keeplane/general"
+    assert capsys.readouterr().err.endswith(
+        "general is unavailable right now and no other model is allowed for this "
+        "project. Wait and try again, or ask your admin to set up another model.\n"
+    )
+
+
+def test_the_no_model_message_itself_is_unchanged():
+    assert coding.NO_MODELS == (
+        "No models are available for this project yet, so nothing was sent. "
+        "Ask an admin to add a model, or approve one for this project's class, "
+        "in Models and routing."
     )
 
 

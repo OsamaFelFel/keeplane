@@ -37,7 +37,11 @@ SWITCH = {
     "down": "Wait and try again, or run it with another model allowed for this project",
     "too_big": "Run it with another model allowed for this project",
 }
-WAIT = {"down": "Wait and try again. ", "too_big": ""}
+# Owner decision on governance issue #52: the task was sent and failed, so the
+# ST12 "nothing was sent" message is not used when no other model is allowed.
+NO_OTHER_MODEL = ("{model} is unavailable right now and no other model is allowed for "
+                  "this project. Wait and try again, or ask your admin to set up "
+                  "another model.")
 CONTEXT_SIGNS = ("context_length_exceeded", "maximum context length", "context window",
                  "contextoverflow", "prompt is too long", "too many tokens")
 
@@ -119,7 +123,9 @@ def problem_message(problem, model, alternatives):
         return (message + SWITCH[problem]
                 + " using --model; `keeplane models` lists them.")
     if not alternatives:
-        return message + WAIT[problem] + NO_MODELS
+        if problem == "down":
+            return NO_OTHER_MODEL.format(model=model)
+        return message + NO_MODELS
     return message + SWITCH[problem] + " using --model: " + ", ".join(alternatives) + "."
 
 
