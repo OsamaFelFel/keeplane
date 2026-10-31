@@ -36,7 +36,7 @@ request = Request(
     headers=headers,
 )
 try:
-    with urlopen(request, timeout=5) as response:
+    with urlopen(request, timeout=options.get("timeout", 5)) as response:
         incomplete = False
         try:
             raw = response.read(65537)
