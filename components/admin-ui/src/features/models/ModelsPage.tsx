@@ -17,6 +17,15 @@ type Model = {
   approved_classes?: string[]
   owned_by_keeplane?: boolean
 }
+type Level = {
+  level: 'simple' | 'standard' | 'complex'
+  name: string
+  model_id: string | null
+  keeplane_pick: string | null
+  changed_by_admin: boolean
+  admin_model_id: string | null
+  admin_model_set_up: boolean | null
+}
 type Classes = { enabled: boolean; classes: { name: string }[] }
 type RunnerModels = { models: string[]; runtime?: Record<string, { active_context_tokens?: number; training_context_tokens?: number }> }
 
@@ -52,13 +61,18 @@ export function ModelsPage() {
   const [sharedKey, setSharedKey] = useState('')
   const [replacementKey, setReplacementKey] = useState('')
   const [approvedClasses, setApprovedClasses] = useState<string[]>([])
+  const [levels, setLevels] = useState<Level[]>([])
+  const [changingLevel, setChangingLevel] = useState<Level | null>(null)
+  const [levelModel, setLevelModel] = useState('')
+  const [inUse, setInUse] = useState<{ model: string; levels: string[] } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
       const [catalog, classListing] = await Promise.all([
-        api<{ models: Model[] }>('/api/models'), api<Classes>('/api/data-classes'),
+        api<{ models: Model[]; levels?: Level[] }>('/api/models'), api<Classes>('/api/data-classes'),
       ])
       setModels(catalog.models.filter(model => model.kind !== 'endpoint-trial' || model.approved !== undefined))
+      setLevels(catalog.levels ?? [])
       setClasses(classListing)
       setError('')
       return catalog.models
@@ -130,6 +144,18 @@ export function ModelsPage() {
     finally { setBusy(false) }
   }
 
+  function levelsUsing(modelId: string) {
+    return levels.filter(level => level.changed_by_admin && level.admin_model_id === modelId).map(level => level.name)
+  }
+
+  function startRemove() {
+    if (!editing) return
+    setDialogError('')
+    const used = levelsUsing(editing.id)
+    if (used.length) { setEditing(null); setInUse({ model: editing.id, levels: used }) }
+    else setRemoving(true)
+  }
+
   async function remove() {
     if (!editing) return
     setBusy(true); setDialogError('')
@@ -141,9 +167,35 @@ export function ModelsPage() {
         `Removed ${editing.id} from Keeplane and the gateway.`)
       setRemoving(false); setEditing(null)
       await refresh()
+    } catch (cause) {
+      const used = cause instanceof ApiError && cause.status === 409 ? (cause.body.in_use as { levels?: string[] } | undefined)?.levels : undefined
+      if (used?.length) {
+        // A level was changed to this model after the page loaded.
+        setRemoving(false); setInUse({ model: editing.id, levels: used }); setEditing(null)
+        void refresh()
+      } else setDialogError((cause as Error).message)
+    }
+    finally { setBusy(false) }
+  }
+
+  function openLevel(level: Level) {
+    setChangingLevel(level); setDialogError('')
+    setLevelModel(level.model_id ?? '')
+  }
+
+  async function saveLevel(modelId: string | null) {
+    if (!changingLevel) return
+    setBusy(true); setDialogError('')
+    try {
+      const result = await action<{ levels: Level[] }>(`/api/levels/${changingLevel.level}`, 'POST', { model_id: modelId })
+      setLevels(result.levels)
+      setNotice(modelId ? `${changingLevel.name} now uses ${modelId}.` : `${changingLevel.name} uses Keeplane's pick again.`)
+      setChangingLevel(null)
     } catch (cause) { setDialogError((cause as Error).message) }
     finally { setBusy(false) }
   }
+
+  const setUpModels = (models ?? []).filter(model => model.approved === true).map(model => model.id)
 
   const runtime = runnerModels?.runtime?.[modelName]
   return <>
@@ -177,6 +229,26 @@ export function ModelsPage() {
           </TableBody></Table>
       </div>
       <p className="mt-4 text-[14px] leading-5 text-muted-foreground">A model added outside Keeplane gets no work until you set it up.</p>
+    </section>
+
+    <section className="mt-6 rounded-[8px] border border-border bg-card p-5 md:p-6" aria-labelledby="complexity-heading">
+      <h2 id="complexity-heading" className="text-[18px] font-semibold">Complexity</h2>
+      <p className="mt-4 text-[15px] text-muted-foreground">Keeplane judges each task's complexity and picks a model for each level from the models you add.</p>
+      <div className="keeplane-table-frame mt-4" role="region" aria-label="Complexity levels table" tabIndex={0}>
+        <Table><TableHeader><TableRow><TableHead>Level</TableHead><TableHead>Model</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+          <TableBody>{models === null ? <TableRow><TableCell colSpan={3}>Loading models…</TableCell></TableRow> :
+            levels.map(level => <TableRow key={level.level}>
+              <TableCell>{level.name}</TableCell>
+              <TableCell>{level.model_id ? <>
+                <span className="font-medium">{level.model_id}</span>{level.changed_by_admin && level.admin_model_set_up ? ' · changed by an admin' : " · Keeplane's pick"}
+                {level.changed_by_admin && !level.admin_model_set_up && <span className="block text-[14px] leading-5 text-muted-foreground">
+                  An admin chose {level.admin_model_id}, which isn't set up now.
+                </span>}
+              </> : <span className="text-muted-foreground">No model set up yet</span>}</TableCell>
+              <TableCell><Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" aria-label={`Change ${level.name}`} disabled={!!error || !setUpModels.length} onClick={() => openLevel(level)}>Change</Button></TableCell>
+            </TableRow>)}
+          </TableBody></Table>
+      </div>
     </section>
 
     <Dialog open={adding} onOpenChange={open => { if (!open && !busy) setAdding(false) }}>
@@ -222,7 +294,7 @@ export function ModelsPage() {
           {editing?.key_choice === 'shared' && editing.owned_by_keeplane && editing.kind === 'cloud' && <div><Label htmlFor="replacement-key" className="keeplane-field-label">Replace shared key</Label><Input id="replacement-key" type="password" autoComplete="new-password" value={replacementKey} disabled={busy} onChange={event => setReplacementKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Leave it empty to keep the current key.</p></div>}
           {classes?.enabled && <ClassChoices choices={classes.classes.map(item => item.name)} selected={approvedClasses} onChange={setApprovedClasses} />}
           {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}
-          <div className="flex flex-wrap justify-end gap-3">{editing?.approved && <Button type="button" variant="outline" className="mr-auto" disabled={busy} onClick={() => { setDialogError(''); setRemoving(true) }}>{editing.owned_by_keeplane ? 'Remove model' : 'Remove setup'}</Button>}
+          <div className="flex flex-wrap justify-end gap-3">{editing?.approved && <Button type="button" variant="outline" className="mr-auto" disabled={busy} onClick={startRemove}>{editing.owned_by_keeplane ? 'Remove model' : 'Remove setup'}</Button>}
             <Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button></div>
         </form>
       </DialogContent>
@@ -232,6 +304,32 @@ export function ModelsPage() {
         <p>Keeplane stops sending work to {editing?.id}{editing?.owned_by_keeplane ? ' and removes it from the gateway.' : '. The model stays in the gateway.'}</p>
         {dialogError && <p role="alert">{dialogError}</p>}
         <div className="flex justify-end gap-3"><Button variant="outline" disabled={busy} onClick={() => setRemoving(false)}>Cancel</Button><Button disabled={busy} onClick={() => void remove()}>{busy ? 'Removing…' : editing?.owned_by_keeplane ? 'Remove model' : 'Remove setup'}</Button></div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={!!inUse} onOpenChange={open => { if (!open) setInUse(null) }}>
+      <DialogContent showCloseButton={false}><DialogHeader><DialogTitle>{inUse?.model} is still in use</DialogTitle></DialogHeader>
+        <div className="grid gap-2"><p className="text-[15px]">Routing still sends work to it here:</p>
+          <ul className="list-disc pl-5 text-[15px]">{inUse?.levels.map(name => <li key={name}>Complexity level: {name}</li>)}</ul></div>
+        <p className="text-[15px]">Move these to another model first, then remove it.</p>
+        <div className="flex justify-end gap-3"><Button onClick={() => setInUse(null)}>Close</Button></div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={!!changingLevel} onOpenChange={open => { if (!open && !busy) setChangingLevel(null) }}>
+      <DialogContent showCloseButton={false}><DialogHeader><DialogTitle>Model for {changingLevel?.name}</DialogTitle></DialogHeader>
+        <form className="grid gap-5" onSubmit={event => { event.preventDefault(); void saveLevel(levelModel) }}>
+          <div><Label htmlFor="level-model" className="keeplane-field-label">Model</Label>
+            <select id="level-model" className={selectStyle} value={levelModel} required disabled={busy} onChange={event => setLevelModel(event.target.value)}>
+              {!setUpModels.includes(levelModel) && <option value="">Choose a model</option>}
+              {setUpModels.map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
+            {changingLevel?.keeplane_pick && <p className="mt-1 text-[14px] text-muted-foreground">Keeplane's pick is {changingLevel.keeplane_pick}.</p>}</div>
+          {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}
+          <div className="flex flex-wrap justify-between gap-3">
+            <Button type="button" variant="outline" disabled={busy || !changingLevel?.changed_by_admin} onClick={() => void saveLevel(null)}>Use Keeplane's pick</Button>
+            <div className="ml-auto flex gap-3"><Button type="button" variant="outline" disabled={busy} onClick={() => setChangingLevel(null)}>Cancel</Button>
+              <Button type="submit" disabled={busy || !levelModel}>{busy ? 'Saving…' : 'Save'}</Button></div>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   </>

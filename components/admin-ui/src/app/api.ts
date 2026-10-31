@@ -5,7 +5,8 @@ export type UserOperation = { status: 'created' | 'not_found' | 'pending'; user?
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) { super(message); this.status = status }
+  body: Record<string, unknown>
+  constructor(status: number, message: string, body: Record<string, unknown> = {}) { super(message); this.status = status; this.body = body }
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -26,7 +27,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(0, 'Keeplane did not answer.')
   }
   const body = await response.json().catch(() => ({}))
-  if (!response.ok) throw new ApiError(response.status, body.error || `Keeplane returned ${response.status}.`)
+  if (!response.ok) throw new ApiError(response.status, body.error || `Keeplane returned ${response.status}.`, body)
   return body as T
 }
 

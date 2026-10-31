@@ -1,8 +1,9 @@
 # Add and manage models
 
 Start Keeplane using the [local setup guide](local-preview.md), open the printed
-address and choose **Models and routing**. Add, Set up, Edit and Remove work;
-complexity and persona routing are still being built.
+address and choose **Models and routing**. Add, Set up, Edit and Remove work.
+The [complexity levels](complexity-levels.md) show and change each level's
+model; routing tasks by complexity, and persona rules, are still being built.
 
 Choose **Add model**, enter `http://qwen:8080`, choose **Find models**, select `qwen2.5-coder:0.5b`, then choose **Add model**. If data classes are on, you may also select **Approved for** classes. Keeplane checks the runner and registered gateway route before saving setup. The model row shows any selected classes while the mode is on. If that model already appears in the list because of earlier preview tests, use its **Set up** action; Add model reports duplicates without changing them.
 
@@ -11,6 +12,8 @@ The confirmation tells you that Keeplane also removes its gateway registration.
 For a model registered directly in the gateway, the action is **Remove Keeplane
 setup** and leaves the gateway registration in place. The
 [removal cases](../../tests/e2e/model-removal-cases.md) check both paths.
+A model an admin chose for a complexity level can't be removed until that
+level uses another model; see [complexity levels](complexity-levels.md).
 
 The [plain-English cases](../../tests/e2e/model-add-cases.md) and `.venv/bin/python -m pytest tests/e2e/test_model_add.py -m live` test the same protected endpoint with a fresh fixture model, a separate alias of the real Qwen runner, empty or invalid class selections, duplicate registration, and an intentional no-answer rollback. The test removes its trial models afterward. Its [JSON run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-10-optional-data-classes-full-final.json) is versioned.
 

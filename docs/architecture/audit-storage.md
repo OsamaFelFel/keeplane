@@ -28,6 +28,7 @@ flowchart LR
   commits in the same transaction as the change it describes.
 - **Settings changes** are written by the stores that make the change:
   `DjangoModelCatalog.approve` and `remove` for models,
+  `DjangoModelCatalog.change_level` for complexity picks,
   `DjangoDataClassStore` for the class mode and each class, and
   `DjangoProjectClasses.assign` for a project's class. Each holds the
   settings row lock, then calls `DjangoAuditStore.record_in_transaction`

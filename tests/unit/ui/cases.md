@@ -12,6 +12,14 @@ colocated tests.
 | UI-CSRF-03 | Refuse or disconnect a mutation. | The write is not repeated automatically. |
 | UI-CSRF-04 | Supply a different-origin URL. | No token or request is sent to that origin. |
 | MO-UI-COUNT | Open Models with zero, one and two personal-key registrations. | Each personal row shows its server count below “Each developer's own”; shared models show no count. |
+| CL-UI-01 | Open Models with two levels on Keeplane's pick and one changed by an admin. | The Complexity table marks each model “Keeplane's pick” or “changed by an admin”. |
+| CL-UI-02 | Change Simple to another model. | The dialog offers only set-up models, names Keeplane's pick, disables Use Keeplane's pick for a level on Keeplane's pick, sends one protected request and shows the change. |
+| CL-UI-03 | Choose Use Keeplane's pick on an admin-changed level. | The request sends no model and the page says the level uses Keeplane's pick again. |
+| CL-UI-04 | The server refuses a level change. | The dialog stays open with the reason. |
+| CL-UI-05 | Choose Remove model for a model an admin-changed level uses. | “[model] is still in use” lists “Complexity level: Complex”; no removal request is sent. |
+| CL-UI-06 | A level was changed to a model after the page loaded, then the admin removes it. | The server's 409 opens the same in-use dialog with the level it names. |
+| CL-UI-07 | No model is set up. | Each level says “No model set up yet” and Change is disabled. |
+| CL-UI-08 | An admin's model isn't set up now. | The row explains that the admin's model isn't set up. |
 
 ## Projects
 
