@@ -176,7 +176,7 @@ Create namespaced Secrets with these keys:
 | `app.postgres.migration.credentialsSecret` | `password` for the separate migration role |
 | `app.postgres.identitySecret` | `first-admin-password` and stable `signing-secret` |
 | `app.postgres.caSecret` | `ca.crt` for the database's issuing CA |
-| `gateway.keysSecret` | `runtime-key` and separate `admin-key` |
+| `gateway.keysSecret` | `runtime-key` and separate `admin-key`; with the managed gateway also their hashes, as in [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys) |
 
 The chart mounts passwords as files and always uses database `verify-full`;
 the configured hostname must match the server certificate. See

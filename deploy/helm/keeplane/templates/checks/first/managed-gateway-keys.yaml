@@ -1,0 +1,65 @@
+{{- /*
+The managed gateway always requires keys on port 4000. The installer creates
+the Secret named in gateway.keysSecret; the chart only references it and
+renders no key material. This file renders no object: it refuses an install
+whose managed gateway would not check those keys.
+Helm renders deeper template paths first, so this check sits two folders down
+to run before the bundled gateway chart's own checks and show its message first.
+*/ -}}
+{{- if and (eq .Values.gateway.mode "managed") .Values.gateway.install }}
+{{- $secret := .Values.gateway.keysSecret }}
+{{- if not $secret }}
+{{- fail "The managed gateway needs access keys. Create a Secret in the release namespace with runtime-key, admin-key, runtime-key-hash and admin-key-hash, then set gateway.keysSecret to its name. See docs/guide/kubernetes-installation-reference.md#gateway-access-keys." }}
+{{- end }}
+{{- $gateway := index .Values "agentgateway-standalone" }}
+{{- $env := $gateway.extraEnv | default (list) }}
+{{- range $variable, $key := dict "GATEWAY_RUNTIME_KEY_HASH" "runtime-key-hash" "GATEWAY_ADMIN_KEY_HASH" "admin-key-hash" }}
+{{- $matches := list }}
+{{- range $env }}
+{{- if and (kindIs "map" .) (eq (toString (get . "name")) $variable) }}
+{{- $matches = append $matches . }}
+{{- end }}
+{{- end }}
+{{- $wired := false }}
+{{- if eq (len $matches) 1 }}
+{{- $entry := first $matches }}
+{{- $reference := dig "valueFrom" "secretKeyRef" (dict) $entry }}
+{{- if and (not (hasKey $entry "value")) (kindIs "map" $reference) }}
+{{- if and (eq (toString (get $reference "name")) $secret) (eq (toString (get $reference "key")) $key) }}
+{{- $wired = true }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if not $wired }}
+{{- fail (printf "The managed gateway must read %s from key %s of Secret %s (gateway.keysSecret). Add exactly one agentgateway-standalone.extraEnv entry named %s with valueFrom.secretKeyRef name %s and key %s." $variable $key $secret $variable $secret $key) }}
+{{- end }}
+{{- end }}
+{{- $config := $gateway.config | default (dict) }}
+{{- range $section, $variable := dict "ui" "GATEWAY_ADMIN_KEY_HASH" "llm" "GATEWAY_RUNTIME_KEY_HASH" }}
+{{- $expected := printf "${%s}" $variable }}
+{{- $closed := false }}
+{{- $settings := get $config $section }}
+{{- if kindIs "map" $settings }}
+{{- $policies := get $settings "policies" }}
+{{- if kindIs "map" $policies }}
+{{- $policy := get $policies "apiKey" }}
+{{- if kindIs "map" $policy }}
+{{- $keys := get $policy "keys" }}
+{{- if and (eq (toString (get $policy "mode")) "strict") (kindIs "slice" $keys) }}
+{{- if eq (len $keys) 1 }}
+{{- $only := first $keys }}
+{{- if kindIs "map" $only }}
+{{- if eq (toString (get $only "keyHash")) $expected }}
+{{- $closed = true }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if not $closed }}
+{{- fail (printf "The managed gateway's %s key policy must stay strict with the single key hash %s. Remove the override of agentgateway-standalone.config.%s.policies.apiKey; the chart sets it." $section $expected $section) }}
+{{- end }}
+{{- end }}
+{{- end }}

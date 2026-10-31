@@ -1,7 +1,7 @@
 """Render PostgreSQL deployments and reject incomplete or conflicting settings."""
 
 import json
-from tests.integration.test_chart_package import CHART, case, named, run
+from tests.integration.test_chart_package import CHART, case, gateway_key_args, named, run
 
 
 def run_cases():
@@ -33,8 +33,7 @@ def run_cases():
         "app.postgres.migration.user=migrate",
         "--set",
         "app.postgres.migration.credentialsSecret=migrate-db",
-        "--set",
-        "gateway.keysSecret=gateway-keys",
+        *gateway_key_args("gateway-keys"),
         "--set",
         "agentgateway-standalone.mode=readonly",
     )

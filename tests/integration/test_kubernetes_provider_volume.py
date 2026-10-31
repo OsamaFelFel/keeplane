@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from tests.integration.test_chart_package import CHART, named, run
+from tests.integration.test_chart_package import CHART, gateway_key_env, named, run
 
 
 @pytest.mark.parametrize("profile", ["managed", "existing", "postgres"])
@@ -27,7 +27,10 @@ def test_provider_initializer_is_scoped_and_before_application(profile, tmp_path
                 },
             },
             "gateway": {"keysSecret": "gateway-keys"},
-            "agentgateway-standalone": {"mode": "readonly"},
+            "agentgateway-standalone": {
+                "mode": "readonly",
+                "extraEnv": gateway_key_env("gateway-keys"),
+            },
         }
         path = tmp_path / "values.yaml"
         path.write_text(json.dumps(values))

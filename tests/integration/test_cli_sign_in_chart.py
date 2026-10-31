@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.integration.test_chart_package import CHART, named, run
+from tests.integration.test_chart_package import CHART, gateway_key_args, named, run
 
 IMAGE = "registry.example.test/keeplane@sha256:" + "a" * 64
 BASE = ("-f", "deploy/postgres/values.example.yaml", "--set", "app.image=" + IMAGE)
@@ -31,7 +31,8 @@ def test_sign_in_stays_off_by_default():
 def test_enabled_sign_in_registers_both_clients_before_serving(managed):
     extra = (
         ("--set", "gateway.mode=managed", "--set", "gateway.install=true",
-         "--set", "agentgateway-standalone.mode=readonly") if managed else ()
+         "--set", "agentgateway-standalone.mode=readonly",
+         *gateway_key_args("keeplane-gateway-keys")) if managed else ()
     )
     app, job = resources(render(
         "--set", "app.cliSignIn.enabled=true",

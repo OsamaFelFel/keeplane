@@ -3,6 +3,8 @@
 import pytest
 
 import argparse
+import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,6 +27,8 @@ HELM = require_helm()
 NAMESPACE = "keeplane-db-" + uuid.uuid4().hex[:8]
 RELEASE = "db-trial"
 MODEL = "saved-before-rotation"
+KEYS_SECRET = "keeplane-gateway-keys"
+KEYS = {"runtime": secrets.token_urlsafe(32), "admin": secrets.token_urlsafe(32)}
 
 
 def run(*command, input_text=None, check=True, timeout=180):
@@ -76,16 +80,44 @@ def rollout(name):
     kube("rollout", "status", "deployment/" + name, "--timeout=150s")
 
 
-def request(url, path, body=None, method=None):
+def keys_secret():
+    """The installer-created key Secret the chart requires for its gateway."""
+    data = {}
+    for role, key in KEYS.items():
+        data[role + "-key"] = key
+        data[role + "-key-hash"] = "sha256:" + hashlib.sha256(key.encode()).hexdigest()
+    manifest = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": KEYS_SECRET, "namespace": NAMESPACE},
+        "type": "Opaque",
+        "data": {
+            name: base64.b64encode(value.encode()).decode()
+            for name, value in data.items()
+        },
+    }
+    kube("apply", "-f", "-", input_text=json.dumps(manifest))
+
+
+def key_env(role):
+    name = "GATEWAY_" + role.upper() + "_KEY_HASH"
+    reference = {"name": KEYS_SECRET, "key": role + "-key-hash"}
+    return {"name": name, "valueFrom": {"secretKeyRef": reference}}
+
+
+def request(url, path, body=None, method=None, role="runtime"):
+    # The key goes through stdin so it never appears in a process argument.
     probe = """import json,sys,urllib.request
 url,path,body,method=sys.argv[1:]
+key=sys.stdin.readline().strip()
 data=None if body=="null" else body.encode()
 request=urllib.request.Request(url+path,data=data,method=method or None,
- headers={"Content-Type":"application/json"})
+ headers={"Content-Type":"application/json","Authorization":"Bearer "+key})
 with urllib.request.urlopen(request,timeout=10) as response:
  print(json.dumps({"status":response.status,"body":json.load(response)}))"""
     result = kube(
         "exec",
+        "-i",
         "deployment/model",
         "--",
         "python",
@@ -95,6 +127,7 @@ with urllib.request.urlopen(request,timeout=10) as response:
         path,
         json.dumps(body),
         method or "",
+        input_text=KEYS[role] + "\n",
     )
     return json.loads(result.stdout)
 
@@ -191,6 +224,7 @@ def run_cases():
         )
         kube("apply", "-f", "deploy/local/model-fixture.yaml")
         kube("apply", "-f", "deploy/local/postgres-fixture.yaml")
+        keys_secret()
         with tempfile.TemporaryDirectory(prefix="keeplane-db-values-") as temporary:
             values = Path(temporary) / "values.json"
             values.write_text(
@@ -200,6 +234,7 @@ def run_cases():
                             "image": "keeplane-preview:kind-local",
                             "pullPolicy": "Never",
                         },
+                        "gateway": {"keysSecret": KEYS_SECRET},
                         "agentgateway-standalone": {
                             "database": {
                                 "postgres": {
@@ -215,7 +250,9 @@ def run_cases():
                                             "key": "password",
                                         }
                                     },
-                                }
+                                },
+                                key_env("runtime"),
+                                key_env("admin"),
                             ],
                         },
                     }
@@ -297,6 +334,7 @@ def run_cases():
             "/api/config/resources/llm.model",
             {"resources": [{"value": resource}]},
             "PUT",
+            role="admin",
         )
         before = wait_for(converged_models)
         record(

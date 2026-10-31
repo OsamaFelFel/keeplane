@@ -11,7 +11,7 @@ Run `.venv/bin/python -m pytest tests/e2e/test_gateway_secret_binding.py -m live
 
 Run `.venv/bin/python -m pytest tests/e2e/test_gateway_secret_kind.py -m live` for GSECRET-04 after preparing the isolated cluster in [network-policy-cases.md](network-policy-cases.md). The script refuses another kubeconfig context and removes its disposable namespace. Its [PostgreSQL fixture](../fixtures/gateway-secret/kind-db.yaml) uses memory-backed storage and a test-only password; [upstream values](../fixtures/gateway-secret/upstream-values.yaml) reference the Secret key.
 
-Run `.venv/bin/python -m pytest tests/e2e/test_gateway_secret_rotation.py -m live` for the following cases in `kind-keeplane`. The script installs the Keeplane wrapper chart in a disposable namespace, uses generated credentials, and removes the namespace afterward.
+Run `.venv/bin/python -m pytest tests/e2e/test_gateway_secret_rotation.py -m live` for the following cases in `kind-keeplane`. The script installs the Keeplane wrapper chart in a disposable namespace, uses generated credentials, and removes the namespace afterward. It first creates the gateway key Secret the chart requires for a managed gateway, so model calls use the runtime key and model registration uses the admin key.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
