@@ -21,6 +21,7 @@ change, when, and a short description such as these:
 | Replace a model's shared provider key | `Changed model alpha: replaced the shared provider key` |
 | Approve a model again after its gateway definition changed | `Changed model beta: approved its changed gateway definition` |
 | Remove Keeplane's setup, or the model from the gateway | `Removed Keeplane setup for model alpha`, `Removed model beta from the gateway` |
+| Change a complexity pick, or go back to Keeplane's pick | `Changed complexity pick Complex: Keeplane's pick to model alpha`, `Changed complexity pick Complex: model alpha to Keeplane's pick` |
 | Turn data classes on or off | `Turned data classes on; added starter classes: Public, Internal, Confidential` |
 | Add a data class | `Added data class Finance; approved models: alpha` |
 | Rename a class or change its approved models | `Changed data class Finance: renamed to Finance team; approved models: alpha to none` |
@@ -31,8 +32,8 @@ A request that changes nothing, or that Keeplane refuses or rolls back, adds
 no record. For example, when a replacement shared key fails its check and
 Keeplane puts the previous key back, nothing is recorded. A
 record never contains a provider key, key file, password, session token or
-prompt text. Complexity picks are not recorded yet; their levels are still to
-be decided.
+prompt text. Keeplane's own complexity picks moving after a model is added or
+removed are not admin changes and add no record.
 
 The held-back-request and model-answer switches persist independently, but
 their event producers await detection and developer-task flows. Do not use

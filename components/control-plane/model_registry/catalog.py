@@ -5,7 +5,13 @@ from common.storage import settings_change, storage_service
 from data_classes.models import DataClass
 from django.db.models import Exists, OuterRef
 
-from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
+from .levels import LEVEL_NAMES, LevelError, ModelInUse, describe_level_change
+from .models import (
+    ComplexityLevelChoice,
+    DeveloperProviderKey,
+    ModelApproval,
+    ProviderKeyChoice,
+)
 
 
 def _names(values):
@@ -97,9 +103,14 @@ class DjangoModelCatalog:
         owned_by_keeplane=False,
         key_choice="none",
         shared_key_replaced=False,
+        context_tokens=None,
     ):
         if key_choice not in ProviderKeyChoice.values:
             raise ValueError("Choose a supported provider key option")
+        if context_tokens is not None and (
+            type(context_tokens) is not int or context_tokens <= 0
+        ):
+            raise ValueError("The model's context window could not be verified")
         if (
             not isinstance(classes, list)
             or any(not isinstance(item, str) for item in classes)
@@ -124,7 +135,11 @@ class DjangoModelCatalog:
                 "gateway_fingerprint": gateway_fingerprint,
                 "owned_by_keeplane": bool(owned_by_keeplane),
             }
-            ModelApproval.objects.update_or_create(pk=model_id, defaults=values)
+            stored = dict(values)
+            if context_tokens is not None:
+                # Kept from setup to setup; only a runner's report changes it.
+                stored["context_tokens"] = context_tokens
+            ModelApproval.objects.update_or_create(pk=model_id, defaults=stored)
             if actor and previous != values:
                 self.audit.record_in_transaction(
                     "settings",
@@ -140,14 +155,88 @@ class DjangoModelCatalog:
             "owned_by_keeplane": bool(owned_by_keeplane),
         }
 
+    def context_windows(self, model_ids):
+        """The context window recorded for each model, None when unknown."""
+        model_ids = list(model_ids)
+        known = dict(
+            ModelApproval.objects.filter(pk__in=model_ids).values_list(
+                "model_id", "context_tokens"
+            )
+        )
+        return {model_id: known.get(model_id) for model_id in model_ids}
+
+    def level_choices(self):
+        """Each level an admin changed, with the model they chose."""
+        return dict(ComplexityLevelChoice.objects.values_list("level", "model_id"))
+
+    def _levels_using(self, model_id):
+        levels = set(
+            ComplexityLevelChoice.objects.filter(model_id=model_id).values_list(
+                "level", flat=True
+            )
+        )
+        return [name for level, name in LEVEL_NAMES.items() if level in levels]
+
+    def routing_uses(self, model_id):
+        """Names of the admin-changed levels that use a model."""
+        return self._levels_using(model_id)
+
+    def change_level(self, level, model_id, set_up_model_ids, actor=None):
+        """Store an admin's pick for a level, or None to use Keeplane's pick.
+
+        set_up_model_ids are the models set up now with their current gateway
+        definition; gateway-only models are never among them.
+        """
+        if level not in LEVEL_NAMES:
+            raise LevelError(404, "Complexity level not found")
+        if model_id is not None and (
+            not isinstance(model_id, str) or model_id not in set_up_model_ids
+        ):
+            raise LevelError(400, "Choose a model that is set up")
+        with settings_change():
+            # Recheck under the settings lock that removal also takes.
+            if (
+                model_id is not None
+                and not ModelApproval.objects.filter(pk=model_id).exists()
+            ):
+                raise LevelError(400, "Choose a model that is set up")
+            previous = (
+                ComplexityLevelChoice.objects.filter(pk=level)
+                .values_list("model_id", flat=True)
+                .first()
+            )
+            if previous == model_id:
+                return {"level": level, "model_id": model_id, "changed": False}
+            if model_id is None:
+                ComplexityLevelChoice.objects.filter(pk=level).delete()
+            else:
+                ComplexityLevelChoice.objects.update_or_create(
+                    pk=level, defaults={"model_id": model_id}
+                )
+            if actor:
+                self.audit.record_in_transaction(
+                    "settings",
+                    *actor,
+                    describe_level_change(level, previous, model_id),
+                )
+        return {"level": level, "model_id": model_id, "changed": True}
+
     def remove(self, model_id, actor=None, remove_from_gateway=None):
         """Remove an approval; with remove_from_gateway, commit only after it succeeds.
+
+        A model that an admin-changed level uses is kept and ModelInUse is
+        raised; Keeplane's own picks never block removal (D121).
 
         remove_from_gateway runs inside the settings transaction, after the
         approval deletion and its Audit record are written. A failed gateway
         answer raises GatewayRemovalFailed and rolls both back.
         """
         with settings_change():
+            # Checked under the settings lock, so a level can't be changed to
+            # this model while it is being removed.
+            in_use = self._levels_using(model_id)
+            if in_use:
+                raise ModelInUse(model_id, in_use)
             removed = bool(ModelApproval.objects.filter(pk=model_id).delete()[0])
             if removed and actor:
                 self.audit.record_in_transaction(

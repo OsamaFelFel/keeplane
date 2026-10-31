@@ -184,3 +184,73 @@ test('MO-UI-07: editing a Personal model preserves its key choice and explains t
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(dialog).not.toBeVisible()
 })
+
+type Level = { level: string; name: string; model_id: string | null; keeplane_pick: string | null; changed_by_admin: boolean; admin_model_id: string | null; admin_model_set_up: boolean | null }
+
+async function mockLevels(page: Page) {
+  const models: Model[] = ['small-coder', 'large-coder'].map(id => ({ id, provider: 'Local runner', kind: 'real-local', approved: true,
+    key_choice: 'none', approved_classes: [], owned_by_keeplane: true }))
+  const picks: Record<string, string> = { simple: 'small-coder', standard: 'small-coder', complex: 'large-coder' }
+  const admin: Record<string, string> = {}
+  const levels = (): Level[] => [['simple', 'Simple'], ['standard', 'Standard'], ['complex', 'Complex']].map(([level, name]) => ({
+    level, name, model_id: admin[level] ?? picks[level], keeplane_pick: picks[level], changed_by_admin: level in admin,
+    admin_model_id: admin[level] ?? null, admin_model_set_up: level in admin ? true : null,
+  }))
+  await page.route('**/api/identity', route => route.fulfill({ json: { id: 'admin', username: 'first-admin', role: 'admin' } }))
+  await page.route('**/api/data-classes', route => route.fulfill({ json: { enabled: false, classes: [] } }))
+  await page.route(url => url.pathname === '/api/models', route => route.fulfill({ json: { models, levels: levels() } }))
+  const writes: unknown[] = []
+  await page.route(url => url.pathname.startsWith('/api/levels/'), route => {
+    expect(route.request().method()).toBe('POST')
+    expect(route.request().headers()['x-keeplane-action']).toBe('1')
+    const level = new URL(route.request().url()).pathname.split('/').pop()!
+    const { model_id: modelId } = route.request().postDataJSON()
+    writes.push({ level, modelId })
+    if (modelId === null) delete admin[level]
+    else admin[level] = modelId
+    return route.fulfill({ json: { levels: levels() } })
+  })
+  return { writes, admin }
+}
+
+test("MO-UI-08 ST13: change a level with the keyboard and go back to Keeplane's pick", async ({ page }) => {
+  const { writes } = await mockLevels(page)
+  await page.goto('/app/models')
+  const table = page.getByRole('region', { name: 'Complexity levels table' })
+  await expect(table.getByRole('row', { name: /Simple/ })).toContainText("small-coder · Keeplane's pick")
+  await expect(table.getByRole('row', { name: /Complex/ })).toContainText("large-coder · Keeplane's pick")
+  await table.getByRole('button', { name: 'Change Complex' }).focus()
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'Model for Complex' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText("Keeplane's pick is large-coder.")).toBeVisible()
+  expect(await dialog.getByLabel('Model', { exact: true }).evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
+  expect(await dialog.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(560)
+  await dialog.getByLabel('Model', { exact: true }).selectOption('small-coder')
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(table.getByRole('row', { name: /Complex/ })).toContainText('small-coder · changed by an admin')
+  await table.getByRole('button', { name: 'Change Complex' }).click()
+  await dialog.getByRole('button', { name: "Use Keeplane's pick" }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(table.getByRole('row', { name: /Complex/ })).toContainText("large-coder · Keeplane's pick")
+  expect(writes).toEqual([{ level: 'complex', modelId: 'small-coder' }, { level: 'complex', modelId: null }])
+  await page.setViewportSize({ width: 320, height: 800 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+})
+
+test('MO-UI-09 ST23: a model an admin-changed level uses cannot be removed', async ({ page }) => {
+  const { admin } = await mockLevels(page)
+  admin.standard = 'large-coder'
+  let deletes = 0
+  await page.route('**/api/models/large-coder/setup', route => { deletes += 1; return route.fulfill({ status: 500, json: {} }) })
+  await page.goto('/app/models')
+  await page.getByRole('row', { name: /^large-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Edit large-coder' }).getByRole('button', { name: 'Remove model' }).click()
+  const dialog = page.getByRole('dialog', { name: 'large-coder is still in use' })
+  await expect(dialog.getByRole('listitem')).toHaveText(['Complexity level: Standard'])
+  await expect(dialog).toContainText('Move these to another model first, then remove it.')
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  await expect(dialog).not.toBeVisible()
+  expect(deletes).toBe(0)
+})

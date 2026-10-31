@@ -15,6 +15,7 @@ sys.path.insert(
 from common.errors import GatewayRemovalFailed, StorageUnavailable
 from integrations.gateway.adapter import AgentgatewayModelAdapter
 from model_registry.fingerprints import fingerprint
+from model_registry.levels import ModelInUse
 from model_registry.removal import remove_model_setup
 
 
@@ -43,8 +44,19 @@ class Catalog:
     """
 
     def __init__(
-        self, owned=True, key_choice="none", revision=1, fail=None, approve_error=None
+        self,
+        owned=True,
+        key_choice="none",
+        revision=1,
+        fail=None,
+        approve_error=None,
+        in_use=(),
+        late_in_use=(),
     ):
+        # in_use: admin-changed levels seen before removal starts.
+        # late_in_use: levels changed to this model after that first check,
+        # found again under the settings lock.
+        self.in_use, self.late_in_use = list(in_use), list(late_in_use)
         self.fail = fail
         self.approve_error = approve_error
         self.storage_down = False
@@ -64,7 +76,12 @@ class Catalog:
             raise StorageUnavailable("Keeplane storage is unavailable")
         return self.approval if model_id == MODEL else None
 
+    def routing_uses(self, model_id):
+        return list(self.in_use) if model_id == MODEL else []
+
     def remove(self, model_id, actor, remove_from_gateway=None):
+        if self.late_in_use:
+            raise ModelInUse(model_id, self.late_in_use)
         if self.fail == "write":
             raise StorageUnavailable("Keeplane storage is unavailable")
         if self.fail == "gone":
@@ -422,3 +439,37 @@ class ModelRemovalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+    def test_mr_20_model_used_by_an_admin_changed_level_is_kept(self):
+        for owned in (True, False):
+            with self.subTest(owned=owned):
+                catalog = Catalog(owned=owned, in_use=["Simple", "Complex"])
+                gateway = Gateway()
+                status, result = remove_model_setup(
+                    MODEL, ACTOR, catalog, gateway, None, ""
+                )
+                self.assertEqual(status, 409)
+                self.assertEqual(
+                    result["in_use"], {"levels": ["Simple", "Complex"], "persona_rules": []}
+                )
+                self.assertEqual(
+                    result["error"],
+                    f"{MODEL} is still in use. "
+                    "Move these to another model first, then remove it.",
+                )
+                self.assertEqual(catalog.removals, [])
+                self.assertIsNotNone(catalog.approval)
+                self.assertEqual((gateway.read_count, gateway.deletions), (0, []))
+
+    def test_mr_21_level_changed_during_removal_still_keeps_the_model(self):
+        for owned in (True, False):
+            with self.subTest(owned=owned):
+                catalog, gateway = Catalog(owned=owned, late_in_use=["Standard"]), Gateway()
+                status, result = remove_model_setup(
+                    MODEL, ACTOR, catalog, gateway, None, ""
+                )
+                self.assertEqual(
+                    (status, result["in_use"]["levels"]), (409, ["Standard"])
+                )
+                self.assertEqual((catalog.removals, gateway.deletions), ([], []))
+                self.assertIsNotNone(catalog.approval)

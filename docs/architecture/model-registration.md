@@ -42,5 +42,9 @@ cannot tell this from a refusal. The leftover approval matches no gateway
 definition, so it grants nothing and is not listed.
 
 Removing setup for a model added outside Keeplane never contacts the gateway.
+
+A model that an admin chose for a [complexity level](complexity-levels.md) is
+refused with `409` and the levels that use it, before the gateway is read. The
+same check runs again under the settings lock inside `DjangoModelCatalog.remove`.
 The settings transaction holds the settings lock while the gateway answers, so
 other settings changes wait for that call.

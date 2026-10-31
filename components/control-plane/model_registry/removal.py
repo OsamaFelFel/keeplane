@@ -2,6 +2,7 @@
 
 from common.errors import GatewayRemovalFailed, StorageUnavailable
 from model_registry.fingerprints import fingerprint
+from model_registry.levels import ModelInUse
 from integrations.gateway.keys import (
     from_resource as provider_key_file,
     remove as remove_provider_key,
@@ -67,8 +68,17 @@ def remove_model_setup(
     approval = catalog.get(model_id)
     if approval is None:
         return 404, {"error": "Model setup not found"}
+    # A level an admin changed keeps its model (Spec 004 ST23, D121). This
+    # early answer sends nothing to the gateway; catalog.remove checks again
+    # under the settings lock.
+    in_use = catalog.routing_uses(model_id)
+    if in_use:
+        return 409, ModelInUse(model_id, in_use).body()
     if not approval["owned_by_keeplane"]:
-        removed = catalog.remove(model_id, actor)
+        try:
+            removed = catalog.remove(model_id, actor)
+        except ModelInUse as error:
+            return 409, error.body()
         return 200, {"removed_from_keeplane": removed, "gateway_model_preserved": True}
 
     status, registry = gateway.resources()
@@ -104,6 +114,9 @@ def remove_model_setup(
         )
     except GatewayRemovalFailed as refused:
         return refused.status, refused.result
+    except ModelInUse as error:
+        # Raised before the gateway step, so nothing was deleted.
+        return 409, error.body()
     except StorageUnavailable:
         if not deleted:
             raise

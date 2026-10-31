@@ -2,7 +2,8 @@
 
 These cases cover spec 006 ST21: when settings changes are recorded, every
 admin change to a model or a data class leaves a record of who changed what,
-and when. Complexity picks are not covered; their levels are not decided yet.
+and when. Complexity pick records are covered by CL-INT-03, CL-INT-04 and
+CL-INT-10 in the [complexity level cases](complexity-level-cases.md).
 
 SC-01, SC-02, SC-03, SC-05, SC-06 and SC-11 run in separate control-plane
 processes on a fresh database, through the same stores the admin screens use.

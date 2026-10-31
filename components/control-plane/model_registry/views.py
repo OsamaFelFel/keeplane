@@ -10,6 +10,7 @@ from audit.contracts import AuditError
 from accounts.contracts import IdentityError
 from common.errors import StorageUnavailable
 from model_registry.chat import ask_model
+from model_registry.levels import LevelError, complexity_levels
 from model_registry.listing import list_models
 from model_registry.removal import remove_model_setup
 from integrations.runners import local_runner
@@ -39,7 +40,51 @@ def models(request):
             os.environ.get("GATEWAY_FILE_CONFIG"),
             RUNNER_URLS,
         )
+        if status == 200:
+            listing["levels"] = complexity_levels(CATALOG, set_up_ids(listing))
         return Response(listing, status=status)
+    except StorageUnavailable:
+        return failure(503, "Keeplane settings storage is unavailable")
+
+
+def set_up_ids(listing):
+    """Models set up in Keeplane with their current gateway definition."""
+    return [item["id"] for item in listing["models"] if item.get("approved")]
+
+
+@api_view(["POST"])
+def complexity_level(request, level):
+    """Change a level's model, or with a null model_id go back to Keeplane's pick."""
+    user, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    if set(request.data) != {"model_id"}:
+        return failure(400, "Choose a model or Keeplane's pick")
+    try:
+        status, listing = list_models(
+            MODEL_GATEWAY.models,
+            MODEL_GATEWAY.resources,
+            CATALOG,
+            os.environ.get("GATEWAY_FILE_CONFIG"),
+            RUNNER_URLS,
+        )
+        if status != 200:
+            return Response(listing, status=status)
+        candidates = set_up_ids(listing)
+        CATALOG.change_level(
+            level,
+            request.data["model_id"],
+            candidates,
+            (user["id"], user["username"]),
+        )
+        return Response({"levels": complexity_levels(CATALOG, candidates)})
+    except LevelError as error:
+        return failure(error.status, error.message)
+    except (IdentityError, AuditError) as error:
+        return failure(error.status, error.message)
     except StorageUnavailable:
         return failure(503, "Keeplane settings storage is unavailable")
 

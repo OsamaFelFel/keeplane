@@ -13,6 +13,19 @@ class NoRunnerRedirect(HTTPRedirectHandler):
 RUNNER_OPENER = build_opener(NoRunnerRedirect)
 
 
+def active_context(address, allowed_urls, model):
+    """The context window a runner reports for one model, or None.
+
+    Uses the same discovery as Add model, so it is known only for a runner
+    serving that one model that reports its effective context.
+    """
+    status, result = local_runner(address, allowed_urls)
+    if status != 200:
+        return None
+    tokens = result.get("runtime", {}).get(model, {}).get("active_context_tokens")
+    return tokens if type(tokens) is int and tokens > 0 else None
+
+
 def local_runner(address, allowed_urls, model=None):
     """Inspect an explicitly allowed runner without following redirects."""
     address = address.rstrip("/") if isinstance(address, str) else ""
