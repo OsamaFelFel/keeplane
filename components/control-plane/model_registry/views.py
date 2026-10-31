@@ -21,7 +21,15 @@ from model_registry.removal import remove_model_setup
 from integrations.runners import local_runner
 
 
-from common.api import CATALOG, MODEL_GATEWAY, RUNNER_URLS, failure, admin, action_error
+from common.api import (
+    CATALOG,
+    MODEL_GATEWAY,
+    MODEL_GATEWAY_COPIES,
+    RUNNER_URLS,
+    failure,
+    admin,
+    action_error,
+)
 
 
 @api_view(["GET", "POST"])
@@ -161,6 +169,7 @@ def model_setup(request, model_id):
             MODEL_GATEWAY,
             os.environ.get("GATEWAY_FILE_CONFIG"),
             os.environ.get("PROVIDER_KEY_DIR", ""),
+            MODEL_GATEWAY_COPIES,
         )
         return Response(result, status=status)
     except (IdentityError, AuditError) as error:

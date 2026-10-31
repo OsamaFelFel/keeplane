@@ -48,3 +48,45 @@ refused with `409` and the levels that use it, before the gateway is read. The
 same check runs again under the settings lock inside `DjangoModelCatalog.remove`.
 The settings transaction holds the settings lock while the gateway answers, so
 other settings changes wait for that call.
+
+## Every gateway copy
+
+A gateway can run as several serving copies that share one model store, such
+as the managed chart's two replicas. A write through the gateway address
+reaches each copy on its own schedule. An operator lists every copy's own
+management address in `GATEWAY_COPY_URLS` (comma-separated `http` or `https`
+origins, at most 32, no credentials or paths). The app reads each copy with
+the gateway's management key; it never writes to a copy or asks it for a model
+answer. Without the setting, the gateway address is the only copy and its own
+readback is the confirmation, as before. A list with any unusable entry
+confirms nothing, so every change below is refused until it is fixed.
+
+- **Adding a model** (local, runner or cloud): after the gateway address
+  confirms and the model answers, every copy must read the same definition and
+  revision. Keeplane waits up to about five seconds. If a copy doesn't
+  confirm, nothing is approved, the new definition is removed again (with its
+  shared key file), and the admin reads "Not every gateway copy confirmed the
+  model. N of M gateway copies confirmed it." followed by what was undone.
+- **Editing setup** (a new definition, a new key choice or more classes): the
+  same readback runs before anything is saved. If a copy doesn't confirm,
+  nothing is saved and the model keeps its earlier setup. A changed
+  definition never matches the earlier approval, so it stays unavailable
+  until the admin sets it up again and every copy confirms.
+- **Replacing a shared key**: if a copy doesn't read the new definition, the
+  previous key and definition go back, as when the new key fails.
+- **Narrowing classes** on an unchanged definition only withdraws access.
+  Every copy's checks read the saved setup, so it applies on all copies when
+  it is saved and needs no copy readback; a copy that is down never holds it
+  back.
+- **Removing a model Keeplane added**: the approval is removed first, so every
+  copy's checks refuse the model before the admin is answered, and the shared
+  key file is deleted. Keeplane then waits for every copy to stop listing the
+  model. If one still lists it, the removal is kept and the admin reads "Model
+  removed from Keeplane, so developers can't use it, but not every gateway
+  copy confirmed it's gone. N of M gateway copies confirmed it. Check the
+  gateway." Removing a model added outside Keeplane reads no copy.
+
+Only the changed model is read and written. Other models keep their
+definitions, approvals and access whatever a copy answers. The
+[copy cases](../../tests/unit/gateway-copy-cases.md) cover these rules with
+fake copies that lag, stay stale or are down.
