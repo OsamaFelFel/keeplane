@@ -1,7 +1,8 @@
 """Choose another allowed model when a developer's own key is not usable.
 
-The choice reads only key registration metadata: it never reads, sends or
-changes a provider key. It is advice for the developer's client, not a permit:
+The choice reads key registration metadata and, through the runtime gate, the
+digest of a shared key file only: it never reads a developer's own key, and
+never sends or changes any key. It is advice for the developer's client, not a permit:
 every gateway request still passes the entry and selected-model checks.
 """
 

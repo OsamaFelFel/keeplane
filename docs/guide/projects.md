@@ -22,9 +22,9 @@ developer names, or a model set in the repository's own runtime settings cannot
 reach a model approved only for another class. Admin accounts get the same
 restriction.
 
-If the project's approved models can't be used right now (for example a model
-is not installed or its shared provider key is gone), the developer's task
-stops before anything is sent and says so:
+If the model the developer asked for is approved but can't be used right now
+(for example it is not installed or its shared provider key is gone), the task
+stops before anything is sent, even if other approved models are up, and says so:
 
 ```text
 coder is approved for this project but can't be used right now, so nothing was sent. Choose another model allowed for this project, or ask an admin to check it in Models and routing.

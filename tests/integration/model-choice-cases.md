@@ -31,7 +31,8 @@ project classes (MC-07, MC-08, MC-18 to MC-21). Run
 The server cases use real Django accounts, policy, enrollment files and
 owner-key registrations with synthetic provider admission, as in the
 [managed Personal model access cases](installed-personal-runtime-cases.md).
-The choice reads registration metadata only; it never reads a key file. The CLI
+The choice reads registration metadata and the shared key file's digest only;
+it never reads a developer's own key or sends any key. The CLI
 cases use a synthetic account server and a controlled runtime process.
 
 ```mermaid

@@ -351,7 +351,8 @@ is allowed. A requested model that needs no own key (or whose own key is usable)
 but that the mode's gate refuses now, such as one not installed or with its
 shared key gone, returns `reason: "unavailable"` and `model_id: null`; nothing
 moves to another model, and the CLI stops before sending (Spec 005 ST19). Older
-CLIs treat that reason as an invalid choice and also stop. It reads registration metadata only, never a key file, and is advice
+CLIs treat that reason as an invalid choice and also stop. It reads registration metadata and the shared key file's digest only; it never
+reads a developer's own key or sends any key, and is advice
 rather than a permit: both gateway checks still run for the chosen model.
 
 `DjangoModelChoice.next_allowed(session, owner, project, skip=...)` is the one
