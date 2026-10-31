@@ -26,6 +26,9 @@ type Level = {
   admin_model_id: string | null
   admin_model_set_up: boolean | null
 }
+type PersonaRule = { persona: string; name: string; model_id: string; model_set_up: boolean }
+type Persona = { persona: string; name: string }
+type InUse = { model: string; levels: string[]; personaRules: string[] }
 type Classes = { enabled: boolean; classes: { name: string }[] }
 type RunnerModels = { models: string[]; runtime?: Record<string, { active_context_tokens?: number; training_context_tokens?: number }> }
 
@@ -64,15 +67,22 @@ export function ModelsPage() {
   const [levels, setLevels] = useState<Level[]>([])
   const [changingLevel, setChangingLevel] = useState<Level | null>(null)
   const [levelModel, setLevelModel] = useState('')
-  const [inUse, setInUse] = useState<{ model: string; levels: string[] } | null>(null)
+  const [inUse, setInUse] = useState<InUse | null>(null)
+  const [rules, setRules] = useState<PersonaRule[]>([])
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [addingRule, setAddingRule] = useState(false)
+  const [rulePersona, setRulePersona] = useState('')
+  const [ruleModel, setRuleModel] = useState('')
 
   const refresh = useCallback(async () => {
     try {
       const [catalog, classListing] = await Promise.all([
-        api<{ models: Model[]; levels?: Level[] }>('/api/models'), api<Classes>('/api/data-classes'),
+        api<{ models: Model[]; levels?: Level[]; persona_rules?: PersonaRule[]; personas?: Persona[] }>('/api/models'), api<Classes>('/api/data-classes'),
       ])
       setModels(catalog.models.filter(model => model.kind !== 'endpoint-trial' || model.approved !== undefined))
       setLevels(catalog.levels ?? [])
+      setRules(catalog.persona_rules ?? [])
+      setPersonas(catalog.personas ?? [])
       setClasses(classListing)
       setError('')
       return catalog.models
@@ -148,11 +158,15 @@ export function ModelsPage() {
     return levels.filter(level => level.changed_by_admin && level.admin_model_id === modelId).map(level => level.name)
   }
 
+  function rulesUsing(modelId: string) {
+    return rules.filter(rule => rule.model_id === modelId).map(rule => rule.name)
+  }
+
   function startRemove() {
     if (!editing) return
     setDialogError('')
-    const used = levelsUsing(editing.id)
-    if (used.length) { setEditing(null); setInUse({ model: editing.id, levels: used }) }
+    const used = { model: editing.id, levels: levelsUsing(editing.id), personaRules: rulesUsing(editing.id) }
+    if (used.levels.length || used.personaRules.length) { setEditing(null); setInUse(used) }
     else setRemoving(true)
   }
 
@@ -168,10 +182,10 @@ export function ModelsPage() {
       setRemoving(false); setEditing(null)
       await refresh()
     } catch (cause) {
-      const used = cause instanceof ApiError && cause.status === 409 ? (cause.body.in_use as { levels?: string[] } | undefined)?.levels : undefined
-      if (used?.length) {
-        // A level was changed to this model after the page loaded.
-        setRemoving(false); setInUse({ model: editing.id, levels: used }); setEditing(null)
+      const used = cause instanceof ApiError && cause.status === 409 ? cause.body.in_use as { levels?: string[]; persona_rules?: string[] } | undefined : undefined
+      if (used?.levels?.length || used?.persona_rules?.length) {
+        // A level or persona rule was changed to this model after the page loaded.
+        setRemoving(false); setInUse({ model: editing.id, levels: used.levels ?? [], personaRules: used.persona_rules ?? [] }); setEditing(null)
         void refresh()
       } else setDialogError((cause as Error).message)
     }
@@ -195,6 +209,26 @@ export function ModelsPage() {
     finally { setBusy(false) }
   }
 
+  function openRule() {
+    setAddingRule(true); setDialogError('')
+    setRulePersona(personas[0]?.persona ?? ''); setRuleModel('')
+  }
+
+  async function addRule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const persona = personas.find(item => item.persona === rulePersona)
+    if (!persona || !ruleModel) return
+    setBusy(true); setDialogError('')
+    try {
+      const result = await action<{ persona_rules: PersonaRule[] }>(`/api/persona-rules/${encodeURIComponent(persona.persona)}`, 'POST', { model_id: ruleModel })
+      setRules(result.persona_rules)
+      setNotice(`${persona.name}'s work now goes to ${ruleModel}.`)
+      setAddingRule(false)
+    } catch (cause) { setDialogError((cause as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  const replacedRule = rules.find(rule => rule.persona === rulePersona)
   const setUpModels = (models ?? []).filter(model => model.approved === true).map(model => model.id)
 
   const runtime = runnerModels?.runtime?.[modelName]
@@ -246,6 +280,23 @@ export function ModelsPage() {
                 </span>}
               </> : <span className="text-muted-foreground">No model set up yet</span>}</TableCell>
               <TableCell><Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" aria-label={`Change ${level.name}`} disabled={!!error || !setUpModels.length} onClick={() => openLevel(level)}>Change</Button></TableCell>
+            </TableRow>)}
+          </TableBody></Table>
+      </div>
+    </section>
+
+    <section className="mt-6 rounded-[8px] border border-border bg-card p-5 md:p-6" aria-labelledby="persona-rules-heading">
+      <h2 id="persona-rules-heading" className="text-[18px] font-semibold">Persona rules</h2>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4"><p className="text-[15px] text-muted-foreground">Send a persona's work to a chosen model.</p>
+        <Button variant="outline" disabled={!!error || !setUpModels.length || !personas.length} onClick={openRule}>Add rule</Button></div>
+      <div className="keeplane-table-frame mt-4" role="region" aria-label="Persona rules table" tabIndex={0}>
+        <Table><TableHeader><TableRow><TableHead>When</TableHead><TableHead>Route to</TableHead></TableRow></TableHeader>
+          <TableBody>{models === null ? <TableRow><TableCell colSpan={2}>Loading models…</TableCell></TableRow> :
+            rules.length === 0 ? <TableRow><TableCell colSpan={2}>No persona rules yet</TableCell></TableRow> :
+            rules.map(rule => <TableRow key={rule.persona}>
+              <TableCell>Persona is {rule.name}</TableCell>
+              <TableCell><span className="font-medium">{rule.model_id}</span>
+                {!rule.model_set_up && <span className="block text-[14px] leading-5 text-muted-foreground">{rule.model_id} isn't set up now, so this rule sends no work.</span>}</TableCell>
             </TableRow>)}
           </TableBody></Table>
       </div>
@@ -309,9 +360,29 @@ export function ModelsPage() {
     <Dialog open={!!inUse} onOpenChange={open => { if (!open) setInUse(null) }}>
       <DialogContent showCloseButton={false}><DialogHeader><DialogTitle>{inUse?.model} is still in use</DialogTitle></DialogHeader>
         <div className="grid gap-2"><p className="text-[15px]">Routing still sends work to it here:</p>
-          <ul className="list-disc pl-5 text-[15px]">{inUse?.levels.map(name => <li key={name}>Complexity level: {name}</li>)}</ul></div>
+          <ul className="list-disc pl-5 text-[15px]">{inUse?.levels.map(name => <li key={`level-${name}`}>Complexity level: {name}</li>)}
+            {inUse?.personaRules.map(name => <li key={`rule-${name}`}>Persona rule: {name}</li>)}</ul></div>
         <p className="text-[15px]">Move these to another model first, then remove it.</p>
         <div className="flex justify-end gap-3"><Button onClick={() => setInUse(null)}>Close</Button></div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={addingRule} onOpenChange={open => { if (!open && !busy) setAddingRule(false) }}>
+      <DialogContent showCloseButton={false}><DialogHeader><DialogTitle>Add persona rule</DialogTitle></DialogHeader>
+        <form className="grid gap-5" onSubmit={event => void addRule(event)}>
+          <div><Label htmlFor="rule-persona" className="keeplane-field-label">When the persona is</Label>
+            <select id="rule-persona" className={selectStyle} value={rulePersona} required disabled={busy} onChange={event => setRulePersona(event.target.value)}>
+              {personas.map(item => <option key={item.persona} value={item.persona}>{item.name}</option>)}
+            </select>
+            {replacedRule && <p className="mt-1 text-[14px] text-muted-foreground">{replacedRule.name}'s work goes to {replacedRule.model_id} now. This rule replaces it.</p>}</div>
+          <div><Label htmlFor="rule-model" className="keeplane-field-label">Route to</Label>
+            <select id="rule-model" className={selectStyle} value={ruleModel} required disabled={busy} onChange={event => setRuleModel(event.target.value)}>
+              <option value="">Choose a model</option>
+              {setUpModels.map(name => <option key={name} value={name}>{name}</option>)}
+            </select></div>
+          {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}
+          <div className="flex justify-end gap-3"><Button type="button" variant="outline" disabled={busy} onClick={() => setAddingRule(false)}>Cancel</Button>
+            <Button type="submit" disabled={busy || !rulePersona || !ruleModel}>{busy ? 'Adding…' : 'Add rule'}</Button></div>
+        </form>
       </DialogContent>
     </Dialog>
     <Dialog open={!!changingLevel} onOpenChange={open => { if (!open && !busy) setChangingLevel(null) }}>

@@ -15,5 +15,7 @@ These cases use the product team's Models, Add model and Edit model designs. The
 | MO-UI-04 | Remove Keeplane setup for a model the customer put in the gateway. | Its gateway entry remains listed as added outside Keeplane and receives no Keeplane work. |
 | MO-UI-08 | Open Change for Complex with the keyboard, save another model, then choose Use Keeplane's pick; narrow to 320px. | The Change a level dialog is at most 560px wide with a 44px Model select and names Keeplane's pick; the row shows “changed by an admin”, then “Keeplane's pick” again; two protected requests are sent; the page stays inside 320px. |
 | MO-UI-09 | Choose Remove model for a model an admin-changed level uses. | The Remove model: in use dialog lists “Complexity level: Standard” and closes; no removal request is sent. |
+| MO-UI-10 | With no rules yet, open Add rule with the keyboard, choose Architect and a model, add it; narrow to 320px. | The Add persona rule dialog is at most 560px wide with 44px persona and model selects; the rule shows as “Persona is Architect” with the model and a notice; one protected request is sent; the page stays inside 320px. |
+| MO-UI-11 | Choose Remove model for a model a persona rule uses. | The Remove model: in use dialog lists “Persona rule: Architect” and closes; no removal request is sent. |
 
 MO-UI-05 covers MODEL-01/EDIT-01 dialog behavior: set up an outside model, retain its class choices after a refused save, retry, edit its approvals and see the updated row. The Python API suites verify storage and authorization separately.
