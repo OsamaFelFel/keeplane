@@ -1,0 +1,178 @@
+{{- /*
+The managed gateway's serving copies. The bundled gateway chart runs its pods
+as a Deployment, whose pods have no stable address, so the app could not read
+each copy back after a model change. This StatefulSet runs the same container
+from the same agentgateway-standalone values and the bundled chart's
+ConfigMap, and the headless Service gives copy N the private address
+<release>-gateway-N.<release>-gateway-copies.<namespace>.svc on port 4000.
+The app's GATEWAY_COPY_URLS is rendered from gateway.copies (see app.yaml), so
+the list always matches the number of copies. The pods carry the bundled
+chart's selector labels: the gateway Service and the gateway NetworkPolicy
+select them unchanged. The bundled Deployment stays at zero replicas.
+*/ -}}
+{{- if and (eq .Values.gateway.mode "managed") .Values.gateway.install }}
+{{- $gw := index .Values "agentgateway-standalone" }}
+{{- $copies := int .Values.gateway.copies }}
+{{- if or (lt $copies 1) (gt $copies 32) }}
+{{- fail "gateway.copies must be a whole number from 1 to 32" }}
+{{- end }}
+{{- if ne (int $gw.replicaCount) 0 }}
+{{- fail "Set the number of managed gateway copies with gateway.copies and leave agentgateway-standalone.replicaCount at 0" }}
+{{- end }}
+{{- if and $gw.autoscaling $gw.autoscaling.enabled }}
+{{- fail "agentgateway-standalone.autoscaling must stay off: the app checks a fixed list of gateway copies (gateway.copies)" }}
+{{- end }}
+{{- if or $gw.nameOverride $gw.fullnameOverride $gw.namespaceOverride }}
+{{- fail "Leave agentgateway-standalone.nameOverride, fullnameOverride and namespaceOverride unset; the gateway copies and NetworkPolicy use the release name" }}
+{{- end }}
+{{- if or $gw.extraContainers (and $gw.oidc $gw.oidc.enabled) }}
+{{- fail "agentgateway-standalone.extraContainers and oidc are not supported on the managed gateway copies" }}
+{{- end }}
+{{- if .Values.gateway.copyUrls }}
+{{- fail "gateway.copyUrls is for an existing gateway; in managed mode the chart lists its own copies from gateway.copies" }}
+{{- end }}
+{{- $image := $gw.image }}
+{{- if kindIs "map" $gw.image }}
+{{- $tag := $gw.image.tag | default (printf "v%s" .Values.gateway.expectedVersion) }}
+{{- $image = printf "%s/%s:%s" $gw.image.registry $gw.image.repository $tag }}
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gateway-copies
+  labels:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: standalone
+  ports:
+    - name: http
+      protocol: TCP
+      port: 4000
+      targetPort: 4000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  serviceName: {{ .Release.Name }}-gateway-copies
+  replicas: {{ $copies }}
+  # Copies share the model store and hold no per-copy state, so they start
+  # together; a copy that is not ready has no address and stays unconfirmed.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: standalone
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ list $gw.mode $gw.config $gw.database | toJson | sha256sum }}
+        {{- with $gw.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app.kubernetes.io/name: agentgateway-standalone
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: standalone
+        {{- with $gw.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $gw.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ if $gw.serviceAccount.create }}{{ $gw.serviceAccount.name | default .Release.Name }}{{ else }}{{ $gw.serviceAccount.name | default "default" }}{{ end }}
+      {{- /* A null entry (such as fsGroup: null) means unset, as in the bundled chart. */}}
+      {{- $podSecurity := dict }}
+      {{- range $key, $value := ($gw.podSecurityContext | default dict) }}
+      {{- if not (kindIs "invalid" $value) }}
+      {{- $_ := set $podSecurity $key $value }}
+      {{- end }}
+      {{- end }}
+      {{- with $podSecurity }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: agentgateway
+          image: {{ required "agentgateway-standalone.image must not be empty" $image | quote }}
+          imagePullPolicy: {{ if kindIs "map" $gw.image }}{{ $gw.image.pullPolicy | default "IfNotPresent" }}{{ else }}IfNotPresent{{ end }}
+          {{- with $gw.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+            periodSeconds: 10
+          startupProbe:
+            failureThreshold: 60
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 2
+          args:
+            - -f
+            - /config/config.yaml
+          env:
+            - name: RUST_BACKTRACE
+              value: "1"
+            {{- with $gw.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- with $gw.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with $gw.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-config
+        - name: tmp
+          emptyDir: {}
+        {{- with $gw.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $gw.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gw.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gw.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gw.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

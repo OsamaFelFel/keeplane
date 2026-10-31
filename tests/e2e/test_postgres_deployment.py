@@ -504,6 +504,7 @@ def run_cases():
                     "mode": "managed",
                     "install": True,
                     "keysSecret": "gateway-keys",
+                    "copies": 2,
                 },
                 "ingress": {
                     "enabled": True,
@@ -512,7 +513,6 @@ def run_cases():
                     "tlsSecretName": "edge-tls",
                 },
                 "agentgateway-standalone": {
-                    "replicaCount": 2,
                     "database": {
                         "postgres": {
                             "url": "postgresql://postgres:${GATEWAY_DB_PASSWORD}@gatewaydb:5432/postgres"

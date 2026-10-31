@@ -137,7 +137,8 @@ All long-running app and gateway containers run with a read-only root
 filesystem. The local trial's `migrate-local-database` init container is the
 exception. The gateway also writes temporary files to an `emptyDir` at `/tmp`. The PostgreSQL mode
 renders no volume claims. The local trial allows one app copy; PostgreSQL mode
-allows several, and the managed gateway defaults to two copies.
+allows several, and the managed gateway defaults to two copies
+(`gateway.copies`; see [gateway copies](#gateway-copies)).
 
 Storage class, access mode across nodes, database operation, backup schedule and
 retention for a production installation are **not decided**.
@@ -147,7 +148,7 @@ retention for a production installation are **not decided**.
 | Port | Component | Reachable through |
 | --- | --- | --- |
 | 3000 | App | Service `<release>-app` (`ClusterIP` by default) and the optional Ingress |
-| 4000 | Managed gateway: model calls and management | Service `<release>` (`ClusterIP`) only |
+| 4000 | Managed gateway: model calls and management | Service `<release>` (`ClusterIP`), and each copy's own address through the headless Service `<release>-gateway-copies` |
 | 15000 | Gateway admin | No Service; the chart keeps the gateway's loopback default |
 | 15020 | Gateway stats | No Service or declared container port; pod annotations only suggest scraping |
 | 15021 | Gateway readiness | No Service; used by the kubelet probe |
@@ -158,7 +159,8 @@ every other type, including `NodePort` and `LoadBalancer`. The gateway is
 never an Ingress backend.
 
 `networkPolicy.gatewayIngressEnabled=true` adds one policy in managed mode. It
-admits only this release's app pods, on TCP 4000, to the gateway pods. It needs
+admits only this release's app pods, on TCP 4000, to the gateway pods,
+including every copy reached through its own address. It needs
 a network plugin that enforces NetworkPolicy. Any pod that can set the app's pod
 label is also admitted. The chart renders no default-deny or egress policy. The
 setting is refused in existing-gateway mode; protect a supplied gateway in its
@@ -169,7 +171,8 @@ own installation.
 | | `managed` (default) | `existing` |
 | --- | --- | --- |
 | Values | `gateway.mode=managed`, `gateway.install=true` | `gateway.mode=existing`, `gateway.install=false`, `gateway.url` |
-| Installs a gateway | Yes: Deployment, Service, ConfigMap and ServiceAccount from the bundled chart | No gateway objects at all; `agentgateway-standalone` values are ignored |
+| Installs a gateway | Yes: the gateway copies (StatefulSet `<release>-gateway` and headless Service `<release>-gateway-copies`), plus Service, ConfigMap, ServiceAccount and a zero-replica Deployment from the bundled chart | No gateway objects at all; `agentgateway-standalone` values are ignored |
+| Gateway copies | `gateway.copies` (1–32, default 2); the app's copy list is rendered from it | Optional `gateway.copyUrls`, supplied by the installer |
 | App reaches the gateway at | `http://<release>:4000` | `gateway.url` |
 | Before install | Create the [gateway key Secret](#gateway-access-keys); Helm refuses the install without it | Preflight Job checks the gateway version, model listing and management read access, and makes one call if `gateway.preflightModel` is set |
 | Gateway database credential | Yours, through `agentgateway-standalone` | None given to Keeplane |
@@ -179,3 +182,53 @@ writes no gateway configuration. The app registers models through the
 gateway's management API and leaves models added outside Keeplane unchanged.
 See [gateway modes](gateway-configuration.md) for the tested cases and the
 limits on shared provider keys with a supplied gateway.
+
+## Gateway copies
+
+After a model change that adds or widens access, the app reads the model back
+from every gateway copy before it saves the change (see
+[every gateway copy](../architecture/model-registration.md#every-gateway-copy)).
+The chart sets the app's copy list, `GATEWAY_COPY_URLS`, as follows.
+
+**Managed mode.** The bundled gateway chart runs its pods as a Deployment,
+whose pods have no stable address. The chart therefore runs the managed
+gateway copies itself as StatefulSet `<release>-gateway`, from the same
+`agentgateway-standalone` values and ConfigMap, with headless Service
+`<release>-gateway-copies`. Copy *N* is reached at
+`http://<release>-gateway-<N>.<release>-gateway-copies.<namespace>.svc:4000`.
+Set the number of copies with `gateway.copies` (1–32, default 2); the app's
+list always has exactly that many entries. The bundled chart's own Deployment
+stays at zero replicas. Helm refuses an install that:
+
+- sets `agentgateway-standalone.replicaCount` to anything but 0, or turns on
+  `agentgateway-standalone.autoscaling` (the list would no longer match the
+  copies that serve);
+- sets `gateway.copies` outside 1–32, or sets `gateway.copyUrls`;
+- sets `agentgateway-standalone.nameOverride`, `fullnameOverride`,
+  `namespaceOverride`, `extraContainers` or `oidc`.
+
+The headless Service carries only port 4000, so the gateway's admin, stats and
+readiness ports stay private. The copies carry the bundled chart's pod labels,
+so the gateway Service and the gateway NetworkPolicy cover them unchanged. A
+copy that is not ready has no address yet; until it is ready, changes that add
+or widen access are not confirmed.
+
+**Existing mode.** If the customer-run gateway serves through several copies,
+list each copy's own management origin in `gateway.copyUrls`:
+
+```yaml
+gateway:
+  mode: existing
+  install: false
+  url: http://customer-gateway.gateway.svc.cluster.local:4000
+  copyUrls:
+    - http://customer-gateway-0.customer-gateway.gateway.svc.cluster.local:4000
+    - http://customer-gateway-1.customer-gateway.gateway.svc.cluster.local:4000
+```
+
+Each entry is an `http` or `https` origin: a host name or address and an
+optional port, with no credentials, path, query or trailing slash. The list
+holds at most 32 distinct entries. `values.schema.json` refuses anything else
+before installation. Keep the list in step with the copies that serve; a copy
+missing from it is never checked. Leave it empty when the gateway runs as one
+copy: the gateway address is then the only copy checked.

@@ -224,13 +224,13 @@ def run_cases():
             "keeplane",
             "rollout",
             "status",
-            "deployment/keeplane",
+            "statefulset/keeplane-gateway",
             "--timeout=120s",
         ],
         stdout=subprocess.DEVNULL,
     )
     replacement = json.loads(
-        kubectl("-n", "keeplane", "get", "deployment", "keeplane", "-o", "json")
+        kubectl("-n", "keeplane", "get", "statefulset", "keeplane-gateway", "-o", "json")
     )
     check(
         "K8S-04",

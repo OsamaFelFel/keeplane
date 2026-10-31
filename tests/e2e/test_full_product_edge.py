@@ -301,7 +301,7 @@ def run_cases():
                 "--set",
                 "ingress.tlsSecretName=keeplane-tls",
                 "--set",
-                "agentgateway-standalone.replicaCount=2",
+                "gateway.copies=2",
                 "--wait",
                 "--timeout",
                 "300s",
@@ -319,7 +319,7 @@ def run_cases():
                 NAMESPACE,
                 "rollout",
                 "status",
-                "deployment/keeplane",
+                "statefulset/keeplane-gateway",
                 "--timeout=240s",
             )
             forwarded = subprocess.Popen(
