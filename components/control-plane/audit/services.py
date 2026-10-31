@@ -23,6 +23,11 @@ class DjangoAuditStore:
             )
         return self.options()
 
+    def enabled(self, kind):
+        if kind not in KINDS:
+            raise ValueError("Unknown audit record kind")
+        return AuditOption.objects.filter(pk=kind, enabled=True).exists()
+
     def record_in_transaction(self, kind, actor_id, actor_name, description):
         if kind not in KINDS:
             raise ValueError("Unknown audit record kind")

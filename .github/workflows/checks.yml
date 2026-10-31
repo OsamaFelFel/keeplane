@@ -272,7 +272,7 @@ jobs:
           .venv/bin/pip install psycopg==3.3.6
           password_file="$RUNNER_TEMP/settings-postgres-password"
           printf '%s\n' ci-disposable-settings-postgres > "$password_file"
-          KEEPLANE_TEST_POSTGRES_PASSWORD_FILE="$password_file" .venv/bin/python -m pytest tests/integration/test_settings_change_records.py tests/integration/test_audit_persistence.py -k postgresql -rs --junitxml=test-results/postgres/settings-junit.xml
+          KEEPLANE_TEST_POSTGRES_PASSWORD_FILE="$password_file" .venv/bin/python -m pytest tests/integration/test_settings_change_records.py tests/integration/test_model_answer_records.py tests/integration/test_audit_persistence.py -k postgresql -rs --junitxml=test-results/postgres/settings-junit.xml
           if grep -q '<skipped' test-results/postgres/settings-junit.xml; then
             echo "PostgreSQL settings cases were skipped" >&2
             exit 1

@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .developer_keys import DeveloperKeyMissing
 from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
+from .model_answer_records import record_sent_request
 from .models import ModelApproval, ProviderKeyChoice
 from .personal_dispatch import DjangoPersonalDispatch
 from .policy import ModelPolicyUnavailable
@@ -209,6 +210,9 @@ def authorize_installed(request, *, selected=False):
         return Response({"error": error.message}, status=error.status)
     except (ModelPolicyUnavailable, StorageUnavailable):
         return Response({"error": "Gateway authorization is unavailable"}, status=503)
+    if selected:
+        # The final check before the model: the request is sent from here on.
+        record_sent_request(result)
     return Response(result)
 
 
