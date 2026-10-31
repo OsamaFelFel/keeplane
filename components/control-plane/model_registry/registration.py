@@ -20,10 +20,13 @@ from integrations.gateway.keys import (
 from integrations.gateway.keys import (
     save as save_provider_key,
 )
+from integrations.gateway.copies import GatewayCopies
 from integrations.runners import active_context, local_runner
 
+from model_registry.copy_messages import key_not_changed, not_added, not_changed
 from model_registry.fingerprints import fingerprint
 from model_registry.provider_probe import provider_answers
+
 
 
 class ModelManagement:
@@ -41,6 +44,7 @@ class ModelManagement:
         trial_key,
         *,
         provider_probe=None,
+        copies=None,
     ):
         self.catalog = catalog
         self.data_classes = data_classes
@@ -53,6 +57,9 @@ class ModelManagement:
         self.cloud_base_urls = cloud_base_urls
         self.trial_key = trial_key
         self.provider_probe = provider_probe or provider_answers
+        # Every other serving copy the operator lists; none means the gateway
+        # address is the only copy and its own readback is the confirmation.
+        self.copies = copies if copies is not None else GatewayCopies([])
 
     def reply(self, status, body):
         return status, body
@@ -65,6 +72,10 @@ class ModelManagement:
 
     def gateway_model_resources(self):
         return self.gateway.resources()
+
+    def every_copy_reads(self, model_id, revision):
+        """Each serving copy reads this exact definition and revision."""
+        return self.copies.confirm(model_id, revision, self.file_config)
 
     def local_runner(self, address, model=None):
         return local_runner(address, self.runner_urls, model)
@@ -375,6 +386,10 @@ class ModelManagement:
                     )
                 },
             )
+        readback = self.every_copy_reads(model_id, revision)
+        if not readback.complete:
+            restored = restore_previous()
+            return self.reply(503, key_not_changed(model_id, readback, restored))
         try:
             approval = self.catalog.approve(
                 model_id,
@@ -504,6 +519,12 @@ class ModelManagement:
                     f"{'OpenAI' if source == 'openai' else 'Anthropic'} didn't answer."
                 )
             return self.reply(503, {"error": reason + suffix})
+        readback = self.every_copy_reads(name, revision)
+        if not readback.complete:
+            removed = self.undo_cloud_model(name, resource)
+            if key_path and removed:
+                remove_provider_key(self.provider_key_dir, key_path)
+            return self.reply(503, not_added(name, readback, removed))
         try:
             approval = self.catalog.approve(
                 name,
@@ -656,6 +677,24 @@ class ModelManagement:
                 return self.reply(
                     503, {"error": "The model didn't answer. Nothing was saved."}
                 )
+        # On an unchanged definition, fewer classes or moving from no key to
+        # each developer's own key only withdraw access. Every copy's checks
+        # read the saved setup, so it applies on all of them once saved and
+        # needs no copy readback. Anything else waits for every copy; until
+        # then the model keeps its earlier, stricter setup.
+        narrower = bool(
+            previous
+            and previous["gateway_fingerprint"] == current_fingerprint
+            and (
+                previous["key_choice"] == choice
+                or (previous["key_choice"] == "none" and choice == "personal")
+            )
+            and set(classes) <= set(previous["approved_classes"])
+        )
+        if not narrower:
+            readback = self.every_copy_reads(model_id, current_fingerprint)
+            if not readback.complete:
+                return self.reply(503, not_changed(model_id, readback))
         try:
             # A definition replaced outside Keeplane loses its provenance.
             still_owned = bool(
@@ -847,6 +886,10 @@ class ModelManagement:
                     )
                 },
             )
+        readback = self.every_copy_reads(name, model_revision)
+        if not readback.complete:
+            removed = self.undo_new_model(name, params)
+            return self.reply(503, not_added(name, readback, removed))
         try:
             approval = self.catalog.approve(
                 name,

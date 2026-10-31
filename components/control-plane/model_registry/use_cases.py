@@ -1,7 +1,13 @@
 """Assemble model use cases and resolve their effective setup state."""
 
 import os
-from common.api import CATALOG, DATA_CLASSES, MODEL_GATEWAY, RUNNER_URLS
+from common.api import (
+    CATALOG,
+    DATA_CLASSES,
+    MODEL_GATEWAY,
+    MODEL_GATEWAY_COPIES,
+    RUNNER_URLS,
+)
 from .registration import ModelManagement
 from .listing import list_models
 
@@ -21,6 +27,7 @@ def model_management(user):
             "anthropic": os.environ.get("PREVIEW_ANTHROPIC_BASE_URL", ""),
         },
         os.environ.get("PREVIEW_PROVIDER_KEY", ""),
+        copies=MODEL_GATEWAY_COPIES,
     )
 
 

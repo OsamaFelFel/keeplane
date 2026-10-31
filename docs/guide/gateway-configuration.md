@@ -18,6 +18,17 @@ management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
 In `existing` mode the customer-run gateway keeps its own key setup.
 
+When the gateway runs as several copies, set `GATEWAY_COPY_URLS` on the app to
+every copy's own management address, for example
+`GATEWAY_COPY_URLS=http://gateway-0.gateway:4000,http://gateway-1.gateway:4000`.
+A model change that adds or widens access is then confirmed only when every
+copy reads it back within 5 seconds; withdrawals apply at once. If any entry
+is invalid, the app logs a warning and refuses every change that adds or
+widens access, telling the admin to ask whoever installed Keeplane to fix the
+list. See
+[every gateway copy](../architecture/model-registration.md#every-gateway-copy).
+The chart doesn't set this yet.
+
 ## Try both modes locally
 
 Follow [the kind setup](kubernetes-local.md) to start the isolated trial. It

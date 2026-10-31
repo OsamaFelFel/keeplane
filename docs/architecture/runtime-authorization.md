@@ -209,9 +209,14 @@ guards, while excluding only provably disjoint stable-ID model targets. This
 lets a publisher distinguish an unrelated registry update from a change to the
 model being used. Ambiguous or unsupported routing fails closed. The existing
 installed gate still uses its complete snapshot; this reader enables no traffic.
-The remaining integration must publish and verify each copy automatically when
-an admin adds or edits a model, preserve other models' access, and withdraw stale
-bindings before acknowledging stricter changes.
+Admin model changes now read the changed model back from every serving copy
+listed in `GATEWAY_COPY_URLS` before they are acknowledged; see
+[every gateway copy](model-registration.md#every-gateway-copy). A copy that
+can't confirm leaves the change unapproved (or, for a removal, withdrawn and
+reported), and other models are untouched. The remaining integration must
+re-enroll the installed runtime's per-model bindings from that confirmed state
+without restarting the gateway, give the chart a per-copy address list, and
+cover customer-run gateways that don't share one model store.
 
 ## Managed operator contract
 

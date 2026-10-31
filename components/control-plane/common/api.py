@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from audit.contracts import AuditError
 from data_classes.contracts import DataClassError
 from integrations.gateway.adapter import AgentgatewayModelAdapter
+from integrations.gateway.copies import GatewayCopies
 from accounts.contracts import IdentityError, LoginThrottled
 from common.stores import stores
 from common.errors import StorageUnavailable
@@ -24,6 +25,9 @@ MODEL_GATEWAY = AgentgatewayModelAdapter(
     os.environ.get("GATEWAY_RUNTIME_KEY_FILE", ""),
     os.environ.get("GATEWAY_ADMIN_KEY_FILE", ""),
 )
+# Every other serving copy's own management address, read back after each
+# model change (GATEWAY_COPY_URLS, comma-separated).
+MODEL_GATEWAY_COPIES = GatewayCopies.from_environment(MODEL_GATEWAY)
 RUNNER_URLS = {
     url.strip().rstrip("/")
     for url in os.environ.get("PREVIEW_RUNNER_URLS", "http://qwen:8080").split(",")
