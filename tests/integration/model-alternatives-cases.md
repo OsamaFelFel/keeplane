@@ -15,6 +15,7 @@ alternatives. Run `python -m pytest tests/integration/test_model_alternatives.py
 | ALT-07 | Responses | No key, fingerprint, session or directory appears. |
 | ALT-08 | Missing or extra query fields, an empty or unallowed model | 400, 400, 400 and 403. |
 | ALT-09 | Invalid session, policy outage, unknown project | 401, 503 “Model alternatives are unavailable”, 403. |
+| ALT-10 | A well-formed ID of a project not registered here, or a registered project the access policy refuses for this developer | 403 with no list. Open Source has one organization; the refused case stands in for a stricter organization rule. |
 
 The cases reuse the real Django accounts, policy, enrollment files and owner-key
 registrations of the [model choice cases](model-choice-cases.md).

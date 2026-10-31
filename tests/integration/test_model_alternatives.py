@@ -126,3 +126,27 @@ def test_signed_out_unknown_project_and_policy_outage(choice):  # noqa: F811
     choice.state.status = 200
     choice.project = "not-a-project"
     assert ask(choice).status_code == 403
+
+
+def test_a_project_the_developer_cannot_use_gets_no_list(choice, monkeypatch):  # noqa: F811
+    from model_registry import model_choice
+
+    choice.install("public")
+    project = choice.project
+    # A well-formed project ID that is not registered in this organization.
+    choice.project = "00000000-0000-4000-8000-00000000abcd"
+    response = ask(choice)
+    assert response.status_code == 403
+    assert "alternatives" not in response.json()
+    # A registered project that the deployment's access policy refuses for this
+    # developer, as a stricter organization rule would.
+    choice.project = project
+    monkeypatch.setattr(
+        model_choice,
+        "organization_project_access",
+        lambda actor_id, project_id: project_id != project,
+    )
+    response = ask(choice)
+    assert response.status_code == 403
+    assert "alternatives" not in response.json()
+    assert "public" not in response.content.decode()
