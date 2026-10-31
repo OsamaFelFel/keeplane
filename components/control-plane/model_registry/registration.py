@@ -23,10 +23,10 @@ from integrations.gateway.keys import (
 from integrations.gateway.copies import GatewayCopies
 from integrations.runners import active_context, local_runner
 
+from model_registry.copy_messages import key_not_changed, not_added, not_changed
 from model_registry.fingerprints import fingerprint
 from model_registry.provider_probe import provider_answers
 
-NOT_EVERY_COPY = "Not every gateway copy confirmed the model. "
 
 
 class ModelManagement:
@@ -389,19 +389,7 @@ class ModelManagement:
         readback = self.every_copy_reads(model_id, revision)
         if not readback.complete:
             restored = restore_previous()
-            return self.reply(
-                503,
-                {
-                    "error": NOT_EVERY_COPY
-                    + readback.summary()
-                    + " "
-                    + (
-                        "The previous key is still active."
-                        if restored
-                        else "The model may need admin attention; check Models."
-                    )
-                },
-            )
+            return self.reply(503, key_not_changed(model_id, readback, restored))
         try:
             approval = self.catalog.approve(
                 model_id,
@@ -536,18 +524,7 @@ class ModelManagement:
             removed = self.undo_cloud_model(name, resource)
             if key_path and removed:
                 remove_provider_key(self.provider_key_dir, key_path)
-            return self.reply(
-                503,
-                {
-                    "error": NOT_EVERY_COPY
-                    + readback.summary()
-                    + (
-                        " Nothing was saved."
-                        if removed
-                        else " Its gateway entry may remain without approval; check Models."
-                    )
-                },
-            )
+            return self.reply(503, not_added(name, readback, removed))
         try:
             approval = self.catalog.approve(
                 name,
@@ -700,23 +677,24 @@ class ModelManagement:
                 return self.reply(
                     503, {"error": "The model didn't answer. Nothing was saved."}
                 )
-        # Narrowing classes on an unchanged definition only withdraws access.
-        # Every copy's checks read the saved setup, so it applies on all of
-        # them once saved and needs no copy readback. Anything else waits for
-        # every copy; until then the model keeps its earlier, stricter setup.
+        # On an unchanged definition, fewer classes or moving from no key to
+        # each developer's own key only withdraw access. Every copy's checks
+        # read the saved setup, so it applies on all of them once saved and
+        # needs no copy readback. Anything else waits for every copy; until
+        # then the model keeps its earlier, stricter setup.
         narrower = bool(
             previous
             and previous["gateway_fingerprint"] == current_fingerprint
-            and previous["key_choice"] == choice
+            and (
+                previous["key_choice"] == choice
+                or (previous["key_choice"] == "none" and choice == "personal")
+            )
             and set(classes) <= set(previous["approved_classes"])
         )
         if not narrower:
             readback = self.every_copy_reads(model_id, current_fingerprint)
             if not readback.complete:
-                return self.reply(
-                    503,
-                    {"error": NOT_EVERY_COPY + readback.summary() + " Nothing was saved."},
-                )
+                return self.reply(503, not_changed(model_id, readback))
         try:
             # A definition replaced outside Keeplane loses its provenance.
             still_owned = bool(
@@ -911,18 +889,7 @@ class ModelManagement:
         readback = self.every_copy_reads(name, model_revision)
         if not readback.complete:
             removed = self.undo_new_model(name, params)
-            return self.reply(
-                503,
-                {
-                    "error": NOT_EVERY_COPY
-                    + readback.summary()
-                    + (
-                        " Registration was removed."
-                        if removed
-                        else " It may remain in the gateway without Keeplane approval; check Models."
-                    )
-                },
-            )
+            return self.reply(503, not_added(name, readback, removed))
         try:
             approval = self.catalog.approve(
                 name,

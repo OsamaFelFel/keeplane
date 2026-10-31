@@ -4,6 +4,7 @@ from common.errors import GatewayRemovalFailed, StorageUnavailable
 from model_registry.fingerprints import fingerprint
 from model_registry.levels import ModelInUse
 from integrations.gateway.copies import GatewayCopies
+from model_registry.copy_messages import removed_but_listed
 from integrations.gateway.keys import (
     from_resource as provider_key_file,
     remove as remove_provider_key,
@@ -55,12 +56,6 @@ def _restore(model_id, approval, resource, catalog, gateway, file_config):
     return "restored_personal" if approval["key_choice"] == "personal" else "restored"
 
 
-NOT_GONE_EVERYWHERE = (
-    "Model removed from Keeplane, so developers can't use it, but not every "
-    "gateway copy confirmed it's gone. {summary} Check the gateway."
-)
-
-
 def _removed(model_id, approval, resource, provider_key_dir, copies, file_config):
     # The approval is already gone, and every copy's checks read it, so the
     # model is refused everywhere before this readback. The shared key file is
@@ -71,7 +66,7 @@ def _removed(model_id, approval, resource, provider_key_dir, copies, file_config
     )
     readback = copies.confirm(model_id, None, file_config)
     if not readback.complete:
-        return 503, {"error": NOT_GONE_EVERYWHERE.format(summary=readback.summary())}
+        return 503, removed_but_listed(model_id, readback)
     if not key_removed:
         return 503, {"error": "Model removed, but its shared key file needs cleanup"}
     return 200, {"removed_from_keeplane": True, "gateway_model_preserved": False}

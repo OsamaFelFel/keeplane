@@ -5,14 +5,22 @@ gateway address reaches each copy on its own schedule. A change is confirmed
 only when every listed copy reads back exactly the expected state: the same
 definition and revision (its fingerprint) for a model being set up, or no
 entry for a model being removed. A copy that cannot be read, or still reads
-another state after the bounded wait, leaves the change unconfirmed.
+another state when the overall deadline passes, leaves the change
+unconfirmed.
+
+A file-owned preview model is defined by the gateway's mounted file, not the
+shared store, and never appears in the resource listing. For it a copy
+confirms when it answers the listing and holds no store entry that would
+replace the file's definition; the expected fingerprint is the file's digest.
 
 Only management resource reads are sent. Nothing here writes to a copy,
 reads another model's definition as authority or sends a model request.
 """
 
+import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -22,6 +30,12 @@ from .adapter import AgentgatewayModelAdapter
 
 RESOURCES = "/api/config/resources/llm.model"
 MAX_COPIES = 32
+# The whole check, across every pass and copy, ends well inside the admin
+# dialog's 10-second no-answer limit.
+DEADLINE_SECONDS = 5.0
+FILE_OWNED = "file-owned:"
+
+log = logging.getLogger(__name__)
 
 
 class GatewayCopiesUnavailable(ValueError):
@@ -32,13 +46,12 @@ class GatewayCopiesUnavailable(ValueError):
 class CopyReadback:
     total: int
     confirmed: int
+    # The operator's copy list could not be used, so nothing can be confirmed.
+    misconfigured: bool = False
 
     @property
     def complete(self):
-        return self.confirmed == self.total
-
-    def summary(self):
-        return f"{self.confirmed} of {self.total} gateway copies confirmed it."
+        return not self.misconfigured and self.confirmed == self.total
 
 
 def copy_urls(value):
@@ -70,11 +83,21 @@ def copy_urls(value):
 class GatewayCopies:
     """Every serving copy an operator lists, in addition to the gateway address."""
 
-    def __init__(self, copies, *, attempts=10, pause=0.5, sleep=time.sleep):
+    def __init__(
+        self,
+        copies,
+        *,
+        deadline=DEADLINE_SECONDS,
+        pause=0.5,
+        sleep=time.sleep,
+        clock=time.monotonic,
+    ):
         self.copies = list(copies)
-        self.attempts, self.pause, self.sleep = attempts, pause, sleep
-        # Set when the operator's list could not be used. Every change is then
-        # unconfirmed rather than confirmed by fewer copies than are serving.
+        self.deadline, self.pause = deadline, pause
+        self.sleep, self.clock = sleep, clock
+        # Set when the operator's list could not be used. Every change that
+        # needs a readback is then unconfirmed rather than confirmed by fewer
+        # copies than are serving.
         self.misconfigured = False
 
     @classmethod
@@ -82,7 +105,8 @@ class GatewayCopies:
         environ = os.environ if environ is None else environ
         try:
             urls = copy_urls(environ.get("GATEWAY_COPY_URLS", ""))
-        except GatewayCopiesUnavailable:
+        except GatewayCopiesUnavailable as error:
+            log.warning("GATEWAY_COPY_URLS is refused: %s", error)
             refused = cls([])
             refused.misconfigured = True
             return refused
@@ -94,9 +118,11 @@ class GatewayCopies:
         )
 
     @staticmethod
-    def _reads(copy, model_id, expected, file_config):
+    def _reads(copy, model_id, expected, file_config, timeout):
         try:
-            status, body = copy.request(RESOURCES, timeout=5, connection_retries=0)
+            status, body = copy.request(
+                RESOURCES, timeout=timeout, connection_retries=0
+            )
         except Exception:  # noqa: BLE001 - an unreadable copy is unconfirmed
             return False
         if status != 200 or not isinstance(body, dict):
@@ -107,22 +133,42 @@ class GatewayCopies:
         listed = [row for row in rows if row.get("id") == model_id]
         if expected is None:
             return not listed
+        if expected.startswith(FILE_OWNED):
+            return not listed and fingerprint(model_id, rows, file_config) == expected
         return len(listed) == 1 and fingerprint(model_id, rows, file_config) == expected
 
     def confirm(self, model_id, expected, file_config=None):
         """Wait until every copy reads `expected` (a fingerprint, or None for gone)."""
         if self.misconfigured:
-            return CopyReadback(1, 0)
-        confirmed = 0
-        for attempt in range(self.attempts):
-            if attempt:
-                self.sleep(self.pause)
-            # Every copy is read again on each pass: an earlier confirmation is
-            # not kept if another write moved that copy on since.
-            confirmed = sum(
-                self._reads(copy, model_id, expected, file_config)
-                for copy in self.copies
+            log.warning(
+                "Model change for %s refused: GATEWAY_COPY_URLS is invalid", model_id
             )
-            if confirmed == len(self.copies):
-                break
-        return CopyReadback(len(self.copies), confirmed)
+            return CopyReadback(0, 0, misconfigured=True)
+        total = len(self.copies)
+        if not total:
+            return CopyReadback(0, 0)
+        end = self.clock() + self.deadline
+        confirmed = 0
+        pool = ThreadPoolExecutor(max_workers=total)
+        try:
+            while True:
+                remaining = end - self.clock()
+                if remaining <= 0:
+                    break
+                # Every copy is read again, in parallel, on each pass: an
+                # earlier confirmation is not kept if another write moved that
+                # copy on since. No read outlives the deadline.
+                futures = [
+                    pool.submit(
+                        self._reads, copy, model_id, expected, file_config, remaining
+                    )
+                    for copy in self.copies
+                ]
+                done, _ = wait(futures, timeout=remaining)
+                confirmed = sum(1 for future in done if future.result() is True)
+                if confirmed == total or end - self.clock() <= self.pause:
+                    break
+                self.sleep(self.pause)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+        return CopyReadback(total, confirmed)

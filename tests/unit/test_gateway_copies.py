@@ -15,8 +15,8 @@ from integrations.gateway.copies import (
 )
 from model_registry import registration
 from model_registry.fingerprints import fingerprint
-from model_registry.registration import NOT_EVERY_COPY, ModelManagement
-from model_registry.removal import NOT_GONE_EVERYWHERE, remove_model_setup
+from model_registry.registration import ModelManagement
+from model_registry.removal import remove_model_setup
 
 ACTOR = ("admin-id", "first-admin")
 OTHER = {
@@ -138,12 +138,25 @@ class Catalog:
         return self.rows.pop(model_id, None) is not None
 
 
-def no_sleep(_):
-    return None
+class Clock:
+    """Fake time: sleeping moves it on, so passes are counted, not waited."""
+
+    def __init__(self):
+        self.now, self.slept = 100.0, []
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.now += seconds
 
 
-def copies_of(*serving):
-    return GatewayCopies(serving, attempts=3, pause=0.5, sleep=no_sleep)
+def copies_of(*serving, deadline=1.5):
+    clock = Clock()
+    return GatewayCopies(
+        serving, deadline=deadline, pause=0.5, sleep=clock.sleep, clock=clock
+    )
 
 
 def manager(store, catalog, serving, tmp_path, monkeypatch, classes_on=False):
@@ -233,10 +246,7 @@ def test_gc_03_a_lagging_copy_is_waited_for_and_every_copy_is_read_on_the_last_p
     store = Store()
     behind = Copy(store, lag=2)
     current = Copy(store)
-    slept = []
-    serving = GatewayCopies(
-        [behind, current], attempts=5, pause=0.5, sleep=slept.append
-    )
+    serving = copies_of(behind, current, deadline=5)
     store.request(
         "/api/config/resources/llm.model",
         {"value": dict(OTHER["value"], id="new", name="new")},
@@ -244,7 +254,7 @@ def test_gc_03_a_lagging_copy_is_waited_for_and_every_copy_is_read_on_the_last_p
     )
     expected = fingerprint("new", store.snapshot())
     assert serving.confirm("new", expected) == CopyReadback(2, 2)
-    assert slept == [0.5, 0.5]
+    assert serving.sleep.__self__.slept == [0.5, 0.5]
     assert behind.reads == current.reads == 3
 
 
@@ -267,7 +277,6 @@ def test_gc_04_a_copy_that_never_confirms_leaves_the_change_unconfirmed(kind):
     )
     assert result == CopyReadback(2, 1)
     assert not result.complete
-    assert result.summary() == "1 of 2 gateway copies confirmed it."
 
 
 def test_gc_05_the_same_definition_at_another_revision_is_not_confirmed():
@@ -306,7 +315,8 @@ def test_gc_07_copy_reads_never_write_or_ask_a_model(monkeypatch):
                 copies_module.RESOURCES,
                 None,
                 None,
-                {"timeout": 5, "connection_retries": 0},
+                # No read is allowed to outlive the overall deadline.
+                {"timeout": 1.5, "connection_retries": 0},
             )
         ]
         * 2
@@ -354,9 +364,11 @@ def test_gc_11_a_copy_that_cannot_confirm_a_new_model_keeps_it_unavailable(
         local_body()
     )
     assert status == 503
-    assert body["error"] == (
-        NOT_EVERY_COPY + "1 of 2 gateway copies confirmed it. Registration was removed."
-    )
+    assert body == {
+        "title": "new-model wasn't added",
+        "error": "Not every gateway copy confirmed it: 1 of 2 did. Nothing was "
+        "saved. Check the gateway and try again.",
+    }
     assert catalog.get("new-model") is None
     assert set(store.records) == {OTHER["id"]}
     # The other model keeps its definition and its setup.
@@ -384,8 +396,8 @@ def test_gc_12_a_cloud_model_with_a_shared_key_is_withdrawn_with_its_key(
         }
     )
     assert status == 503
-    assert body["error"].startswith(NOT_EVERY_COPY)
-    assert body["error"].endswith("Nothing was saved.")
+    assert body["title"] == "cloud-model wasn't added"
+    assert body["error"].startswith("Not every gateway copy confirmed it: 1 of 2 did.")
     assert catalog.get("cloud-model") is None
     assert "cloud-model" not in store.records
     assert not list((tmp_path / "keys").iterdir())
@@ -437,9 +449,11 @@ def test_gc_14_widening_classes_waits_for_every_copy_and_keeps_the_earlier_setup
     )
     status, body = management.setup("edited", widen)
     assert status == 503
-    assert body["error"] == (
-        NOT_EVERY_COPY + "1 of 2 gateway copies confirmed it. Nothing was saved."
-    )
+    assert body == {
+        "title": "edited wasn't changed",
+        "error": "Not every gateway copy confirmed the change: 1 of 2 did. Nothing "
+        "was saved, and its earlier setup stays. Check the gateway and try again.",
+    }
     assert catalog.get("edited") == before
     down.down = False
     assert management.setup("edited", widen)[0] == 200
@@ -476,7 +490,7 @@ def test_gc_15_a_changed_definition_is_not_approved_until_every_copy_reads_it(
         "edited", {"key_choice": "none", "approved_classes": ["Public"]}
     )
     assert status == 503
-    assert body["error"].startswith(NOT_EVERY_COPY)
+    assert body["title"] == "edited wasn't changed"
     assert catalog.get("edited") == before
 
 
@@ -519,10 +533,11 @@ def test_gc_16_a_replaced_shared_key_goes_back_when_a_copy_cannot_confirm(
         {"key_choice": "shared", "replace_shared_key": "synthetic-replacement-key"},
     )
     assert status == 503
-    assert body["error"] == (
-        NOT_EVERY_COPY
-        + "1 of 2 gateway copies confirmed it. The previous key is still active."
-    )
+    assert body == {
+        "title": "keyed wasn't changed",
+        "error": "Not every gateway copy confirmed the new key: 1 of 2 did. Nothing "
+        "was saved, and the earlier key stays. Check the gateway and try again.",
+    }
     assert store.records["keyed"]["value"] == value
     assert sorted(path.name for path in keys.iterdir()) == [old_key.name]
 
@@ -571,9 +586,11 @@ def test_gc_21_a_copy_still_listing_the_model_is_reported_and_the_model_stays_wi
         "gone", ACTOR, catalog, store, None, str(tmp_path), serving
     )
     assert status == 503
-    assert body["error"] == NOT_GONE_EVERYWHERE.format(
-        summary="1 of 2 gateway copies confirmed it."
-    )
+    assert body == {
+        "title": "gone was removed",
+        "error": "Developers can't use it, but 1 of 2 gateway copies still list "
+        "it. Check the gateway.",
+    }
     # The withdrawal is kept: no approval and no key for the stale copy to use.
     assert catalog.get("gone") is None
     assert not key.exists()
@@ -606,3 +623,226 @@ def test_gc_23_without_listed_copies_the_gateway_address_alone_confirms(
     )
     owned(store, catalog)
     assert remove_model_setup("gone", ACTOR, catalog, store, None, "")[0] == 200
+
+
+# GC-08 / GC-09: the overall deadline and file-owned preview models.
+
+
+def test_gc_08_a_hanging_copy_cannot_hold_the_check_past_its_deadline():
+    import threading
+    import time
+
+    store = Store()
+    seen = []
+    release = threading.Event()
+
+    class Hung:
+        def request(self, path, **options):
+            seen.append(options["timeout"])
+            release.wait(3)  # ignores its timeout, like a stuck connection
+            return 200, {"resources": store.snapshot()}
+
+    serving = GatewayCopies([Copy(store)] + [Hung() for _ in range(4)], deadline=0.4)
+    started = time.monotonic()
+    result = serving.confirm(OTHER["id"], fingerprint(OTHER["id"], [OTHER]))
+    elapsed = time.monotonic() - started
+    release.set()
+    assert result == CopyReadback(5, 1)
+    assert elapsed < 1.0
+    assert seen and all(timeout <= 0.4 for timeout in seen)
+    assert copies_module.DEADLINE_SECONDS == 5.0
+
+
+def test_gc_09_a_file_owned_preview_model_is_confirmed_by_what_the_copies_serve(
+    tmp_path, monkeypatch
+):
+    config = tmp_path / "local.yaml"
+    config.write_text("llm: {models: [{name: local-fixture}]}\n")
+    expected = fingerprint("local-fixture", [], str(config))
+    assert expected.startswith("file-owned:")
+    store = Store()
+    plain, overridden = Copy(store), Copy(store, stale=True)
+    down = Copy(store, down=True)
+    overridden.frozen = store.snapshot() + [
+        {"id": "local-fixture", "revision": 1, "value": {"name": "local-fixture"}}
+    ]
+    assert (
+        copies_of(plain, Copy(store))
+        .confirm("local-fixture", expected, str(config))
+        .complete
+    )
+    assert copies_of(plain, overridden).confirm(
+        "local-fixture", expected, str(config)
+    ) == CopyReadback(2, 1)
+    assert copies_of(plain, down).confirm(
+        "local-fixture", expected, str(config)
+    ) == CopyReadback(2, 1)
+
+    class Preview(Store):
+        def request(self, path, body=None, method=None, **options):
+            if path == "/v1/models":
+                return 200, {"data": [{"id": "local-fixture"}]}
+            if path == "/v1/chat/completions":
+                return 200, {"choices": [{"message": {"content": "OK"}}]}
+            return super().request(path, body, method, **options)
+
+    preview, catalog = Preview(), Catalog()
+    management = manager(
+        preview,
+        catalog,
+        copies_of(Copy(preview), Copy(preview)),
+        tmp_path,
+        monkeypatch,
+        classes_on=True,
+    )
+    management.file_config = str(config)
+    status, body = management.setup(
+        "local-fixture", {"key_choice": "none", "approved_classes": ["Public"]}
+    )
+    assert status == 200, body
+    assert catalog.get("local-fixture")["gateway_fingerprint"] == expected
+
+
+# GC-17 / GC-18: stricter key choice and an invalid copy list.
+
+
+def test_gc_17_moving_from_no_key_to_own_keys_is_saved_even_when_a_copy_is_down(
+    tmp_path, monkeypatch
+):
+    store, catalog = Store(), Catalog()
+    before = approved_local(store, catalog, ["Public"])
+    monkeypatch.setattr(
+        ModelManagement,
+        "confirm_cloud_model",
+        lambda self, name, resource, **_: (fingerprint(name, store.snapshot()), None),
+    )
+    down = Copy(store, down=True)
+    management = manager(
+        store, catalog, copies_of(down), tmp_path, monkeypatch, classes_on=True
+    )
+    status, body = management.setup(
+        "edited", {"key_choice": "personal", "approved_classes": ["Public"]}
+    )
+    assert status == 200, body
+    assert catalog.get("edited")["key_choice"] == "personal"
+    assert catalog.get("edited")["gateway_fingerprint"] == before["gateway_fingerprint"]
+    assert down.reads == 0
+
+
+BAD_LIST_TEXT = (
+    "Keeplane can't check every gateway copy because the gateway copy list in "
+    "its settings isn't valid."
+)
+
+
+def test_gc_18_an_invalid_copy_list_refuses_wider_access_but_not_withdrawals(
+    tmp_path, monkeypatch, caplog
+):
+    primary = SimpleNamespace(runtime_key_file="", admin_key_file="")
+    with caplog.at_level("WARNING", logger=copies_module.__name__):
+        refused = GatewayCopies.from_environment(
+            primary, {"GATEWAY_COPY_URLS": "http://gw-0:4000/not-an-origin"}
+        )
+    assert "GATEWAY_COPY_URLS is refused" in caplog.text
+    store, catalog = Store(), Catalog()
+    monkeypatch.setattr(
+        ModelManagement,
+        "confirm_new_model",
+        lambda self, name, params: fingerprint(name, store.snapshot()),
+    )
+    management = manager(
+        store, catalog, refused, tmp_path, monkeypatch, classes_on=True
+    )
+    caplog.clear()
+    with caplog.at_level("WARNING", logger=copies_module.__name__):
+        status, body = management.add(dict(local_body(), approved_classes=["Public"]))
+    assert "GATEWAY_COPY_URLS is invalid" in caplog.text
+    assert (status, body) == (
+        503,
+        {
+            "title": "new-model wasn't added",
+            "error": BAD_LIST_TEXT
+            + " Nothing was saved. Ask whoever installed Keeplane to fix it.",
+        },
+    )
+    assert catalog.get("new-model") is None and "new-model" not in store.records
+
+    approved_local(store, catalog, ["Public", "Internal"])
+    status, body = management.setup(
+        "edited", {"key_choice": "none", "approved_classes": ["Public"]}
+    )
+    assert (status, body["approved_classes"]) == (200, ["Public"])
+    status, body = management.setup(
+        "edited", {"key_choice": "none", "approved_classes": ["Public", "Internal"]}
+    )
+    assert (status, body["title"]) == (503, "edited wasn't changed")
+    assert body["error"] == (
+        BAD_LIST_TEXT + " Nothing was saved. Ask whoever installed Keeplane to fix it."
+    )
+    assert catalog.get("edited")["approved_classes"] == ["Public"]
+
+    owned(store, catalog)
+    status, body = remove_model_setup("gone", ACTOR, catalog, store, None, "", refused)
+    assert (status, body["title"]) == (503, "gone was removed")
+    assert body["error"] == (
+        "Developers can't use it, but "
+        + BAD_LIST_TEXT
+        + " Ask whoever installed Keeplane to fix it."
+    )
+    assert catalog.get("gone") is None and "gone" not in store.records
+
+
+# GC-24 / GC-25: a removal whose commit reports a failure, and the wiring.
+
+
+def test_gc_24_a_removal_kept_despite_a_reported_commit_failure_still_reads_every_copy():
+    from common.errors import StorageUnavailable
+
+    class Landed(Catalog):
+        def remove(self, model_id, actor, remove_from_gateway=None):
+            super().remove(model_id, actor, remove_from_gateway)
+            raise StorageUnavailable("The commit reported a failure")
+
+    store, catalog = Store(), Landed()
+    owned(store, catalog)
+    stale = Copy(store, stale=True)
+    stale.freeze()
+    status, body = remove_model_setup(
+        "gone", ACTOR, catalog, store, None, "", copies_of(Copy(store), stale)
+    )
+    assert (status, body["title"]) == (503, "gone was removed")
+    assert catalog.get("gone") is None
+    stale.stale = False
+    owned(store, catalog)
+    status, body = remove_model_setup(
+        "gone", ACTOR, catalog, store, None, "", copies_of(Copy(store), stale)
+    )
+    assert (status, body) == (
+        200,
+        {"removed_from_keeplane": True, "gateway_model_preserved": False},
+    )
+
+
+def test_gc_25_the_app_passes_its_copy_list_to_every_model_change(monkeypatch):
+    from common import api
+    from django.test import RequestFactory
+    from model_registry import use_cases, views
+
+    assert isinstance(api.MODEL_GATEWAY_COPIES, GatewayCopies)
+    marker = GatewayCopies([])
+    monkeypatch.setattr(use_cases, "MODEL_GATEWAY_COPIES", marker)
+    user = {"id": "admin-id", "username": "first-admin", "role": "admin"}
+    assert use_cases.model_management(user).copies is marker
+
+    seen = []
+    monkeypatch.setattr(views, "MODEL_GATEWAY_COPIES", marker)
+    monkeypatch.setattr(views, "admin", lambda request: (user, None))
+    monkeypatch.setattr(views, "action_error", lambda request: None)
+    monkeypatch.setattr(
+        views,
+        "remove_model_setup",
+        lambda *args: seen.append(args) or (200, {"removed_from_keeplane": True}),
+    )
+    response = views.model_setup(RequestFactory().delete("/api/models/m"), "m")
+    assert response.status_code == 200
+    assert seen[0][0] == "m" and seen[0][-1] is marker
