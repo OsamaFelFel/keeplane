@@ -154,6 +154,13 @@ def test_sc_11_a_removal_that_cannot_finish_changes_nothing(start_process):
     )
     assert {key: restored[key] for key in unchanged} == unchanged
 
+    landed = result["commit lands but reports failure"]
+    assert (landed["status"], landed["in_gateway"], landed["approved"]) == (
+        200,
+        False,
+        False,
+    )
+
     outside_failed = result["outside, record write fails"]
     assert outside_failed["status"] == 503
     assert {key: outside_failed[key] for key in unchanged} == unchanged
@@ -173,6 +180,7 @@ def test_sc_11_a_removal_that_cannot_finish_changes_nothing(start_process):
     # The outside model is never sent to the gateway for deletion.
     assert "outside" not in result["gateway deletes"]
     assert result["records"] == [
+        "Removed model commit-lands from the gateway",
         "Removed Keeplane setup for model outside",
         "Removed model normal from the gateway",
     ]

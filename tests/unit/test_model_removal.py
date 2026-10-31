@@ -34,11 +34,17 @@ class Catalog:
     """Behaves like one settings transaction: nothing is kept unless it commits.
 
     fail is None, "write" (the approval or record write fails before the
-    gateway step) or "commit" (the commit fails after the gateway step).
+    gateway step), "commit" (the commit fails after the gateway step),
+    "landed" (the commit reports a failure but was kept), "changed" (another
+    request changes the setup after the failed commit) or "gone" (another
+    request removed the approval first). approve_error makes re-pinning fail.
     """
 
-    def __init__(self, owned=True, key_choice="none", revision=1, fail=None):
+    def __init__(
+        self, owned=True, key_choice="none", revision=1, fail=None, approve_error=None
+    ):
         self.fail = fail
+        self.approve_error = approve_error
         self.repinned = []
         self.approval = {
             "gateway_fingerprint": fingerprint(
@@ -56,32 +62,54 @@ class Catalog:
     def remove(self, model_id, actor, remove_from_gateway=None):
         if self.fail == "write":
             raise StorageUnavailable("Keeplane storage is unavailable")
+        if self.fail == "gone":
+            self.approval = None
+            return False
         if remove_from_gateway:
             status, result = remove_from_gateway()
             if status != 200:
                 raise GatewayRemovalFailed(status, result)
-        if self.fail == "commit":
+        if self.fail == "landed":
+            self.approval = None
+        if self.fail == "changed":
+            self.approval = dict(self.approval, approved_classes=["Internal"])
+        if self.fail in ("commit", "landed", "changed"):
             raise StorageUnavailable("Keeplane storage is unavailable")
         self.removals.append((model_id, actor, bool(remove_from_gateway)))
         self.approval = None
         return True
 
     def approve(self, model_id, classes, revision, actor, **options):
+        if self.approve_error:
+            raise self.approve_error
         self.repinned.append((model_id, classes, revision, actor, options))
         self.approval = dict(self.approval, gateway_fingerprint=revision)
 
 
 class Gateway:
-    def __init__(self, resources=None, delete_status=200, restore_status=200):
+    def __init__(
+        self,
+        resources=None,
+        delete_status=200,
+        restore_status=200,
+        read_after_restore=200,
+        restored_value=None,
+    ):
         self.registry = [RESOURCE] if resources is None else resources
         self.delete_status = delete_status
         self.restore_status = restore_status
+        # How the gateway answers the readback after a write back, and what
+        # it then holds (None: exactly the definition written back).
+        self.read_after_restore = read_after_restore
+        self.restored_value = restored_value
         self.read_count = 0
         self.deletions = []
         self.restores = []
 
     def resources(self):
         self.read_count += 1
+        if self.restores and self.read_after_restore != 200:
+            return self.read_after_restore, {"error": "Gateway unavailable"}
         return 200, {"resources": self.registry}
 
     def delete_model(self, model_id):
@@ -96,8 +124,9 @@ class Gateway:
         if self.restore_status != 200:
             return self.restore_status, {"error": "Gateway unavailable"}
         # A write back is a new gateway revision.
+        kept = value if self.restored_value is None else self.restored_value
         self.registry = self.registry + [
-            {"id": value.get("id", MODEL), "revision": 7, "value": json.loads(json.dumps(value))}
+            {"id": MODEL, "revision": 7, "value": json.loads(json.dumps(kept))}
         ]
         return 200, {}
 
@@ -279,6 +308,93 @@ class ModelRemovalTests(unittest.TestCase):
                 )
             ],
         )
+
+
+    def assert_not_recorded(self, result, outcome):
+        self.assertEqual(
+            result, {"error": "Keeplane couldn't record the removal. " + outcome}
+        )
+
+    def test_mr_14_personal_key_restore_asks_developers_to_check_keys(self):
+        catalog, gateway = Catalog(key_choice="personal", fail="commit"), Gateway()
+        status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
+        self.assertEqual(status, 503)
+        self.assert_not_recorded(
+            result,
+            "The model is back in the gateway. Developers using their own "
+            "provider keys for it must check them again.",
+        )
+        self.assertEqual(len(catalog.repinned), 1)
+
+    def test_mr_15_commit_that_landed_is_reported_as_removed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            key = Path(directory) / ("key-" + "a" * 32)
+            key.write_text("private-fixture-key")
+            resource = json.loads(json.dumps(RESOURCE))
+            resource["value"]["auth"] = {"key": {"value": {"file": str(key)}}}
+            catalog = Catalog(key_choice="shared", fail="landed")
+            catalog.approval["gateway_fingerprint"] = fingerprint(MODEL, [resource])
+            gateway = Gateway([resource])
+            status, result = remove_model_setup(
+                MODEL, ACTOR, catalog, gateway, None, directory
+            )
+            self.assertEqual(
+                (status, result),
+                (200, {"removed_from_keeplane": True, "gateway_model_preserved": False}),
+            )
+            self.assertEqual((gateway.restores, catalog.repinned), ([], []))
+            self.assertFalse(key.exists())
+
+    def test_mr_16_setup_changed_after_failed_commit_is_not_overwritten(self):
+        catalog, gateway = Catalog(fail="changed"), Gateway()
+        status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
+        self.assertEqual(status, 503)
+        self.assert_not_recorded(
+            result, "The model may be missing from the gateway; check Models."
+        )
+        self.assertEqual((gateway.restores, catalog.repinned), ([], []))
+        self.assertEqual(catalog.approval["approved_classes"], ["Internal"])
+
+    def test_mr_17_unconfirmed_write_back_asks_admin_to_check_setup(self):
+        changed = dict(RESOURCE["value"], params={"model": "other"})
+        cases = {
+            "readback fails": (Catalog(fail="commit"), Gateway(read_after_restore=503)),
+            "definition differs": (
+                Catalog(fail="commit"),
+                Gateway(restored_value=changed),
+            ),
+            "re-pin refused": (
+                Catalog(fail="commit", approve_error=ValueError("Choose valid data classes")),
+                Gateway(),
+            ),
+            "re-pin storage fails": (
+                Catalog(
+                    fail="commit",
+                    approve_error=StorageUnavailable("Keeplane storage is unavailable"),
+                ),
+                Gateway(),
+            ),
+        }
+        for name, (catalog, gateway) in cases.items():
+            with self.subTest(name):
+                previous = catalog.approval
+                status, result = remove_model_setup(
+                    MODEL, ACTOR, catalog, gateway, None, ""
+                )
+                self.assertEqual(status, 503)
+                self.assert_not_recorded(
+                    result,
+                    "The model is back in the gateway; check its setup in Models.",
+                )
+                self.assertEqual(len(gateway.restores), 1)
+                self.assertEqual(catalog.repinned, [])
+                self.assertIs(catalog.approval, previous)
+
+    def test_mr_18_removal_already_done_by_another_request(self):
+        catalog, gateway = Catalog(fail="gone"), Gateway()
+        status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
+        self.assertEqual((status, result), (404, {"error": "Model setup not found"}))
+        self.assertEqual((gateway.deletions, gateway.restores), ([], []))
 
 
 if __name__ == "__main__":

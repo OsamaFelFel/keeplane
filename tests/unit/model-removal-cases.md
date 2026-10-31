@@ -22,3 +22,8 @@ SQLite and PostgreSQL database are
 | MR-11 | As MR-09, for a model with a Keeplane-managed shared key. | The key file is kept, so the restored model can still use it. |
 | MR-12 | Remove setup for a customer-added model while the record write fails. | No gateway delete or write back is sent. |
 | MR-13 | Write a model back through the gateway adapter. | The request is a PUT of the previous definition to the management API. |
+| MR-14 | As MR-09, for a model where each developer uses their own provider key. | The model is written back and re-pinned, and the admin is told developers must check their keys again, not that nothing changed. |
+| MR-15 | The commit reports a failure after the gateway deletion, but the database kept it. | Keeplane sees the approval is gone, writes nothing back, deletes the shared key file and reports the removal as done. |
+| MR-16 | The commit fails after the gateway deletion and the setup has changed since. | Nothing is written back and the changed setup is kept; the admin is told the model may be missing from the gateway and to check Models. |
+| MR-17 | The model is written back, but the gateway readback fails, shows a different definition, or the approval can't be re-pinned (invalid classes or storage unavailable). | The approval is left as it was and the admin is told the model is back in the gateway and to check its setup in Models. |
+| MR-18 | Another request removed the setup between reading it and removing it. | "Model setup not found" (404); no gateway delete or write back is sent. |

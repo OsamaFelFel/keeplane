@@ -27,10 +27,19 @@ the gateway refuses, the transaction rolls back and nothing is recorded.
 The commit itself can still fail after the gateway deletion. Keeplane then
 writes the same definition back and binds the unchanged approval to its new
 gateway revision, without a settings-change record, as it does when a key
-replacement is undone. If the write back fails, the admin is asked to check
-Models. Developers' personal keys for that model are bound to the old revision
-and need checking again after such a write back. A shared key file is deleted
-only after the removal commits.
+replacement is undone. Before writing back, Keeplane reads the approval again:
+if it is gone, the commit was kept despite the error and the removal is
+reported as done; if it changed, nothing is written back and the admin is
+asked to check Models. If the write back or its readback fails, the admin is
+also asked to check Models. Developers' personal keys for that model are bound
+to the old revision, so the admin is told they need checking again. A shared
+key file is deleted only after the removal commits. If another request already
+removed the setup, the removal answers "Model setup not found".
+
+A gateway that deletes the model but loses its answer, for example to a
+timeout, still leaves the approval in place while the model is gone; Keeplane
+cannot tell this from a refusal. The leftover approval matches no gateway
+definition, so it grants nothing and is not listed.
 
 Removing setup for a model added outside Keeplane never contacts the gateway.
 The settings transaction holds the settings lock while the gateway answers, so

@@ -345,6 +345,19 @@ def removal_rollbacks():
     set_up("commit-fails")
     with patch.object(wrapper, "commit", commit_fails_once):
         result["commit fails"] = remove("commit-fails")
+    landed = []
+
+    def commit_lands_then_fails():
+        # The connection drops after the server kept the commit.
+        if not landed:
+            landed.append("landed")
+            real_commit()
+            raise OperationalError("connection lost during commit")
+        return real_commit()
+
+    set_up("commit-lands")
+    with patch.object(wrapper, "commit", commit_lands_then_fails):
+        result["commit lands but reports failure"] = remove("commit-lands")
     set_up("outside", owned=False)
     with patch.object(
         AuditRecord.objects, "create", side_effect=OperationalError("audit down")

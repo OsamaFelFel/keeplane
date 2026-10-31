@@ -10,6 +10,8 @@ from integrations.gateway.keys import (
 NOT_RECORDED = "Keeplane couldn't record the removal. "
 RESTORE_OUTCOMES = {
     "restored": "The model is back in the gateway and nothing changed.",
+    "restored_personal": "The model is back in the gateway. Developers using "
+    "their own provider keys for it must check them again.",
     "unpinned": "The model is back in the gateway; check its setup in Models.",
     "missing": "The model may be missing from the gateway; check Models.",
 }
@@ -46,7 +48,17 @@ def _restore(model_id, approval, resource, catalog, gateway, file_config):
         )
     except (ValueError, StorageUnavailable):
         return "unpinned"
-    return "restored"
+    # Personal keys are checked against one gateway revision; the new one
+    # does not match them until each developer checks their key again.
+    return "restored_personal" if approval["key_choice"] == "personal" else "restored"
+
+
+def _removed(approval, resource, provider_key_dir):
+    if approval["key_choice"] == "shared" and not remove_provider_key(
+        provider_key_dir, provider_key_file(resource)
+    ):
+        return 503, {"error": "Model removed, but its shared key file needs cleanup"}
+    return 200, {"removed_from_keeplane": True, "gateway_model_preserved": False}
 
 
 def remove_model_setup(
@@ -95,14 +107,20 @@ def remove_model_setup(
     except StorageUnavailable:
         if not deleted:
             raise
-        # The gateway deletion succeeded but the commit did not.
+        # The gateway deletion succeeded but the commit reported a failure.
+        try:
+            current = catalog.get(model_id)
+        except StorageUnavailable:
+            current = approval  # Unknown: keep the model rather than lose it.
+        if current is None:
+            # The commit landed even though it reported a failure.
+            return _removed(approval, resource, provider_key_dir)
+        if current != approval:
+            # Someone changed the setup since; writing back could undo that.
+            return 503, {"error": NOT_RECORDED + RESTORE_OUTCOMES["missing"]}
         outcome = _restore(model_id, approval, resource, catalog, gateway, file_config)
         return 503, {"error": NOT_RECORDED + RESTORE_OUTCOMES[outcome]}
-    if not deleted:
-        # Another request removed the approval first; nothing was deleted here.
-        return 200, {"removed_from_keeplane": removed, "gateway_model_preserved": True}
-    if approval["key_choice"] == "shared" and not remove_provider_key(
-        provider_key_dir, provider_key_file(resource)
-    ):
-        return 503, {"error": "Model removed, but its shared key file needs cleanup"}
-    return 200, {"removed_from_keeplane": removed, "gateway_model_preserved": False}
+    if not removed:
+        # Another request removed it first; this one deleted nothing.
+        return 404, {"error": "Model setup not found"}
+    return _removed(approval, resource, provider_key_dir)
