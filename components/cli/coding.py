@@ -1,5 +1,6 @@
 """Run a local coding turn with the signed-in account and requested project."""
 
+import json
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -8,12 +9,14 @@ if __package__:
     from . import opencode_adapter
     from .credential_profile import ProfileError, opened
     from .project_registration import register
-    from .server_connection import ConnectionError, account, model_choice, models, origin
+    from .server_connection import (ConnectionError, account, model_alternatives,
+                                    model_choice, models, origin)
 else:
     import opencode_adapter
     from credential_profile import ProfileError, opened
     from project_registration import register
-    from server_connection import ConnectionError, account, model_choice, models, origin
+    from server_connection import (ConnectionError, account, model_alternatives,
+                                   model_choice, models, origin)
 
 
 NO_MODELS = ("No models are available for this project yet, so nothing was sent. "
@@ -23,6 +26,20 @@ NO_MODELS = ("No models are available for this project yet, so nothing was sent.
 UNAVAILABLE = ("{requested} is approved for this project but can't be used right now, so "
                "nothing was sent. Choose another model allowed for this project, or ask "
                "an admin to check it in Models and routing.")
+
+# Spec 004 ST16, owner decision of 31 October 2026: the gateway has already
+# retried a model that is down; Keeplane never switches it, it tells the developer.
+STOPPED = {
+    "down": "{model} is unavailable right now, so this task stopped. ",
+    "too_big": "This task is too big for {model}'s context, so it stopped. ",
+}
+SWITCH = {
+    "down": "Wait and try again, or run it with another model allowed for this project",
+    "too_big": "Run it with another model allowed for this project",
+}
+WAIT = {"down": "Wait and try again. ", "too_big": ""}
+CONTEXT_SIGNS = ("context_length_exceeded", "maximum context length", "context window",
+                 "contextoverflow", "prompt is too long", "too many tokens")
 
 REASONS = {
     "missing": "No provider key is added for {requested}",
@@ -53,6 +70,57 @@ def chosen_model(issuer, project_id, model, credential, notify):
             + fix + "`.", 403)
     notify(why + "; using " + choice["model_id"] + " instead. " + action + " with `" + fix + "`.")
     return choice["model_id"]
+
+
+def _walk(value, depth=0):
+    """Yield (key, value) pairs of a decoded error event, bounded in depth."""
+    if depth > 8:
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield key, item
+            yield from _walk(item, depth + 1)
+    elif isinstance(value, list):
+        for item in value[:64]:
+            yield from _walk(item, depth + 1)
+
+
+def model_problem(stdout):
+    """Return "down", "too_big" or None for the runtime's error events.
+
+    The gateway has already retried a model that is down: a 429 or 5xx that
+    remains is final. A context-length refusal is never retried.
+    """
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "error":
+            continue
+        statuses, text = set(), []
+        for key, value in _walk(event):
+            if key in ("statusCode", "status") and type(value) is int:
+                statuses.add(value)
+            elif isinstance(value, str):
+                text.append(value.lower())
+        text = " ".join(text).replace(" ", "")
+        if any(sign.replace(" ", "") in text for sign in CONTEXT_SIGNS):
+            return "too_big"
+        if any(status == 429 or 500 <= status <= 599 for status in statuses):
+            return "down"
+    return None
+
+
+def problem_message(problem, model, alternatives):
+    """Tell the developer what happened and which allowed models they may choose."""
+    message = STOPPED[problem].format(model=model)
+    if alternatives is None:
+        return (message + SWITCH[problem]
+                + " using --model; `keeplane models` lists them.")
+    if not alternatives:
+        return message + WAIT[problem] + NO_MODELS
+    return message + SWITCH[problem] + " using --model: " + ", ".join(alternatives) + "."
 
 
 def gateway_endpoint(value):
@@ -99,6 +167,14 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             account_context={"issuer": credential.issuer, "actor_id": actor["id"],
                              "project_id": project_id},
         )
+        problem = model_problem(result.stdout) if result.returncode else None
+        if problem:
+            try:
+                alternatives = model_alternatives(
+                    credential.issuer, project_id, model, credential.access_token)
+            except ConnectionError:
+                alternatives = None  # An older server: the developer still gets the reason.
+            result.stderr += problem_message(problem, model, alternatives) + "\n"
         for secret in secrets:
             result.stdout = result.stdout.replace(secret, "[redacted]")
             result.stderr = result.stderr.replace(secret, "[redacted]")

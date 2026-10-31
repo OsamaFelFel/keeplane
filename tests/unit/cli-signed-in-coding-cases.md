@@ -31,6 +31,21 @@
   the provider package, gateway URL, project header and model name, so it adds or
   replaces no request setting such as temperature. The gateway side is covered by
   the [native protocol cases](../integration/native-runtime-protocol-cases.md).
+- Model down after the gateway's retries (Spec 004 ST16): when the runtime's
+  error event carries a 429 or 5xx, `code` keeps its failing exit status, still
+  prints the runtime's error, and adds “coder is unavailable right now, so this
+  task stopped. Wait and try again, or run it with another model allowed for
+  this project using --model: …” with the server's list. The runtime is started
+  once, with the requested model only. Run
+  `python -m pytest tests/unit/test_cli_model_outage.py`.
+- No alternative left: the message ends with the existing no-models message.
+- Task too big for the model's context: “This task is too big for coder's
+  context, so it stopped. Run it with another model allowed for this project
+  using --model: …”, or the no-models message.
+- An older server (404), an unavailable server (503) or a malformed list: the
+  reason still shows and points to `keeplane models`; no list is printed.
+- A 400, 401 or 403 error, an error without a status, or a successful turn asks
+  for no alternatives and prints nothing extra.
 - Private history records the issuer, account and project without credentials.
   Fresh credentials for the same account work; another account or project cannot
   reuse that history. Legacy unbound history is also refused.
