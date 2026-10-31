@@ -55,9 +55,22 @@ record. The record never contains the prompt, the answer, a session token, the
 gateway credential or a provider key. If the record cannot be written, the
 request still goes ahead and the app logs a warning,
 `Model answers record was not written; the request was allowed`, with only the
-error kind. Records are written only on a managed guarded runtime
-([guarded runtime](guarded-runtime.md)); the experimental shared check at
-`/internal/runtime/authorize` does not write them.
+error kind.
+
+Records are written whichever gateway runs the model traffic, and each
+request sent is recorded once:
+
+- **Keeplane's managed gateway** records at its last check before the model
+  ([guarded runtime](guarded-runtime.md)). Nothing to set up.
+- **A gateway your organization runs** (`existing` mode) records when it calls
+  Keeplane's shared final check, `/internal/runtime/authorize/selected`, on
+  each model backend. Its route can keep calling the shared check
+  `/internal/runtime/authorize`, which never records, because a gateway may
+  call it more than once per request. If the gateway calls only
+  `/internal/runtime/authorize`, requests are checked but not recorded; see
+  [gateway configuration](gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway).
+  On a managed install the shared final check is refused, so one request is
+  never recorded twice.
 
 The held-back-request switch persists independently, but its records wait for
 detection. Do not use that switch as evidence that held-back requests are
