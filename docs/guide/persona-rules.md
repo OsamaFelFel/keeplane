@@ -67,9 +67,9 @@ gateway while the model is in use.
 
 While **Changes to models, routing and data classes** is on in
 [Audit](audit-local.md), each change adds one record:
-`Added persona rule Architect: route to model alpha`,
-`Changed persona rule Architect: model alpha to model beta` or
-`Removed persona rule Architect: it routed to model beta`. Adding the same rule
+`Added a persona rule for Architect: alpha`,
+`Changed the persona rule for Architect to beta` or
+`Removed the persona rule for Architect`. Adding the same rule
 again adds nothing.
 
 ## Checks

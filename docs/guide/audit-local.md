@@ -22,7 +22,7 @@ change, when, and a short description such as these:
 | Approve a model again after its gateway definition changed | `Changed model beta: approved its changed gateway definition` |
 | Remove Keeplane's setup, or the model from the gateway | `Removed Keeplane setup for model alpha`, `Removed model beta from the gateway` |
 | Change a complexity pick, or go back to Keeplane's pick | `Changed complexity pick Complex: Keeplane's pick to model alpha`, `Changed complexity pick Complex: model alpha to Keeplane's pick` |
-| Add, change or remove a persona rule | `Added persona rule Architect: route to model alpha`, `Changed persona rule Architect: model alpha to model beta` |
+| Add, change or remove a persona rule | `Added a persona rule for Architect: alpha`, `Changed the persona rule for Architect to beta`, `Removed the persona rule for Architect` |
 | Turn data classes on or off | `Turned data classes on; added starter classes: Public, Internal, Confidential` |
 | Add a data class | `Added data class Finance; approved models: alpha` |
 | Rename a class or change its approved models | `Changed data class Finance: renamed to Finance team; approved models: alpha to none` |

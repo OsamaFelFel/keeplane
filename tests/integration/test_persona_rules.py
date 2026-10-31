@@ -90,9 +90,9 @@ def test_pr_int_02_records_name_the_admin_and_each_change(levels):  # noqa: F811
     assert add_rule(levels.client, "architect", None).status_code == 200
     assert add_rule(levels.client, "architect", None).status_code == 200
     assert settings_records() == [
-        "Added persona rule Architect: route to model large",
-        "Changed persona rule Architect: model large to model medium",
-        "Removed persona rule Architect: it routed to model medium",
+        "Added a persona rule for Architect: large",
+        "Changed the persona rule for Architect to medium",
+        "Removed the persona rule for Architect",
     ]
     assert set(
         AuditRecord.objects.filter(kind="settings").values_list("actor_name", flat=True)

@@ -42,7 +42,7 @@ def describe_rule_change(persona, previous, chosen):
     """Say what an admin changed for one persona rule, for the settings record."""
     name = PERSONA_NAMES[persona]
     if previous is None:
-        return f"Added persona rule {name}: route to model {chosen}"
+        return f"Added a persona rule for {name}: {chosen}"
     if chosen is None:
-        return f"Removed persona rule {name}: it routed to model {previous}"
-    return f"Changed persona rule {name}: model {previous} to model {chosen}"
+        return f"Removed the persona rule for {name}"
+    return f"Changed the persona rule for {name} to {chosen}"

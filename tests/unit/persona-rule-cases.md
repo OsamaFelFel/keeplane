@@ -10,7 +10,7 @@ order against real accounts, policy and keys.
 | --- | --- | --- |
 | PR-01 Personas | The persona list | Architect, Developer and Frontend, in that order, offered as Add rule choices. |
 | PR-02 Rows | Rules for Frontend and Architect, one on a model that isn't set up now | Listed Architect first, each with its model and whether that model is set up. No rules gives an empty list. |
-| PR-03 Record wording | Adding, moving and removing a rule | `Added persona rule Architect: route to model large`, `Changed persona rule Architect: model large to model small`, `Removed persona rule Frontend: it routed to model small`. |
+| PR-03 Record wording | Adding, moving and removing a rule | `Added a persona rule for Architect: large`, `Changed the persona rule for Architect to small`, `Removed the persona rule for Frontend`. |
 | PR-04 In-use answer | A model a level and a persona rule use | The answer lists both. |
 | PR-05 Order | Three allowed models; an Architect rule; a level | The developer's switch wins, then the persona rule, then the level's model, then the first allowed model. |
 | PR-06 Rule gives way | The rule's model isn't allowed for the project's class, or the runtime gate refuses it now | The level's model, or the first allowed model, is used instead. |

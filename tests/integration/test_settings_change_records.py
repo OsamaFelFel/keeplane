@@ -546,9 +546,9 @@ def test_sc_13_level_change_and_removal_on_two_connections(
 
 
 RULE_RECORDS = [
-    "Added persona rule Architect: route to model alpha",
-    "Changed persona rule Architect: model alpha to model beta",
-    "Removed persona rule Architect: it routed to model beta",
+    "Added a persona rule for Architect: alpha",
+    "Changed the persona rule for Architect to beta",
+    "Removed the persona rule for Architect",
 ]
 
 

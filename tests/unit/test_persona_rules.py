@@ -46,15 +46,15 @@ def test_pr_02_rules_are_listed_in_persona_order_with_their_setup():
 def test_pr_03_record_wording():
     assert (
         describe_rule_change("architect", None, "large")
-        == "Added persona rule Architect: route to model large"
+        == "Added a persona rule for Architect: large"
     )
     assert (
         describe_rule_change("architect", "large", "small")
-        == "Changed persona rule Architect: model large to model small"
+        == "Changed the persona rule for Architect to small"
     )
     assert (
         describe_rule_change("frontend", "small", None)
-        == "Removed persona rule Frontend: it routed to model small"
+        == "Removed the persona rule for Frontend"
     )
 
 

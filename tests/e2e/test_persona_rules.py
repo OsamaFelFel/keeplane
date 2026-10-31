@@ -52,11 +52,13 @@ def test_persona_rules_live():
             "/api/audit/records?kind=settings&search=persona"
         )
         assert status == 200
+        expected = {
+            f"Added a persona rule for Architect: {name}",
+            f"Changed the persona rule for Architect to {name}",
+        }
         assert any(
-            row["what"].startswith("Added persona rule Architect: ")
-            or row["what"].startswith("Changed persona rule Architect: ")
+            row["what"] in expected and row["who"] == "first-admin"
             for row in records["records"]
-            if row["what"].endswith(f"model {name}") and row["who"] == "first-admin"
         ), records
 
         # RULE-LIVE-02: the model can't be removed while the rule uses it.
