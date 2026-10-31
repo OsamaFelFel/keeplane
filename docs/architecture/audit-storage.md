@@ -32,6 +32,7 @@ flowchart LR
 - **Settings changes** are written by the stores that make the change:
   `DjangoModelCatalog.approve` and `remove` for models,
   `DjangoModelCatalog.change_level` for complexity picks,
+  `DjangoModelCatalog.set_persona_rule` for persona rules,
   `DjangoDataClassStore` for the class mode and each class, and
   `DjangoProjectClasses.assign` for a project's class. Each holds the
   settings row lock, then calls `DjangoAuditStore.record_in_transaction`

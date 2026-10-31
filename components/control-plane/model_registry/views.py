@@ -12,6 +12,11 @@ from common.errors import StorageUnavailable
 from model_registry.chat import ask_model
 from model_registry.levels import LevelError, complexity_levels
 from model_registry.listing import list_models
+from model_registry.persona_rules import (
+    PersonaRuleError,
+    persona_choices,
+    persona_rule_rows,
+)
 from model_registry.removal import remove_model_setup
 from integrations.runners import local_runner
 
@@ -41,7 +46,10 @@ def models(request):
             RUNNER_URLS,
         )
         if status == 200:
-            listing["levels"] = complexity_levels(CATALOG, set_up_ids(listing))
+            set_up = set_up_ids(listing)
+            listing["levels"] = complexity_levels(CATALOG, set_up)
+            listing["persona_rules"] = persona_rule_rows(CATALOG.persona_rules(), set_up)
+            listing["personas"] = persona_choices()
         return Response(listing, status=status)
     except StorageUnavailable:
         return failure(503, "Keeplane settings storage is unavailable")
@@ -84,6 +92,47 @@ def complexity_level(request, level):
         )
         return Response({"levels": complexity_levels(CATALOG, candidates)})
     except LevelError as error:
+        return failure(error.status, error.message)
+    except (IdentityError, AuditError) as error:
+        return failure(error.status, error.message)
+    except StorageUnavailable:
+        return failure(503, "Keeplane settings storage is unavailable")
+
+
+@api_view(["POST"])
+def persona_rule(request, persona):
+    """Send a persona's work to a model, or with a null model_id remove its rule."""
+    user, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a JSON object")
+    if set(request.data) != {"model_id"}:
+        return failure(400, "Choose a model")
+    try:
+        status, listing = list_models(
+            MODEL_GATEWAY.models,
+            MODEL_GATEWAY.resources,
+            CATALOG,
+            os.environ.get("GATEWAY_FILE_CONFIG"),
+            RUNNER_URLS,
+        )
+        if status != 200:
+            return Response(listing, status=status)
+        candidates = set_up_ids(listing)
+        CATALOG.set_persona_rule(
+            persona,
+            request.data["model_id"],
+            candidates,
+            (user["id"], user["username"]),
+        )
+        return Response(
+            {"persona_rules": persona_rule_rows(CATALOG.persona_rules(), candidates)}
+        )
+    except PersonaRuleError as error:
         return failure(error.status, error.message)
     except (IdentityError, AuditError) as error:
         return failure(error.status, error.message)

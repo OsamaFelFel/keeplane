@@ -39,10 +39,12 @@ An admin pick is shown while its model is a candidate. Otherwise the level shows
 Keeplane's pick and reports that the admin's model isn't set up now; the stored
 choice is kept.
 
-Project data classes are not applied to these organization-wide picks. When
-routing by level is built it must still pass the chosen model through the
-shared fallback filter (`DjangoModelChoice.next_allowed`), which applies setup,
-key availability and the project's class.
+Project data classes are not applied to these organization-wide picks shown
+in Models and routing. When a task names its level,
+[task routing](task-routing.md) works the level's model out again from the
+project's allowed models only and passes it through the same filter as
+`DjangoModelChoice.next_allowed`, which applies setup, key availability and the
+project's class.
 
 ## Changes and removal
 
@@ -51,8 +53,9 @@ current candidates, then, under the settings row lock, checks that the model's
 approval still exists, writes or deletes the choice and adds the settings-change
 Audit record in the same transaction. An unchanged request writes nothing.
 
-`remove_model_setup` answers `409` with the admin-changed levels that use the
-model before it contacts the gateway. `DjangoModelCatalog.remove` checks again
+`remove_model_setup` answers `409` with the admin-changed levels and
+[persona rules](task-routing.md) that use the model before it contacts the
+gateway. `DjangoModelCatalog.remove` checks again
 under the same settings lock, so a level changed to the model during a removal
 still stops it before the gateway is asked. Models that are only Keeplane's pick
 are removed normally and the picks are worked out again on the next read.

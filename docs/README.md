@@ -8,6 +8,7 @@
 | Create accounts and change roles | [Accounts](guide/accounts-local.md) |
 | Add, edit or remove a model | [Model setup](guide/model-add-local.md), [model approvals](guide/model-approval-local.md) |
 | See or change the model for each complexity level | [Complexity levels](guide/complexity-levels.md), [how picks are stored](architecture/complexity-levels.md) |
+| Send a persona's work to a chosen model | [Persona rules](guide/persona-rules.md), [how a task's model is chosen](architecture/task-routing.md) |
 | Enable data classes | [Data classes](guide/data-classes-local.md) |
 | Find recorded events | [Audit](guide/audit-local.md), [Audit storage](architecture/audit-storage.md) |
 | Use a managed or customer-run gateway | [Gateway configuration](guide/gateway-configuration.md) |

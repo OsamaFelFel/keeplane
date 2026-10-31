@@ -543,3 +543,63 @@ def test_sc_13_level_change_and_removal_on_two_connections(
         assert second_result["choices"] == {"complex": "alpha"}
         assert second_result["models"] == ["alpha", "beta"]
         assert second_result["records"] == [LEVEL_RECORDS[0]]
+
+
+RULE_RECORDS = [
+    "Added a persona rule for Architect: alpha",
+    "Changed the persona rule for Architect to beta",
+    "Removed the persona rule for Architect",
+]
+
+
+def test_sc_14_persona_rule_records_commit_with_the_change(start_process):
+    app = start_process()
+    app.ask("migrate")
+    assert app.ask("level_setup")["records"] == []
+    result = app.ask("rule_changes")
+    assert result["refused"] == ["Architect"]
+    assert result["records"] == RULE_RECORDS
+    assert result["rules"] == {}
+    assert result["models"] == ["alpha", "beta"]
+    rows = settings_records(start_process())
+    assert [row["what"] for row in rows] == RULE_RECORDS
+    assert {row["who"] for row in rows} == {"settings-admin"}
+
+
+@pytest.mark.parametrize("first", ["remove", "persona_rule"])
+def test_sc_15_persona_rule_and_removal_on_two_connections(
+    start_process, tmp_path, first
+):
+    """set_persona_rule and remove serialize on the settings lock across processes."""
+    a, b = start_process(), start_process()
+    a.ask("migrate")
+    a.ask("level_setup")
+    held, release = tmp_path / "held", tmp_path / "release"
+    rule = dict(action="level_race", step="persona_rule", persona="architect", model="alpha")
+    removal = dict(action="level_race", step="remove", model="alpha")
+    lock = dict(held=str(held), release=str(release))
+    if first == "remove":
+        send(a, **removal, **lock)
+        wait_until(held)
+        send(b, **rule)
+    else:
+        send(a, **rule, **lock)
+        wait_until(held)
+        send(b, **removal)
+    assert answer(b, 1.5) is None
+    release.write_text("go")
+    first_result = answer(a, 30)
+    second_result = answer(b, 30)
+    assert first_result is not None and second_result is not None
+    if first == "remove":
+        assert first_result["removed"] is True
+        assert second_result["level_error"] == "Choose a model that is set up"
+        assert second_result["rules"] == {}
+        assert second_result["models"] == ["beta"]
+        assert second_result["records"] == ["Removed model alpha from the gateway"]
+    else:
+        assert first_result["changed"] is True
+        assert second_result["rules_in_use"] == ["Architect"]
+        assert second_result["rules"] == {"architect": "alpha"}
+        assert second_result["models"] == ["alpha", "beta"]
+        assert second_result["records"] == [RULE_RECORDS[0]]

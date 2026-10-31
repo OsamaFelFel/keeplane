@@ -77,5 +77,5 @@ removal paths and the changed-definition refusal; the
 [recorded run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-09-model-removal.md) includes the
 full local regression. A model an admin chose for a
 [complexity level](complexity-levels.md) is kept, and removal lists the levels
-that use it; a model that is only Keeplane's pick can be removed. Persona rules
-are not built yet, so they need the same guard when they exist.
+that use it; a model that is only Keeplane's pick can be removed. A model a
+[persona rule](persona-rules.md) uses is kept the same way.

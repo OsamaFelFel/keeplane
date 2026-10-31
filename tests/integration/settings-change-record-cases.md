@@ -4,9 +4,11 @@ These cases cover spec 006 ST21: when settings changes are recorded, every
 admin change to a model or a data class leaves a record of who changed what,
 and when. Complexity pick records are covered by SC-12 and SC-13 here and by
 CL-INT-03, CL-INT-04 and CL-INT-10 in the
-[complexity level cases](complexity-level-cases.md).
+[complexity level cases](complexity-level-cases.md). Persona rule records are
+covered by SC-14 and SC-15 here and by PR-INT-02, PR-INT-03 and PR-INT-10 in
+the [persona rule cases](persona-rule-cases.md).
 
-SC-01, SC-02, SC-03, SC-05, SC-06, SC-11, SC-12 and SC-13 run in separate control-plane
+SC-01, SC-02, SC-03, SC-05, SC-06 and SC-11 to SC-15 run in separate control-plane
 processes on a fresh database, through the same stores the admin screens use.
 SC-04 and SC-07 to SC-10 run in the test process.
 
@@ -26,6 +28,9 @@ SC-04 and SC-07 to SC-10 run in the test process.
 | SC-12 Complexity picks | Settings changes are on and two models are set up. The admin changes Complex to one model, repeats it, moves it to the other, tries to remove that model, then goes back to Keeplane's pick twice | The removal is refused because Complex uses the model. Three records, one per real change, name the admin; a second app process sees them. |
 | SC-13 Change and removal at the same time | Two app processes on one database. In one order, A removes a model and holds the settings lock at its gateway step while B chooses that model for Complex. In the other, A chooses the model for Complex and holds the lock after its record while B removes it | B waits for A's lock. Then the late level change is refused because the model is no longer set up, or the late removal is refused because Complex uses the model. Only A's change is stored and recorded. |
 
+| SC-14 Persona rules | Settings changes are on and two models are set up. The admin adds an Architect rule, repeats it, moves it to the other model, tries to remove that model, then removes the rule twice | The removal is refused because the Architect rule uses the model. Three records, one per real change, name the admin; a second app process sees them. |
+| SC-15 Rule and removal at the same time | Two app processes on one database. In one order, A removes a model and holds the settings lock at its gateway step while B adds an Architect rule for it. In the other, A adds the rule and holds the lock after its record while B removes the model | B waits for A's lock. Then the late rule is refused because the model is no longer set up, or the late removal is refused because the Architect rule uses the model. Only A's change is stored and recorded. |
+
 Project class choices are covered in the [project cases](project-cases.md).
 
 Run on SQLite:
@@ -34,7 +39,7 @@ Run on SQLite:
 .venv/bin/python -m pytest tests/integration/test_settings_change_records.py
 ```
 
-To run SC-01, SC-02, SC-03, SC-05, SC-06, SC-11, SC-12 and SC-13 on PostgreSQL
+To run SC-01, SC-02, SC-03, SC-05, SC-06 and SC-11 to SC-15 on PostgreSQL
 as well, set the `KEEPLANE_TEST_POSTGRES_*` variables described in the
 [persistence cases](audit-persistence-cases.md). Without them the PostgreSQL
 cases are skipped and reported as skipped. The CI `postgres` job sets them

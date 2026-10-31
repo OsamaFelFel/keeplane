@@ -3,7 +3,8 @@
 Start Keeplane using the [local setup guide](local-preview.md), open the printed
 address and choose **Models and routing**. Add, Set up, Edit and Remove work.
 The [complexity levels](complexity-levels.md) show and change each level's
-model; routing tasks by complexity, and persona rules, are still being built.
+model, and [persona rules](persona-rules.md) send a persona's work to a chosen
+model; judging a task's complexity is still being built.
 
 Choose **Add model**, enter `http://qwen:8080`, choose **Find models**, select `qwen2.5-coder:0.5b`, then choose **Add model**. If data classes are on, you may also select **Approved for** classes. Keeplane checks the runner and registered gateway route before saving setup. The model row shows any selected classes while the mode is on. If that model already appears in the list because of earlier preview tests, use its **Set up** action; Add model reports duplicates without changing them.
 

@@ -20,6 +20,13 @@ colocated tests.
 | CL-UI-06 | A level was changed to a model after the page loaded, then the admin removes it. | The server's 409 opens the same in-use dialog with the level it names. |
 | CL-UI-07 | No model is set up. | Each level says “No model set up yet” and Change is disabled. |
 | CL-UI-08 | An admin's model isn't set up now. | The row explains that the admin's model isn't set up. |
+| PR-UI-01 | Open Models with a rule for the Architect. | The Persona rules table shows “Persona is Architect” and its model. |
+| PR-UI-02 | Add a rule for Frontend. | The dialog offers Architect, Developer and Frontend and only set-up models, keeps Add rule disabled until a model is chosen, sends one protected request and shows the new rule with a notice. |
+| PR-UI-03 | Open Add rule with Architect, which already has a rule, then choose Developer. | The dialog says the new rule replaces Architect's current model; the note goes away for Developer. |
+| PR-UI-04 | The server refuses the rule. | The dialog stays open with the reason. |
+| PR-UI-05 | Remove a model the Architect rule uses. | The in-use dialog lists “Persona rule: Architect” and no level; no removal request is sent. |
+| PR-UI-06 | A rule was added after the page loaded, then Remove model is confirmed. | The server's 409 opens the in-use dialog with “Persona rule: Frontend”. |
+| PR-UI-07 | No rules; a rule whose model isn't set up; no set-up model. | “No persona rules yet”; the row says the rule sends no work; Add rule is disabled. |
 
 ## Projects
 

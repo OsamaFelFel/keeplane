@@ -254,3 +254,68 @@ test('MO-UI-09 ST23: a model an admin-changed level uses cannot be removed', asy
   await expect(dialog).not.toBeVisible()
   expect(deletes).toBe(0)
 })
+
+type PersonaRule = { persona: string; name: string; model_id: string; model_set_up: boolean }
+
+async function mockRules(page: Page) {
+  const { admin } = await mockLevels(page)
+  const personas = [{ persona: 'architect', name: 'Architect' }, { persona: 'developer', name: 'Developer' }, { persona: 'frontend', name: 'Frontend' }]
+  const rules: Record<string, string> = {}
+  const rows = (): PersonaRule[] => personas.filter(({ persona }) => persona in rules)
+    .map(({ persona, name }) => ({ persona, name, model_id: rules[persona], model_set_up: true }))
+  const models: Model[] = ['small-coder', 'large-coder'].map(id => ({ id, provider: 'Local runner', kind: 'real-local', approved: true,
+    key_choice: 'none', approved_classes: [], owned_by_keeplane: true }))
+  await page.route(url => url.pathname === '/api/models', route => route.fulfill({ json: {
+    models, levels: [], persona_rules: rows(), personas,
+  } }))
+  const writes: unknown[] = []
+  await page.route(url => url.pathname.startsWith('/api/persona-rules/'), route => {
+    expect(route.request().method()).toBe('POST')
+    expect(route.request().headers()['x-keeplane-action']).toBe('1')
+    const persona = new URL(route.request().url()).pathname.split('/').pop()!
+    const { model_id: modelId } = route.request().postDataJSON()
+    writes.push({ persona, modelId })
+    rules[persona] = modelId
+    return route.fulfill({ json: { persona_rules: rows() } })
+  })
+  return { writes, rules, admin }
+}
+
+test('MO-UI-10 ST15: add a persona rule with the keyboard', async ({ page }) => {
+  const { writes } = await mockRules(page)
+  await page.goto('/app/models')
+  const table = page.getByRole('region', { name: 'Persona rules table' })
+  await expect(table).toContainText('No persona rules yet')
+  await page.getByRole('button', { name: 'Add rule', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'Add persona rule' })
+  await expect(dialog).toBeVisible()
+  expect(await dialog.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(560)
+  for (const label of ['When the persona is', 'Route to']) {
+    expect(await dialog.getByLabel(label, { exact: true }).evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
+  }
+  await dialog.getByLabel('When the persona is', { exact: true }).selectOption('architect')
+  await dialog.getByLabel('Route to', { exact: true }).selectOption('large-coder')
+  await dialog.getByRole('button', { name: 'Add rule', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(table.getByRole('row', { name: /Persona is Architect/ })).toContainText('large-coder')
+  await expect(page.getByRole('status')).toHaveText("Architect's work now goes to large-coder.")
+  expect(writes).toEqual([{ persona: 'architect', modelId: 'large-coder' }])
+  await page.setViewportSize({ width: 320, height: 800 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+})
+
+test('MO-UI-11 ST23: a model a persona rule uses cannot be removed', async ({ page }) => {
+  const { rules } = await mockRules(page)
+  rules.architect = 'large-coder'
+  let deletes = 0
+  await page.route('**/api/models/large-coder/setup', route => { deletes += 1; return route.fulfill({ status: 500, json: {} }) })
+  await page.goto('/app/models')
+  await page.getByRole('row', { name: /^large-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Edit large-coder' }).getByRole('button', { name: 'Remove model' }).click()
+  const dialog = page.getByRole('dialog', { name: 'large-coder is still in use' })
+  await expect(dialog.getByRole('listitem')).toHaveText(['Persona rule: Architect'])
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  await expect(dialog).not.toBeVisible()
+  expect(deletes).toBe(0)
+})
