@@ -153,11 +153,25 @@ def authorized_model(request, body):
 @api_view(["POST"])
 @authentication_classes([RuntimeSessionAuthentication])
 @permission_classes([IsAuthenticated])
-def authorize(request):
+def authorize(request, *, selected=False):
+    """The shared check a customer-run gateway calls.
+
+    `/internal/runtime/authorize` may run several times for one request (at the
+    route and again per model backend), so it writes no record. The
+    `/selected` variant is the last check before the model: in customer-run
+    mode it writes the "Model answers" record. A managed gateway records on its
+    installed final check instead, so `/selected` refuses there; one request is
+    never recorded by both.
+    """
     try:
         body = callback_metadata(request)
         if isinstance(body, Response):
             return body
+        if selected and os.environ.get("GATEWAY_MODE", "managed") == "managed":
+            return Response(
+                {"error": "Managed gateways use the installed runtime checks"},
+                status=503,
+            )
         result = authorized_model(request, body)
         DjangoSharedKeyAvailability(
             MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")
@@ -166,6 +180,9 @@ def authorize(request):
         return Response({"error": error.message}, status=error.status)
     except (ModelPolicyUnavailable, StorageUnavailable):
         return Response({"error": "Gateway authorization is unavailable"}, status=503)
+    if selected:
+        # The final check before the model: the request is sent from here on.
+        record_sent_request(result)
     return Response(result)
 
 

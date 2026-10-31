@@ -1,7 +1,9 @@
 """Spec 006 ST21 "Model answers": one Audit record per request sent to a model.
 
 Owner decision (governance issue #36): a record is written each time the final
-selected-model check lets a developer's request through to a model. It names
+selected-model check lets a developer's request through to a model, in either
+gateway mode: the managed installed check or the customer-run shared
+`/internal/runtime/authorize/selected` check (never both). It names
 the time, the developer, the project and the model, and nothing else: no
 prompt or answer text, no session, gateway or provider key. A failed write
 never blocks the developer; it is logged and the request stays allowed.

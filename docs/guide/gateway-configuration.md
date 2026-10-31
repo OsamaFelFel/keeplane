@@ -95,6 +95,25 @@ changing the gateway, with an explicit error. The release gateway contract
 needs a supported secret-delivery mechanism for customer-run gateways before
 this mode handles shared or personal keys.
 
+## Keeplane's checks on a customer-run gateway
+
+A customer-run gateway asks Keeplane before each model call. Point both checks
+at the Keeplane app over the private network, with the developer's session as
+the Bearer credential and the private gateway credential in
+`X-Keeplane-Gateway-Credential`
+([contract](../architecture/runtime-authorization.md)):
+
+| Where on the gateway | Keeplane check | Writes an Audit record |
+| --- | --- | --- |
+| The route that carries developer model traffic | `POST /internal/runtime/authorize` | Never |
+| Each model backend, after the gateway picks the model | `POST /internal/runtime/authorize/selected` | One per request sent, when **Model answers** is on |
+
+Both send only `project_id` and `model_id`, never the prompt. A gateway that
+calls only the first check still protects the model, but writes no
+**Model answers** records. The backend check runs again for each retry, so a
+retried request is recorded once per try, as on the managed gateway. A managed
+install refuses the backend check: its own gateway records instead.
+
 ## Retry a model that is down
 
 When a model answers with a 5xx, times out, or answers 429 before its first
@@ -121,8 +140,8 @@ policies:
     backendRequestTimeout: 60s   # per try, up to the response headers
 ```
 
-Keep the selected-model authorization on each model backend, not only on the
-route, so every retry is checked again. Do not add a failover group or virtual
+Keep the selected-model authorization (`/internal/runtime/authorize/selected`)
+on each model backend, not only on the route, so every retry is checked again. Do not add a failover group or virtual
 model for an outage: that would switch the model. List every code from 500 to 599: the
 policy takes exact codes, not a range. A provider that refuses the connection is
 retried natively. Leave 4xx codes other than 429 out of `codes`; a context-length refusal must reach the developer at once.

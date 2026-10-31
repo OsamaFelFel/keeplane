@@ -12,7 +12,8 @@ flowchart LR
   Admin --> B[App process B]
   A -- "change + record,<br/>one transaction" --> Records
   B -- "sign-in session + break-glass record,<br/>one transaction" --> Records
-  Gateway[Gateway final model check] --> C[App process]
+  Gateway[Managed gateway: installed final check] --> C[App process]
+  Customer[Customer-run gateway: shared final check] --> C
   C -- "allowed request,<br/>own transaction" --> Records
   A -- "Show, search, page" --> Records
   B -- "Show, search, page" --> Records
@@ -41,15 +42,19 @@ flowchart LR
   database write then fails, Keeplane tries to undo a new model or a key
   replacement in the gateway. A model already deleted from the gateway stays
   deleted while the request reports that storage is unavailable.
-- **Model answers** are written by the final selected-model check,
-  `POST /internal/runtime/installed/selected`, after every check has passed
-  (owner decision in governance issue #36: a request sent is enough).
+- **Model answers** are written by the final selected-model check after every
+  check has passed (owner decision in governance issue #36: a request sent is
+  enough). A managed gateway calls `POST /internal/runtime/installed/selected`;
+  a customer-run (`existing`) gateway calls the shared
+  `POST /internal/runtime/authorize/selected`. Each mode has exactly one
+  recorder: the installed checks refuse outside managed mode, and the shared
+  final check refuses in managed mode, so one request is never recorded twice.
   `model_answer_records.record_sent_request` reads the switch, the developer's
   username and the project name from Keeplane's own tables and writes one
   record per allowed request, in its own transaction. The record's account is
   the developer whose session made the request; its description names the model
-  and the project. The entry check and the experimental shared
-  `/internal/runtime/authorize` callback write nothing, because the gateway
+  and the project. The managed entry check and the shared
+  `/internal/runtime/authorize` check write nothing, because the gateway
   may call them more than once for one request. Unlike settings changes, a
   failed write never refuses the request: it is rolled back, logged as a
   warning with only the error kind, and the decision is still returned. Each
@@ -106,5 +111,5 @@ cover each model and data-class change, refused changes and failed record
 writes on the same databases. The
 [model-answer cases](../../tests/integration/model-answer-record-cases.md)
 cover the switch, refused requests, failed writes, leaks and other developers'
-records, with the producer also run on both databases. The
+records in both gateway modes, with the producer also run on both databases. The
 [browser cases](../../tests/browser/audit-cases.md) cover the screen.

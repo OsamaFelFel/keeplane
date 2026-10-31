@@ -31,6 +31,29 @@ LOGGER = "model_registry.model_answer_records"
 PROMPT = "Summarise customer 4711's unpaid invoices"
 
 
+SHARED = "/internal/runtime/authorize"
+
+
+@pytest.fixture
+def customer_run(callback, monkeypatch):
+    """A customer-run (`existing`) gateway that calls only the shared check."""
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    return callback
+
+
+def send_shared(f, selected=False, body=None, **headers):
+    return f.client.post(
+        SHARED + ("/selected" if selected else ""),
+        data=json.dumps(body or {"project_id": f.project, "model_id": "private"}),
+        content_type="application/json",
+        **{
+            "HTTP_AUTHORIZATION": "Bearer " + f.token,
+            "HTTP_X_KEEPLANE_GATEWAY_CREDENTIAL": f.key,
+            **headers,
+        },
+    )
+
+
 def model_answers(f):
     return f.stores.audit.records(kind=KIND, page_size=50)["records"]
 
@@ -282,11 +305,12 @@ def test_ma_08_only_admins_can_read_the_records(installed):
     ]
 
 
-def test_ma_09_the_experimental_shared_callback_writes_nothing(callback):
-    from tests.integration.test_runtime_callback import send as send_shared
-
-    callback.stores.audit.set_option(KIND, True)
-    assert send_shared(callback).status_code == 200
+def test_ma_09_the_shared_entry_check_writes_nothing(customer_run):
+    f = customer_run
+    switch_on(f)
+    # The gateway may call the shared check at the route and again per backend.
+    for _ in range(3):
+        assert send_shared(f).status_code == 200
     assert AuditRecord.objects.filter(kind=KIND).count() == 0
 
 
@@ -313,3 +337,180 @@ def test_description_uses_the_stored_names():
         model_answer_records.description("gpt-4.1", "payments-api")
         == "Request sent to model gpt-4.1; project payments-api"
     )
+
+
+# Customer-run gateways: the shared check's final variant writes the record.
+
+
+def test_ma_11_a_customer_run_gateway_records_each_request_sent(customer_run):
+    f = customer_run
+    # Off after install: the shared final check writes nothing.
+    assert send_shared(f).status_code == 200
+    assert send_shared(f, True).status_code == 200
+    assert AuditRecord.objects.filter(kind=KIND).count() == 0
+    switch_on(f)
+    for _ in range(3):
+        # Entry check at the route, then the final check on the model backend.
+        assert send_shared(f).status_code == 200
+        response = send_shared(f, True)
+        assert response.status_code == 200
+        assert response.json() == {
+            "actor_id": f.actor["id"],
+            "project_id": f.project,
+            "model_id": "private",
+        }
+    rows = model_answers(f)
+    assert len(rows) == 3
+    for row in rows:
+        assert row["who"] == "callback-developer"
+        assert row["what"] == "Request sent to model private; project Callback"
+        assert row["when"].endswith("+00:00")
+    assert f.stores.audit.records(kind="settings")["total"] == 0
+    f.stores.audit.set_option(KIND, False)
+    assert send_shared(f, True).status_code == 200
+    assert len(model_answers(f)) == 3
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        "model-not-set-up",
+        "class-not-allowed",
+        "unknown-project",
+        "signed-out",
+        "gateway-credential",
+        "prompt-in-body",
+        "class-changed",
+    ],
+)
+def test_ma_12_a_request_the_shared_check_refuses_writes_nothing(
+    customer_run, refusal
+):
+    f = customer_run
+    switch_on(f)
+    body, headers = {"project_id": f.project, "model_id": "private"}, {}
+    if refusal == "model-not-set-up":
+        body["model_id"] = "outside"
+    elif refusal == "class-not-allowed":
+        body["model_id"] = "public"
+    elif refusal == "unknown-project":
+        body["project_id"] = str(uuid.uuid4())
+    elif refusal == "signed-out":
+        f.stores.identity.logout(f.token)
+    elif refusal == "gateway-credential":
+        headers["HTTP_X_KEEPLANE_GATEWAY_CREDENTIAL"] = "x" * 32
+    elif refusal == "prompt-in-body":
+        body["prompt"] = PROMPT
+    else:
+        from data_classes.models import ProjectClass
+
+        ProjectClass.objects.filter(project_id=f.project).update(
+            data_class_id="public"
+        )
+    response = send_shared(f, True, body, **headers)
+    assert response.status_code in (400, 401, 403, 503)
+    assert AuditRecord.objects.filter(kind=KIND).count() == 0
+
+
+@pytest.mark.parametrize("fault", ["record", "switch"])
+def test_ma_13_a_failed_write_on_the_shared_check_still_allows_the_request(
+    customer_run, caplog, fault
+):
+    f = customer_run
+    switch_on(f)
+    target = (
+        patch.object(
+            AuditRecord.objects, "create", side_effect=OperationalError("audit down")
+        )
+        if fault == "record"
+        else patch(
+            "audit.services.AuditOption.objects.filter",
+            side_effect=OperationalError("audit down"),
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger=LOGGER), target:
+        response = send_shared(f, True)
+    assert response.status_code == 200
+    assert response.json()["model_id"] == "private"
+    assert AuditRecord.objects.filter(kind=KIND).count() == 0
+    logged = [r for r in caplog.records if r.name == LOGGER]
+    assert len(logged) == 1
+    assert "not written; the request was allowed" in logged[0].getMessage()
+    for secret in (f.token, f.key, "audit down"):
+        assert secret not in caplog.text
+    assert send_shared(f, True).status_code == 200
+    assert len(model_answers(f)) == 1
+
+
+def test_ma_14_shared_check_records_hold_no_request_text_or_credentials(
+    customer_run,
+):
+    f = customer_run
+    switch_on(f)
+    response = send_shared(
+        f, True, HTTP_X_KEEPLANE_PROMPT=PROMPT, HTTP_X_KEEPLANE_PROJECT_ID=f.project
+    )
+    assert response.status_code == 200
+    rows = list(AuditRecord.objects.filter(kind=KIND).values())
+    assert len(rows) == 1
+    text = json.dumps(rows, default=str)
+    for secret in (PROMPT, f.token, f.key, str(f.key_file), "callback-test-password"):
+        assert secret not in text
+
+
+def test_ma_15_shared_check_records_name_only_the_sending_developer(customer_run):
+    f = customer_run
+    switch_on(f)
+    other = f.stores.identity.create_user(
+        {"username": "second-developer", "role": "developer", "password": "x" * 24}
+    )
+    other_token = f.stores.identity.login("second-developer", "x" * 24)
+    other_project = str(uuid.uuid4())
+    DjangoProjectStore().register_use(other["id"], other_project, "Second")
+    from data_classes.models import ProjectClass
+
+    ProjectClass.objects.create(
+        project_id=other_project, data_class_id="confidential"
+    )
+    first_token = f.token
+    assert send_shared(f, True).status_code == 200
+    f.token = other_token
+    assert (
+        send_shared(
+            f, True, {"project_id": other_project, "model_id": "private"}
+        ).status_code
+        == 200
+    )
+    f.token = first_token
+    rows = list(reversed(model_answers(f)))
+    assert [(row["who"], row["what"]) for row in rows] == [
+        ("callback-developer", "Request sent to model private; project Callback"),
+        ("second-developer", "Request sent to model private; project Second"),
+    ]
+    stored = list(
+        AuditRecord.objects.filter(kind=KIND).order_by("pk").values_list(
+            "actor_id", flat=True
+        )
+    )
+    assert stored == [f.actor["id"], other["id"]]
+
+
+def test_ma_16_one_recorder_per_gateway_mode(installed, monkeypatch):
+    f = installed
+    switch_on(f)
+    # Managed: the installed final check records; the shared final check
+    # refuses, so one request can never be recorded twice.
+    assert send(f).status_code == 200
+    assert send(f, True).status_code == 200
+    refused = send_shared(f, True)
+    assert refused.status_code == 503
+    assert refused.json() == {
+        "error": "Managed gateways use the installed runtime checks"
+    }
+    assert len(model_answers(f)) == 1
+    # Customer-run: the installed checks refuse and the shared one records.
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    assert send(f, True).status_code == 503
+    assert send_shared(f).status_code == 200
+    assert send_shared(f, True).status_code == 200
+    assert len(model_answers(f)) == 2

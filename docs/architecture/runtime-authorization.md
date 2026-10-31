@@ -36,6 +36,19 @@ PKCE credential issuance is implemented.
 | 403 | Gateway credential, project access or model eligibility is denied |
 | 503 | Operator credential, storage or current policy cannot be verified |
 
+A customer-run (`existing`) gateway calls this check at its route and calls
+`POST /internal/runtime/authorize/selected` on each model backend, after native
+model selection. The final variant takes the same headers and the same two
+fields and makes the same decision. When it allows the request and the Audit
+**Model answers** switch is on, it writes one record (time, developer, project,
+model) in its own transaction; a failed write is logged and the request is
+still allowed. The plain check never records, because one request may pass it
+more than once. In managed mode the final variant returns 503
+`Managed gateways use the installed runtime checks` before any decision: the
+managed gateway records on its installed final check, so one request is never
+recorded twice. The [model-answer cases](../../tests/integration/model-answer-record-cases.md)
+cover both modes.
+
 Responses are not cached. Replacing the key file withdraws the old gateway
 credential on the next request. No credential, request body or key filename is
 included in errors. Keep both credentials out of URLs and logs.
