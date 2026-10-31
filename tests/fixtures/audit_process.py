@@ -421,6 +421,53 @@ def level_changes():
     return {"refused": refused, **level_state()}
 
 
+def model_answers():
+    """Write "Model answers" records through the producer the final check uses.
+
+    Off, on, a failed write and a vanished project; the producer never raises.
+    """
+    import logging
+    import uuid
+    from unittest.mock import patch
+
+    from accounts.models import User
+    from audit.models import AuditRecord
+    from django.db import OperationalError
+    from model_registry.model_answer_records import record_sent_request
+    from projects.models import Project
+
+    audit, _, _ = domain()
+    developer = User.objects.create(
+        username="process-developer", role="developer", password="!"
+    )
+    project = Project.objects.create(name="payments-api")
+    decision = {
+        "actor_id": str(developer.pk),
+        "project_id": str(project.pk),
+        "model_id": "alpha",
+    }
+    logged = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            logged.append(record.getMessage())
+
+    logger = logging.getLogger("model_registry.model_answer_records")
+    logger.addHandler(Collect())
+    result = {"off": record_sent_request(decision, audit)}
+    audit.set_option("model_answers", True)
+    result["on"] = record_sent_request(decision, audit)
+    with patch.object(
+        AuditRecord.objects, "create", side_effect=OperationalError("audit down")
+    ):
+        result["failed_write"] = record_sent_request(decision, audit)
+    result["missing_project"] = record_sent_request(
+        dict(decision, project_id=str(uuid.uuid4())), audit
+    )
+    result["logged"] = len(logged)
+    return result
+
+
 def wait_for(path, timeout=60):
     import time
 
@@ -498,6 +545,8 @@ def handle(command):
         return failed_record_writes()
     if action == "removal_rollbacks":
         return removal_rollbacks()
+    if action == "model_answers":
+        return model_answers()
     audit, identity, password_file = services()
     if action == "audit_option":
         return audit.set_option(command["kind"], command["enabled"])

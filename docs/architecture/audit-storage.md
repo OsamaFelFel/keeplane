@@ -12,6 +12,8 @@ flowchart LR
   Admin --> B[App process B]
   A -- "change + record,<br/>one transaction" --> Records
   B -- "sign-in session + break-glass record,<br/>one transaction" --> Records
+  Gateway[Gateway final model check] --> C[App process]
+  C -- "allowed request,<br/>own transaction" --> Records
   A -- "Show, search, page" --> Records
   B -- "Show, search, page" --> Records
   subgraph DB["Django database: SQLite file or PostgreSQL"]
@@ -38,11 +40,24 @@ flowchart LR
   database write then fails, Keeplane tries to undo a new model or a key
   replacement in the gateway. A model already deleted from the gateway stays
   deleted while the request reports that storage is unavailable.
+- **Model answers** are written by the final selected-model check,
+  `POST /internal/runtime/installed/selected`, after every check has passed
+  (owner decision in governance issue #36: a request sent is enough).
+  `model_answer_records.record_sent_request` reads the switch, the developer's
+  username and the project name from Keeplane's own tables and writes one
+  record per allowed request, in its own transaction. The record's account is
+  the developer whose session made the request; its description names the model
+  and the project. The entry check and the experimental shared
+  `/internal/runtime/authorize` callback write nothing, because the gateway
+  may call them more than once for one request. Unlike settings changes, a
+  failed write never refuses the request: it is rolled back, logged as a
+  warning with only the error kind, and the decision is still returned. Each
+  native retry passes the final check again and so writes its own record.
 - **Break-glass sign-ins** are always written, in the same transaction as the
   session. If the record cannot be written, the sign-in fails.
 - A record holds its kind, UTC time, account ID, username and a short
-  description. It never holds passwords, session tokens, provider keys or
-  request text.
+  description. It never holds passwords, session tokens, provider keys,
+  prompts, answers or other request text.
 
 ## Finding records
 
@@ -88,4 +103,7 @@ upgrade, on SQLite and, when configured, PostgreSQL. The
 [settings-change cases](../../tests/integration/settings-change-record-cases.md)
 cover each model and data-class change, refused changes and failed record
 writes on the same databases. The
+[model-answer cases](../../tests/integration/model-answer-record-cases.md)
+cover the switch, refused requests, failed writes, leaks and other developers'
+records, with the producer also run on both databases. The
 [browser cases](../../tests/browser/audit-cases.md) cover the screen.
