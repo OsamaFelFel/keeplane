@@ -68,7 +68,7 @@ agentgateway-standalone:
   podSecurityContext:
     fsGroup: null
   # PostgreSQL deployments with this managed gateway require repository@sha256:<digest>.
-  image:cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+  image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
   gateway:
     service:
       type: ClusterIP
