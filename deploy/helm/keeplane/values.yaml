@@ -67,7 +67,8 @@ agentgateway-standalone:
   # The app initializes private provider files; gateway mounts must not widen them.
   podSecurityContext:
     fsGroup: null
-  image: cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+  # PostgreSQL deployments with this managed gateway require repository@sha256:<digest>.
+  image:cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
   gateway:
     service:
       type: ClusterIP
