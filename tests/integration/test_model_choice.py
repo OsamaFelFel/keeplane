@@ -5,6 +5,7 @@ import hashlib
 import pytest
 from accounts.cli_credentials import RuntimeIdentity
 from accounts.models import User
+from data_classes.models import ProjectClass
 from model_registry import model_choice, runtime_views
 from model_registry.fingerprints import fingerprint
 from model_registry.models import DeveloperProviderKey, ModelApproval
@@ -269,3 +270,71 @@ def test_existing_gateway_mode_uses_its_own_gate_for_candidates(choice, monkeypa
     # That gate never admits Personal models, so one cannot be a fallback.
     ModelApproval.objects.filter(pk="public").update(key_choice="personal")
     assert ask(choice).json() == chosen(choice, None, "missing")
+
+
+def shared_model(f, name="public", classes=("Confidential",)):
+    """Install a shared-key model; return its managed key file."""
+    path = f.key_directory / ("key-" + "d" * 32)
+    path.write_text("synthetic-managed-provider-key")
+    path.chmod(0o600)
+    row = next(r for r in f.resources if r["id"] == name)
+    row["value"]["auth"] = {"key": {"value": {"file": str(path)}}}
+    f.install(name, key_choice="shared", classes=classes)
+    f.declaration["models"][name].update(
+        key_name=path.name, key_digest=hashlib.sha256(path.read_bytes()).hexdigest()
+    )
+    f.write()
+    return path
+
+
+@pytest.mark.parametrize("state", ["not-installed", "shared-key-gone"])
+def test_an_approved_model_that_is_not_up_stops_and_nothing_moves(choice, state):
+    # Spec 005 ST19 "No approved model is up": the task stops with a reason,
+    # and no other model is chosen, even one that is up for another class.
+    f = choice
+    f.install("outside", classes=("Public",))
+    if state == "not-installed":
+        f.stores.catalog.approve(
+            "public", ["Confidential"], fingerprint("public", f.resources)
+        )
+    else:
+        key = shared_model(f)
+        assert ask(f, "public").json() == chosen(f, "public", None, "public")
+        key.unlink()
+    assert ask(f, "public").json() == chosen(f, None, "unavailable", "public")
+    # The gateway refuses the requested model and the other-class model too.
+    assert entry(f, model_id="public").status_code in (403, 503)
+    assert entry(f, model_id="outside").status_code == 403
+    assert not f.reads
+
+
+def test_all_approved_models_down_leaves_nothing_to_choose(choice):
+    f = choice
+    f.install("outside", classes=("Public",))
+    shared_model(f).unlink()
+    f.store.remove("private")
+    assert ask(f).json() == chosen(f, None, "missing")
+    assert ask(f, "public").json() == chosen(f, None, "unavailable", "public")
+    assert ask(f, "outside").status_code == 403
+
+
+def test_a_model_for_another_class_is_refused_when_asked_for_directly(choice):
+    # Spec 005 ST19 "Only approved models": naming a model directly, as a
+    # repository setting or a hand-made request would, does not get past the class.
+    f = choice
+    f.install("public", classes=("Public",))
+    assert ask(f, "public").status_code == 403
+    assert entry(f, model_id="public").status_code == 403
+    assert entry(f).status_code == 200
+
+
+def test_a_project_with_no_class_may_use_any_set_up_model(choice):
+    # Spec 005 ST19 "No class": the project's class is cleared.
+    f = choice
+    f.install("public", classes=("Public",))
+    assert ask(f, "public").status_code == 403
+    ProjectClass.objects.filter(pk=f.project).delete()
+    assert ask(f, "public").json() == chosen(f, "public", None, "public")
+    assert entry(f, model_id="public").status_code == 200
+    f.store.remove("private")
+    assert ask(f).json() == chosen(f, "public", "missing")

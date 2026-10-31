@@ -37,6 +37,18 @@ project's data class, `code` stops before the runtime starts and sends nothing:
 No models are available for this project yet, so nothing was sent. Ask an admin to add a model, or approve one for this project's class, in Models and routing.
 ```
 
+If the requested model is approved for the project but can't be used right now,
+for example because it is not installed or its shared provider key is gone,
+`code` also stops before the runtime starts and sends nothing to any other model:
+
+```text
+coder is approved for this project but can't be used right now, so nothing was sent. Choose another model allowed for this project, or ask an admin to check it in Models and routing.
+```
+
+The project's data class always applies. Model or provider settings in the
+repository's own runtime configuration, and runtime environment variables, are
+not loaded, so they cannot send a task to a model outside the class.
+
 Settings your runtime sends with each request, such as temperature, reach the
 model unchanged: Keeplane adds none of its own. If the model fails during a turn,
 the turn shows the error; Keeplane does not yet move a running turn to another
@@ -46,6 +58,7 @@ model when its model is down or the task is too big for it.
 flowchart LR
   Profile[Signed-in account] --> Check[Register project and check models]
   Check -->|no models| Stop[No models are available yet; nothing sent]
+  Check -->|model can't be used now| Stop2[Model can't be used right now; nothing sent]
   Check --> Choice[Own key missing? Use another allowed model]
   Choice --> Local[Local coding runtime and tools]
   Local --> Gateway[Protected gateway checks every request]

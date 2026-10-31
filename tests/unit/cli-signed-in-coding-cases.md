@@ -10,6 +10,16 @@
   malformed choice, or a 403/503 stops before launch; an older server without
   the route (404) keeps the requested model. See the
   [model choice cases](../integration/model-choice-cases.md).
+- Spec 005 ST19: when the server reports the requested model `unavailable`
+  (approved but not usable right now), the CLI says “… can't be used right now,
+  so nothing was sent” and starts no runtime. An `unavailable` reason that still
+  names a model is treated as an invalid choice.
+- Repository settings (ST19 “The repo can't change it”): an `opencode.json` in
+  the repository or its `.opencode/` folder, and `OPENCODE_CONFIG`,
+  `OPENCODE_CONFIG_CONTENT` or `OPENCODE_MODEL` in the environment, all naming
+  another model and provider, change nothing: the runtime gets only the chosen
+  Keeplane model and the gateway URL. The gateway still refuses a model outside
+  the class ([MC-20](../integration/model-choice-cases.md)).
 - Changed account, withdrawn session, server outage or an unavailable model
   prevents runtime launch. Invalid gateway destinations stop before any request.
 - No models yet (Spec 004 ST12): when the project's allowed model list is empty,

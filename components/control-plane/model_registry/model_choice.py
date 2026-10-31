@@ -1,7 +1,8 @@
 """Choose another allowed model when a developer's own key is not usable.
 
-The choice reads only key registration metadata: it never reads, sends or
-changes a provider key. It is advice for the developer's client, not a permit:
+The choice reads key registration metadata and, through the runtime gate, the
+digest of a shared key file only: it never reads a developer's own key, and
+never sends or changes any key. It is advice for the developer's client, not a permit:
 every gateway request still passes the entry and selected-model checks.
 """
 
@@ -60,6 +61,8 @@ class DjangoModelChoice:
     Another model is chosen only from the project's currently eligible models,
     in model ID order, and only when the same runtime gate that admits a task
     (installation, setup, shared or owner key, project class) accepts it.
+    A requested model that gate refuses for any other reason is reported as
+    ``unavailable`` with no model, so the client sends nothing.
     """
 
     def __init__(self, identity, policy, gateway, directory, *, project_access,
@@ -107,6 +110,12 @@ class DjangoModelChoice:
             "reason": reason,
         }
         if reason is None:
+            if not self._usable(owner_id, model_id):
+                # Spec 005 ST19: an approved model that the runtime gate would
+                # not admit now (not installed, setup changed or shared key
+                # gone) gets no task. Nothing moves to another model here:
+                # moving a task off a model that is down is still open (ST16).
+                result["model_id"], result["reason"] = None, "unavailable"
             return result
         result["model_id"] = self.next_allowed(
             session_token, owner_id, project_id, skip={model_id}

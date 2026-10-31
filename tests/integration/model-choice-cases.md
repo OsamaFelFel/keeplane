@@ -1,6 +1,7 @@
 # Use another allowed model when my own key is missing
 
-Spec 004 ST11 “No key yet” and “Replace or remove my key”. Run
+Spec 004 ST11 “No key yet” and “Replace or remove my key”; Spec 005 ST19
+project classes (MC-07, MC-08, MC-18 to MC-21). Run
 `python -m pytest tests/integration/test_model_choice.py tests/unit/test_cli_project_profile.py`.
 
 | Case | Situation | Expected result |
@@ -22,11 +23,16 @@ Spec 004 ST11 “No key yet” and “Replace or remove my key”. Run
 | MC-15 | Older server without the route (404) | The CLI keeps the requested model; the gateway still refuses a missing key. A 403 or 503 stops before the runtime. |
 | MC-16 | Spec 004 ST23: a model added outside Keeplane is removed from Keeplane | It stays in the gateway but is never chosen; the gateway entry check refuses it. Removing the last other model leaves `model_id` `null`. |
 | MC-17 | The shared fallback filter is asked again with every model already tried | Each call returns the next permitted model by ID, then `null`. A requested model with a usable own key is itself a candidate; without one it is not. |
+| MC-18 | Spec 005 ST19: the requested model is approved for the project's class but not installed, or its shared key file is gone, while a model for another class is up | `model_id` is `null` with reason `unavailable`; nothing moves to another model and the gateway refuses both models. |
+| MC-19 | Every model approved for the class is down (own key missing, shared key gone) and only a model for another class is up | Each request gets no model; the other-class model is refused with 403. |
+| MC-20 | A developer, a repository setting or a hand-made request names a model approved only for another class | The choice returns 403 and the gateway entry check refuses it; the project's own model still works. |
+| MC-21 | The project's class is cleared | A model approved for any class is kept, chosen as a fallback and admitted by the gateway. |
 
 The server cases use real Django accounts, policy, enrollment files and
 owner-key registrations with synthetic provider admission, as in the
 [managed Personal model access cases](installed-personal-runtime-cases.md).
-The choice reads registration metadata only; it never reads a key file. The CLI
+The choice reads registration metadata and the shared key file's digest only;
+it never reads a developer's own key or sends any key. The CLI
 cases use a synthetic account server and a controlled runtime process.
 
 ```mermaid
@@ -36,4 +42,5 @@ flowchart LR
   Own -->|missing, refused or outdated| Next[Try other allowed models by ID]
   Next -->|gate admits one| Use[Use it and say why]
   Next -->|none| Stop[Stop: add or replace your provider key]
+  Own -->|not needed, but gate refuses it now| Down[Stop: unavailable, nothing sent]
 ```

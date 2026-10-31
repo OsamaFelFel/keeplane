@@ -347,7 +347,12 @@ availability check, which never admits Personal models. Gateway-only models,
 other classes and withdrawn setup are never returned. The response is
 `{"project_id", "requested_model_id", "model_id", "reason"}` with `reason`
 `null`, `missing`, `refused` or `outdated`, and `model_id: null` when nothing else
-is allowed. It reads registration metadata only, never a key file, and is advice
+is allowed. A requested model that needs no own key (or whose own key is usable)
+but that the mode's gate refuses now, such as one not installed or with its
+shared key gone, returns `reason: "unavailable"` and `model_id: null`; nothing
+moves to another model, and the CLI stops before sending (Spec 005 ST19). Older
+CLIs treat that reason as an invalid choice and also stop. It reads registration metadata and the shared key file's digest only; it never
+reads a developer's own key or sends any key, and is advice
 rather than a permit: both gateway checks still run for the chosen model.
 
 `DjangoModelChoice.next_allowed(session, owner, project, skip=...)` is the one
@@ -367,6 +372,7 @@ flowchart LR
   Choice -->|own key usable or not needed| Same[Requested model]
   Choice -->|own key missing/refused| Next[First allowed model by ID passing the runtime gate]
   Choice -->|none left| Stop[Add or replace your provider key]
+  Choice -->|requested model not admitted now| Down[Unavailable; nothing sent]
   Same --> Gateway[Entry and selected-model checks]
   Next --> Gateway
 ```
