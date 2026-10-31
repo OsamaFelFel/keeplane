@@ -142,7 +142,13 @@ class WorkflowTests(unittest.TestCase):
         workflow = ROOT / ".github/workflows/checks.yml"
         text = workflow.read_text()
         gate = "if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}"
-        for job in ("frontend", "backend", "local-application", "postgres"):
+        for job in (
+            "frontend",
+            "backend",
+            "component-manifest",
+            "local-application",
+            "postgres",
+        ):
             self.assertIn("  " + job + ":\n    needs: scope\n    " + gate, text)
         self.assertNotIn("paths-ignore:", text)
         self.assertNotIn("pull_request_target:", text)

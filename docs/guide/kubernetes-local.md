@@ -26,6 +26,81 @@ building. Run it again after changing the app or chart. It uses
 context. Set `KEEPLANE_KUBECONFIG` to use another kubeconfig file, or
 `KEEPLANE_HELM_BIN` if Helm is outside `PATH`.
 
+## Know which component set you install
+
+Keeplane has not been released, so no version is supported yet. The setup
+installs the component set that your checkout's
+[component manifest](../architecture/component-manifest.md) describes: the
+Keeplane chart, the app image built from your checkout, the agentgateway trial
+chart and image, package versions, migrations and default features. The
+gateway entry is an integration trial, not the release gateway.
+
+To see the main entries, run from the repository root:
+
+```sh
+python3 -c 'import json; m = json.load(open("deploy/component-manifest.json")); print(m["release_status"], m["chart"]["version"], m["gateway"]["status"], m["gateway"]["runtime_version"])'
+```
+
+Expected result: `pre-release 0.1.0 integration-trial 1.6.0`, or the newer
+values in your checkout.
+
+In Git, the manifest's `build` fields stay empty: commit and digests are known
+only after a build. Each run of the **Build and application checks** workflow on
+GitHub builds the app image, packages the chart and keeps a filled-in copy. To
+find the copy for the commit you are installing:
+
+1. Open the repository's **Actions** tab, then the **Build and application
+   checks** run for that commit.
+2. The run summary shows **Component manifest for this build**, with the commit,
+   app image ID and chart package digest.
+3. Download the `component-manifest-<commit>` artifact. It holds
+   `component-manifest.json` and the chart package `keeplane-<version>.tgz`.
+
+With the GitHub CLI signed in, the same steps are:
+
+```sh
+commit="$(git rev-parse HEAD)"
+gh run list --repo OsamaFelFel/keeplane --workflow checks.yml --commit "$commit"
+gh run download <run-id> --repo OsamaFelFel/keeplane \
+  --name "component-manifest-$commit" --dir test-results/ci-manifest
+```
+
+Then check the copy against your checkout and the downloaded chart package:
+
+```sh
+copy=test-results/ci-manifest/component-manifest.json
+image="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["build"]["app_image_digest"])' "$copy")"
+python3 deploy/stamp_component_manifest.py --commit "$commit" --app-image "$image" \
+  --chart-package test-results/ci-manifest/keeplane-*.tgz --check "$copy"
+```
+
+Expected result: `... matches commit <your commit>, image sha256:..., chart
+sha256:...`. The check confirms the commit, recomputes the chart package digest
+and confirms that every other entry equals your checkout's manifest. The app
+image ID names the image built in that run; no registry image is published, so
+the check takes it from the copy, and your own local build has a different ID.
+
+To record the set you installed locally, run this after `kind-up.sh`. The output
+path is ignored by Git:
+
+```sh
+python3 deploy/stamp_component_manifest.py --commit "$(git rev-parse HEAD)" \
+  --app-image-from-docker keeplane-preview:kind-local \
+  --output test-results/installed-component-manifest.json
+```
+
+If something does not match:
+
+- **No run or artifact for your commit:** pushes to `main` and pull requests
+  run the workflow; documentation-only pull requests skip the build. For a pull
+  request, the run builds GitHub's test merge commit, which is the commit in the
+  artifact name. Artifacts are kept for 30 days; after that, record your own
+  build as above.
+- **`Docker has no built image`:** run `deploy/local/kind-up.sh` first, then
+  retry.
+- **`... is not stamped` or `... but this build produced ...` from `--check`:**
+  the copy belongs to another build. Download the artifact for your commit.
+
 ## Open Keeplane
 
 | Installation | Browser address | What runs |

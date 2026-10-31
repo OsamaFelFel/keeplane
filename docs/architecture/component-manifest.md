@@ -13,11 +13,23 @@ pre-release set; it supports nothing yet.
 ```mermaid
 flowchart LR
   Sources[Chart.yaml, Chart.lock, values.yaml,<br/>Dockerfile, requirements, package files,<br/>migrations] --> Check[Manifest check<br/>tests/integration]
-  Manifest[deploy/component-manifest.json] --> Check
-  Manifest --> Stamp[stamp_component_manifest.py]
-  Build[Build: commit, image digest,<br/>chart digest] --> Stamp
-  Stamp --> Copy[Stamped copy kept<br/>with that build's results]
+  Manifest[deploy/component-manifest.json<br/>build fields empty] --> Check
+  subgraph CI[CI job component-manifest in checks.yml]
+    UI[npm run build<br/>admin UI] --> Image[docker build<br/>keeplane-preview:local]
+    Chart[helm package<br/>keeplane chart .tgz]
+    Commit[Checked-out commit]
+    Image -->|image ID| Stamp[stamp_component_manifest.py<br/>--output]
+    Chart -->|SHA-256| Stamp
+    Commit --> Stamp
+    Stamp --> Verify[stamp_component_manifest.py<br/>--check]
+  end
+  Manifest --> Stamp
+  Manifest --> Verify
+  Verify --> Artifact[Workflow artifact<br/>component-manifest-commit:<br/>stamped copy and chart package]
+  Verify --> Summary[Run summary:<br/>commit and digests]
 ```
+
+The stamped copy is a build result. It is never committed.
 
 ## What it records
 
@@ -72,26 +84,71 @@ gateway entry is still a trial.
 
 The commit, app image digest and chart package digest exist only after a build.
 They stay `null` in Git. A build writes a filled copy and keeps it with its
-results:
+results.
+
+### In CI
+
+The `component-manifest` job in
+[`.github/workflows/checks.yml`](../../.github/workflows/checks.yml) runs on
+pushes to `main`, manual runs and pull requests. Documentation-only pull
+requests skip it, like the other application jobs. The job has read-only
+repository access. It:
+
+1. builds the admin UI, then the app image from
+   `components/control-plane/Dockerfile`, tagged `keeplane-preview:local` (the
+   chart's default reference);
+2. packages `deploy/helm/keeplane` with the pinned Helm 3.19.0;
+3. stamps the manifest with the checked-out commit, the image ID Docker reports
+   and the SHA-256 of the chart package;
+4. runs the script again with `--check`, which looks the values up again and
+   refuses the copy unless they match and every other section equals the
+   committed manifest;
+5. uploads the copy and the chart package as the `component-manifest-<commit>`
+   artifact, kept for 30 days, and writes the three values to the run summary.
+
+On a pull request, the checked-out commit is GitHub's test merge commit, so
+that commit is recorded. No image is pushed to a registry, so
+`app_image_digest` holds the local image ID (`sha256:<digest>`). It identifies
+the image built in that run but cannot be pulled. A registry build would record
+`repository@sha256:<digest>` instead. The stamped copy names the component set
+one run built and tested; it does not make that set a release.
+
+The [install guide](../guide/kubernetes-local.md#know-which-component-set-you-install)
+shows readers how to find and check the copy for a commit.
+
+### By hand
 
 ```sh
 python3 deploy/stamp_component_manifest.py \
   --commit "$(git rev-parse HEAD)" \
-  --app-image registry.example.test/keeplane@sha256:<digest> \
-  --chart-digest sha256:<digest> \
+  --app-image-from-docker keeplane-preview:local \
+  --chart-package test-results/keeplane-0.1.0.tgz \
   --output test-results/component-manifest.json
+python3 deploy/stamp_component_manifest.py \
+  --commit "$(git rev-parse HEAD)" \
+  --app-image-from-docker keeplane-preview:local \
+  --chart-package test-results/keeplane-0.1.0.tgz \
+  --check test-results/component-manifest.json
 ```
 
-The script accepts only a full 40-character commit and `@sha256:` references,
-not tags. It will not overwrite the committed manifest. It changes only the
-`build` section; `app_image` keeps describing the chart's default reference,
-so a stamped copy can still show `"pinned": false` for that default. `--chart-digest` is
-optional until the chart is published as a package.
+`--app-image registry.example.test/keeplane@sha256:<digest>` or
+`--app-image sha256:<image-id>` can replace `--app-image-from-docker`.
+`--chart-digest sha256:<digest>` can replace `--chart-package`; the chart is
+optional until it is published as a package.
+
+The script accepts only a full 40-character commit and digests, not tags. It
+refuses a chart package whose name, version or appVersion differ from the
+manifest, and it will not overwrite the committed manifest. It changes only the
+`build` section; `app_image` keeps describing the chart's default reference, so
+a stamped copy can still show `"pinned": false` for that default.
 
 ## What the check covers
 
 [`tests/integration/test_component_manifest.py`](../../tests/integration/test_component_manifest.py)
 reads the repository files directly; it needs no Docker, Helm or cluster.
+[`tests/integration/test_component_manifest_build.py`](../../tests/integration/test_component_manifest_build.py)
+covers stamping and checking with a stand-in Docker command and chart package.
+It uses real Helm when available; one `live` case needs Docker.
 The [cases](../../tests/integration/component-manifest-cases.md) list each
 check. In short, it fails when:
 
@@ -103,7 +160,11 @@ check. In short, it fails when:
 - a versioned API path appears or a chart switch is added, removed or changes
   default;
 - a gateway or PostgreSQL version is listed as supported before release, or
-  build fields are committed filled in.
+  build fields are committed filled in;
+- a stamped copy is unstamped, belongs to another commit, image or chart
+  package, or differs from the committed manifest outside `build`;
+- the CI job stops building, stamping, checking or uploading the copy, or gains
+  write access.
 
 The check proves the manifest matches the source files. It does not prove the
 component set works; the [regression suite](../guide/regression-local.md) does

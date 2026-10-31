@@ -96,6 +96,63 @@ jobs:
           path: test-results/
           retention-days: 30
 
+  component-manifest:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/package-lock.json
+      - name: Build the admin UI the app image serves
+        working-directory: components/admin-ui
+        run: npm ci && npm run build
+      - name: Build the app image under the chart's default reference
+        run: docker build -f components/control-plane/Dockerfile -t keeplane-preview:local .
+      - name: Install the pinned Helm tool
+        run: |
+          curl --fail --location --output /tmp/helm.tar.gz https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz
+          echo "a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496  /tmp/helm.tar.gz" | sha256sum --check
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          echo "KEEPLANE_HELM_BIN=/tmp/linux-amd64/helm" >> "$GITHUB_ENV"
+      - name: Package the chart
+        run: |
+          mkdir -p test-results/component-manifest
+          "$KEEPLANE_HELM_BIN" package deploy/helm/keeplane --destination test-results/component-manifest
+      - name: Stamp and check the component manifest for this build
+        run: |
+          out=test-results/component-manifest
+          commit="$(git rev-parse HEAD)"
+          chart="$(ls "$out"/keeplane-*.tgz)"
+          python3 deploy/stamp_component_manifest.py --commit "$commit" \
+            --app-image-from-docker keeplane-preview:local \
+            --chart-package "$chart" --output "$out/component-manifest.json"
+          python3 deploy/stamp_component_manifest.py --commit "$commit" \
+            --app-image-from-docker keeplane-preview:local \
+            --chart-package "$chart" --check "$out/component-manifest.json"
+          python3 - "$out/component-manifest.json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          build = json.load(open(sys.argv[1]))["build"]
+          print("### Component manifest for this build\n")
+          for field in ("keeplane_commit", "app_image_digest", "chart_package_digest"):
+              print(f"- `{field}`: `{build[field]}`")
+          print("\nDownload the `component-manifest-<commit>` artifact for the stamped copy and chart package.")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: component-manifest-${{ github.sha }}
+          path: test-results/component-manifest/
+          if-no-files-found: error
+          retention-days: 30
+
   local-application:
     needs: scope
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
