@@ -110,7 +110,7 @@ next to its entry authorization:
 policies:
   retry:
     attempts: 2          # retries after the first try: three tries at most
-    codes: [429, 500, 502, 503, 504]
+    codes: [429, 500, 501, 502, 503, 504, 505, …, 599]   # 429 and every 5xx, listed
     backoff: 500ms
   timeout:
     backendRequestTimeout: 60s   # per try, up to the response headers
@@ -118,8 +118,9 @@ policies:
 
 Keep the selected-model authorization on each model backend, not only on the
 route, so every retry is checked again. Do not add a failover group or virtual
-model for an outage: that would switch the model. Leave 4xx codes other than 429
-out of `codes`; a context-length refusal must reach the developer at once.
+model for an outage: that would switch the model. List every code from 500 to 599: the
+policy takes exact codes, not a range. A provider that refuses the connection is
+retried natively. Leave 4xx codes other than 429 out of `codes`; a context-length refusal must reach the developer at once.
 Another gateway product needs the same behaviour with its own settings.
 
 ## Release configuration plan

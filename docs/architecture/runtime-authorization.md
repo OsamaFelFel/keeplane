@@ -370,9 +370,13 @@ model for an outage or a context-length refusal. The managed installer adds a
 native route policy to the protected `keeplane-chat` route:
 
 ```json
-{"retry": {"attempts": 2, "codes": [429, 500, 502, 503, 504], "backoff": "500ms"},
+{"retry": {"attempts": 2, "codes": [429, 500, 501, 502, "…", 599], "backoff": "500ms"},
  "timeout": {"backendRequestTimeout": "60s"}}
 ```
+
+The native policy takes exact codes, so the installer lists 429 and every code
+from 500 to 599 (101 codes). A provider that cannot be reached (connection
+refused) never started the request, and the native gateway retries that too.
 
 `attempts` counts retries after the first try, so a model is contacted at most
 three times. Each retry goes to the same route backend and its native model
@@ -383,9 +387,12 @@ A status decides the retry before any byte reaches the client, so a stream that
 has started is never retried. A context-length refusal is a 4xx other than 429
 and is returned at once. The native gateway buffers a request body to retry it
 and disables retries above its own size limit; such a request fails on its first
-error. The installer's readback requires exactly one entry check, one retry with
-two attempts and one timeout on that route; the native spelling of durations and
-codes is bound by the complete applied digest.
+error. The installer's readback requires exactly one entry check, one retry and
+one timeout on that route, and compares them with what it generated: the same
+attempts, the same set of codes, the same backoff and the same per-attempt
+timeout, with no other timeout set. It normalises only the native spelling:
+codes as numbers, text or text with a reason phrase, and durations such as
+`500ms`, `0.5s`, `1m0s` or seconds and nanoseconds. Anything else is refused.
 
 After the retries, the CLI reads the runtime's error event. A remaining 429 or
 5xx, or a context-length refusal, makes it ask

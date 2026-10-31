@@ -54,7 +54,7 @@ model unchanged: Keeplane adds none of its own.
 
 ### When the model is down or the task is too big
 
-If the model answers with a server error (5xx), times out, or says it is busy
+If the model answers with a server error (5xx), cannot be reached, times out, or says it is busy
 (429) before any of its answer has reached you, the gateway sends the same
 request to the same model twice more. Keeplane never moves the task to another
 model on its own. If the model is still down, the turn stops and `code` prints
