@@ -18,13 +18,25 @@ from tests.support.native_runtime_trial import native_runtime_trial
 FIXTURE_ATTEMPT_TIMEOUT = "2s"
 
 
+def named(policy, check):
+    """Tell the fixture which gateway policy made a decision; clients cannot."""
+    policy["protocol"]["http"]["addRequestHeaders"]["x-fixture-check"] = json.dumps(check)
+
+
 def outage_config(existing, admin, *, timeout=None):
     value = gateway_config(existing, admin)
     for route in value["binds"][0]["listeners"][0]["routes"]:
         route["policies"].update(outage_retry())
+        named(route["policies"]["extAuthz"], "entry")
         if timeout:
             route["policies"]["timeout"] = {"backendRequestTimeout": timeout}
+    for row in value["policies"]:
+        named(row["policy"]["extAuthz"], "selected")
     return value
+
+
+def checks(observed, check):
+    return [row for row in observed["decisions"] if row["check"] == check]
 
 
 def fixture_config(existing, admin):
@@ -39,6 +51,10 @@ CASES = {
     "down-500": (["500"] * 3, False, {500}, 3),
     "down-502": (["502"] * 3, False, {502}, 3),
     "down-504": (["504"] * 3, False, {504}, 3),
+    "down-501": (["501"] * 3, False, {501}, 3),
+    "down-520": (["520"] * 3, False, {520}, 3),
+    "down-529": (["529"] * 3, False, {529}, 3),
+    "down-599": (["599"] * 3, False, {599}, 3),
     "rate-limited": (["429"] * 3, False, {429}, 3),
     "recovers-on-second-retry": (["503", "503", "ok"], False, {200}, 3),
     "recovers-after-429": (["429", "ok"], False, {200}, 2),
@@ -89,7 +105,13 @@ def test_a_down_model_is_retried_twice_and_never_switched(
         assert observed["calls"] == ["mock-private"] * contacts
         assert set(report["selected_models"]) == {"private"}
         # Each attempt passed its own selected-model check before contact.
-        assert len(observed["decisions"]) >= contacts + 1
+        selected = checks(observed, "selected")
+        assert [(row["model_id"], row["status"]) for row in selected] == [
+            ("private", 200)
+        ] * contacts
+        entry = checks(observed, "entry")
+        assert entry and all(row["status"] == 200 for row in entry)
+        assert len(entry) + len(selected) == len(observed["decisions"])
         assert observed["developer_key_forwarded"] == [False] * contacts
         report["passed"] = True
         save_report()
@@ -124,5 +146,35 @@ def test_a_started_stream_is_never_retried(tmp_path, report_file, existing):
         assert "partial " in response["body"]
         assert observed["calls"] == ["mock-private"]
         assert observed["outage_steps"] == ["mid"]
+        report["passed"] = True
+        report_file.write_text(json.dumps(report, indent=2) + "\n")
+
+
+@pytest.mark.live
+@pytest.mark.infrastructure
+@pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
+def test_an_unreachable_provider_is_retried_twice(tmp_path, report_file, existing):
+    """Connection refused counts as down: three checked attempts, then an error."""
+    report = {"existing": existing, "passed": False}
+    with native_runtime_trial(tmp_path, existing, fixture_config) as trial:
+        trial.call("allow_public")
+        report["published"] = trial.call("unreachable")
+        assert report["published"]["applied"]
+        trial.call("reset")
+        status = trial.probe({"timeout": 20})
+        observed = trial.call("summary")
+        selected = checks(observed, "selected")
+        report.update(
+            {
+                "status": status,
+                "provider_contacts": observed["calls"],
+                "selected": [(row["model_id"], row["status"]) for row in selected],
+            }
+        )
+        report_file.write_text(json.dumps(report, indent=2) + "\n")
+        assert isinstance(status, int) and 500 <= status <= 599
+        # Nothing answered, and Public, which is up, received nothing.
+        assert observed["calls"] == []
+        assert report["selected"] == [("private", 200)] * (RETRY_ATTEMPTS + 1)
         report["passed"] = True
         report_file.write_text(json.dumps(report, indent=2) + "\n")

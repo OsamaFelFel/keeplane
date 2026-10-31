@@ -11,6 +11,7 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.request import urlopen
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -373,6 +374,8 @@ def serve():
                     "project_id": metadata.get("project_id"),
                     "model_id": metadata.get("model_id"),
                     "status": int(status.split(" ", 1)[0]),
+                    # Set by the gateway policy that called, never by the client.
+                    "check": environ.get("HTTP_X_FIXTURE_CHECK", "unnamed"),
                 },
             )
             return start_response(status, headers, exc_info)
@@ -480,9 +483,49 @@ def command(action, arguments):
             "settings": rows("settings"),
             "outage_steps": rows("outage_steps"),
         }
+    elif action == "unreachable":
+        # Point Private at a local port where nothing listens: connection refused.
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        definition = next(r for r in body["resources"] if r["id"] == "private")["value"]
+        definition["params"]["baseUrl"] = "http://127.0.0.1:18089/v1"
+        status, _ = MODEL_GATEWAY.request(
+            "/api/config/resources/llm.model/private",
+            {"value": definition},
+            method="PUT",
+        )
+        assert status == 200
+        status, body = MODEL_GATEWAY.resources()
+        assert status == 200
+        stores()[2].approve(
+            "private",
+            ["Confidential"],
+            fingerprint("private", body["resources"]),
+            key_choice="shared"
+            if os.environ.get("FIXTURE_SHARED_PROVIDER_KEY") == "1"
+            else "none",
+        )
+        # Management writes complete before native publication; wait for it.
+        deadline = time.monotonic() + 10
+        while True:
+            dump = json.loads(urlopen("http://127.0.0.1:15000/config_dump", timeout=2).read())
+            hosts = [
+                group["active"]["private"]["endpoint"].get("hostOverride")
+                for row in dump.get("backends", [])
+                if row.get("backend", {}).get("ai", {}).get("name") == "llm:model:private"
+                for group in row["backend"]["ai"]["target"]["providers"]
+                if "private" in group.get("active", {})
+            ]
+            if hosts == ["127.0.0.1:18089"]:
+                return {"applied": True}
+            if time.monotonic() >= deadline:
+                return {"applied": False, "hosts": hosts}
+            time.sleep(0.1)
     elif action == "outage":
         steps = json.loads(arguments)
-        allowed = {"ok", "slow", "context", "mid", "429", "500", "502", "503", "504"}
+        allowed = {"ok", "slow", "context", "mid", "429"} | {
+            str(code) for code in range(500, 600)
+        }
         assert isinstance(steps, list) and set(steps) <= allowed
         (STATE / "outage-script").write_text(json.dumps(steps))
     elif action == "protocol_failure":
