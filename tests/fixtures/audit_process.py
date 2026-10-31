@@ -18,6 +18,9 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 PREVIOUS = [("accounts", "0001_initial")]
+ADMIN = ("subject-settings", "settings-admin")
+FIRST = "a" * 64
+SECOND = "b" * 64
 
 
 def migrate(target):
@@ -46,6 +49,197 @@ def write_previous_schema_records(count):
     return {"written": count + 1}
 
 
+def domain():
+    from audit.services import DjangoAuditStore
+    from data_classes.services import DjangoDataClassStore
+    from model_registry.catalog import DjangoModelCatalog
+
+    audit = DjangoAuditStore()
+    return audit, DjangoDataClassStore(audit), DjangoModelCatalog(audit)
+
+
+def class_id(classes, name):
+    return next(row["id"] for row in classes.list() if row["name"] == name)
+
+
+def settings_changes():
+    """Every admin change to a model or a data class, through the real stores.
+
+    Repeated identical requests are included; they change nothing and must not
+    add a record.
+    """
+    _, classes, catalog = domain()
+    classes.set_enabled(True, ADMIN)
+    classes.set_enabled(True, ADMIN)
+    shared = {"owned_by_keeplane": True, "key_choice": "shared"}
+    catalog.approve("alpha", ["Public"], FIRST, ADMIN, **shared)
+    catalog.approve("alpha", ["Public"], FIRST, ADMIN, **shared)
+    catalog.approve("alpha", ["Public", "Internal"], FIRST, ADMIN, **shared)
+    catalog.approve(
+        "alpha",
+        ["Public", "Internal"],
+        SECOND,
+        ADMIN,
+        shared_key_replaced=True,
+        **shared,
+    )
+    catalog.approve(
+        "alpha",
+        ["Public", "Internal"],
+        SECOND,
+        ADMIN,
+        owned_by_keeplane=True,
+        key_choice="personal",
+    )
+    catalog.approve("beta", [], FIRST, ADMIN)
+    catalog.approve("beta", [], SECOND, ADMIN)
+    added = classes.add(
+        {"name": "Finance", "approved_model_ids": ["alpha"]}, None, ADMIN
+    )
+    classes.edit(
+        added["id"], {"name": "Finance", "approved_model_ids": ["alpha"]}, None, ADMIN
+    )
+    classes.edit(
+        added["id"], {"name": "Finance team", "approved_model_ids": []}, None, ADMIN
+    )
+    classes.edit(
+        added["id"],
+        {"name": "Finance team", "approved_model_ids": ["alpha", "beta"]},
+        None,
+        ADMIN,
+    )
+    classes.remove(added["id"], ADMIN)
+    catalog.remove("beta", ADMIN, gateway_removed=True)
+    catalog.remove("alpha", ADMIN)
+    catalog.remove("alpha", ADMIN)
+    classes.set_enabled(False, ADMIN)
+    classes.set_enabled(False, ADMIN)
+    return {"done": True}
+
+
+def snapshot():
+    from data_classes.models import DataClass, Settings
+    from model_registry.models import ModelApproval
+    from audit.models import AuditRecord
+
+    return {
+        "classes_enabled": Settings.objects.filter(pk=1, classes_enabled=True).exists(),
+        "classes": sorted(DataClass.objects.values_list("name", flat=True)),
+        "approvals": sorted(
+            [row.pk, row.key_choice, row.approved_classes, row.gateway_fingerprint]
+            for row in ModelApproval.objects.all()
+        ),
+        "records": AuditRecord.objects.count(),
+    }
+
+
+def refused_changes():
+    """Changes that fail validation; each must leave state and Audit untouched."""
+    from common.errors import StorageUnavailable
+
+    _, classes, catalog = domain()
+    classes.set_enabled(True, ADMIN)
+    catalog.approve("alpha", ["Public"], FIRST, ADMIN)
+    before = snapshot()
+    attempts = [
+        lambda: classes.add({"name": "public", "approved_model_ids": []}, None, ADMIN),
+        lambda: classes.add({"name": "x", "approved_model_ids": []}, None, ADMIN),
+        lambda: classes.add(
+            {"name": "Finance", "approved_model_ids": ["missing"]}, None, ADMIN
+        ),
+        lambda: classes.edit(
+            class_id(classes, "Public"),
+            {"name": "Internal", "approved_model_ids": []},
+            None,
+            ADMIN,
+        ),
+        lambda: classes.edit(
+            "missing", {"name": "Finance", "approved_model_ids": []}, None, ADMIN
+        ),
+        lambda: classes.remove("missing", ADMIN),
+        lambda: classes.set_enabled("yes", ADMIN),
+        lambda: catalog.approve("alpha", ["Missing"], FIRST, ADMIN),
+        lambda: catalog.approve("alpha", ["Public"], FIRST, ADMIN, key_choice="other"),
+        lambda: catalog.approve("alpha", ["Public"], "", ADMIN),
+    ]
+    refused = []
+    for attempt in attempts:
+        try:
+            attempt()
+        except StorageUnavailable:
+            refused.append("StorageUnavailable")
+        except Exception as error:  # noqa: BLE001 - the test checks the error kind.
+            refused.append(type(error).__name__)
+        else:
+            refused.append("accepted")
+    removed = catalog.remove("missing", ADMIN)
+    return {
+        "refused": refused,
+        "removed_missing": removed,
+        "before": before,
+        "after": snapshot(),
+    }
+
+
+def failed_record_writes():
+    """When writing the record fails, each change must roll back with it."""
+    from unittest.mock import patch
+
+    from audit.models import AuditRecord
+    from common.errors import StorageUnavailable
+    from django.db import OperationalError
+
+    _, classes, catalog = domain()
+    classes.set_enabled(True, ADMIN)
+    catalog.approve("alpha", ["Public"], FIRST, ADMIN, key_choice="shared")
+    classes.add({"name": "Finance", "approved_model_ids": ["alpha"]}, None, ADMIN)
+    before = snapshot()
+    finance = class_id(classes, "Finance")
+    attempts = {
+        "class mode off": lambda: classes.set_enabled(False, ADMIN),
+        "add class": lambda: classes.add(
+            {"name": "Legal", "approved_model_ids": ["alpha"]}, None, ADMIN
+        ),
+        "rename class": lambda: classes.edit(
+            finance,
+            {"name": "Finance team", "approved_model_ids": ["alpha"]},
+            None,
+            ADMIN,
+        ),
+        "class approvals": lambda: classes.edit(
+            finance, {"name": "Finance", "approved_model_ids": []}, None, ADMIN
+        ),
+        "remove class": lambda: classes.remove(finance, ADMIN),
+        "set up model": lambda: catalog.approve("beta", ["Public"], FIRST, ADMIN),
+        "change model": lambda: catalog.approve(
+            "alpha", ["Public", "Internal"], FIRST, ADMIN, key_choice="personal"
+        ),
+        "replace shared key": lambda: catalog.approve(
+            "alpha",
+            ["Public"],
+            SECOND,
+            ADMIN,
+            key_choice="shared",
+            shared_key_replaced=True,
+        ),
+        "remove model": lambda: catalog.remove("alpha", ADMIN),
+    }
+    outcome = {}
+    with patch.object(
+        AuditRecord.objects,
+        "create",
+        side_effect=OperationalError("audit write failed"),
+    ):
+        for name, attempt in attempts.items():
+            try:
+                attempt()
+            except StorageUnavailable:
+                outcome[name] = "StorageUnavailable"
+            else:
+                outcome[name] = "saved"
+    return {"outcome": outcome, "before": before, "after": snapshot()}
+
+
 def services():
     from accounts.services import DjangoIdentity
     from audit.services import DjangoAuditStore
@@ -61,7 +255,17 @@ def handle(command):
         return migrate([tuple(item) for item in command.get("target", [])])
     if action == "previous_records":
         return write_previous_schema_records(command["count"])
+    if action == "settings_changes":
+        return settings_changes()
+    if action == "refused_changes":
+        return refused_changes()
+    if action == "failed_record_writes":
+        return failed_record_writes()
     audit, identity, password_file = services()
+    if action == "audit_option":
+        return audit.set_option(command["kind"], command["enabled"])
+    if action == "options":
+        return audit.options()
     if action == "settings":
         audit.set_option("settings", True)
         for index in range(command["count"]):
