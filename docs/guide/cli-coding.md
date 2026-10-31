@@ -50,9 +50,37 @@ repository's own runtime configuration, and runtime environment variables, are
 not loaded, so they cannot send a task to a model outside the class.
 
 Settings your runtime sends with each request, such as temperature, reach the
-model unchanged: Keeplane adds none of its own. If the model fails during a turn,
-the turn shows the error; Keeplane does not yet move a running turn to another
-model when its model is down or the task is too big for it.
+model unchanged: Keeplane adds none of its own.
+
+### When the model is down or the task is too big
+
+If the model answers with a server error (5xx), times out, or says it is busy
+(429) before any of its answer has reached you, the gateway sends the same
+request to the same model twice more. Keeplane never moves the task to another
+model on its own. If the model is still down, the turn stops and `code` prints
+the runtime's error followed by:
+
+```text
+coder is unavailable right now, so this task stopped. Wait and try again, or run it with another model allowed for this project using --model: general, local.
+```
+
+Run the same `code` command again later, or with one of the listed models in
+`--model`. The list is checked for you: only models set up in Keeplane, allowed
+for the project's class and with a usable key. If none is left, the message
+ends with the no-models message shown above instead of a list.
+
+When the model refuses a task as too big for its context, nothing is retried
+and `code` prints:
+
+```text
+This task is too big for coder's context, so it stopped. Run it with another model allowed for this project using --model: large.
+```
+
+Once part of an answer has started to arrive, a failure is shown as it is and
+nothing is sent again. An older Keeplane server cannot list the alternatives;
+the message then points to `keeplane models` instead. The missing-key case
+above is different: there `code` does switch to another allowed model and says
+so before it starts.
 
 ```mermaid
 flowchart LR
@@ -63,6 +91,9 @@ flowchart LR
   Choice --> Local[Local coding runtime and tools]
   Local --> Gateway[Protected gateway checks every request]
   Gateway --> Model[Allowed model]
+  Model -->|5xx, timeout or 429 before the answer starts| Retry[Same model, up to two more tries]
+  Retry -->|still down| Tell[Stop: wait, or choose a listed model]
+  Model -->|too big for its context| Tell
 ```
 
 Only the access token reaches the local runtime. The refresh token stays in the

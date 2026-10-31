@@ -90,6 +90,38 @@ changing the gateway, with an explicit error. The release gateway contract
 needs a supported secret-delivery mechanism for customer-run gateways before
 this mode handles shared or personal keys.
 
+## Retry a model that is down
+
+When a model answers with a 5xx, times out, or answers 429 before its first
+byte, the gateway retries the same model twice, then returns the error. The
+developer's CLI then lists the other allowed models; Keeplane never switches the
+model itself. Never retry after the first byte of a streamed answer.
+
+| Where | Who sets it |
+| --- | --- |
+| Docker preview, managed runtime profile | The Keeplane runtime installer adds it to the protected `keeplane-chat` route. |
+| Kubernetes chart, `managed` | Not yet: the chart does not install the protected listener. The retry arrives with it. |
+| Customer-run gateway, `existing` | The operator, on the route that carries developer model traffic. |
+
+On a customer-run agentgateway, attach this native policy to that route,
+next to its entry authorization:
+
+```yaml
+policies:
+  retry:
+    attempts: 2          # retries after the first try: three tries at most
+    codes: [429, 500, 502, 503, 504]
+    backoff: 500ms
+  timeout:
+    backendRequestTimeout: 60s   # per try, up to the response headers
+```
+
+Keep the selected-model authorization on each model backend, not only on the
+route, so every retry is checked again. Do not add a failover group or virtual
+model for an outage: that would switch the model. Leave 4xx codes other than 429
+out of `codes`; a context-length refusal must reach the developer at once.
+Another gateway product needs the same behaviour with its own settings.
+
 ## Release configuration plan
 
 The release gateway has not been selected. The agentgateway v1.6.0 chart is
