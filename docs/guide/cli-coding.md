@@ -80,6 +80,12 @@ and `code` prints:
 This task is too big for coder's context, so it stopped. Run it with another model allowed for this project using --model: large.
 ```
 
+If no other model is allowed for the project, it prints instead:
+
+```text
+This task is too big for coder's context and no other model is allowed for this project. Make the task smaller, or ask your admin to set up a model with a larger context.
+```
+
 Once part of an answer has started to arrive, a failure is shown as it is and
 nothing is sent again. An older Keeplane server cannot list the alternatives;
 the message then points to `keeplane models` instead. The missing-key case

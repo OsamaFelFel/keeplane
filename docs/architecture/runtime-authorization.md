@@ -406,8 +406,9 @@ prints which model is unavailable or too small and the listed models for
 `--model`. When the list is empty, a down model gets "… is unavailable right now
 and no other model is allowed for this project. Wait and try again, or ask your
 admin to set up another model." (governance issue #52), and a task too big for
-its model gets the existing no-model message
-([CLI coding guide](../guide/cli-coding.md)). Errors are 400, 401, 403 and 503
+its model gets "This task is too big for … context and no other model is allowed
+for this project. Make the task smaller, or ask your admin to set up a model with
+a larger context." (governance issue #57; [CLI coding guide](../guide/cli-coding.md)). Errors are 400, 401, 403 and 503
 as for the model choice.
 
 ```mermaid
