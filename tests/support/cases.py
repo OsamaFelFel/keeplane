@@ -33,6 +33,7 @@ EXPECTED_CASES = {
     "test_model_runtime": "LOCAL-19 LOCAL-20",
     "test_postgres_chart": "PGCHART-01 PGCHART-02 PGCHART-03 PGCHART-04 PGCHART-05 PGCHART-06 PGCHART-07 PGCHART-08",
     "test_preview_parity": "PARITY-01 PARITY-02",
+    "test_project_classes_live": "PCL-LIVE-01 PCL-LIVE-02 PCL-LIVE-03 PCL-LIVE-04 PCL-LIVE-05 PCL-LIVE-06",
     "test_qwen": "LOCAL-07 LOCAL-09",
     "test_runner_flow": "LOCAL-23 LOCAL-21 LOCAL-24 LOCAL-21-ADD LOCAL-22",
     "test_stack_lock": "LOCK-01 LOCK-02 LOCK-03 LOCK-04 LOCK-05",
