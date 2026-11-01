@@ -86,6 +86,15 @@ The local
 [`ask.py`](../../deploy/local/ask.py) helper exercises a model request; it is a
 development tool. See [model setup](model-add-local.md) for the supported flows.
 
+## Isolated networks
+
+Internet access is needed only for the first downloads. Once Keeplane is
+running, the web UI asks nothing from the internet: every page, script, style
+and font, including the IBM Plex typefaces, comes from Keeplane itself. Admins
+on a network with no outside access see the same pages in IBM Plex. The font
+licence is at `/fonts/LICENSE.txt` on your Keeplane address; other bundled
+notices are at `/app/assets/THIRD_PARTY_LICENSES.txt`.
+
 ## Model limits
 
 The displayed active context is the running model's configured limit. Training

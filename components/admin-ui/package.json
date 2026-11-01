@@ -12,6 +12,7 @@
     "lint": "oxlint",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:notices": "node --test ../../tests/integration/ui-notices.test.mjs",
+    "test:offline-assets": "node --test ../../tests/unit/ui-offline-assets.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

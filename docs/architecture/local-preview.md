@@ -83,6 +83,16 @@ Sign-out requires POST. The browser receives a masked token from
 `/api/auth-options`; the CSRF cookie is HttpOnly and SameSite Strict. The public
 origin and HTTPS scheme come from deployment configuration, not client headers.
 
+The web UI loads only from Keeplane, so it works on an isolated network
+(ADR 009). Django serves the built page, scripts and styles under `/app/assets/` and the
+bundled IBM Plex Sans (regular, semibold) and IBM Plex Mono (regular) files
+under `/fonts/` and `/app/fonts/`, with their SIL Open Font License in
+`/fonts/LICENSE.txt`. The UI uses no font service, CDN, analytics, telemetry or
+update check. A [static check](../../tests/unit/ui-offline-assets-cases.md)
+fails the build output on any external URL not on its documented list, and a
+[browser check](../../tests/browser/offline-assets-cases.md) blocks every
+request that leaves Keeplane while confirming the text is drawn in IBM Plex.
+
 Only explicit application and asset routes are served. Gateway management,
 provider credentials and databases remain internal. Model registration confirms
 component readback; gateway calls and database commits are separate operations,

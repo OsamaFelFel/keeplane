@@ -20,6 +20,10 @@ the build also retains the package CSS imports' notices and separate copyright
 files. Font notices remain at `/fonts/LICENSE.txt`. Run `npm run test:notices`
 after building to verify the shipped text. Generated `dist/` stays out of Git.
 
+The UI must load nothing from outside Keeplane: bundle every font and asset here
+instead of linking a CDN or font service. After building, `npm run test:offline-assets`
+fails on any external address not on its documented list.
+
 `react-remove-scroll-bar` 2.3.8 omits its license file from npm. Its original
 project MIT notice is retained under `licenses/` with a pinned source and hash.
 That source declares 2.3.7; correspondence to the 2.3.8 release remains unresolved.
