@@ -17,6 +17,9 @@ spec:
       restartPolicy: Never
       automountServiceAccountToken: false
       securityContext:
+        # Secrets are mounted 0440; the group lets the non-root user read them,
+        # as in the migration Job.
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       {{- with .Values.app.imagePullSecrets }}
@@ -54,6 +57,7 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
+            runAsGroup: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:

@@ -1,6 +1,6 @@
 """Render the chart and check how certificates reach Keeplane and the ingress.
 
-Cases CO-H1 to CO-H4 in chart-certificates-cases.md. Rendering proves what
+Cases CO-H1 to CO-H5 in chart-certificates-cases.md. Rendering proves what
 the chart asks Kubernetes to create, not that a certificate is valid or that a
 cluster serves it.
 """
@@ -88,3 +88,42 @@ def test_co_h4_ingress_requires_and_only_references_its_tls_secret(chart, tmp_pa
     result = render(chart, tmp_path, values)
     assert result.returncode != 0
     assert "ingress.tlsSecretName is required when ingress is enabled" in result.stderr
+
+
+def secret_modes(chart, document):
+    """Each Secret volume's file mode; Kubernetes uses 0644 when none is given."""
+    spec = chart.block(chart.block(document, "template"), "spec")
+    return {chart.scalar(item, "name"): int(chart.scalar(item, "defaultMode") or "0644", 8)
+            for item in chart.items(chart.block(spec, "volumes")) if "secret:" in item}
+
+
+def can_read(mode, user, fs_group):
+    """Secret files are owned by root, with group fsGroup when the pod sets one."""
+    if mode & 0o004 or (user == 0 and mode & 0o400):
+        return True
+    return bool(fs_group) and bool(mode & 0o040)
+
+
+def test_co_h5_every_mounted_certificate_is_readable_by_the_user_that_reads_it(chart, tmp_path):
+    output = rendered(render(chart, tmp_path, existing_with_ca(chart)))
+    checked = set()
+    for kind, name, container_name in (
+        ("Deployment", "keeplane-app", "app"),
+        ("Job", "keeplane-existing-gateway-preflight", "preflight"),
+        ("Job", "keeplane-accounts-migrate", "migrate"),
+    ):
+        document = workload(chart, output, kind, name)
+        container = next((item for item in chart.containers(document)
+                          if chart.scalar(item, "name") == container_name),
+                         chart.containers(document)[0])
+        user = int(chart.scalar(container, "runAsUser"))
+        assert user != 0, f"{name} must not read certificates as root"
+        fs_group = chart.scalar(document, "fsGroup")
+        modes = secret_modes(chart, document)
+        for volume, _, _ in chart.mounts(container):
+            if volume in ("gateway-ca", "database-ca", "gateway-keys"):
+                assert can_read(modes[volume], user, fs_group), (name, volume, oct(modes[volume]))
+                checked.add((name, volume))
+    assert ("keeplane-existing-gateway-preflight", "gateway-ca") in checked
+    assert ("keeplane-app", "gateway-ca") in checked
+    assert ("keeplane-accounts-migrate", "database-ca") in checked
