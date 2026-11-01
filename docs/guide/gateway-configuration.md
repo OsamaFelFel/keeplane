@@ -186,8 +186,13 @@ definition, stay exactly as they were
 Use `check_credentials` before and after, and compare the model and approval
 lists, as described in
 [before and after every rotation](postgres-accounts.md#before-and-after-every-rotation),
-which also sets the `NS`, `RELEASE` and `mounted_sha` used below. It shows each gateway copy's answer to each key: `accepted`, `refused`,
-`unreachable`, or `unreadable` for a missing key file. While the Secret also
+which also sets the `NS`, `RELEASE` and `mounted_sha` used below. Those checks
+run with `kubectl exec` and need `pods/exec` from the optional
+[operations Role](kubernetes-namespace-permissions.md#operations-role);
+patching the keys Secret and restarting the copies need the
+[installer Role](kubernetes-namespace-permissions.md#installer-role).
+`check_credentials` shows each gateway copy's answer to each key: `accepted`,
+`refused`, `unreachable`, or `unreadable` for a missing key file. While the Secret also
 holds next keys (`admin-key-next`, `runtime-key-next`, used in a managed
 rotation below), it shows each copy's answer to them as `admin_key_next` and
 `runtime_key_next`, and passes only when they are accepted too. While a copy refuses

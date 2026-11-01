@@ -8,7 +8,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-docs_only = runpy.run_path(ROOT / ".github/scripts/ci_scope.py")["docs_only"]
+SCOPE = runpy.run_path(ROOT / ".github/scripts/ci_scope.py")
+docs_only = SCOPE["docs_only"]
+CHECKED_GUIDES = SCOPE["CHECKED_GUIDES"]
 
 
 class ScopeTests(unittest.TestCase):
@@ -87,11 +89,22 @@ class ScopeTests(unittest.TestCase):
                 self.assertFalse(self.selected())
 
     def test_a_guide_checked_by_tests_runs_full(self):
-        self.write("docs/guide/backup-and-restore.md")
-        self.base = self.commit()
-        (self.repo / "docs/guide/backup-and-restore.md").write_text("new step\n")
-        self.commit()
-        self.assertFalse(self.selected())
+        start = self.base
+        for path in CHECKED_GUIDES:
+            with self.subTest(path=path):
+                self.git("reset", "--hard", start)
+                self.git("clean", "-fdq")
+                self.write(path)
+                self.base = self.commit()
+                (self.repo / path).write_text("new step\n")
+                self.commit()
+                self.assertFalse(self.selected())
+
+    def test_every_guide_with_kubectl_commands_is_checked(self):
+        with_kubectl = {"docs/guide/" + path.name
+                        for path in (ROOT / "docs/guide").glob("*.md")
+                        if "kubectl " in path.read_text()}
+        self.assertLessEqual(with_kubectl, CHECKED_GUIDES)
 
     def test_doc_deletion_and_rename_run_full(self):
         (self.repo / "docs/guide.md").rename(self.repo / "docs/moved.md")

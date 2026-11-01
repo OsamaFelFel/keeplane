@@ -7,8 +7,19 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 # Guides whose commands a test checks against the code; editing one runs the
-# application checks so the guide can't drift from what it describes.
-CHECKED_GUIDES = {"docs/guide/backup-and-restore.md"}
+# application checks so the guide can't drift from what it describes. Every
+# guide with kubectl commands is checked against the example Roles
+# (tests/integration/test_chart_namespace_permissions.py).
+CHECKED_GUIDES = {
+    "docs/guide/backup-and-restore.md",
+    "docs/guide/certificate-operations.md",
+    "docs/guide/gateway-configuration.md",
+    "docs/guide/gateway-database-secret.md",
+    "docs/guide/kubernetes-installation-reference.md",
+    "docs/guide/kubernetes-local.md",
+    "docs/guide/kubernetes-namespace-permissions.md",
+    "docs/guide/postgres-accounts.md",
+}
 
 
 def docs_only(event_name, event_path, *, directory=None):
