@@ -136,8 +136,8 @@ the Bearer credential and the private gateway credential in
 
 | Where on the gateway | Keeplane check | Writes an Audit record |
 | --- | --- | --- |
-| The route that carries developer model traffic | `POST /internal/runtime/authorize` | Never |
-| Each model backend, after the gateway picks the model | `POST /internal/runtime/authorize/selected` | One per request sent, when **Model answers** is on |
+| The route that carries developer model traffic | `POST /internal/runtime/authorize` | One per request detection holds back, when **Held-back requests** is on |
+| Each model backend, after the gateway picks the model | `POST /internal/runtime/authorize/selected` | One per request sent, when **Model answers** is on; and one per request detection holds back here because it was down, too slow or failed, when **Held-back requests** is on |
 
 Both send only `project_id` and `model_id`, never the prompt, unless the
 install is set up for
@@ -150,7 +150,9 @@ agentgateway, add this to each check's CEL body:
 `"messages": size(request.body) <= 1048576 ? json(request.body).messages : null`.
 The size guard sends `null` for a body over 1 MiB, which Keeplane holds, so a
 large request is never refused for its size. A check body may be up to 8 MiB.
-A gateway that
+Call the route check exactly once per request. It records held-back
+requests, so if your gateway calls it more than once for the same request,
+Audit records that hold twice. A gateway that
 calls only the first check still protects the model, but writes no
 **Model answers** records. The backend check runs again for each retry, so a
 retried request is recorded once per try, as on the managed gateway. A managed

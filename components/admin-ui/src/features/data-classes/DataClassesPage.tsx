@@ -135,6 +135,7 @@ export function DataClassesPage() {
         </select>
       </div>
     </section>}
+    {listing?.enabled && <p className="mt-6 text-[14px] leading-5 text-muted-foreground">When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded.</p>}
     <Dialog open={editing !== null} onOpenChange={open => { if (!open && !busy) setEditing(null) }}>
       <DialogContent><DialogHeader><DialogTitle>{editing === 'new' ? 'Add class' : `Edit ${editing?.name}`}</DialogTitle></DialogHeader>
         <form className="grid gap-5" onSubmit={event => void save(event)}>

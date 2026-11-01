@@ -5,7 +5,7 @@ These cases use a real Chromium browser and the locally built React UI. The netw
 | ID | Plain-English case | Expected result |
 | --- | --- | --- |
 | DC-UI-01 | Open Data Classes with the mode off, turn it on, check the 1280px screenshots and 320px width, then turn it off again. | The off screen has no class table or Add button. On shows the three starter classes. The narrow page does not scroll horizontally. Turning it off hides class controls again. |
-| DC-UI-02 | Open an on-mode Data Classes screen, add Restricted, and leave the available model unchecked. | Restricted appears with no approved model; the UI does not approve a model by default. |
+| DC-UI-02 | Open an on-mode Data Classes screen, add Restricted, and leave the available model unchecked. | Restricted appears with no approved model; the UI does not approve a model by default. The page says "When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded." |
 | DC-UI-03 | Open Models and routing while data classes are off, then open Add model and Set up model. | The approval column and both class selection fields are hidden. |
 
 The live API and storage cases are in [Data Classes cases](../e2e/data-classes-cases.md) and [the 005-01 run](https://github.com/OsamaFelFel/keeplane/blob/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests/e2e/runs/2026-10-10-optional-data-classes.md).

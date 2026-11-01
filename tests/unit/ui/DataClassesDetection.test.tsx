@@ -77,3 +77,16 @@ test('detection that is on stays switchable off when the detector is gone', asyn
   await user.click(toggle)
   await waitFor(() => expect(sent).toEqual([{ enabled: false, class_id: 'confidential' }]))
 })
+
+// DC-UI-10 (ST21): the page says its changes and held requests are recorded.
+test('the page says what Audit records while classes are on', async () => {
+  const line = 'When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded.'
+  server({ enabled: false, class_id: 'confidential', available: true })
+  render(<DataClassesPage />)
+  expect(await screen.findByText(line)).toBeTruthy()
+  cleanup()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ enabled: false, classes: [] })))
+  render(<DataClassesPage />)
+  await screen.findByRole('switch', { name: 'Use data classes' })
+  expect(screen.queryByText(line)).toBeNull()
+})

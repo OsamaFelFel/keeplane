@@ -74,8 +74,8 @@ def gate(domain_services, tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_callback, "record_sent_request", lambda result: None)
     held = []
     monkeypatch.setattr(
-        runtime_callback, "held_request", lambda result, verdict: held.append(
-            (result["held_class"], verdict.reason)
+        runtime_callback, "held_request", lambda hold, verdict: held.append(
+            (hold["held_class"], verdict.reason, hold["allowed"])
         )
     )
     with override_settings(ALLOWED_HOSTS=["testserver"], RUNTIME_AUTHORIZER_KEY_FILE=str(path)):
@@ -201,15 +201,20 @@ def test_pr_06_turned_on_mid_check_holds(gate, monkeypatch):
     assert gate.fake.texts == []
 
 
-# PR-07 The final check also inspects, and marks the held request for Audit.
-def test_pr_07_selected_check_inspects_and_reports_held(gate):
+# PR-07 The final check also inspects; only the route check marks a held
+# request for Audit, once per request, allowed or refused (task 006-02).
+def test_pr_07_selected_check_inspects_and_route_check_reports_held(gate):
     detection(gate)
     path = "/internal/runtime/authorize/selected"
     with patch.dict("os.environ", {"GATEWAY_MODE": "existing"}):
         assert ask(gate, "open", f"mail {EMAIL}", path=path).status_code == 403
         assert ask(gate, "private", f"mail {EMAIL}", path=path).status_code == 200
         assert ask(gate, "private", "Refactor the parser", path=path).status_code == 200
-    assert gate.held == [("Confidential", FOUND)]
+        assert gate.held == []
+        assert ask(gate, "open", f"mail {EMAIL}").status_code == 403
+        assert ask(gate, "private", f"mail {EMAIL}").status_code == 200
+        assert ask(gate, "private", "Refactor the parser").status_code == 200
+    assert gate.held == [("Confidential", FOUND, False), ("Confidential", FOUND, True)]
 
 
 # PR-08 Size limits: metadata alone keeps 4 KiB; messages may be larger; an

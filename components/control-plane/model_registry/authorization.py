@@ -8,9 +8,12 @@ from .policy import ModelPolicyUnavailable
 
 
 class ModelAccessDenied(Exception):
-    def __init__(self, status, message):
+    def __init__(self, status, message, *, held=None):
         super().__init__(message)
         self.status, self.message = status, message
+        # A request held to the detection class and refused for this model:
+        # the server's actor, project, model and class, never request text.
+        self.held = held
 
 
 @storage_service
@@ -62,6 +65,13 @@ class DjangoModelAuthorization:
                     "isn't approved for it, so nothing was sent. Run it with a "
                     f"model approved for {held_class}, or ask your admin to "
                     "approve one.",
+                    held={
+                        "actor_id": actor_id,
+                        "project_id": project_id,
+                        "model_id": model_id,
+                        "held_class": held_class,
+                        "allowed": False,
+                    },
                 )
             raise ModelAccessDenied(403, "This model is not eligible for the project")
         result = {"actor_id": actor_id, "project_id": project_id, "model_id": model_id}

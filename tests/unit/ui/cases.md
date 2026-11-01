@@ -72,5 +72,6 @@ colocated tests.
 | DC-UI-07 | Open Data classes with classes off. | The detection section is hidden. |
 | DC-UI-08 | Open Data classes when the detector isn't installed or the install doesn't send messages. | The switch is disabled and the page says "Personal-data detection isn't installed. Install it, then turn this on." |
 | DC-UI-09 | The detector disappears after detection was turned on. | The switch can still be turned off. |
+| DC-UI-10 | Open Data classes with classes on, then with classes off. | With classes on, the page ends with "When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded." With classes off, that line is hidden with the rest of the class settings. |
 
 The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`; the rest of the card's look and the failure message's look by BR-15 and BR-16.

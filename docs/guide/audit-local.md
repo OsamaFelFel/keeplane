@@ -73,9 +73,18 @@ request sent is recorded once:
   On a managed install the shared final check is refused, so one request is
   never recorded twice.
 
-The held-back-request switch persists independently, but its records wait for
-detection. Do not use that switch as evidence that held-back requests are
-recorded yet.
+**Held-back requests** are recorded for every request that personal-data
+detection holds back, at the gateway's entry check: the managed gateway's
+installed entry check, or `/internal/runtime/authorize` at a customer-run
+gateway's route. The final model check also records a hold when detection was
+down, too slow or failed there, so during a detection outage one request can
+have more than one record; a held request is never left unrecorded. Each
+record gives a reference, the time, the developer, the project, the class the
+request was handled as, why it was held, and the model it was approved for or
+refused for. It never contains the prompt or what
+detection found. If the record cannot be written, a warning is logged and the
+hold still applies. See the
+[held-back request cases](../../tests/integration/held-request-record-cases.md).
 
 Records are stored in the application database: the preview's SQLite volume, or
 PostgreSQL when configured. The same transaction writes each data-class or
@@ -85,8 +94,7 @@ mandatory record commit together; if the record cannot be written, the sign-in
 fails. The record contains the account and time, not the password or session
 token. Every app copy finds the same records, and they survive restarts and
 upgrades. Nothing deletes them automatically. See
-[Audit storage](../architecture/audit-storage.md). Redaction for held-back
-requests remains to be designed before that producer is connected.
+[Audit storage](../architecture/audit-storage.md).
 
 The reusable [plain-English cases](../../tests/e2e/audit-cases.md) run with
 `.venv/bin/python -m pytest tests/e2e/test_audit.py -m live`; the isolated store check runs with

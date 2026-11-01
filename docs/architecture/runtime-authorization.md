@@ -47,8 +47,15 @@ model selection. The final variant takes the same headers and the same two
 fields and makes the same decision. When it allows the request and the Audit
 **Model answers** switch is on, it writes one record (time, developer, project,
 model) in its own transaction; a failed write is logged and the request is
-still allowed. The plain check never records, because one request may pass it
-more than once. In managed mode the final variant returns 503
+still allowed. In customer-run mode the plain check, called once per request
+at the route, writes the **Held-back requests** record: when detection holds
+the request and that switch is on, one record (reference, time, developer,
+project, class, reason and model, never request text), whether the model was
+approved for the class or refused. The final variant runs again for every
+backend attempt, so it writes a held-back record only when detection was
+down, too slow or failed there, which the route check may not have met; such
+a request can have two records, never none. A failed write is logged and the
+decision stands. The plain check never writes a Model answers record. In managed mode the final variant returns 503
 `Managed gateways use the installed runtime checks` before any decision: the
 managed gateway records on its installed final check, so one request is never
 recorded twice. The [model-answer cases](../../tests/integration/model-answer-record-cases.md)
