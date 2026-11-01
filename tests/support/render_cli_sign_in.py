@@ -13,7 +13,8 @@ from types import SimpleNamespace
 import django
 from django.conf import settings
 
-TEMPLATES = Path(__file__).resolve().parents[2] / "components/control-plane/accounts/templates"
+CONTROL_PLANE = Path(__file__).resolve().parents[2] / "components/control-plane"
+TEMPLATES = CONTROL_PLANE / "accounts/templates"
 
 
 def render_states():
@@ -22,6 +23,10 @@ def render_states():
         django.setup()
     from django import forms
     from django.template import Context, Engine
+
+    if str(CONTROL_PLANE) not in sys.path:
+        sys.path.insert(0, str(CONTROL_PLANE))
+    from accounts.cli_device_pages import rejected_code_context
 
     class DeviceCodeForm(forms.Form):
         # The toolkit's DeviceGrantForm has this one required text field.
@@ -32,14 +37,18 @@ def render_states():
 
     engine = Engine(dirs=[str(TEMPLATES)])
     request = SimpleNamespace(user=SimpleNamespace(username="browser-developer"))
-    invalid = DeviceCodeForm(data={"user_code": ""})
-    invalid.is_valid()
+    # A form the toolkit itself rejected, as on its own entry and confirm views.
+    blank = DeviceCodeForm(data={"user_code": ""})
+    blank.is_valid()
     states = {
         "consent": ("cli_consent.html", {"form": ConsentForm()}),
         "consent-error": ("cli_consent.html", {"error": True}),
         "device-entry": ("cli_device.html", {"entry": True, "form": DeviceCodeForm()}),
-        "device-entry-invalid": ("cli_device.html", {"entry": True, "invalid": True, "form": invalid}),
-        "device-confirm": ("cli_device.html", {"user_code": "ABCD-EFGH", "form": DeviceCodeForm()}),
+        # The context oauth_device.confirm renders for a code Keeplane rejects.
+        "device-entry-invalid": ("cli_device.html", rejected_code_context(DeviceCodeForm, "ABCD1234")),
+        "device-entry-blank": ("cli_device.html", {"entry": True, "form": blank}),
+        "device-confirm": ("cli_device.html", {"user_code": "ABCD1234", "form": DeviceCodeForm()}),
+        "device-confirm-rejected": ("cli_device.html", {"user_code": "ABCD1234", "form": blank}),
         "device-allowed": ("cli_device.html", {"complete": True, "allowed": True}),
         "device-cancelled": ("cli_device.html", {"complete": True, "allowed": False}),
     }

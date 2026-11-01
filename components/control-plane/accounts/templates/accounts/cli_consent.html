@@ -1,6 +1,6 @@
 {% extends "accounts/cli_auth_base.html" %}
 {% block content %}{% if error %}<h1 id="title">CLI access wasn't allowed</h1><p>Return to the CLI and try again.</p>
-{% else %}<h1 id="title">Allow CLI access?</h1><p>Signed in as <strong>{{ request.user.username }}</strong>.</p><p>The CLI can use models your projects allow.</p>
+{% else %}<h1 id="title">Allow CLI access?</h1><p class="signed-in">Signed in as <strong>{{ request.user.username }}</strong>.</p><p>The CLI can use models your projects allow.</p>
 <form method="post" action="/oauth/authorize/">{% csrf_token %}{% for field in form %}{% if field.is_hidden %}{{ field }}{% endif %}{% endfor %}
 <div class="actions"><button type="submit">Cancel</button><button type="submit" name="allow" value="true">Continue</button></div></form>{% endif %}
 {% endblock %}

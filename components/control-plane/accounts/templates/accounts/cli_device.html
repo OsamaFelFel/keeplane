@@ -2,12 +2,12 @@
 {% block content %}
 {% if complete %}<h1 id="title">{% if allowed %}CLI access allowed{% else %}CLI access cancelled{% endif %}</h1><p>Return to your CLI.</p>
 {% else %}<h1 id="title">{% if entry %}Connect your CLI{% else %}Allow CLI access?{% endif %}</h1>
-<p>Signed in as <strong>{{ request.user.username }}</strong>.</p>
-{% if invalid or form.errors %}<p role="alert">Check the code shown in your CLI and try again.</p>{% endif %}
+<p class="signed-in">Signed in as <strong>{{ request.user.username }}</strong>.</p>
 <form method="post" action="/oauth/confirm-device/">{% csrf_token %}
-{% if entry %}<label for="id_user_code">Code shown in your CLI</label>{{ form.user_code }}<button type="submit">Continue</button>
-{% else %}<p>CLI code: <strong>{{ user_code }}</strong></p><p>The CLI can use models your projects allow.</p>
+{% if entry %}<div class="field"><label for="id_user_code">Code shown in your CLI</label>{{ form.user_code }}{% if invalid or form.errors %}<p class="field-error" id="id_user_code_error"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1E252B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="7" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>Check the code shown in your CLI and try again.</span></p>{% endif %}</div><button type="submit">Continue</button>
+{% else %}<p>CLI code: <code>{{ user_code }}</code></p><p>The CLI can use models your projects allow.</p>
 <input type="hidden" name="user_code" value="{{ user_code }}"><input type="hidden" name="stage" value="confirm">
+{% if invalid or form.errors %}<div class="alert" role="alert"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E252B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="7" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><p>Check the code shown in your CLI and try again.</p></div>{% endif %}
 <div class="actions"><button type="submit" name="action" value="deny">Cancel</button><button type="submit" name="action" value="accept">Continue</button></div>
 {% endif %}</form>{% endif %}
 {% endblock %}

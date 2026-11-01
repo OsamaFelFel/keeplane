@@ -49,15 +49,22 @@ async function styleOf(page: Page, selector: string): Promise<Style[]> {
 }
 
 // Text styles from the design system tokens (product/design/system/tokens.json) and the
-// component specs: body 15/22 400, body-strong 15/22 600, field-label 14/20 500,
-// buttons and text fields 15px, outline buttons 500 and the primary action 600.
-// The sign-in card title is 24/32 600, the same as the web sign-in page's title.
-const body = { size: '15px', line: '22px', weight: '400', family: 'IBM Plex Sans' }
+// component specs: the card title page-title 28/36 600; body 15/22 400; "Signed in as"
+// small 14/20 400 with the name at 600; field-label 14/20 500; a field error small
+// 14/20; the failure message's line 15/22 600; the CLI code in code style, IBM Plex Mono
+// 14/20 400; buttons and text fields 15/22, outline buttons 500 and the primary 600.
+const sans = 'IBM Plex Sans'
+const body = { size: '15px', line: '22px', weight: '400', family: sans }
+const small = { size: '14px', line: '20px', weight: '400', family: sans }
 const expected: Record<string, Style> = {
-  'h1': { size: '24px', line: '32px', weight: '600', family: 'IBM Plex Sans' },
-  'p': body,
-  'strong': { ...body, weight: '600' },
-  'label': { size: '14px', line: '20px', weight: '500', family: 'IBM Plex Sans' },
+  'h1': { size: '28px', line: '36px', weight: '600', family: sans },
+  'p:not([class]):not(.alert p)': body,
+  '.signed-in': small,
+  '.signed-in strong': { ...small, weight: '600' },
+  'code': { size: '14px', line: '20px', weight: '400', family: 'IBM Plex Mono' },
+  'label': { ...small, weight: '500' },
+  '.field-error': small,
+  '.alert p': { ...body, weight: '600' },
   'input:not([type=hidden])': body,
   'button:not([name=allow]):not([value=accept])': { ...body, weight: '500' },
   'button[name=allow], button[value=accept]': { ...body, weight: '600' },
@@ -79,6 +86,13 @@ for (const width of [1280, 320]) {
       const faces = await page.evaluate(() => [...document.fonts]
         .filter(face => face.status === 'loaded').map(face => `${face.family.replace(/["']/g, '')} ${face.weight}`))
       expect(faces).toContain('IBM Plex Sans 600')
+      if (await page.locator('code').count()) expect(faces).toContain('IBM Plex Mono 400')
+      // Every text node is checked by one of the rules above.
+      const unchecked = await page.evaluate(selectors => [...document.querySelectorAll('h1, p, strong, code, label, input, button, span')]
+        .filter(node => !(node instanceof HTMLInputElement && node.type === 'hidden'))
+        .filter(node => !selectors.some(selector => node.matches(selector)) && !(node.matches('.field-error span')))
+        .map(node => node.outerHTML.slice(0, 80)), Object.keys(expected))
+      expect(unchecked).toEqual([])
       expect(outside, 'requests that left Keeplane').toEqual([])
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     })
@@ -107,16 +121,47 @@ for (const width of [1280, 320]) {
       expect(await button.evaluate(node => [getComputedStyle(node).paddingLeft, getComputedStyle(node).borderRadius]))
         .toEqual(['18px', '6px'])
     }
+    const code = await page.locator('code').evaluate(node => {
+      const style = getComputedStyle(node)
+      return [style.paddingTop, style.paddingLeft, style.borderTopWidth, style.borderTopColor, style.borderRadius, style.backgroundColor]
+    })
+    expect(code).toEqual(['2px', '6px', '1px', 'rgb(211, 216, 221)', '4px', 'rgb(244, 245, 246)'])
     const card = await page.locator('.card').evaluate(node => ({ width: node.getBoundingClientRect().width,
       padding: getComputedStyle(node).paddingTop, radius: getComputedStyle(node).borderRadius }))
     expect(card).toEqual({ width: Math.min(400, width - 32), padding: '32px', radius: '10px' })
   })
 
-  test(`CLI-TYPE-03: a rejected code marks the field with a 2px ink edge at ${width}px`, async ({ page }) => {
-    await open(page, 'device-entry-invalid', width)
-    const field = page.getByLabel('Code shown in your CLI')
-    await expect(field).toHaveAttribute('aria-invalid', 'true')
-    expect(await field.evaluate(node => `${getComputedStyle(node).borderTopWidth} ${getComputedStyle(node).borderTopColor}`))
-      .toBe('2px rgb(30, 37, 43)')
+  for (const state of ['device-entry-invalid', 'device-entry-blank']) {
+    test(`CLI-TYPE-03: ${state} shows the error under the code field at ${width}px`, async ({ page }) => {
+      await open(page, state, width)
+      const field = page.getByLabel('Code shown in your CLI')
+      await expect(field).toHaveAttribute('aria-invalid', 'true')
+      await expect(field).toHaveAccessibleDescription('Check the code shown in your CLI and try again.')
+      expect(await field.evaluate(node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor, getComputedStyle(node).paddingLeft]))
+        .toEqual(['2px', 'rgb(30, 37, 43)', '11px'])
+      const error = page.locator('.field-error')
+      const input = (await field.boundingBox())!
+      const below = (await error.boundingBox())!
+      expect(Math.round(below.y - (input.y + input.height))).toBe(6)
+      const icon = (await error.locator('svg').boundingBox())!
+      expect([icon.width, icon.height]).toEqual([16, 16])
+      expect(await error.locator('svg').getAttribute('aria-hidden')).toBe('true')
+      await expect(page.getByRole('alert')).toHaveCount(0)
+    })
+  }
+
+  test(`CLI-TYPE-04: a code rejected on the confirm screen shows the failure message above the buttons at ${width}px`, async ({ page }) => {
+    await open(page, 'device-confirm-rejected', width)
+    const alert = page.getByRole('alert')
+    await expect(alert).toHaveText('Check the code shown in your CLI and try again.')
+    expect(await alert.evaluate(node => {
+      const style = getComputedStyle(node)
+      return [style.backgroundColor, style.borderTopWidth, style.borderTopColor, style.borderRadius, style.paddingTop, style.paddingLeft]
+    })).toEqual(['rgb(244, 245, 246)', '1px', 'rgb(122, 133, 143)', '8px', '14px', '16px'])
+    const icon = (await alert.locator('svg').boundingBox())!
+    expect([icon.width, icon.height]).toEqual([20, 20])
+    const box = (await alert.boundingBox())!
+    const cancel = (await page.getByRole('button', { name: 'Cancel', exact: true }).boundingBox())!
+    expect(box.y + box.height).toBeLessThanOrEqual(cancel.y)
   })
 }
