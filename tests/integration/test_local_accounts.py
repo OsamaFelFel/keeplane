@@ -1,5 +1,6 @@
 """Spec 003 local accounts through the account API, without a running preview."""
 
+from contextlib import contextmanager
 from unittest.mock import patch
 import uuid
 
@@ -13,9 +14,20 @@ ADMIN_PASSWORD = "first-test-password-123"
 PASSWORD = "a-local-test-password-123"
 
 
+@contextmanager
+def serving(identity):
+    # The account views keep their own reference to the shared identity port.
+    import accounts.views
+
+    with patch("common.api.IDENTITY", identity), patch.object(
+        accounts.views, "IDENTITY", identity
+    ):
+        yield identity
+
+
 @pytest.fixture
 def identity(domain_services):
-    with patch("common.api.IDENTITY", domain_services.identity):
+    with serving(domain_services.identity):
         yield domain_services.identity
 
 
@@ -132,7 +144,7 @@ def test_la_05_rotation_keeps_the_break_glass_identity(domain_services):
     original = identity.session(identity.login("first-admin", ADMIN_PASSWORD))
     domain_services.secret.write_text("rotated-first-test-password-456\n")
     rotated = DjangoIdentity(domain_services.secret, domain_services.audit)
-    with patch("common.api.IDENTITY", rotated):
+    with serving(rotated):
         client = signed_in(rotated, password="rotated-first-test-password-456")
         rows = listed(client, "search=first-admin")["users"]
     assert [(row["id"], row["role"], row["managed"]) for row in rows] == [
