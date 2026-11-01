@@ -280,6 +280,8 @@ CHART_SWITCHES = {
     "app.postgres.enabled": "postgres",
     "app.localTrial.enabled": "local_trial",
     "networkPolicy.gatewayIngressEnabled": "gateway_ingress_network_policy",
+    "networkPolicy.appIngressEnabled": "app_ingress_network_policy",
+    "networkPolicy.egressEnabled": "egress_network_policy",
     "ingress.enabled": "ingress",
 }
 # Sub-settings that apply only once their parent feature is turned on.

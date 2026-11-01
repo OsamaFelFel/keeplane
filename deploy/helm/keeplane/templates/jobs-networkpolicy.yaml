@@ -1,0 +1,46 @@
+{{- /*
+Opt-in egress for the install Jobs. The Jobs are pre-install/pre-upgrade hooks,
+so their policies are hooks too, with a lower weight, and exist before each Job
+starts. Helm does not remove hook objects on uninstall; delete these two
+policies by name afterwards.
+*/ -}}
+{{- $np := .Values.networkPolicy }}
+{{- if $np.egressEnabled }}
+{{- if and .Values.app.postgres.enabled .Values.app.postgres.migration.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-accounts-migrate-egress
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-accounts-migrate
+  policyTypes: [Egress]
+  egress:
+    {{- include "keeplane.networkPolicy.dnsRule" . | nindent 4 }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.postgres" $np.egress.postgres) | trim | nindent 4 }}
+{{- end }}
+{{- if eq .Values.gateway.mode "existing" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gateway-preflight-egress
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-gateway-preflight
+  policyTypes: [Egress]
+  egress:
+    {{- include "keeplane.networkPolicy.dnsRule" . | nindent 4 }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.suppliedGateway" $np.egress.suppliedGateway) | trim | nindent 4 }}
+{{- end }}
+{{- end }}

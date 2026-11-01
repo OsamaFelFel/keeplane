@@ -158,13 +158,119 @@ only to the app Service. It requires a `ClusterIP` app Service and refuses
 every other type, including `NodePort` and `LoadBalancer`. The gateway is
 never an Ingress backend.
 
-`networkPolicy.gatewayIngressEnabled=true` adds one policy in managed mode. It
-admits only this release's app pods, on TCP 4000, to the gateway pods,
-including every copy reached through its own address. It needs
-a network plugin that enforces NetworkPolicy. Any pod that can set the app's pod
-label is also admitted. The chart renders no default-deny or egress policy. The
-setting is refused in existing-gateway mode; protect a supplied gateway in its
-own installation.
+The chart can also limit who reaches these ports and where Keeplane's pods
+connect; see [network policies](#network-policies).
+
+## Network policies
+
+All policies are off by default. They need a network plugin that enforces
+NetworkPolicy; the local kind preview (kindnet) does not, so keep them off
+there. **The chart's render checks prove which policies Helm creates and which
+pods they select. They do not prove that your cluster enforces them.** After
+installing, check from a pod that should be refused, for example with a call
+that must time out. The [network policy cases](../../tests/integration/chart-network-policies-cases.md)
+list what the render checks cover.
+
+| Setting | Policy | Pods selected | Allows only |
+| --- | --- | --- | --- |
+| `gatewayIngressEnabled` (managed mode) | `<release>-gateway-ingress` | Gateway copies | In: this release's app pods, TCP 4000 |
+| `appIngressEnabled` | `<release>-app-ingress` | App pods | In: the pods matching `publicEntry`, TCP 3000 |
+| `egressEnabled` | `<release>-app-egress` | App pods | Out: DNS; the gateway copies on TCP 4000 (managed) or `egress.suppliedGateway` (existing); `egress.postgres`; `egress.modelEndpoints`; `egress.runners` |
+| `egressEnabled` (managed mode) | `<release>-gateway-egress` | Gateway copies | Out: DNS; `egress.gatewayDatabase` (database mode); `egress.modelEndpoints` |
+| `egressEnabled` (PostgreSQL with the chart's migration Job) | `<release>-accounts-migrate-egress` | Migration Job | Out: DNS; `egress.postgres` |
+| `egressEnabled` (existing mode) | `<release>-gateway-preflight-egress` | Preflight Job | Out: DNS; `egress.suppliedGateway` |
+
+All settings sit under `networkPolicy`. Each selected pod is denied every
+connection in that direction that its policy does not list.
+
+**Public entry.** `publicEntry.namespaceSelector` and `publicEntry.podSelector`
+are label maps for your ingress controller, for example
+`kubernetes.io/metadata.name: ingress-nginx` and
+`app.kubernetes.io/name: ingress-nginx`. Give at least one; a namespace map
+alone admits every pod in that namespace, and a pod map alone means pods in the
+release namespace. Helm refuses `appIngressEnabled` without either, and with an
+app Service other than `ClusterIP`. No other Keeplane pod calls the app: the
+gateway copies make no call to it and the Jobs call only PostgreSQL or the
+supplied gateway. The kubelet's readiness and liveness checks come from the
+node, which most network plugins admit regardless of policy; check yours.
+
+**Destinations.** Each entry in an `egress` list is either an address range or
+labels, with the TCP ports to allow:
+
+```yaml
+networkPolicy:
+  appIngressEnabled: true
+  publicEntry:
+    namespaceSelector:
+      kubernetes.io/metadata.name: ingress-nginx
+  egressEnabled: true
+  egress:
+    modelEndpoints:
+      - cidr: 203.0.113.0/24        # a provider outside the cluster
+        ports: [443]
+      - namespaceSelector:          # a runner inside the cluster
+          kubernetes.io/metadata.name: models
+        podSelector:
+          app: qwen
+        ports: [8080]
+    postgres:
+      - cidr: 10.20.0.5/32
+        ports: [5432]
+    gatewayDatabase:
+      - namespaceSelector:
+          kubernetes.io/metadata.name: database
+        podSelector:
+          app: gateway-db
+        ports: [5432]
+```
+
+Use labels for anything that runs in the cluster: an address range for a pod or
+Service address is not reliable, because pod addresses change and most plugins
+check the pod address behind a Service, not the Service address. Use `cidr` for
+destinations outside the cluster. NetworkPolicy cannot match host names: if a
+model provider has no fixed addresses, you must either allow a wide range on
+port 443 or send that traffic through an egress proxy you run, and list the
+proxy instead.
+
+`dns` defaults to the cluster DNS pods (`k8s-app: kube-dns` in `kube-system`)
+on UDP and TCP 53. Replace both label maps, or set them to `null` and give
+`dns.cidr` instead, for example for a node-local DNS cache.
+
+`egress.modelEndpoints` lists every model provider and runner the gateway
+copies call. The app also gets these endpoints because it checks provider keys
+and probes providers itself. `egress.runners` is optional and lists the runner
+addresses in `app.runnerUrls` that the app checks directly.
+
+Helm refuses `egressEnabled`, before creating anything, when:
+
+- `egress.modelEndpoints` is empty;
+- PostgreSQL is on (`app.postgres.enabled`) and `egress.postgres` is empty;
+- the managed gateway runs in database mode and `egress.gatewayDatabase` is empty;
+- the gateway is customer-run (existing mode) and `egress.suppliedGateway` is empty.
+
+Helm also refuses settings for objects the chart does not install, whether or
+not the policies are on: `gatewayIngressEnabled` or `egress.gatewayDatabase` in
+existing mode, `egress.suppliedGateway` in managed mode, `egress.gatewayDatabase`
+with a read-only gateway, and `egress.postgres` without PostgreSQL. An entry
+with both `cidr` and labels, or with an empty label map, is refused too, since
+an empty selector would match everything. `values.schema.json` refuses unknown
+settings, address ranges that are not CIDRs, and ports outside 1–65535.
+
+**Customer-run gateway.** In existing mode the chart creates no policy for the
+gateway. It restricts only Keeplane's pods: list the supplied gateway in
+`egress.suppliedGateway`, covering `gateway.url` and every `gateway.copyUrls`
+host, by labels if it runs in the cluster or by address range otherwise.
+Protect the gateway itself in its own installation.
+
+**Install Jobs.** The migration and preflight Jobs run before install and
+upgrade, so their policies are install hooks that Helm creates first. Helm
+does not remove hook objects on uninstall, or when you later turn
+`egressEnabled` off: delete `<release>-accounts-migrate-egress` and
+`<release>-gateway-preflight-egress` with `kubectl delete networkpolicy` then.
+
+Any pod that can carry the app's pod label (`app: <release>-app`) is treated as
+the app by the gateway ingress policy. Restricting who may set that label is
+outside this chart.
 
 ## Gateway modes
 

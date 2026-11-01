@@ -1,0 +1,23 @@
+{{- /*
+Opt-in egress for the managed gateway copies: DNS, the gateway database and the
+listed model endpoints only. Rendered only for a gateway this chart installs.
+The copies make no call to the app, so the app is not a destination.
+*/ -}}
+{{- $np := .Values.networkPolicy }}
+{{- if and $np.egressEnabled (eq .Values.gateway.mode "managed") .Values.gateway.install }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gateway-egress
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "keeplane.networkPolicy.gatewayPods" . | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    {{- include "keeplane.networkPolicy.dnsRule" . | nindent 4 }}
+    {{- if eq (index .Values "agentgateway-standalone").mode "database" }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.gatewayDatabase" $np.egress.gatewayDatabase) | trim | nindent 4 }}
+    {{- end }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.modelEndpoints" $np.egress.modelEndpoints) | trim | nindent 4 }}
+{{- end }}

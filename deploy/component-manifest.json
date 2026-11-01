@@ -110,8 +110,10 @@
       "managed_gateway"
     ],
     "off_by_default": [
+      "app_ingress_network_policy",
       "cli_sign_in",
       "data_classes",
+      "egress_network_policy",
       "gateway_ingress_network_policy",
       "ingress",
       "local_trial",
