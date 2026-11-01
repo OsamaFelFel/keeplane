@@ -45,8 +45,9 @@ from the StatefulSet and headless Service in gateway-copies.yaml.
 {{- end -}}
 
 {{- /*
-agentgateway-standalone.extraVolumes as the managed gateway copies mount them,
-given the agentgateway-standalone values. A Secret volume, or a projected
+gateway.extraVolumes as the managed gateway copies mount them, given a dict
+with "extraVolumes" (gateway.extraVolumes) and "podSecurityContext"
+(agentgateway-standalone.podSecurityContext). A Secret volume, or a projected
 volume with a Secret source, gets defaultMode 0440 when it sets none, as every
 Secret Keeplane mounts itself; a looser mode is refused. Kubernetes makes the
 files owned by root with the pod's fsGroup as their group, so the non-root
@@ -59,7 +60,7 @@ app.postgres or app.localTrial, so those installs use secretKeyRef.
 {{- $volumes := list -}}
 {{- range $index, $original := (.extraVolumes | default list) -}}
 {{- $volume := deepCopy $original -}}
-{{- $where := printf "agentgateway-standalone.extraVolumes[%d] (%s)" $index ($volume.name | default "unnamed") -}}
+{{- $where := printf "gateway.extraVolumes[%d] (%s)" $index ($volume.name | default "unnamed") -}}
 {{- $holder := dict -}}
 {{- $secrets := list -}}
 {{- if hasKey $volume "secret" -}}

@@ -31,6 +31,18 @@ select them unchanged. The bundled Deployment stays at zero replicas.
 {{- if .Values.gateway.copyUrls }}
 {{- fail "gateway.copyUrls is for an existing gateway; in managed mode the chart lists its own copies from gateway.copies" }}
 {{- end }}
+{{- /*
+Extra volumes go to the copies only, from gateway.extraVolumes and
+gateway.extraVolumeMounts. Under agentgateway-standalone the bundled chart's
+own Deployment would list them too, unchecked: a Secret volume without a mode
+would carry Kubernetes' usual 0644 there, and would be mounted that way if
+that Deployment were ever scaled up.
+*/}}
+{{- if or $gw.extraVolumes $gw.extraVolumeMounts }}
+{{- fail "Give the managed gateway copies extra volumes with gateway.extraVolumes and gateway.extraVolumeMounts, and leave agentgateway-standalone.extraVolumes and extraVolumeMounts empty: the bundled gateway chart's own Deployment would list them without Keeplane's Secret file mode checks" }}
+{{- end }}
+{{- $volumeMounts := .Values.gateway.extraVolumeMounts }}
+{{- $volumes := .Values.gateway.extraVolumes }}
 {{- if and $gw.monitoring $gw.monitoring.enabled }}
 {{- fail "agentgateway-standalone.monitoring is not supported on the managed gateway copies: their metrics port (15020) stays private, and the gateway NetworkPolicy admits only the app on port 4000" }}
 {{- end }}
@@ -156,7 +168,7 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
-            {{- with $gw.extraVolumeMounts }}
+            {{- with $volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- with $gw.resources }}
@@ -171,8 +183,8 @@ spec:
           emptyDir: {}
         {{- /* Secret volumes get mode 0440 unless they set a stricter one;
         see keeplane.gatewayExtraVolumes. */}}
-        {{- with $gw.extraVolumes }}
-        {{- include "keeplane.gatewayExtraVolumes" $gw | nindent 8 }}
+        {{- if $volumes }}
+        {{- include "keeplane.gatewayExtraVolumes" (dict "extraVolumes" $volumes "podSecurityContext" $gw.podSecurityContext) | nindent 8 }}
         {{- end }}
       {{- with $gw.nodeSelector }}
       nodeSelector:

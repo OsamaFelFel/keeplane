@@ -65,25 +65,32 @@ signing key is generated on the state volume.
 
 Prefer `secretKeyRef` for anything else the managed gateway needs. If it must
 read a Secret as files, add a `secret` volume (or a `projected` volume with a
-`secret` source) to `agentgateway-standalone.extraVolumes`, and mount it with
-`extraVolumeMounts`. The gateway copies then get these files with mode 0440
-when the volume sets no mode. Helm keeps a stricter mode, such as 0400, and
-refuses a looser one: any write or execute bit, or any access for other users,
-such as Kubernetes' usual 0644. Because the files belong to root, the non-root
-gateway can read 0440 files only through the pod's group, so Helm also refuses
-a Secret volume unless `agentgateway-standalone.podSecurityContext.fsGroup` is
-set (for example to 65532); Kubernetes then adds group read, so 0400 files are
-written 0440. With `app.postgres` or `app.localTrial` the gateway shares the
-provider-key volume and Helm refuses any gateway `fsGroup`, so those installs
-cannot mount Secret files into the gateway and use `secretKeyRef` instead
-([CM-04 to CM-06](../../tests/integration/chart-credential-mounts-cases.md)).
+`secret` source) to `gateway.extraVolumes`, and mount it with
+`gateway.extraVolumeMounts`. Only the gateway copies get these volumes. Helm
+refuses `agentgateway-standalone.extraVolumes` and `extraVolumeMounts`: the
+bundled gateway chart's own Deployment, which runs zero copies, would list them
+without the checks below, so a Secret there would carry Kubernetes' usual
+0644 if that Deployment were ever scaled up.
+
+The gateway copies get Secret files with mode 0440 when the volume sets no
+mode. Helm keeps a stricter mode, such as 0400, and refuses a looser one: any
+write or execute bit, or any access for other users, such as Kubernetes' usual
+0644. Write a mode as an octal number with a leading 0, such as `0440`;
+without it YAML reads a decimal number, so `440` means 0670 and is refused,
+and a quoted `"0440"` is text and is refused too. Because the files belong to
+root, the non-root gateway can read 0440 files only through the pod's group,
+so Helm also refuses a Secret volume unless
+`agentgateway-standalone.podSecurityContext.fsGroup` is set (for example to
+65532); Kubernetes then adds group read, so 0400 files are written 0440. With
+`app.postgres` or `app.localTrial` the gateway shares the provider-key volume
+and Helm refuses any gateway `fsGroup`, so those installs cannot mount Secret
+files into the gateway and use `secretKeyRef` instead
+([CM-04 to CM-06, CM-08, CM-09](../../tests/integration/chart-credential-mounts-cases.md)).
 With `gateway.mode=existing` the chart runs no gateway, so it ignores these
 settings. The chart offers no extra volumes for the app.
 
 ```yaml
-agentgateway-standalone:
-  podSecurityContext:
-    fsGroup: 65532
+gateway:
   extraVolumes:
     - name: provider-ca
       secret:
@@ -92,6 +99,9 @@ agentgateway-standalone:
     - name: provider-ca
       mountPath: /run/provider-ca
       readOnly: true
+agentgateway-standalone:
+  podSecurityContext:
+    fsGroup: 65532
 ```
 
 ## Gateway access keys
@@ -177,7 +187,7 @@ is rendered.
 | State | Where it lives |
 | --- | --- |
 | Accounts, sessions, settings, approvals, data classes and Audit (PostgreSQL mode) | Your PostgreSQL database |
-| Provider-key files (PostgreSQL mode) | Your existing claim in `app.postgres.providerKeysClaim`; the app writes it. A managed gateway mounts it read-only only if you configure that |
+| Provider-key files (PostgreSQL mode) | Your existing claim in `app.postgres.providerKeysClaim`; the app writes it. A managed gateway mounts it read-only only if you add it to `gateway.extraVolumes` and `gateway.extraVolumeMounts` |
 | Accounts, settings and signing key (local trial) | Claim `<release>-state`, `ReadWriteOnce`, `app.localTrial.storageSize` (1Gi) |
 | Provider-key files (local trial) | Claim `<release>-provider-keys`, same size and access mode |
 | Managed gateway model catalog | PostgreSQL at `agentgateway-standalone.database.postgres.url`; the starting configuration is in ConfigMap `<release>-config` |
