@@ -12,3 +12,8 @@ def rejected_code_context(form_class, code):
         {"aria-invalid": "true", "aria-describedby": CODE_ERROR_ID}
     )
     return {"entry": True, "invalid": True, "form": form}
+
+
+def rejected_confirm_context(code):
+    """Keep the confirm screen, with the failure message above its buttons."""
+    return {"user_code": code, "invalid": True}

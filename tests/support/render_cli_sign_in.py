@@ -26,7 +26,10 @@ def render_states():
 
     if str(CONTROL_PLANE) not in sys.path:
         sys.path.insert(0, str(CONTROL_PLANE))
-    from accounts.cli_device_pages import rejected_code_context
+    from accounts.cli_device_pages import (
+        rejected_code_context,
+        rejected_confirm_context,
+    )
 
     class DeviceCodeForm(forms.Form):
         # The toolkit's DeviceGrantForm has this one required text field.
@@ -48,7 +51,8 @@ def render_states():
         "device-entry-invalid": ("cli_device.html", rejected_code_context(DeviceCodeForm, "ABCD1234")),
         "device-entry-blank": ("cli_device.html", {"entry": True, "form": blank}),
         "device-confirm": ("cli_device.html", {"user_code": "ABCD1234", "form": DeviceCodeForm()}),
-        "device-confirm-rejected": ("cli_device.html", {"user_code": "ABCD1234", "form": blank}),
+        # The context the same view renders for a code rejected on the confirm screen.
+        "device-confirm-rejected": ("cli_device.html", rejected_confirm_context("ABCD1234")),
         "device-allowed": ("cli_device.html", {"complete": True, "allowed": True}),
         "device-cancelled": ("cli_device.html", {"complete": True, "allowed": False}),
     }

@@ -10,7 +10,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 
 from . import oauth_views
-from .cli_device_pages import rejected_code_context
+from .cli_device_pages import rejected_code_context, rejected_confirm_context
 from .contracts import LoginThrottled
 from .models import SessionOwner, User
 
@@ -127,7 +127,9 @@ def confirm(request):
                 return render(
                     request,
                     "accounts/cli_device.html",
-                    rejected_code_context(DeviceGrantForm, code),
+                    rejected_confirm_context(code)
+                    if stage == "confirm"
+                    else rejected_code_context(DeviceGrantForm, code),
                     status=400,
                 )
         if stage == "confirm":

@@ -13,8 +13,8 @@ command style in `Web-UI-developers.dc.html`.
 The CLI consent and device-code pages are Django templates served only by the
 optional ADR 022 trial. Each case renders every page state with Django's own
 template engine (`tests/support/render_cli_sign_in.py`, synthetic names). A code
-Keeplane rejects uses the same page context as the running view
-(`accounts/cli_device_pages.py`). Each page is served with the bundled IBM Plex
+Keeplane rejects, on the entry or the confirm screen, uses the same page context
+as the running view (`accounts/cli_device_pages.py`). Each page is served with the bundled IBM Plex
 files and every other request is blocked. Each case runs at 1280px and at 320px.
 
 | ID | Plain-English action | Expected result |
@@ -26,7 +26,10 @@ files and every other request is blocked. Each case runs at 1280px and at 320px.
 
 The [device-flow integration case](../integration/test_cli_oauth_device.py)
 `test_device_rejected_code_marks_the_field_and_links_its_error` checks the same
-field marking on the page the running view returns.
+field marking on the page the running view returns, and
+`test_device_claim_cannot_be_stolen_or_confirmed_by_another_account` checks that a
+code rejected on the confirm screen returns status 400 with the confirm screen, its
+failure message above the buttons and no code field.
 
 Run `npm test -- cli-sign-in-type.spec.ts` from this directory. The cases need a
 Python with Django (`pip install -r tests/requirements.txt`): set

@@ -218,13 +218,26 @@ def test_device_consent_retains_csrf_and_fresh_browser_session(device):
     assert not CliCredentialBinding.objects.filter(kind="device").exists()
 
 
+def assert_confirm_rejected(response, code):
+    """A confirm-stage rejection keeps the confirm screen with its failure message."""
+    html = response.content.decode()
+    assert "Allow CLI access?" in html and f"<code>{code}</code>" in html
+    assert re.search(
+        r'<div class="alert" role="alert">.*'
+        r"Check the code shown in your CLI and try again\.</p></div>\s*"
+        r'<div class="actions">',
+        html,
+    )
+    body = html[html.index("<main>") :]
+    assert '<input type="text"' not in body and 'class="field-error"' not in body
+
+
 def test_device_claim_cannot_be_stolen_or_confirmed_by_another_account(device):
     issued = device.start()
     fields = {"user_code": issued.value["user_code"]}
-    assert (
-        device.post({**fields, "stage": "confirm", "action": "accept"}).status_code
-        == 400
-    )
+    unclaimed = device.post({**fields, "stage": "confirm", "action": "accept"})
+    assert unclaimed.status_code == 400
+    assert_confirm_rejected(unclaimed, issued.value["user_code"])
     assert device.post(fields).status_code == 302
     device.flow.native.create_user(
         {
@@ -235,10 +248,9 @@ def test_device_claim_cannot_be_stolen_or_confirmed_by_another_account(device):
     )
     device.flow.sign_in("other-device-user", "synthetic-other-password")
     assert device.post(fields).status_code == 400
-    assert (
-        device.post({**fields, "stage": "confirm", "action": "accept"}).status_code
-        == 400
-    )
+    rejected = device.post({**fields, "stage": "confirm", "action": "accept"})
+    assert rejected.status_code == 400
+    assert_confirm_rejected(rejected, issued.value["user_code"])
     issued.row.refresh_from_db()
     assert (
         issued.row.user_id == device.flow.owner.pk
