@@ -166,3 +166,44 @@ test('OFF-05: every font weight the stylesheet asks for has its own bundled Plex
   const declared = [...new Set(faces.flatMap(face => face.src.map(src => src.split('/').pop())))].sort()
   assert.deepEqual(shipped, declared)
 })
+
+test('OFF-06: every font weight on the CLI sign-in pages has its own bundled Plex face', () => {
+  const names = readdirSync(templates).filter(name => name.endsWith('.html'))
+  const html = names.map(name => readFileSync(new URL(name, templates), 'utf8')).join('\n')
+  const css = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(([, body]) => body).join('\n')
+  assert.ok(css.length > 0, 'The CLI sign-in pages have no stylesheet')
+  const declared = new Set(fontFaces(css).map(face => Number(face.weight)))
+  const rules = [...css.replace(/@font-face\s*{[^}]*}/g, '').matchAll(/([^{}]+){([^{}]*)}/g)]
+    .map(([, selector, body]) => ({ selectors: selector.split(',').map(part => part.trim()), body }))
+  const relative = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer', 'bolder', 'lighter'])
+  const named = { normal: 400, bold: 700 }
+  const used = new Set([400])
+  const weighted = new Set()
+  const weightOf = value => /^\d+$/.test(value) ? Number(value) : named[value]
+  for (const { selectors, body } of rules) {
+    const values = []
+    const weight = body.match(/(?<![\w-])font-weight:\s*([^;}!]+)/)?.[1]?.trim()
+    if (weight) values.push(weight)
+    // The font shorthand resets the weight to normal unless it starts with one.
+    const shorthand = body.match(/(?<![\w-])font:\s*([^;}!]+)/)?.[1]?.trim()
+    if (shorthand && !relative.has(shorthand)) {
+      const first = shorthand.split(/\s+/)[0]
+      values.push(weightOf(first) ? first : 'normal')
+    }
+    for (const value of values) {
+      if (relative.has(value)) continue
+      assert.ok(weightOf(value), `Unrecognised CLI page font weight: ${value}`)
+      used.add(weightOf(value))
+    }
+    if (values.length) selectors.forEach(selector => weighted.add(selector))
+  }
+  // Headings and strong text are bold (700) by default unless the page sets their weight.
+  for (const [, tag] of html.matchAll(/<(h[1-6]|strong|b|th)\b/g)) {
+    if (!weighted.has(tag)) used.add(700)
+  }
+  const missing = [...used].filter(weight => !declared.has(weight)).sort()
+  assert.deepEqual(missing, [], `CLI page weights used without a bundled Plex file: ${missing.join(', ')}`)
+  assert.ok(declared.has(500), 'The CLI pages declare the medium Plex file for labels and buttons')
+  const label = rules.find(rule => rule.selectors.includes('label'))?.body.match(/font-weight:\s*(\d+)/)?.[1]
+  assert.equal(label, '500', 'Field labels use the design weight 500')
+})
