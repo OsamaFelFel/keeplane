@@ -4,6 +4,7 @@
 | --- | --- |
 | Only added or modified regular Markdown in README.md, components/cli/README.md or docs/ | Skip the five application jobs, including the component manifest build; keep their check names. |
 | Code, tests, licences, workflows, unknown paths or mixed changes | Run all five. |
+| A guide whose commands a test checks (`docs/guide/backup-and-restore.md`) | Run all five, so the guide's command checks run. |
 | Deleted, renamed, executable or symlink documentation | Run all five. |
 | Empty diff, missing Git base, invalid SHA or unreadable/malformed event | Run all five. |
 | Main push, initial push or manual run | Run all five. |

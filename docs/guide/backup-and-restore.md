@@ -32,6 +32,17 @@ flowchart LR
 | Signing secret | `/state/django-secret-key` (in the app database's volume) | `/state/django-secret-key` | `signing-secret` in `app.postgres.identitySecret` |
 | Other credentials | The private credential folder printed at start (`.keeplane/local/`) | `gateway.keysSecret` and the trial's Secrets | `gateway.keysSecret`, `app.postgres.*Secret` |
 
+In the Docker preview, the `account-data` volume is the Docker volume
+`keeplane-accounts-trial_model-approvals`, and the others are
+`keeplane-local_provider-keys` and `keeplane-local_gateway-data`. The app
+container runs as UID 65532 and the gateway container as UID 65532 too: the
+preview's `volume-init` step gives the gateway volume to that user before the
+gateway starts. In the Kubernetes trial, the app's `/state` and
+`/provider-keys` are the claims `<release>-state` and
+`<release>-provider-keys`. The trial's signing secret is a file on the state
+claim, not a Kubernetes Secret, so your secret store doesn't hold it unless you
+copy it there ([step 5](#5-keep-the-secrets)).
+
 What each part means for a restore:
 
 - **Provider keys aren't encrypted.** Each key is a plain file readable only by
@@ -57,8 +68,11 @@ What each part means for a restore:
 
 ## Prerequisites
 
-- Shell access to an app copy (`docker compose exec`, or `kubectl exec` into
-  the `app` container of `deploy/<release>-app`).
+- Shell access to an app copy: `docker compose exec` into the preview's `app`
+  service, or `kubectl exec` into the `app` container of
+  `deploy/<release>-app`. Each check below is shown both ways: in the preview
+  it's `python manage.py <command>` (the app's working folder is `/app`), in
+  Kubernetes `python /app/manage.py <command>`.
 - For PostgreSQL: `pg_dump` and `pg_restore` at least as new as the server, and
   the migration role's credentials (it owns the tables). The restricted app role
   can't make a complete dump.
@@ -114,6 +128,9 @@ too when a gateway is reachable: it lists the gateway's models and Keeplane's
 approvals ([how to read it](postgres-accounts.md#before-and-after-every-rotation)).
 
 ```sh
+# Docker preview
+docker compose exec -T app python manage.py check_credentials > keeplane-backup/credentials.json
+# Kubernetes
 kubectl -n "$NS" exec deploy/"$RELEASE"-app -c app -- \
   python /app/manage.py check_credentials > credentials.json
 ```
@@ -178,18 +195,37 @@ docker compose run --rm --no-deps -v "$PWD/keeplane-backup:/backup" volume-init 
 
 **Kubernetes managed gateway.** Dump the gateway's PostgreSQL database with
 `pg_dump --format=custom` as above, using the gateway database's own role. The
-[gateway database guide](gateway-database-secret.md) shows a dump and restore
-in the kind trial. A customer-run gateway isn't part of Keeplane's backup.
+[gateway database guide](gateway-database-secret.md) describes a dump and
+restore of the kind trial's gateway database. A customer-run gateway isn't part of Keeplane's backup.
 
 ### 5. Keep the Secrets
 
 Make sure your secret store holds the current signing secret, first-admin
-password, database passwords, database CA and gateway keys. In the Docker
-preview, keep the credential folder and copy the signing secret:
+password, database passwords, database CA and gateway keys. In PostgreSQL mode
+the signing secret is already there, in `app.postgres.identitySecret`.
+
+In the Docker preview and the Kubernetes trial, the signing secret is a file
+next to the app database, so copy it out with the backup:
 
 ```sh
+# Docker preview: also keep the credential folder (.keeplane/local/)
 docker compose cp app:/state/django-secret-key keeplane-backup/django-secret-key
+# Kubernetes SQLite trial
+kubectl -n "$NS" exec deploy/"$RELEASE"-app -c app -- \
+  cat /state/django-secret-key > django-secret-key
 ```
+
+Expected result: the file is one line of at least 48 characters. It signs
+every browser session and CLI sign-in, so keep it as privately as the
+database backup.
+
+If the signing secret is lost (it wasn't copied, or the volume holding it is
+gone), the backup still restores: when none is there, a new signing secret is
+made at start (by the launcher's volume step in the preview, by the app's init
+container in the Kubernetes trial), and everyone signs in again. Browser sessions and CLI
+sign-ins end; accounts, passwords, approvals and provider keys stay. This is
+the same result as the sign-out after
+[restoring an older backup](#after-restoring-an-older-backup).
 
 ## Restore
 
@@ -233,8 +269,16 @@ checked the restore, so you can go back to it.
    [after restoring an older backup](#after-restoring-an-older-backup).
 
    ```sh
+   # Docker preview
    docker compose exec -T app python -c "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())" /state/django-secret-key < keeplane-backup/django-secret-key
+   # Kubernetes SQLite trial, from the backup folder
+   kubectl -n "$NS" exec -i "$POD" -c app -- python -c "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())" /state/django-secret-key < django-secret-key
    ```
+
+   Restoring into the same installation without this step keeps its current
+   signing secret. If you didn't keep the backup's signing secret, skip this
+   step: everyone signs in again, as described in
+   [step 5 of the backup](#5-keep-the-secrets).
 
 5. Bring the schema up to date and restart the app so it reloads everything.
    For the preview:
@@ -246,10 +290,31 @@ checked the restore, so you can go back to it.
 
    For the Kubernetes trial, `kubectl -n "$NS" rollout restart deployment/"$RELEASE"-app`;
    its init container runs the migrations before the app starts.
-6. Restore the gateway database if you backed it up: stop the gateway
-   (`docker compose stop gateway`), run the step 4 backup command with the two
-   paths swapped (`/backup/gateway.sqlite3 /data/agentgateway.db`), then start
-   it again.
+6. Restore the gateway database if you backed it up. In the Docker preview,
+   stop the gateway, copy the backup in with the same online backup as when
+   you took it (the two paths swapped), and give the files back to the
+   gateway's user. The helper
+   container runs as root, so a file it writes belongs to root, and the
+   gateway (UID 65532) can't open it; a new installation's empty volume is the
+   usual case.
+
+   ```sh
+   # Docker preview
+   docker compose stop gateway
+   docker compose run --rm --no-deps -v "$PWD/keeplane-backup:/backup" volume-init \
+     python -c "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" /backup/gateway.sqlite3 /data/agentgateway.db
+   docker compose run --rm --no-deps volume-init chown -R 65532:65532 /data
+   docker compose run --rm --no-deps volume-init ls -ln /data
+   docker compose start gateway
+   ```
+
+   Expected result: `ls -ln` shows `65532 65532` as the owner of
+   `agentgateway.db` and of any other file there, and
+   `docker compose logs gateway` shows no database error after the start.
+
+   In the Kubernetes trial the managed gateway keeps its models in
+   PostgreSQL: restore it as in step 6 of the
+   [PostgreSQL restore](#postgresql).
 
 ### PostgreSQL
 
@@ -311,14 +376,23 @@ checked the restore, so you can go back to it.
    runs before the new copies start and brings an older backup up to date.
    If you run migrations yourself, run
    `python /app/manage.py migrate --noinput` with the migration role first.
-6. Restore the gateway database the same way if you backed it up, then restart
-   the gateway copies.
+6. Restore the gateway database the same way if you backed it up, using the
+   gateway database's own role, then restart the managed gateway copies so
+   they load it:
+
+   ```sh
+   kubectl -n "$NS" rollout restart statefulset/"$RELEASE"-gateway
+   ```
 
 ## Check the restore
 
 Before you let people back in:
 
 ```sh
+# Docker preview
+docker compose exec -T app python manage.py verify_restore > keeplane-backup/restored.json
+docker compose exec -T app python manage.py check_credentials > keeplane-backup/restored-credentials.json
+# Kubernetes
 kubectl -n "$NS" exec deploy/"$RELEASE"-app -c app -- \
   python /app/manage.py verify_restore > restored.json
 kubectl -n "$NS" exec deploy/"$RELEASE"-app -c app -- \
@@ -327,10 +401,15 @@ kubectl -n "$NS" exec deploy/"$RELEASE"-app -c app -- \
 
 Expected result: both exit 0 and show `"passed": true`, and the `records`
 counts in `restored.json` equal those in the `report.json` you saved with the
-backup. `sessions.usable` is the number of saved sessions that still work with
-the current signing secret. Then compare the models and approvals:
+backup, apart from sessions that have expired since. `records.sessions.usable`
+is the number of saved sessions that still work with the current signing
+secret: 0 after a new or lost signing secret. Then compare the models and approvals:
 
 ```sh
+# Docker preview
+diff <(jq '{gateway_models, approvals}' keeplane-backup/credentials.json) \
+     <(jq '{gateway_models, approvals}' keeplane-backup/restored-credentials.json) && echo unchanged
+# Kubernetes
 diff <(jq '{gateway_models, approvals}' credentials.json) \
      <(jq '{gateway_models, approvals}' restored-credentials.json) && echo unchanged
 ```
@@ -343,7 +422,7 @@ are set up, and send one model call.
 | Missing migrations this Keeplane version needs | The backup came from an older version. Run `migrate` (or the migration Job), then check again ([BR-09](../../tests/integration/backup-restore-cases.md)). |
 | Migrations this Keeplane version doesn't know | The backup came from a newer version. Restore it with that version or newer. Don't serve from it. |
 | Developer key files are missing | Restore the key folder from the same backup. Otherwise those developers add their key again; until then Keeplane refuses those keys. |
-| Developer key files can't be read | Restore owner 65532, folder mode 0700 and file mode 0600. In Kubernetes, restarting the app runs the repair. |
+| Developer key files can't be read | Restore owner 65532, folder mode 0700 and file mode 0600. In Kubernetes, restarting the app runs the repair. In the Docker preview, restore the folder with the `docker compose exec` command above, which writes as the app's user. |
 | Developer keys are registered but `PROVIDER_KEY_DIR` isn't set | Run the check in an app copy, where the folder is mounted. |
 | Keeplane can't read the database | The app copy points at the wrong database or its password is refused; run `check_credentials`. |
 | Every migration pending and nothing applied | The app copy points at an empty database, not the restored one ([BR-11](../../tests/integration/backup-restore-cases.md)). |
@@ -413,6 +492,9 @@ commands above on SQLite and on PostgreSQL with separate migration and app
 roles, and check what survives, what a different signing secret or a missing
 key folder does, and older and newer backups. The Docker preview and
 Kubernetes wrappers (`docker compose`, `kubectl`, the migration Job) are not
-run by those cases. Backup scheduling, retention, point-in-time recovery and
+run by those cases. The [guide command cases](../../tests/unit/backup-guide-cases.md)
+check that every command here names a real preview service, chart resource,
+mounted path and `manage.py` command, and that the gateway's user can write its
+database after the restore step's `chown`. Backup scheduling, retention, point-in-time recovery and
 database availability belong to your database operator; Keeplane doesn't
 provide them.

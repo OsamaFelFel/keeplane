@@ -44,7 +44,9 @@ runs as the app role.
 
 Not proven here: the Docker preview and Kubernetes commands in the guide
 (`docker compose exec`, `kubectl exec`, the chart's migration Job), which this
-suite replaces with the same commands run directly; a backup of the gateway's
+suite replaces with the same commands run directly (the
+[guide command cases](../unit/backup-guide-cases.md) check that those commands
+name real services, chart resources, mounts and `manage.py` commands); a backup of the gateway's
 own database (the [gateway database cases](../e2e/gateway-secret-cases.md) cover
 catalog recovery in kind); container UID 65532 ownership of key files (the
 [provider-volume cases](kubernetes-provider-volume-cases.md) cover the chart's

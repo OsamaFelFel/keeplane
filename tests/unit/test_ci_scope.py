@@ -86,6 +86,13 @@ class ScopeTests(unittest.TestCase):
                 self.commit()
                 self.assertFalse(self.selected())
 
+    def test_a_guide_checked_by_tests_runs_full(self):
+        self.write("docs/guide/backup-and-restore.md")
+        self.base = self.commit()
+        (self.repo / "docs/guide/backup-and-restore.md").write_text("new step\n")
+        self.commit()
+        self.assertFalse(self.selected())
+
     def test_doc_deletion_and_rename_run_full(self):
         (self.repo / "docs/guide.md").rename(self.repo / "docs/moved.md")
         self.commit()
