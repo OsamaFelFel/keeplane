@@ -6,6 +6,7 @@ import os
 import stat
 import tempfile
 import time
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from urllib.error import HTTPError
@@ -57,6 +58,57 @@ def atomic_private(path, value):
             os.close(directory)
     finally:
         Path(temporary).unlink(missing_ok=True)
+
+
+@contextmanager
+def private_lock(directory, trusted_file):
+    """One installer or enroller at a time, on a private operator directory."""
+    directory, trusted_file = Path(directory), Path(trusted_file)
+    if not directory.is_absolute() or not trusted_file.is_absolute():
+        raise RuntimeInstallationUnavailable("Private installation paths are required")
+    metadata = directory.lstat()
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid not in (0, os.geteuid())
+        or metadata.st_mode & 0o077
+    ):
+        raise RuntimeInstallationUnavailable(
+            "The installation directory must be private"
+        )
+    descriptor = os.open(
+        directory / ".installation.lock",
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+        0o600,
+    )
+    try:
+        lock = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(lock.st_mode)
+            or lock.st_uid not in (0, os.geteuid())
+            or lock.st_mode & 0o077
+        ):
+            raise RuntimeInstallationUnavailable(
+                "The installation lock must be private"
+            )
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def trusted_base(trusted_file):
+    """The installer's trusted base configuration, parsed and as raw bytes."""
+    with Path(trusted_file).open("rb") as source:
+        trusted_bytes = source.read(MAX_APPLIED_BYTES + 1)
+    if len(trusted_bytes) > MAX_APPLIED_BYTES:
+        raise RuntimeInstallationUnavailable("The trusted base is too large")
+    try:
+        trusted = json.loads(trusted_bytes, object_pairs_hook=unique_pairs)
+    except (ValueError, TypeError, UnicodeError, RecursionError):
+        raise RuntimeInstallationUnavailable("The trusted base is malformed") from None
+    if not isinstance(trusted, dict):
+        raise RuntimeInstallationUnavailable("The trusted base is malformed")
+    return trusted, trusted_bytes
 
 
 def local_applied():
@@ -164,38 +216,8 @@ class DjangoRuntimeInstallation:
             or self.gateway.base_url != "http://127.0.0.1:4000"
         ):
             raise RuntimeInstallationUnavailable("Use the managed gateway installer")
-        if not self.directory.is_absolute() or not self.trusted_file.is_absolute():
-            raise RuntimeInstallationUnavailable(
-                "Private installation paths are required"
-            )
-        metadata = self.directory.lstat()
-        if (
-            not stat.S_ISDIR(metadata.st_mode)
-            or metadata.st_uid not in (0, os.geteuid())
-            or metadata.st_mode & 0o077
-        ):
-            raise RuntimeInstallationUnavailable(
-                "The installation directory must be private"
-            )
-        descriptor = os.open(
-            self.directory / ".installation.lock",
-            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
-            0o600,
-        )
-        try:
-            lock = os.fstat(descriptor)
-            if (
-                not stat.S_ISREG(lock.st_mode)
-                or lock.st_uid not in (0, os.geteuid())
-                or lock.st_mode & 0o077
-            ):
-                raise RuntimeInstallationUnavailable(
-                    "The installation lock must be private"
-                )
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with private_lock(self.directory, self.trusted_file):
             return self._install(identifiers)
-        finally:
-            os.close(descriptor)
 
     def _install(self, identifiers):
         active = self.directory / "manifest.json"
@@ -207,17 +229,8 @@ class DjangoRuntimeInstallation:
         ):
             raise RuntimeInstallationUnavailable("Declare up to 32 exact model IDs")
         config_file = self.directory / "gateway.json"
-        with self.trusted_file.open("rb") as source:
-            trusted_bytes = source.read(MAX_APPLIED_BYTES + 1)
-        if len(trusted_bytes) > MAX_APPLIED_BYTES:
-            raise RuntimeInstallationUnavailable("The trusted base is too large")
-        try:
-            trusted = json.loads(trusted_bytes, object_pairs_hook=unique_pairs)
-        except (ValueError, TypeError, UnicodeError, RecursionError):
-            raise RuntimeInstallationUnavailable(
-                "The trusted base is malformed"
-            ) from None
-        if not isinstance(trusted, dict) or config_file.read_bytes() != trusted_bytes:
+        trusted, trusted_bytes = trusted_base(self.trusted_file)
+        if config_file.read_bytes() != trusted_bytes:
             raise RuntimeInstallationUnavailable(
                 "Start a fresh gateway with the trusted base first"
             )
@@ -246,6 +259,17 @@ class DjangoRuntimeInstallation:
                 "The complete desired baseline changed"
             )
         models = self._models(identifiers, resources)
+        return self.publish(base, resources, models, initial)
+
+    def publish(self, base, resources, models, initial):
+        """Write the guard for `models`, read it back, then enable the declaration.
+
+        The caller holds the private lock and has already written a disabled
+        declaration, so every protected call is refused until this returns.
+        """
+        active = self.directory / "manifest.json"
+        config_file = self.directory / "gateway.json"
+        identifiers = list(models)
         gate = DjangoInstalledRuntimeGate(self.gateway, str(active), self.key_directory)
         for identifier, model in models.items():
             gate.require_definition(identifier, model)

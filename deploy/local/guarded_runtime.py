@@ -38,7 +38,8 @@ def install(repo, runtime, models, port, *, env, wait_ready, app_image=None):
     # is unsupported. Stop the old process before resetting operator files.
     try:
         old = run(["ps", "-q", "gateway"])
-        run(["stop", "gateway", "app"])
+        # The enroller writes the guard directory; stop it before the reset.
+        run(["stop", "model-enroller", "gateway", "app"])
         run(["run", "--rm", "--no-deps", "runtime-init"])
         run(
             [
@@ -104,12 +105,26 @@ def install(repo, runtime, models, port, *, env, wait_ready, app_image=None):
         for identifier in models:
             command.extend(["--model", identifier])
         run(command)
+        # From here the private enroller (ADR 027) keeps the guard in step with
+        # saved model changes; neither the app nor the gateway restarts.
+        run(
+            [
+                "up",
+                "-d",
+                "--no-build",
+                "--pull",
+                "never",
+                "--no-deps",
+                "--force-recreate",
+                "model-enroller",
+            ]
+        )
     except (OSError, subprocess.TimeoutExpired, RuntimeError):
         # Even a failed manifest rollback must not leave a serving endpoint.
         # This targets only the Compose project the operator explicitly started.
         try:
             stopped = subprocess.run(
-                compose + ["stop", "gateway"],
+                compose + ["stop", "model-enroller", "gateway"],
                 cwd=repo,
                 env=environment,
                 capture_output=True,
