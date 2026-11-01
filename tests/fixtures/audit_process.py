@@ -555,8 +555,103 @@ def level_race(command):
         return {"level_error": error.message, **level_state()}
 
 
+def http(command):
+    """Call Keeplane's own HTTP API in this process, as a browser would.
+
+    Answers with the status, the JSON body and the session cookie the answer
+    set, if any.
+    """
+    from django.test import Client
+
+    client = Client(HTTP_HOST="127.0.0.1")
+    if command.get("session"):
+        client.cookies["keeplane_session"] = command["session"]
+    method, path = command["method"], command["path"]
+    if method == "GET":
+        response = client.get(path)
+    else:
+        response = client.generic(
+            method,
+            path,
+            json.dumps(command.get("body", {})),
+            content_type="application/json",
+            HTTP_X_KEEPLANE_ACTION="1",
+        )
+    cookie = response.cookies.get("keeplane_session")
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    return {
+        "status": response.status_code,
+        "body": body,
+        "session": cookie.value if cookie is not None and cookie.value else None,
+    }
+
+
+OUTAGE_TABLES = {"audit": "accounts_auditrecord", "session": "django_session"}
+
+
+def outage(command):
+    """Make the database itself refuse new rows in one table, or repair it.
+
+    A database trigger fails every insert, so the failure comes from the
+    database, not from patched application code. PostgreSQL reports a full
+    disk; SQLite reports a missing table. Both are operational errors, as a
+    real outage would be (a constraint error would instead make Django pick a
+    new session key and try again).
+    """
+    table = OUTAGE_TABLES[command["table"]]
+    trigger = "keeplane_test_outage_" + command["table"]
+    postgres = connection.vendor == "postgresql"
+    with connection.cursor() as cursor:
+        if not command["down"]:
+            cursor.execute(
+                f"DROP TRIGGER IF EXISTS {trigger}" + (f" ON {table}" if postgres else "")
+            )
+            return {"down": False}
+        if postgres:
+            cursor.execute(
+                "CREATE OR REPLACE FUNCTION keeplane_test_outage() RETURNS trigger "
+                "LANGUAGE plpgsql AS $$ BEGIN "
+                "RAISE EXCEPTION 'test storage outage' USING ERRCODE = 'disk_full'; "
+                "END $$"
+            )
+            cursor.execute(
+                f"CREATE TRIGGER {trigger} BEFORE INSERT ON {table} "
+                "FOR EACH ROW EXECUTE FUNCTION keeplane_test_outage()"
+            )
+        else:
+            cursor.execute(
+                f"CREATE TRIGGER {trigger} BEFORE INSERT ON {table} "
+                "BEGIN INSERT INTO keeplane_test_storage_offline VALUES (1); END"
+            )
+    return {"down": True}
+
+
+def stored():
+    """Row counts and the full stored text of every Audit record."""
+    from audit.models import AuditRecord
+    from django.contrib.sessions.models import Session
+
+    return {
+        "sessions": Session.objects.count(),
+        "records": AuditRecord.objects.count(),
+        "record_text": [
+            [row.kind, row.actor_id, row.actor_name, row.description]
+            for row in AuditRecord.objects.order_by("pk")
+        ],
+    }
+
+
 def handle(command):
     action = command["action"]
+    if action == "http":
+        return http(command)
+    if action == "outage":
+        return outage(command)
+    if action == "stored":
+        return stored()
     if action == "level_setup":
         return level_setup()
     if action == "level_changes":
