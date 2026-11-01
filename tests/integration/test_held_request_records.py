@@ -36,8 +36,8 @@ EMAIL = "amara.okonkwo@example.com"
 PROMPT = f"Write to {EMAIL} about invoice 4711"
 SHARED = "/internal/runtime/authorize"
 ALLOWED = (
-    r"Request HR-[0-9a-f]{12} held back as Confidential \(personal data detected\); "
-    r"project Callback; allowed to model private, approved for it"
+    r"Request HR-[0-9a-f]{12} held back as Confidential \(Personal data detected\); "
+    r"project Callback; approved model private"
 )
 
 
@@ -153,9 +153,8 @@ def test_hr_03_a_held_request_refused_for_its_model_is_recorded(managed):
     assert "nothing was sent" in response.json()["error"]
     [row] = held(f)
     assert re.fullmatch(
-        r"Request HR-[0-9a-f]{12} held back as Public \(personal data detected\); "
-        r"project Callback; refused for model private, not approved for it; "
-        r"nothing was sent",
+        r"Request HR-[0-9a-f]{12} held back as Public \(Personal data detected\); "
+        r"project Callback; model private isn't approved for it, nothing was sent",
         row["what"],
     )
 
@@ -186,12 +185,12 @@ def test_hr_05_detection_off_writes_nothing(managed):
 @pytest.mark.parametrize(
     "verdict, why",
     [
-        (Verdict(True, FOUND), "personal data detected"),
-        (Verdict(True, NOT_SENT), "request could not be read"),
-        (Verdict(True, UNAVAILABLE), "detector unavailable"),
-        (Verdict(True, SLOW), "check took too long"),
-        (Verdict(True, FAILED), "detector failed"),
-        (Verdict(True, "something new"), "not checked"),
+        (Verdict(True, FOUND), "Personal data detected"),
+        (Verdict(True, NOT_SENT), "Request couldn't be read"),
+        (Verdict(True, UNAVAILABLE), "Detection was down"),
+        (Verdict(True, SLOW), "Detection took longer than 200 ms"),
+        (Verdict(True, FAILED), "Detection failed"),
+        (Verdict(True, "something new"), "Detection failed"),
     ],
 )
 def test_hr_06_each_reason_is_named(managed, verdict, why):
@@ -208,7 +207,7 @@ def test_hr_06_unreadable_parts_are_also_named(managed):
     switch_on(f)
     image = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "x"}}]}]
     assert send_managed(f, messages=image).status_code == 200
-    assert "(request could not be read)" in held(f)[0]["what"]
+    assert "(Request couldn't be read)" in held(f)[0]["what"]
 
 
 def test_hr_07_its_own_switch(managed):
@@ -298,12 +297,11 @@ def test_hr_10_customer_run_records_at_the_route_check_only(customer_run):
     assert re.fullmatch(ALLOWED, row["what"])
     # A held request refused at the route is recorded there.
     assert shared(f, model="public").status_code == 403
-    assert "refused for model public, not approved for it" in held(f)[0]["what"]
+    assert "model public isn't approved for it, nothing was sent" in held(f)[0]["what"]
     # A refused model ID Keeplane doesn't know is not copied into the record.
     assert shared(f, model=EMAIL).status_code == 403
     assert held(f)[0]["what"].endswith(
-        "refused for a model Keeplane doesn't know, not approved for it; "
-        "nothing was sent"
+        "a model Keeplane doesn't know isn't approved for it, nothing was sent"
     )
     assert EMAIL not in json.dumps(held(f))
     assert len(held(f)) == 3
@@ -352,15 +350,77 @@ def test_hr_12_each_record_names_only_its_developer(customer_run):
         assert b"held back" not in anonymous.content
 
 
+class Sequence(FakeInspector):
+    """The entry check gets the first verdict, later checks the next ones."""
+
+    def __init__(self, verdicts):
+        super().__init__()
+        self.verdicts = list(verdicts)
+
+    def check(self, text):
+        return self.verdicts.pop(0) if len(self.verdicts) > 1 else self.verdicts[0]
+
+
+@pytest.mark.parametrize("reason", [UNAVAILABLE, SLOW, FAILED])
+def test_hr_13_held_only_at_the_final_check_is_recorded(managed, monkeypatch, reason):
+    f = managed
+    switch_on(f)
+    clean = Verdict(False, "clean")
+    f.fake = Sequence([clean, Verdict(True, reason)])
+    monkeypatch.setattr(runtime_callback, "inspector", lambda: f.fake)
+    assert entry(f, "Refactor the parser").status_code == 200
+    assert held(f) == []
+    assert selected(f, "Refactor the parser").status_code == 200
+    [row] = held(f)
+    why = held_request_records.REASONS[reason]
+    assert f"held back as Confidential ({why}); project Callback; approved model private" in row["what"]
+    # Refused at the final check: recorded too, and still refused.
+    f.stores.classes.set_detection({"enabled": True, "class_id": "public"})
+    f.fake = Sequence([Verdict(True, reason)])
+    response = selected(f, "Refactor the parser")
+    assert response.status_code == 403
+    assert "isn't approved for it, nothing was sent" in held(f)[0]["what"]
+
+
+def test_hr_14_the_final_check_never_repeats_a_steady_reason(managed):
+    f = managed
+    switch_on(f)
+    # Personal data and unreadable text give the same answer at both checks,
+    # so only the entry check records them, however often the final one runs.
+    assert entry(f).status_code == 200
+    for _ in range(3):
+        assert selected(f).status_code == 200
+    f.fake.verdict = Verdict(True, NOT_SENT)
+    assert entry(f).status_code == 200
+    assert selected(f).status_code == 200
+    assert len(held(f)) == 2
+    # During an outage each final attempt records: a duplicate, never a gap.
+    f.fake.verdict = Verdict(True, UNAVAILABLE)
+    assert entry(f).status_code == 200
+    assert selected(f).status_code == 200
+    assert selected(f).status_code == 200
+    assert len(held(f)) == 5
+
+
+def test_hr_15_customer_run_final_check_records_outage_holds(customer_run):
+    f = customer_run
+    switch_on(f)
+    f.fake.verdict = Verdict(True, FOUND)
+    assert shared(f, final=True).status_code == 200
+    assert held(f) == []
+    f.fake.verdict = Verdict(True, SLOW)
+    assert shared(f, final=True).status_code == 200
+    assert "(Detection took longer than 200 ms)" in held(f)[0]["what"]
+
+
 def test_description_holds_only_the_given_details():
     assert held_request_records.description(
         "HR-0123456789ab", "Confidential", FOUND, "payments-api", "gpt-4.1", True
     ) == (
-        "Request HR-0123456789ab held back as Confidential (personal data detected); "
-        "project payments-api; allowed to model gpt-4.1, approved for it"
+        "Request HR-0123456789ab held back as Confidential (Personal data detected); "
+        "project payments-api; approved model gpt-4.1"
     )
     assert held_request_records.description(
         "HR-0123456789ab", "Public", SLOW, "payments-api", None, False
-    ).endswith("refused for a model Keeplane doesn't know, not approved for it; "
-               "nothing was sent")
+    ).endswith("a model Keeplane doesn't know isn't approved for it, nothing was sent")
     assert re.fullmatch(r"HR-[0-9a-f]{12}", held_request_records.reference())

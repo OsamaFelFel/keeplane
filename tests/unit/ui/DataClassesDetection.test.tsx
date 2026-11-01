@@ -80,7 +80,7 @@ test('detection that is on stays switchable off when the detector is gone', asyn
 
 // DC-UI-10 (ST21): the page says its changes and held requests are recorded.
 test('the page says what Audit records while classes are on', async () => {
-  const line = 'With the audit add-on on, every change here and every request detection holds back is recorded.'
+  const line = 'When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded.'
   server({ enabled: false, class_id: 'confidential', available: true })
   render(<DataClassesPage />)
   expect(await screen.findByText(line)).toBeTruthy()

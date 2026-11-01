@@ -65,7 +65,7 @@ test('DC-UI-02: an admin can add a class without silently approving a model', as
   await expect(page.getByRole('checkbox', { name: 'set-up-model' })).not.toBeChecked()
   await page.getByRole('dialog').getByRole('button', { name: 'Add class' }).click()
   await expect(page.getByRole('row', { name: /Restricted/ })).toContainText('None')
-  await expect(page.getByText('With the audit add-on on, every change here and every request detection holds back is recorded.')).toBeVisible()
+  await expect(page.getByText('When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded.')).toBeVisible()
 })
 
 test('DC-UI-03: Models hides every class field while the mode is off', async ({ page }) => {

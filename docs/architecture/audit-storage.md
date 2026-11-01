@@ -67,21 +67,28 @@ flowchart LR
   detection holds the request to the detection class,
   `held_request_records.record_held_request` writes one record in its own
   transaction, after the decision is made: whether the requested model was
-  allowed (it is approved for the class) or refused (it isn't). Detection
-  also runs at the final selected-model check, but that check runs again for
-  every backend attempt, so it never records a hold: one held request gets one
-  record, however often it is retried. The shared route check does not record
-  on a managed install. The record's account is the developer whose session
+  approved for the class or refused. Detection also runs at the final
+  selected-model check (`installed/selected` or the shared
+  `authorize/selected`), which runs again for every backend attempt. It
+  records a hold only when detection was down, too slow or failed there:
+  personal data and unreadable text give the same answer at both checks, so
+  the entry check has recorded them already, and retries add nothing. A
+  request the entry check found clean but the final check held during an
+  outage is therefore recorded; during an outage a request may get two or more
+  records (entry and each final attempt). Nothing derived from the request is
+  stored to tell them apart (owner decision on PR #204: a rare duplicate is
+  acceptable, a missing record isn't). The shared checks do not record on a
+  managed install. The record's account is the developer whose session
   made the request. Its description gives a random reference (`HR-` and 12
   hex digits, derived from nothing in the request), the class, the reason
-  category (personal data detected, request could not be read, detector
-  unavailable, check took too long, detector failed), the project and the
-  model. A refused model ID Keeplane doesn't know is not copied. A failed
+  category (Personal data detected, Request couldn't be read, Detection was
+  down, Detection took longer than 200 ms, Detection failed), the project and
+  the model: "approved model X" when the model is approved for the class (a
+  later provider-key check can still refuse it, so this does not mean sent),
+  or "model X isn't approved for it, nothing was sent". A refused model ID Keeplane doesn't know is not copied. A failed
   write is handled as for model answers: rolled back, logged as a warning
   with only the error kind, and the decision stands, so a held request is
-  never let through to a model that isn't approved for its class. A request
-  the entry check found clean but the final check held (the detector became
-  unavailable or too slow in between) is held but not recorded.
+  never let through to a model that isn't approved for its class.
 - **Break-glass sign-ins** are always written, in the same transaction as the
   session. If the record cannot be written, the sign-in fails.
 - A record holds its kind, UTC time, account ID, username and a short

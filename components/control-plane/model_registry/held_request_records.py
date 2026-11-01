@@ -7,14 +7,19 @@ project, the class it was handled as, why it was held, and the model it was
 allowed to or refused for. It never holds the prompt, any other request text
 or anything detection found.
 
-One record per request, not per check: the gateway runs detection at its
-route (entry) check and again at the selected-model check, which runs once
-per backend attempt, retries included. Only the entry check records, because
-it runs exactly once for each request and before any model is chosen, so it
-also sees requests refused there. The selected-model check never records a
-hold. Each gateway mode has one recording entry check: the managed installed
-entry check, or the shared ``/internal/runtime/authorize`` check of a
-customer-run gateway.
+Every held request is recorded; duplicates are kept down. The gateway runs
+detection at its route (entry) check, once per request, and again at the
+selected-model check, once per backend attempt, retries included. The entry
+check records every hold. The selected-model check records a hold only for
+the reasons that can differ between the two checks (detection down, too slow
+or failed, see ``FINAL_CHECK_REASONS``): personal data and unreadable text
+give the same answer at both checks, so the entry check has already recorded
+those. A request held at the final check for an outage reason may therefore
+have a second record, from the entry check or a retry; nothing derived from
+the request is stored to tell them apart (owner decision on PR #204: a rare
+duplicate is acceptable, a missing record isn't). Each gateway mode has one
+recording pair: the managed installed checks, or the shared
+``/internal/runtime/authorize`` checks of a customer-run gateway.
 
 A failed write follows "Model answers": it is logged and the decision
 stands. The record is written only after the decision has been made, so a
@@ -28,7 +33,14 @@ import secrets
 from accounts.models import User
 from audit.services import DjangoAuditStore
 from django.db import transaction
-from personal_data.inspection import FAILED, FOUND, NOT_SENT, SLOW, UNAVAILABLE
+from personal_data.inspection import (
+    FAILED,
+    FOUND,
+    LIMIT_SECONDS,
+    NOT_SENT,
+    SLOW,
+    UNAVAILABLE,
+)
 from projects.models import Project
 
 from .models import ModelApproval
@@ -37,14 +49,16 @@ KIND = "held_requests"
 
 # Why the request was held: a category only, never what was found.
 REASONS = {
-    FOUND: "personal data detected",
-    NOT_SENT: "request could not be read",
-    UNAVAILABLE: "detector unavailable",
-    SLOW: "check took too long",
-    FAILED: "detector failed",
+    FOUND: "Personal data detected",
+    NOT_SENT: "Request couldn't be read",
+    UNAVAILABLE: "Detection was down",
+    SLOW: f"Detection took longer than {round(LIMIT_SECONDS * 1000)} ms",
+    FAILED: "Detection failed",
 }
-# Any other reason still records a hold, without guessing why.
-UNKNOWN_REASON = "not checked"
+# Any other reason still records a hold: detection gave no clean answer.
+UNKNOWN_REASON = REASONS[FAILED]
+# Reasons the final check may meet even when the entry check did not hold.
+FINAL_CHECK_REASONS = frozenset({UNAVAILABLE, SLOW, FAILED})
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +70,12 @@ def reference():
 
 def description(ref, held_class, reason, project_name, model_id, allowed):
     why = REASONS.get(reason, UNKNOWN_REASON)
+    # "Approved", not "sent": a later key check can still refuse the request.
     model = f"model {model_id}" if model_id else "a model Keeplane doesn't know"
     outcome = (
-        f"allowed to {model}, approved for it"
+        f"approved {model}"
         if allowed
-        else f"refused for {model}, not approved for it; nothing was sent"
+        else f"{model} isn't approved for it, nothing was sent"
     )
     return (
         f"Request {ref} held back as {held_class} ({why}); "

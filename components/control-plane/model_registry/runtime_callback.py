@@ -29,7 +29,7 @@ from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .developer_keys import DeveloperKeyMissing
-from .held_request_records import record_held_request
+from .held_request_records import FINAL_CHECK_REASONS, record_held_request
 from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
 from .model_answer_records import record_sent_request
 from .models import ModelApproval, ProviderKeyChoice
@@ -183,11 +183,24 @@ def held_request(hold, verdict):
     record_held_request(hold, verdict)
 
 
-def authorized_model(request, body, *, record_hold=False):
-    """Authorize; at a gateway's entry check, also record a held request.
+ENTRY, FINAL = "entry", "final"
 
-    Only the entry check records (``record_hold``): it runs once per request,
-    while the selected-model check runs again for every backend attempt.
+
+def records_hold(check, verdict):
+    """Whether this check records a hold (see held_request_records).
+
+    The entry check records every hold. The final check, run per backend
+    attempt, records only reasons the entry check may not have met.
+    """
+    if check == ENTRY:
+        return True
+    return check == FINAL and getattr(verdict, "reason", None) in FINAL_CHECK_REASONS
+
+
+def authorized_model(request, body, *, record_hold=None):
+    """Authorize; at a recording gateway check, also record a held request.
+
+    ``record_hold`` is ENTRY, FINAL or None (this check never records).
     """
     policy = model_policy()
     verdict = personal_data_verdict(policy, body)
@@ -200,10 +213,10 @@ def authorized_model(request, body, *, record_hold=False):
             request.auth, body["project_id"], body["model_id"], personal_data=verdict
         )
     except ModelAccessDenied as error:
-        if record_hold and error.held is not None:
+        if error.held is not None and records_hold(record_hold, verdict):
             held_request(error.held, verdict)
         raise
-    if record_hold and "held_class" in result:
+    if "held_class" in result and records_hold(record_hold, verdict):
         held_request({**result, "allowed": True}, verdict)
     return result, verdict
 
@@ -225,10 +238,10 @@ def authorize(request, *, selected=False):
     customer-run mode it writes the "Held-back requests" record when detection
     holds the request, and never a "Model answers" record. The `/selected`
     variant is the last check before the model, run again for each backend
-    attempt: in customer-run mode it writes the "Model answers" record and
-    never a held-back one. A managed gateway records on its installed checks
-    instead, so `/selected` refuses there and the plain check records no hold;
-    one request is never recorded by both.
+    attempt: in customer-run mode it writes the "Model answers" record, and a
+    held-back record only when detection was down, too slow or failed there.
+    A managed gateway records on its installed checks instead, so `/selected`
+    refuses there and the plain check records no hold.
     """
     try:
         body = callback_metadata(request)
@@ -241,7 +254,9 @@ def authorize(request, *, selected=False):
             )
         managed = os.environ.get("GATEWAY_MODE", "managed") == "managed"
         result, _ = authorized_model(
-            request, body, record_hold=not selected and not managed
+            request,
+            body,
+            record_hold=None if managed else (FINAL if selected else ENTRY),
         )
         DjangoSharedKeyAvailability(
             MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")
@@ -274,7 +289,9 @@ def authorize_installed(request, *, selected=False):
             settings.RUNTIME_GUARD_MANIFEST_FILE,
             os.environ.get("PROVIDER_KEY_DIR", ""),
         ).require_installed(body["model_id"], body.get("definition_fingerprint"))
-        result, _ = authorized_model(request, body, record_hold=not selected)
+        result, _ = authorized_model(
+            request, body, record_hold=FINAL if selected else ENTRY
+        )
         if not selected and enrollment["key_choice"] == "personal":
             # Missing keys must fail before native backend selection, where a
             # failed token exchange would change the enrolled backend's health.

@@ -73,12 +73,15 @@ request sent is recorded once:
   On a managed install the shared final check is refused, so one request is
   never recorded twice.
 
-**Held-back requests** are recorded once per request that personal-data
+**Held-back requests** are recorded for every request that personal-data
 detection holds back, at the gateway's entry check: the managed gateway's
 installed entry check, or `/internal/runtime/authorize` at a customer-run
-gateway's route. Each record gives a reference, the time, the developer, the
-project, the class the request was handled as, why it was held, and the model
-it was allowed to or refused for. It never contains the prompt or what
+gateway's route. The final model check also records a hold when detection was
+down, too slow or failed there, so during a detection outage one request can
+have more than one record; a held request is never left unrecorded. Each
+record gives a reference, the time, the developer, the project, the class the
+request was handled as, why it was held, and the model it was approved for or
+refused for. It never contains the prompt or what
 detection found. If the record cannot be written, a warning is logged and the
 hold still applies. See the
 [held-back request cases](../../tests/integration/held-request-record-cases.md).
