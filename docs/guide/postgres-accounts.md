@@ -137,16 +137,17 @@ budget and revokes old sessions. Never leave different configured passwords on
 replicas that may restart. In the chart, follow
 [rotate the first-admin password](#rotate-the-first-admin-password).
 
-Back up the complete database and retain the matching signing secret separately.
-Restore into a fresh database and point all replicas at it. Integration cases
-prove identity, sessions, settings, approvals and Audit survive this operation.
-The database backup does not include provider-key files, gateway registrations,
-mounted credentials or certificates. Recover those separately before admitting
-model calls. A restore also returns accounts, sessions and policy to the backup's
-state; review later account revocations and approval changes before reopening
-access. The database fixture does not prove a complete deployment recovery.
-Production backup scheduling, retention, database availability, volume semantics
-and review-preview cutover remain release work.
+To back up and restore this database, follow
+[Back up and restore](backup-and-restore.md). Back up the database with
+`pg_dump` as the migration role, together with the provider-key folder and the
+gateway's database, and keep the signing secret in your secret store. Restore
+into a fresh database, point all replicas at it and run
+`python /app/manage.py verify_restore` before reopening access. The database
+backup does not include provider-key files, gateway registrations, mounted
+credentials or certificates. A restore also returns accounts, sessions and
+policy to the backup's state, including access withdrawn since; the guide says
+what to recheck. Backup scheduling, retention and database availability belong
+to your database operator.
 
 ## Install the chart against an operated database
 
