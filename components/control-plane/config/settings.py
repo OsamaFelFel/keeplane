@@ -199,6 +199,28 @@ if os.environ.get("KEEPLANE_DATABASE_READ_ONLY") == "1":
     else:
         database["OPTIONS"]["options"] = "-c default_transaction_read_only=on"
 
+# ADR 027, Kubernetes: the enroller's one write, its own gateway copy's
+# guard-status row, goes through a second connection with a separate role
+# (see model_registry.guard_status). Its transactions are read-only by default
+# too; the write opens an explicit READ WRITE transaction.
+if os.environ.get("KEEPLANE_GUARD_STATUS_DATABASE_USER"):
+    if DATABASES["default"]["ENGINE"] != "common.postgresql":
+        raise RuntimeError("The guard status connection needs PostgreSQL")
+    status_password = os.environ["KEEPLANE_GUARD_STATUS_DATABASE_PASSWORD_FILE"]
+    DATABASES["guard_status"] = {
+        **DATABASES["default"],
+        "USER": os.environ["KEEPLANE_GUARD_STATUS_DATABASE_USER"],
+        "PASSWORD": Path(status_password).read_text().strip(),
+        "PASSWORD_FILE": status_password,
+        "OPTIONS": {
+            **DATABASES["default"]["OPTIONS"],
+            "options": "-c default_transaction_read_only=on",
+        },
+    }
+# ADR 027, Kubernetes: the app admits a protected check only when the copy
+# that sent it has a confirmed guard-status row listing that model.
+GUARD_STATUS_CHECK = os.environ.get("KEEPLANE_GUARD_STATUS_CHECK", "0") == "1"
+
 ADMIN_UI_DIR = Path(os.environ.get("KEEPLANE_UI_DIR", "/ui"))
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"

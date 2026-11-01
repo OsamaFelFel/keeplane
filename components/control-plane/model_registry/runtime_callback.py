@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
 from accounts.cli_credentials import RuntimeIdentity
-from common.api import IDENTITY, MODEL_GATEWAY
+from common.api import IDENTITY, MODEL_GATEWAY, MODEL_GATEWAY_COPIES
 from common.errors import StorageUnavailable
 from common.middleware import CHECK_LIMIT
 from django.conf import settings
@@ -29,8 +29,9 @@ from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .developer_keys import DeveloperKeyMissing
+from .guard_status import installed_gate, per_copy_check, valid_copy_name
 from .held_request_records import FINAL_CHECK_REASONS, record_held_request
-from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
+from .installed_runtime import unique_pairs
 from .model_answer_records import record_sent_request
 from .models import ModelApproval, ProviderKeyChoice
 from .personal_dispatch import DjangoPersonalDispatch
@@ -93,7 +94,8 @@ class OperatorValidationAuthentication(BaseAuthentication):
         return SimpleNamespace(is_authenticated=True), None
 
 
-def callback_metadata(request, *, selected=False, with_project=True):
+def callback_metadata(request, *, selected=False, with_project=True, copy=False):
+    """The check's metadata; ``copy`` requires the sending gateway copy's name."""
     expected = gateway_key()
     supplied = request.headers.get("X-Keeplane-Gateway-Credential", "")
     if not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", supplied) or not hmac.compare_digest(
@@ -125,6 +127,8 @@ def callback_metadata(request, *, selected=False, with_project=True):
         fields.add("project_id")
     if selected:
         fields.add("definition_fingerprint")
+    if copy:
+        fields.add("gateway_copy")
     if (
         not isinstance(body, dict)
         or set(body) != fields
@@ -144,6 +148,7 @@ def callback_metadata(request, *, selected=False, with_project=True):
                 or not re.fullmatch(r"[a-f0-9]{64}", body["definition_fingerprint"])
             )
         )
+        or (copy and not valid_copy_name(body["gateway_copy"]))
     ):
         message = (
             "Send only a project ID and model ID"
@@ -279,16 +284,21 @@ def authorize(request, *, selected=False):
 def authorize_installed(request, *, selected=False):
     """Fixed operator enrollment only; this does not install a public listener."""
     try:
-        body = callback_metadata(request, selected=selected)
+        body = callback_metadata(request, selected=selected, copy=per_copy_check())
         if isinstance(body, Response):
             return body
         if os.environ.get("GATEWAY_MODE", "managed") != "managed":
             raise ModelPolicyUnavailable("Managed runtime installation is required")
-        enrollment = DjangoInstalledRuntimeGate(
+        # In Kubernetes (ADR 027) the sending copy's own confirmed guard-status
+        # row and applied state; otherwise the private declaration file.
+        enrollment = installed_gate(
+            body,
             MODEL_GATEWAY,
             settings.RUNTIME_GUARD_MANIFEST_FILE,
             os.environ.get("PROVIDER_KEY_DIR", ""),
+            MODEL_GATEWAY_COPIES,
         ).require_installed(body["model_id"], body.get("definition_fingerprint"))
+        body.pop("gateway_copy", None)
         result, _ = authorized_model(
             request, body, record_hold=FINAL if selected else ENTRY
         )

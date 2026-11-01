@@ -391,6 +391,11 @@ so the gateway Service and the gateway NetworkPolicy cover them unchanged. A
 copy that is not ready has no address yet; until it is ready, changes that add
 or widen access are not confirmed.
 
+Each copy's Pod name is also its name in the gateway guard-status table, which
+the private model enroller for that copy will write (the chart doesn't run the
+enroller container yet). Create its database roles as in
+[the enroller's database roles](guard-status-roles.md).
+
 **Existing mode.** If the customer-run gateway serves through several copies,
 list each copy's own management origin in `gateway.copyUrls`:
 

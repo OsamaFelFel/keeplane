@@ -94,3 +94,41 @@ class PersonaRule(models.Model):
                 name="persona_rule_persona_valid",
             )
         ]
+
+
+class GatewayGuardStatus(models.Model):
+    """One managed gateway copy's confirmed guard declaration (ADR 027).
+
+    In Kubernetes the app cannot read a copy's Pod-local guard files, so each
+    copy's model enroller records here what it confirmed by readback. The copy
+    name is its StatefulSet Pod name. Only that copy's enroller may write its
+    row (PostgreSQL row-level security, set up by
+    ``manage.py configure_guard_status_access``); the app only reads it.
+    ``declaration`` is null, and ``confirmed`` false, while nothing is
+    confirmed on that copy.
+    """
+
+    copy_name = models.CharField(max_length=63, primary_key=True)
+    confirmed = models.BooleanField(default=False)
+    declaration = models.JSONField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        confirmed=True,
+                        declaration__isnull=False,
+                        confirmed_at__isnull=False,
+                    )
+                    | models.Q(
+                        confirmed=False,
+                        declaration__isnull=True,
+                        confirmed_at__isnull=True,
+                    )
+                ),
+                name="guard_status_confirmed_complete",
+            )
+        ]

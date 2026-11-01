@@ -357,7 +357,7 @@ def run_scenario(app, databases, root):
     databases.create("older")
     app.migrate("older", older_keys)
     older = app.probe("populate", "older", older_keys)
-    app.migrate("older", older_keys, "model_registry", "0007")
+    app.migrate("older", older_keys, "model_registry", "0008")
     databases.backup("older", root / "older.backup")
     restore(root / "older.backup", "older_restored")
     older_restored_keys = copy_keys(older_keys, root / "provider-keys-older-restored")
@@ -477,7 +477,7 @@ def test_br08_restored_approval_fails_closed_when_the_gateway_differs(scenario):
 def test_br09_older_schema_needs_migrate_before_serving(scenario):
     older = scenario["older_report"]
     assert not older["passed"] and "records" not in older
-    assert older["migrations"]["pending"] == ["model_registry.0008_persona_rules"]
+    assert older["migrations"]["pending"] == ["model_registry.0009_gateway_guard_status"]
     assert "migrate" in older["problems"][0]
     migrated = scenario["older_migrated_report"]
     assert migrated["passed"], migrated["problems"]

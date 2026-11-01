@@ -151,6 +151,7 @@ class DjangoRuntimeInstallation:
         gateway_mode="managed",
         callback_host="app:3000",
         read_applied=local_applied,
+        gateway_copy=None,
     ):
         self.gateway, self.directory, self.trusted_file, self.key_directory = (
             gateway,
@@ -163,6 +164,9 @@ class DjangoRuntimeInstallation:
             callback_host,
             read_applied,
         )
+        # Kubernetes (ADR 027): this copy's StatefulSet Pod name, sent with
+        # every protected check so the app reads this copy's guard status.
+        self.gateway_copy = gateway_copy
 
     def _read(self, path):
         status, value = self.gateway.request(path, timeout=5, connection_retries=0)
@@ -287,6 +291,7 @@ class DjangoRuntimeInstallation:
             callback_host=self.callback_host,
             personal_providers=providers,
             send_messages=settings.PERSONAL_DATA_DETECTION_INSTALLED,
+            gateway_copy=self.gateway_copy,
         )
         expected = deepcopy(generated)
         expected["llm"]["models"].extend(deepcopy([row["value"] for row in resources]))

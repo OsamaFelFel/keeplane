@@ -11,7 +11,7 @@ import uuid
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
 from accounts.cli_credentials import RuntimeIdentity
-from common.api import IDENTITY, MODEL_GATEWAY
+from common.api import IDENTITY, MODEL_GATEWAY, MODEL_GATEWAY_COPIES
 from common.errors import StorageUnavailable
 from common.storage import storage_service
 from django.conf import settings
@@ -28,6 +28,7 @@ from rest_framework.response import Response
 
 from . import runtime_views
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
+from .guard_status import confirmed_everywhere, per_copy_check
 from .installed_runtime import DjangoInstalledRuntimeGate
 from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
 from .policy import ModelPolicyUnavailable
@@ -76,6 +77,13 @@ class DjangoModelChoice:
     def _usable(self, owner_id, model_id):
         """Return True only if the current runtime gate would admit this model."""
         try:
+            if self.managed and per_copy_check():
+                enrollment = self._confirmed_on_every_copy(model_id)
+                if enrollment is None:
+                    return False
+                if enrollment["key_choice"] == ProviderKeyChoice.PERSONAL:
+                    return key_problem(owner_id, model_id, enrollment["fingerprint"]) is None
+                return True
             if self.managed:
                 enrollment = DjangoInstalledRuntimeGate(
                     self.gateway, self.manifest_file, self.directory
@@ -89,6 +97,31 @@ class DjangoModelChoice:
             return True
         except (ModelAccessDenied, ModelPolicyUnavailable):
             return False
+
+    @staticmethod
+    def _confirmed_on_every_copy(model_id):
+        """In Kubernetes (ADR 027): the saved setup, when every copy confirmed it.
+
+        A request can reach any copy, so a model is picked only when every
+        listed copy's confirmed guard lists it with the saved fingerprint. The
+        copy that serves the request still checks it in full.
+        """
+        approval = (
+            ModelApproval.objects.filter(pk=model_id)
+            .values("key_choice", "gateway_fingerprint")
+            .first()
+        )
+        if approval is None or not confirmed_everywhere(
+            model_id,
+            approval["gateway_fingerprint"],
+            approval["key_choice"],
+            MODEL_GATEWAY_COPIES,
+        ):
+            return None
+        return {
+            "key_choice": approval["key_choice"],
+            "fingerprint": approval["gateway_fingerprint"],
+        }
 
     def choose(self, session_token, project_id, model_id):
         decision = self.authorization.authorize(session_token, project_id, model_id)
