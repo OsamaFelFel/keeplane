@@ -177,6 +177,21 @@ def test_cm_03_installation_reference_states_the_mode_of_every_mounted_secret():
     assert "mode 0440" in section and "`fsGroup`" in section
 
 
+def dbg(chart, tmp_path, volumes):
+    import traceback
+    path = tmp_path / "dbg.json"
+    path.write_text(json.dumps(gateway_secret_values("managed", volumes)))
+    result = chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane", "-f", str(path))
+    print("\nDBG rc", result.returncode, result.stderr[-1500:])
+    for doc in chart.of_kind(result.stdout, "StatefulSet"):
+        print("DBG name", repr(chart.name_of(doc)))
+        print(doc[-2500:])
+    try:
+        print("DBG", copies_volumes(chart, result.stdout)[1])
+    except Exception:
+        traceback.print_exc()
+
+
 def octal_mode(text):
     """A mode as Helm prints it: 0440 from Keeplane's templates, 288 from toYaml."""
     return int(text, 8) if text.startswith("0") and len(text) > 1 else int(text)
@@ -262,7 +277,10 @@ def copies_volumes(chart, output):
     return copies, found
 
 
-def test_cm_04_gateway_secret_volumes_without_a_mode_get_0440(chart, tmp_path):
+def test_cm_04_gateway_secret_volumes_without_a_mode_get_0440(chart, tmp_path, capsys):
+    with capsys.disabled():
+        dbg(chart, tmp_path, UNSET_VOLUMES)
+
     observed = {}
     result = render_values(chart, tmp_path, "unset",
                            gateway_secret_values("managed", UNSET_VOLUMES))
@@ -298,7 +316,10 @@ def test_cm_04_gateway_secret_volumes_without_a_mode_get_0440(chart, tmp_path):
     print(json.dumps(observed, indent=2))
 
 
-def test_cm_05_gateway_secret_volumes_keep_a_stricter_mode(chart, tmp_path):
+def test_cm_05_gateway_secret_volumes_keep_a_stricter_mode(chart, tmp_path, capsys):
+    with capsys.disabled():
+        dbg(chart, tmp_path, STRICT_VOLUMES)
+
     result = render_values(chart, tmp_path, "strict",
                            gateway_secret_values("managed", STRICT_VOLUMES))
     assert result.returncode == 0, result.stderr
