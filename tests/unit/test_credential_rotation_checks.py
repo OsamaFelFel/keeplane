@@ -80,6 +80,20 @@ def test_cr_u3_never_uses_a_password_the_database_has_not_accepted(tmp_path):
     assert database.attempts == ["wrong"]
 
 
+def test_cr_u3b_unreadable_file_keeps_the_accepted_password(tmp_path):
+    """A process that read its file and then dropped privileges keeps working."""
+    secret = tmp_path / "password"
+    secret.write_text("right")
+    rotating, database = RotatingPassword(secret), Database("right")
+    rotating.connect(database.open, Refused)
+    secret.unlink()
+    assert rotating.connect(database.open, Refused) == "connection"
+    database.password = "changed"
+    with pytest.raises(Refused):
+        rotating.connect(database.open, Refused)
+    assert database.attempts == ["right", "right", "right"]
+
+
 def test_cr_u4_gateway_key_refusal_is_reported_as_unavailable_not_signed_out(caplog):
     caplog.set_level(logging.WARNING)
     with patch.object(web.MODEL_GATEWAY, "request", return_value=(401, {"error": "x"})):

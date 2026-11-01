@@ -17,7 +17,7 @@ holding a Keeplane-added model and a customer's model. CR-01 to CR-03 run on
 SQLite and, in CI, on PostgreSQL. CR-04 to CR-06 need PostgreSQL role
 passwords and run only in CI's PostgreSQL job (or locally with
 `KEEPLANE_TEST_POSTGRES_*`). CR-07 to CR-09 render the chart with Helm and are
-skipped where Helm is missing. CR-U1 to CR-U6 are unit cases.
+skipped where Helm is missing. CR-U1 to CR-U6 (with CR-U3b) are unit cases.
 
 | Case | Given | Expected result |
 | --- | --- | --- |
@@ -33,6 +33,7 @@ skipped where Helm is missing. CR-U1 to CR-U6 are unit cases.
 | CR-U1 Password read per connection | A password file changes after a connection | The next connection uses the new password; nothing else is tried. |
 | CR-U2 Documented order | The file changes, then the role | No connection fails; the database sees one refused try per process; exactly two log lines, neither holding a password. |
 | CR-U3 Unaccepted passwords | A wrong, empty or missing file | A wrong password fails the connection; an empty or missing file fails before any connection is tried. |
+| CR-U3b Unreadable file later | A process connected, then its password file can't be read (it dropped privileges, or the Secret is briefly unmounted) | It keeps using the password the database accepted, and fails normally if the database no longer accepts it. |
 | CR-U4 Refused gateway key | The gateway answers 401 to the admin key | The app answers 503 with the plain message and logs it; other gateway failures pass through unchanged. |
 | CR-U5 Public gateway health | The gateway answers 403 | `/health` answers 503 `{"gateway": "unavailable"}` and says nothing more. |
 | CR-U6 Key check outcomes | Gateway answers 200, 401, 403, an unreadable key file, or unavailable | Reported as accepted, refused, refused, unreadable and unreachable. |

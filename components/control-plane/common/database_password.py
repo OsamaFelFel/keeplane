@@ -57,9 +57,16 @@ class RotatingPassword:
         `open_connection(password)` opens one connection; `refused` is the
         exception class it raises when the database does not let it in.
         """
-        current = read_password(self.path)
         with self._lock:
             accepted, previous_in_use = self._accepted, self._previous_in_use
+        try:
+            current = read_password(self.path)
+        except DatabasePasswordUnavailable:
+            # A process that read the file and then dropped privileges, or a
+            # Secret briefly unmounted: keep the password the database accepted.
+            if accepted is None:
+                raise
+            return open_connection(accepted)
         if accepted is None or accepted == current:
             order = [current]
         elif previous_in_use:
