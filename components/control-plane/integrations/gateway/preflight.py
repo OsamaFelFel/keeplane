@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import ssl
 import sys
 import time
 from urllib.error import HTTPError, URLError
@@ -14,6 +15,18 @@ EXPECTED_VERSION = os.environ.get("EXPECTED_GATEWAY_VERSION", "")
 MODEL = os.environ.get("GATEWAY_PREFLIGHT_MODEL", "")
 RUNTIME_KEY_FILE = os.environ.get("GATEWAY_RUNTIME_KEY_FILE", "")
 ADMIN_KEY_FILE = os.environ.get("GATEWAY_ADMIN_KEY_FILE", "")
+CA_FILE = os.environ.get("KEEPLANE_GATEWAY_CA_FILE", "")
+# fetch() status for a gateway whose TLS certificate is not trusted; the
+# result is then the verification message. It is never retried.
+TLS_REFUSED = -1
+
+
+def tls_context():
+    """System CAs plus the mounted gateway CA, as the app copies use."""
+    context = ssl.create_default_context()
+    if CA_FILE:
+        context.load_verify_locations(cafile=CA_FILE)
+    return context
 
 
 def fetch(path, body=None):
@@ -29,11 +42,21 @@ def fetch(path, body=None):
             return 0, None
         headers["Authorization"] = "Bearer " + key
     request = Request(URL + path, data=data, headers=headers)
+    tls = {}
+    if URL.startswith("https:"):
+        try:
+            tls["context"] = tls_context()
+        except (OSError, ssl.SSLError):
+            return TLS_REFUSED, "the gateway CA file cannot be read"
     try:
-        with urlopen(request, timeout=8) as response:
+        with urlopen(request, timeout=8, **tls) as response:
             return response.status, json.load(response)
     except HTTPError as error:
         return error.code, None
+    except URLError as error:
+        if isinstance(error.reason, ssl.SSLCertVerificationError):
+            return TLS_REFUSED, error.reason.verify_message or "certificate not trusted"
+        return 0, None
     except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
         return 0, None
 
@@ -56,6 +79,8 @@ def check():
         status, runtime = fetch("/api/runtime")
         if status == 200 and isinstance(runtime, dict):
             break
+        if status == TLS_REFUSED:
+            return False, "Gateway TLS certificate is not trusted: " + runtime
         if attempt < 2:
             time.sleep(1)
     else:

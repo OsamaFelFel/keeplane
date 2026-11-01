@@ -8,6 +8,10 @@ During a managed gateway key rotation the keys Secret may also hold the next
 keys (admin-key-next, runtime-key-next) beside the current ones. Each copy's
 answer to them is reported too, so an installer knows every copy accepts the
 next keys before switching Keeplane to them.
+It also reports the certificates Keeplane itself verifies (the database CA,
+the database server's certificate, and with a customer-run HTTPS gateway its
+CA and certificates) with their expiry dates; see
+docs/guide/certificate-operations.md.
 It only reads; it never prints a password, key, key hash or provider key.
 """
 
@@ -138,14 +142,94 @@ def approvals():
     ]
 
 
-def check(primary, copies):
+def certificate_report(gateways, warning_days, now=None):
+    """Certificates Keeplane verifies, and the sentences an operator must read.
+
+    Returns (report, refusals, warnings). A refusal is an expired, not yet
+    valid, unreadable or untrusted certificate; a warning is one that expires
+    within warning_days.
+    """
+    import os
+    from datetime import datetime, timezone
+
+    from common import certificates
+    from integrations.gateway.adapter import GATEWAY_CA_FILE, gateway_tls_context
+
+    now = now or datetime.now(timezone.utc)
+    report, refusals, warnings = {}, [], []
+
+    def add(name, section, label):
+        report[name] = section
+        found, soon = certificates.problems(section, label)
+        refusals.extend(found)
+        warnings.extend(soon)
+
+    settings = connection.settings_dict
+    options = settings.get("OPTIONS") or {}
+    if connection.vendor == "postgresql" and options.get("sslrootcert"):
+        add("database_ca", certificates.ca_file(options["sslrootcert"], now, warning_days),
+            "Database CA")
+    if (connection.vendor == "postgresql" and options.get("sslrootcert")
+            and str(options.get("sslmode", "")).startswith("verify")):
+        context = None
+        try:
+            context = ssl_context_for_database(options)
+        except (OSError, ValueError):
+            add("database_server", {"address": settings.get("HOST"), "trusted": False,
+                                    "problem": "the database CA file cannot be loaded"},
+                "Database server")
+        if context is not None:
+            add("database_server", certificates.server_certificate(
+                settings["HOST"], int(settings.get("PORT") or 5432), context, now,
+                warning_days, postgres=True), "Database server")
+    if os.environ.get(GATEWAY_CA_FILE):
+        add("gateway_ca", certificates.ca_file(os.environ[GATEWAY_CA_FILE], now, warning_days),
+            "Gateway CA")
+    rows = []
+    for gateway in gateways:
+        address = certificates.https_address(gateway.base_url)
+        if address is None:
+            continue
+        try:
+            context = gateway_tls_context()
+        except (OSError, ValueError):
+            row = {"address": "%s:%s" % address, "trusted": False,
+                   "problem": "the gateway CA file cannot be loaded"}
+        else:
+            row = certificates.server_certificate(*address, context, now, warning_days)
+        found, soon = certificates.problems(row, "Gateway " + row["address"])
+        refusals.extend(found)
+        warnings.extend(soon)
+        rows.append(row)
+    if rows:
+        report["gateway_servers"] = rows
+    return report, refusals, warnings
+
+
+def ssl_context_for_database(options):
+    """The trust libpq applies: only the configured CA file; the name for verify-full."""
+    import ssl
+
+    context = ssl.create_default_context(cafile=options["sslrootcert"])
+    context.check_hostname = options.get("sslmode") == "verify-full"
+    return context
+
+
+def check(primary, copies, warning_days=None):
     """Return the report and whether every credential was accepted."""
+    from common.certificates import WARNING_DAYS
+
     gateways = [primary, *(copy for copy in copies if copy.base_url != primary.base_url)]
+    certificates, refusals, warnings = certificate_report(
+        gateways, WARNING_DAYS if warning_days is None else warning_days)
     report = {
         "database": database_status(),
         "gateway": gateway_status(gateways),
         "gateway_models": gateway_models(primary),
         "approvals": approvals(),
+        "certificates": certificates,
+        "certificate_problems": refusals,
+        "certificate_warnings": warnings,
     }
     passed = (
         report["database"] == "connected"
@@ -157,5 +241,6 @@ def check(primary, copies):
         )
         and report["gateway_models"] is not None
         and report["approvals"] is not None
+        and not refusals
     )
     return report, passed

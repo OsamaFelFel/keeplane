@@ -1,3 +1,4 @@
+{{- include "keeplane.gatewayCa.check" . }}
 {{- if and .Values.app.localTrial.enabled (not .Values.gateway.keysSecret) }}
 {{- fail "app.localTrial requires gateway.keysSecret" }}
 {{- end }}
@@ -116,6 +117,7 @@ spec:
               value: {{ if eq .Values.gateway.mode "managed" }}{{ if not .Values.gateway.install }}{{ fail "gateway.install must be true in managed mode" }}{{ end }}{{ printf "http://%s:4000" .Release.Name | quote }}{{ else if eq .Values.gateway.mode "existing" }}{{ if .Values.gateway.install }}{{ fail "gateway.install must be false in existing mode" }}{{ end }}{{ required "gateway.url is required in existing mode" .Values.gateway.url | quote }}{{ else }}{{ fail "gateway.mode must be managed or existing" }}{{ end }}
             - name: GATEWAY_MODE
               value: {{ .Values.gateway.mode | quote }}
+            {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.env" . | trim | nindent 12 }}{{- end }}
             {{- if eq .Values.gateway.mode "managed" }}
             - name: GATEWAY_COPY_URLS
               value: {{ include "keeplane.gatewayCopyUrls" . | quote }}
@@ -174,8 +176,9 @@ spec:
               value: /gateway-config/config.yaml
             {{- end }}
             {{- end }}
-          {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled }}
+          {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled .Values.gateway.caSecret }}
           volumeMounts:
+            {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.mount" . | trim | nindent 12 }}{{- end }}
             {{- if .Values.gateway.keysSecret }}
             - name: gateway-keys
               mountPath: /run/gateway-keys
@@ -228,8 +231,9 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled }}
+      {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled .Values.gateway.caSecret }}
       volumes:
+        {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.volume" . | trim | nindent 8 }}{{- end }}
         {{- if .Values.app.postgres.enabled }}
         {{- include "keeplane.postgres.ca" . | nindent 8 }}
         - name: database-credentials

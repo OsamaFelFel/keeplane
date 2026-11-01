@@ -17,6 +17,7 @@
 | Give an installer only the permissions a Kubernetes install needs in one namespace | [Kubernetes namespace permissions](guide/kubernetes-namespace-permissions.md) |
 | Configure PostgreSQL, credentials and recovery | [PostgreSQL](guide/postgres-accounts.md), [gateway database credentials](guide/gateway-database-secret.md) |
 | Back up and restore Keeplane's data | [Back up and restore](guide/backup-and-restore.md) |
+| See when certificates expire and renew them without a restart | [Check and renew certificates](guide/certificate-operations.md) |
 | Preview an existing Claude, Codex or Qwen project setup | [CLI migration preview](guide/cli-migration-preview.md) |
 | Run tests and retain their results | [Testing](guide/regression-local.md) |
 | Read the experimental allowed-model catalog | [Runtime catalog](guide/runtime-catalog.md) |

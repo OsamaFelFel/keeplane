@@ -60,6 +60,7 @@
         "install": {"type": "boolean"},
         "url": {"type": "string"},
         "keysSecret": {"type": "string"},
+        "caSecret": {"type": "string"},
         "copies": {"type": "integer", "minimum": 1, "maximum": 32},
         "copyUrls": {
           "type": "array",
@@ -80,7 +81,7 @@
         },
         {
           "if": {"properties": {"mode": {"const": "managed"}}},
-          "then": {"properties": {"install": {"const": true}, "copyUrls": {"maxItems": 0}}}
+          "then": {"properties": {"install": {"const": true}, "copyUrls": {"maxItems": 0}, "caSecret": {"maxLength": 0}}}
         }
       ]
     },
