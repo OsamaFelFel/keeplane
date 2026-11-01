@@ -26,7 +26,7 @@ flowchart LR
 
 | Part | Docker preview | Kubernetes, SQLite trial | Kubernetes, PostgreSQL |
 | --- | --- | --- | --- |
-| App database | `/state/keeplane.sqlite3` in the `account-data` volume | `/state/keeplane.sqlite3` on the app's state volume | The database named in `app.postgres.database` |
+| App database | `/state/database/keeplane.sqlite3` in the `account-data` volume | `/state/keeplane.sqlite3` on the app's state volume | The database named in `app.postgres.database` |
 | Provider-key folder | `/provider-keys` in the `provider-keys` volume | `/provider-keys` on the provider-key claim | `/provider-keys` on `app.postgres.providerKeysClaim` |
 | Gateway database | `/data/agentgateway.db` in the `gateway-data` volume | The managed gateway's PostgreSQL | The managed gateway's PostgreSQL. A customer-run gateway is backed up by its owner |
 | Signing secret | `/state/django-secret-key` (in the app database's volume) | `/state/django-secret-key` | `signing-secret` in `app.postgres.identitySecret` |
@@ -35,6 +35,10 @@ flowchart LR
 In the Docker preview, the `account-data` volume is the Docker volume
 `keeplane-accounts-trial_model-approvals`, and the others are
 `keeplane-local_provider-keys` and `keeplane-local_gateway-data`. The app
+database has its own `database` folder in that volume, so the guarded preview's
+model enroller can read it without the rest of the volume. Earlier previews kept
+it at `/state/keeplane.sqlite3`; the preview moves it into the folder when it
+starts. The app
 container runs as UID 65532 and the gateway container as UID 65532 too: the
 preview's `volume-init` step gives the gateway volume to that user before the
 gateway starts. In the Kubernetes trial, the app's `/state` and
@@ -156,7 +160,7 @@ corrupt.
 
 ```sh
 # Docker preview
-docker compose exec -T app python -c "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" /state/keeplane.sqlite3 /state/backup.sqlite3
+docker compose exec -T app python -c "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" /state/database/keeplane.sqlite3 /state/backup.sqlite3
 docker compose cp app:/state/backup.sqlite3 keeplane-backup/keeplane-app.sqlite3
 docker compose exec -T app rm /state/backup.sqlite3
 ```
@@ -252,7 +256,7 @@ checked the restore, so you can go back to it.
    ```sh
    # Docker preview
    docker compose exec -T app python -c "import shutil,sys; shutil.copyfileobj(sys.stdin.buffer, open(sys.argv[1], 'xb'))" /state/incoming.sqlite3 < keeplane-backup/keeplane-app.sqlite3
-   docker compose exec -T app python -c "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" /state/incoming.sqlite3 /state/keeplane.sqlite3
+   docker compose exec -T app python -c "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" /state/incoming.sqlite3 /state/database/keeplane.sqlite3
    docker compose exec -T app rm /state/incoming.sqlite3
    ```
 

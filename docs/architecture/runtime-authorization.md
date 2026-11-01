@@ -237,7 +237,10 @@ share one model store.
 namespace. It has no listener and takes nothing from the app. Its database
 connection is read-only (`KEEPLANE_DATABASE_READ_ONLY=1` opens SQLite with
 `mode=ro` and makes every PostgreSQL transaction read-only; in PostgreSQL its
-role must also be read-only). Every 2 seconds it:
+role must also be read-only). In the Docker preview it mounts only the app
+database's own folder of the account volume (`/state/database`, read-only, with
+the journal SQLite keeps beside the file), not the signing secret or the rest of
+`/state`; the preview has no PostgreSQL mode. Every 2 seconds it:
 
 1. works out the models to enroll: every saved approval whose fingerprint
    matches the gateway's current definition and passes the installer's checks.

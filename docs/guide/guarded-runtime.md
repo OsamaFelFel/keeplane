@@ -49,7 +49,12 @@ in Models and routing, without restarting the gateway or the app:
 
 The enroller has no port, reads models through a read-only database connection
 and is the only service that writes the private installation volume after
-enrollment; the app's copy of that volume stays read-only. Check it with
+enrollment; the app's copy of that volume stays read-only. Of the app's account
+volume it mounts only the `database` folder, read-only, so it can't read the
+signing secret or anything else kept there. (Earlier previews kept the database
+at `/state/keeplane.sqlite3`; the preview moves it into that folder when it
+starts. If it finds a database in both places, or one in the middle of a change,
+it stops and `docker compose logs account-volume-init` says what to do.) Check it with
 `docker compose -f compose.yaml -f deploy/local/runtime.yaml logs model-enroller`.
 If it reports that enrollment did not complete, protected access stays refused
 and it tries again every 2 seconds. To stop automatic changes, stop the
