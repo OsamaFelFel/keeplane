@@ -24,6 +24,9 @@ export function UsersPage() {
   const [changing, setChanging] = useState<User | null>(null)
   const noteRequested = useRef(false)
   const createTrigger = useRef<HTMLButtonElement>(null)
+  const tableFrame = useRef<HTMLDivElement>(null)
+  // After a role change the table reloads, so focus goes back to the row's Change role once it is shown again.
+  const roleFocus = useRef<string | null>(null)
 
   useEffect(() => {
     const nextSearch = searchInput.trim()
@@ -43,6 +46,12 @@ export function UsersPage() {
     return () => { cancelled = true }
   }, [page, search, refresh])
   useEffect(() => {
+    if (busy || !roleFocus.current) return
+    const id = roleFocus.current
+    Array.from(tableFrame.current?.querySelectorAll<HTMLButtonElement>('[data-role-for]') ?? []).find(button => button.dataset.roleFor === id)?.focus()
+    roleFocus.current = null
+  }, [busy, users])
+  useEffect(() => {
     if (noteRequested.current) return
     noteRequested.current = true
     action<{ show: boolean }>('/api/edition-note/consume', 'POST', {}).then(result => setEditionNote(result.show)).catch(() => {})
@@ -53,7 +62,7 @@ export function UsersPage() {
     { accessorKey: 'role', header: 'Role', cell: ({ row }) => row.original.role === 'admin' ? 'Admin' : 'Developer' },
     { accessorKey: 'sign_in', header: 'Signs in with', cell: ({ row }) => row.original.sign_in === 'break-glass' ? 'Break-glass, managed at infrastructure level' : row.original.sign_in === 'oidc' ? 'Single sign-on' : 'Username and password' },
     { id: 'actions', header: () => <span className="sr-only">Actions</span>, cell: ({ row }) => row.original.managed ? null :
-      <Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" onClick={() => setChanging(row.original)}>Change role</Button> },
+      <Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" data-role-for={row.original.id} onClick={() => setChanging(row.original)}>Change role</Button> },
   ], [])
   // oxlint-disable-next-line react/incompatible-library -- React Compiler is not enabled for this application.
   const table = useReactTable({ data: users, columns, getCoreRowModel: getCoreRowModel() })
@@ -64,7 +73,7 @@ export function UsersPage() {
     setNotice(`Created ${user.username}.`); setSearchInput(''); setSearch(''); setPage(1); setRefresh(value => value + 1)
   }
   function changed(user: User) {
-    setNotice(`Changed ${user.username}'s role to ${user.role}.`); setRefresh(value => value + 1)
+    setNotice(`Changed ${user.username}'s role to ${user.role}.`); roleFocus.current = user.id; setRefresh(value => value + 1)
   }
 
   return <>
@@ -76,7 +85,7 @@ export function UsersPage() {
     {notice && <p className="mt-6 text-[15px]" role="status">{notice}</p>}
     {error && <p className="mt-6 text-[15px]" role="alert">Users could not load. {error}</p>}
     <div className="mt-6 max-w-[400px]"><Label htmlFor="search-users" className="keeplane-field-label">Search users</Label><Input id="search-users" type="search" value={searchInput} onChange={event => setSearchInput(event.target.value)} /></div>
-    <div className="keeplane-table-frame mt-6" tabIndex={0} role="region" aria-label="Users table">
+    <div ref={tableFrame} className="keeplane-table-frame mt-6" tabIndex={0} role="region" aria-label="Users table">
       <Table><TableHeader>{table.getHeaderGroups().map(group => <TableRow key={group.id}>{group.headers.map(header => <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}</TableRow>)}</TableHeader>
         <TableBody>{busy ? <TableRow><TableCell colSpan={4}>Loading users…</TableCell></TableRow> : users.length === 0 ? <TableRow><TableCell colSpan={4}>No users found</TableCell></TableRow> :
           table.getRowModel().rows.map(row => <TableRow key={row.id}>{row.getVisibleCells().map(cell => <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}</TableRow>)}</TableBody>

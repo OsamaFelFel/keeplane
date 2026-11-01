@@ -142,6 +142,7 @@ test('BR-04: a timed-out create can be checked and retried with one operation ID
 test('BR-05: Change role uses the account API and updates Users', async ({ page }) => {
   const listedUsers = users.map(user => ({ ...user }))
   await mockAdmin(page, listedUsers)
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { sso_connected: false, csrf_token: 'masked' } }))
   await page.route('**/api/users/developer-1/role', async route => {
     const body = route.request().postDataJSON()
     expect(body.role).toBe('admin')
@@ -150,10 +151,16 @@ test('BR-05: Change role uses the account API and updates Users', async ({ page 
   })
   await page.goto('/app/')
   await page.getByRole('row', { name: /developer-example/ }).getByRole('button', { name: 'Change role' }).click()
-  await page.getByRole('radio', { name: 'Admin' }).check()
-  await page.getByRole('button', { name: 'Save role' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Change role' })
+  // As in Users-role.dc.html: the legend names the user and the button reads Change role.
+  await expect(dialog.getByRole('group', { name: 'Role for developer-example' })).toBeVisible()
+  await dialog.getByRole('radio', { name: 'Admin' }).check()
+  await dialog.getByRole('button', { name: 'Change role' }).click()
   await expect(page.getByRole('status')).toContainText("Changed developer-example's role to admin.")
-  await expect(page.getByRole('row', { name: /developer-example/ })).toContainText('Admin')
+  const row = page.getByRole('row', { name: /developer-example/ })
+  await expect(row).toContainText('Admin')
+  // Done: focus goes back to the button that opened the dialog.
+  await expect(row.getByRole('button', { name: 'Change role' })).toBeFocused()
 })
 
 test('BR-12: a live admin creates a user with a role, changes the role, and the developer sees the CLI page', async ({ page, request }) => {
@@ -183,8 +190,9 @@ test('BR-12: a live admin creates a user with a role, changes the role, and the 
     await expect(row).toContainText('Username and password')
 
     await row.getByRole('button', { name: 'Change role' }).click()
-    await page.getByRole('radio', { name: 'Developer' }).check()
-    await page.getByRole('button', { name: 'Save role' }).click()
+    const roleDialog = page.getByRole('dialog', { name: 'Change role' })
+    await roleDialog.getByRole('radio', { name: 'Developer' }).check()
+    await roleDialog.getByRole('button', { name: 'Change role' }).click()
     await expect(page.getByRole('status')).toContainText(`Changed ${username}'s role to developer.`)
     await expect(row).toContainText('Developer')
 
@@ -430,15 +438,15 @@ test("BR-17: Change role's failure messages match the design system on desktop a
     await page.setViewportSize({ width, height: 800 })
     for (const [answer, title, second] of [
       [404, "developer-example's role wasn't changed", 'Account not found. Nothing was saved. Check the details and try again.'],
-      [503, "It isn't clear whether developer-example's role was changed", "Keeplane couldn't confirm the result. Save the role again to make sure; it won't be changed twice."],
-      [0, "It isn't clear whether developer-example's role was changed", "Keeplane didn't answer in time. Save the role again to make sure; it won't be changed twice."],
+      [503, "It isn't clear whether developer-example's role was changed", "Keeplane couldn't confirm the result. Check to find out."],
+      [0, "It isn't clear whether developer-example's role was changed", "Keeplane didn't answer in time. Check to find out."],
     ] as const) {
       status = answer
       await page.goto('/app/')
       await page.getByRole('row', { name: /developer-example/ }).getByRole('button', { name: 'Change role' }).click()
       const dialog = page.getByRole('dialog', { name: 'Change role' })
       await dialog.getByRole('radio', { name: 'Admin' }).check()
-      await dialog.getByRole('button', { name: 'Save role' }).click()
+      await dialog.getByRole('button', { name: 'Change role' }).click()
       await page.evaluate(() => document.fonts.ready)
       await expectFailureMessage(page, title)
       await expect(dialog.getByText(second, { exact: true })).toBeVisible()
@@ -446,8 +454,55 @@ test("BR-17: Change role's failure messages match the design system on desktop a
       const alert = (await dialog.getByRole('alert').boundingBox())!
       const box = (await dialog.boundingBox())!
       expect(alert.x + alert.width).toBeLessThanOrEqual(box.x + box.width)
-      expect(alert.y + alert.height).toBeLessThanOrEqual((await dialog.getByRole('button', { name: 'Save role' }).boundingBox())!.y)
+      const action = dialog.getByRole('button', { name: answer === 404 ? 'Change role' : 'Check' })
+      expect(alert.y + alert.height).toBeLessThanOrEqual((await action.boundingBox())!.y)
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     }
+  }
+})
+
+test('BR-18: Change role that gets no answer for 10 seconds offers Cancel and Check, and Check reads the role back', async ({ page }) => {
+  const listedUsers = users.map(user => ({ ...user }))
+  await mockAdmin(page, listedUsers)
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { sso_connected: false, csrf_token: 'masked' } }))
+  // The change is made, but its answer never arrives within the time limit.
+  const attempts: string[] = []
+  await page.route('**/api/users/developer-1/role', async route => {
+    attempts.push(route.request().postDataJSON().role)
+    listedUsers[2].role = 'admin'
+    await new Promise(resolve => setTimeout(resolve, 11_000))
+    await route.fulfill({ json: listedUsers[2] }).catch(() => {})
+  })
+  test.setTimeout(90_000)
+  for (const width of [1280, 320]) {
+    listedUsers[2].role = 'developer'
+    attempts.length = 0
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/app/')
+    await page.getByRole('row', { name: /developer-example/ }).getByRole('button', { name: 'Change role' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Change role' })
+    await dialog.getByRole('radio', { name: 'Admin' }).check()
+    await dialog.getByRole('button', { name: 'Change role' }).click()
+    // Saving: a spinner, a status only screen readers hear, everything off, and Escape doesn't close.
+    await expect(dialog.getByRole('status')).toHaveText('Saving')
+    await expect(dialog.getByRole('button', { name: 'Change role' })).toBeDisabled()
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    await expect(dialog.getByRole('radio', { name: 'Developer' })).toBeDisabled()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeVisible()
+    // No answer, as in Users-create-no-answer.dc.html.
+    await expect(dialog.getByRole('button', { name: 'Check' })).toBeVisible({ timeout: 15_000 })
+    await page.evaluate(() => document.fonts.ready)
+    await expectFailureMessage(page, "It isn't clear whether developer-example's role was changed")
+    await expect(dialog.getByText("Keeplane didn't answer in time. Check to find out.", { exact: true })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled()
+    await expect(dialog.getByRole('radio', { name: 'Admin' })).toBeDisabled()
+    const alert = (await dialog.getByRole('alert').boundingBox())!
+    expect(alert.y + alert.height).toBeLessThanOrEqual((await dialog.getByRole('button', { name: 'Check' }).boundingBox())!.y)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    await dialog.getByRole('button', { name: 'Check' }).click()
+    await expect(page.getByRole('status')).toContainText("Changed developer-example's role to admin.")
+    await expect(page.getByRole('row', { name: /developer-example/ })).toContainText('Admin')
+    expect(attempts).toEqual(['admin'])
   }
 })
