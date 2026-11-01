@@ -1,5 +1,6 @@
 """Serve the single React application and explicit health endpoints."""
 
+import logging
 import mimetypes
 import os
 
@@ -9,7 +10,22 @@ from django.http import FileResponse, HttpResponseRedirect, JsonResponse
 from django.views.decorators.http import require_GET
 
 from .api import MODEL_GATEWAY, actor, admin
+from .credential_check import KEY_REFUSED
 from .readiness import schema_ready
+
+log = logging.getLogger(__name__)
+
+
+def gateway_runtime():
+    """Read the gateway's runtime API; say plainly when it refuses the admin key."""
+    status, result = MODEL_GATEWAY.request("/api/runtime", timeout=10)
+    if status in (401, 403):
+        # Typically a key rotation half done: the mounted admin key and the
+        # gateway's loaded hash differ. Never pass the gateway's 401 on: the
+        # admin's browser would read it as their own sign-in having ended.
+        log.warning("%s (HTTP %s)", KEY_REFUSED, status)
+        return 503, {"error": KEY_REFUSED}
+    return status, result
 
 
 @require_GET
@@ -76,7 +92,7 @@ def readiness(request):
 
 @require_GET
 def gateway_health(request):
-    status, _ = MODEL_GATEWAY.request("/api/runtime", timeout=10)
+    status, _ = gateway_runtime()
     return JsonResponse(
         {"gateway": "ready" if status == 200 else "unavailable"},
         status=200 if status == 200 else 503,
@@ -88,7 +104,7 @@ def gateway_status(request):
     _, denied = admin(request)
     if denied:
         return JsonResponse(denied.data, status=denied.status_code)
-    status, result = MODEL_GATEWAY.request("/api/runtime", timeout=10)
+    status, result = gateway_runtime()
     return JsonResponse(
         {
             "gateway": {

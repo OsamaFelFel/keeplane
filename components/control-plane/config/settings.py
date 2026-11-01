@@ -146,14 +146,18 @@ if os.environ.get("KEEPLANE_DATABASE_HOST"):
         raise RuntimeError("Configure a persistent Django signing secret")
     DATABASES = {
         "default": {
-            "ENGINE": "django.db.backends.postgresql",
+            # Django's PostgreSQL backend, reading PASSWORD_FILE again for every
+            # connection so a rotated Secret is used without a restart.
+            "ENGINE": "common.postgresql",
             "HOST": os.environ["KEEPLANE_DATABASE_HOST"],
             "PORT": os.environ.get("KEEPLANE_DATABASE_PORT", "5432"),
             "NAME": os.environ["KEEPLANE_DATABASE_NAME"],
             "USER": os.environ["KEEPLANE_DATABASE_USER"],
+            # Read once here too, so a missing file still stops start-up.
             "PASSWORD": Path(os.environ["KEEPLANE_DATABASE_PASSWORD_FILE"])
             .read_text()
             .strip(),
+            "PASSWORD_FILE": os.environ["KEEPLANE_DATABASE_PASSWORD_FILE"],
             "CONN_MAX_AGE": 0,
             "OPTIONS": {
                 "connect_timeout": 5,
