@@ -1,5 +1,6 @@
 """Actual maintained device flow plus Keeplane lifecycle/account boundaries."""
 
+import re
 from datetime import timedelta
 from types import SimpleNamespace
 from urllib.parse import urlencode
@@ -217,13 +218,26 @@ def test_device_consent_retains_csrf_and_fresh_browser_session(device):
     assert not CliCredentialBinding.objects.filter(kind="device").exists()
 
 
+def assert_confirm_rejected(response, code):
+    """A confirm-stage rejection keeps the confirm screen with its failure message."""
+    html = response.content.decode()
+    assert "Allow CLI access?" in html and f"<code>{code}</code>" in html
+    assert re.search(
+        r'<div class="alert" role="alert">.*'
+        r"Check the code shown in your CLI and try again\.</p></div>\s*"
+        r'<div class="actions">',
+        html,
+    )
+    body = html[html.index("<main>") :]
+    assert '<input type="text"' not in body and 'class="field-error"' not in body
+
+
 def test_device_claim_cannot_be_stolen_or_confirmed_by_another_account(device):
     issued = device.start()
     fields = {"user_code": issued.value["user_code"]}
-    assert (
-        device.post({**fields, "stage": "confirm", "action": "accept"}).status_code
-        == 400
-    )
+    unclaimed = device.post({**fields, "stage": "confirm", "action": "accept"})
+    assert unclaimed.status_code == 400
+    assert_confirm_rejected(unclaimed, issued.value["user_code"])
     assert device.post(fields).status_code == 302
     device.flow.native.create_user(
         {
@@ -234,10 +248,9 @@ def test_device_claim_cannot_be_stolen_or_confirmed_by_another_account(device):
     )
     device.flow.sign_in("other-device-user", "synthetic-other-password")
     assert device.post(fields).status_code == 400
-    assert (
-        device.post({**fields, "stage": "confirm", "action": "accept"}).status_code
-        == 400
-    )
+    rejected = device.post({**fields, "stage": "confirm", "action": "accept"})
+    assert rejected.status_code == 400
+    assert_confirm_rejected(rejected, issued.value["user_code"])
     issued.row.refresh_from_db()
     assert (
         issued.row.user_id == device.flow.owner.pk
@@ -329,6 +342,20 @@ def test_device_code_guessing_and_anonymous_initiation_have_separate_budgets(dev
     for _ in range(5):
         assert device.post({"user_code": "INVALID1"}).status_code == 400
     assert device.post({"user_code": "INVALID2"}).status_code == 429
+
+
+def test_device_rejected_code_marks_the_field_and_links_its_error(device):
+    page = device.post({"user_code": "INVALID1"})
+    assert page.status_code == 400
+    html = page.content.decode()
+    field = re.search(r'<input type="text" name="user_code"[^>]*>', html).group(0)
+    assert 'aria-invalid="true"' in field
+    assert 'aria-describedby="id_user_code_error"' in field
+    assert re.search(
+        r'<p class="field-error" id="id_user_code_error">.*'
+        r"Check the code shown in your CLI and try again\.",
+        html,
+    )
 
 
 def test_device_collision_refuses_new_source_and_keeps_original(device):

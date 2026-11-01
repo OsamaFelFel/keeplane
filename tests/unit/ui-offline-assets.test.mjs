@@ -172,7 +172,8 @@ test('OFF-06: every font weight on the CLI sign-in pages has its own bundled Ple
   const html = names.map(name => readFileSync(new URL(name, templates), 'utf8')).join('\n')
   const css = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(([, body]) => body).join('\n')
   assert.ok(css.length > 0, 'The CLI sign-in pages have no stylesheet')
-  const declared = new Set(fontFaces(css).map(face => Number(face.weight)))
+  const faces = fontFaces(css)
+  const declared = new Set(faces.filter(face => face.family === 'IBM Plex Sans').map(face => Number(face.weight)))
   const rules = [...css.replace(/@font-face\s*{[^}]*}/g, '').matchAll(/([^{}]+){([^{}]*)}/g)]
     .map(([, selector, body]) => ({ selectors: selector.split(',').map(part => part.trim()), body }))
   const relative = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer', 'bolder', 'lighter'])
@@ -206,4 +207,19 @@ test('OFF-06: every font weight on the CLI sign-in pages has its own bundled Ple
   assert.ok(declared.has(500), 'The CLI pages declare the medium Plex file for labels and buttons')
   const label = rules.find(rule => rule.selectors.includes('label'))?.body.match(/font-weight:\s*(\d+)/)?.[1]
   assert.equal(label, '500', 'Field labels use the design weight 500')
+
+  // The CLI code is set in IBM Plex Mono regular, the design's code style.
+  assert.deepEqual(faces.map(face => `${face.family} ${face.weight}`).sort(),
+    ['IBM Plex Mono 400', 'IBM Plex Sans 400', 'IBM Plex Sans 500', 'IBM Plex Sans 600'])
+  const mono = faces.filter(face => face.family === 'IBM Plex Mono')
+  assert.deepEqual(mono.flatMap(face => face.src), ['/fonts/IBMPlexMono-Regular.woff2'])
+  const monoRules = rules.filter(rule => /font-family:\s*["']?IBM Plex Mono/.test(rule.body))
+  assert.ok(monoRules.some(rule => rule.selectors.includes('code')), 'CLI code text is set in IBM Plex Mono')
+  for (const rule of monoRules) {
+    const weight = rule.body.match(/(?<![\w-])font-weight:\s*([^;}!]+)/)?.[1]?.trim()
+    assert.ok(!weight || weight === '400', `IBM Plex Mono weight without a bundled file: ${weight}`)
+  }
+  for (const [, tag] of html.matchAll(/<(code|pre|kbd|samp)\b/g)) {
+    assert.ok(monoRules.some(rule => rule.selectors.includes(tag)), `<${tag}> on the CLI pages is not set in IBM Plex Mono`)
+  }
 })
