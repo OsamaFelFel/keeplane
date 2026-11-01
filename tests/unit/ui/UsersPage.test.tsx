@@ -47,3 +47,30 @@ test('UI-USERS-02: search asks the server for matching users from the first page
     expect([last.get('search'), last.get('page'), last.get('page_size')]).toEqual(['dev', '1', '25'])
   })
 })
+
+test("UI-USERS-03: after Change role is done, Users shows the change and focus goes back to that row's Change role", async () => {
+  const listed = users.map(row => ({ ...row }))
+  const request = vi.fn((path: string) => {
+    if (path === '/api/auth-options') return Promise.resolve(response({ csrf_token: 'masked' }))
+    if (path === '/api/edition-note/consume') return Promise.resolve(response({ show: false }))
+    if (path === '/api/users/developer-1/role') {
+      listed[1].role = 'admin'
+      return Promise.resolve(response(listed[1]))
+    }
+    return Promise.resolve(response({ users: listed.map(row => ({ ...row })), page: 1, page_size: 25, total: 2, has_more: false }))
+  })
+  vi.stubGlobal('fetch', request)
+  const user = userEvent.setup()
+  render(<UsersPage />)
+  const row = (await screen.findByText('developer-example')).closest('tr')!
+  await user.click(within(row).getByRole('button', { name: 'Change role' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Change role' })
+  await user.click(within(dialog).getByRole('radio', { name: 'Admin' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Change role' }))
+  expect(await screen.findByText("Changed developer-example's role to admin.")).toBeTruthy()
+  await waitFor(() => {
+    const updated = screen.getByText('developer-example').closest('tr')!
+    expect(within(updated).getByText('Admin')).toBeTruthy()
+    expect(document.activeElement).toBe(within(updated).getByRole('button', { name: 'Change role' }))
+  })
+})

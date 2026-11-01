@@ -56,11 +56,11 @@ Each scenario in Spec 003 and the cases that prove it. LA cases are the
 | ST7 | The break-glass admin in Users | LA-04, ACCT-16, ACCT-17, UI-USERS-01, BR-02 |
 | ST8 | Create a user with a role | LA-06, UI-02, ACCT-04, BR-12 |
 | ST8 | Developer by default | UI-01, BR-02; the API needs an explicit role: LA-07 |
-| ST8 | No answer | UI-03 (10 seconds, Check and Cancel), UI-05 (server errors), UI-06, BR-04 |
+| ST8 | No answer | UI-03 (10 seconds, Check and Cancel), UI-05 (server errors), UI-06, UI-10 (Check gets no answer), BR-04 |
 | ST8 | Check finds the user | UI-03, LA-09, ACCT-18 |
 | ST8 | Check doesn't find the user | UI-04, LA-09, LA-10, BR-04 |
 | ST8 | Sent twice | LA-08, UI-04, ACCT-18, ACCT-19, BR-04 |
 | ST8 | Find a user | LA-11, UI-USERS-02, ACCT-07, BR-07 |
 | ST8 | No self sign-up | LA-03, UI-SIGN-01, ACCT-11, BR-01 |
-| ST28 | Change a role | LA-12, BR-05, BR-12, ACCT-20 |
+| ST28 | Change a role | LA-12, UI-USERS-03, BR-05, BR-12, ACCT-20; Saving, No answer and Check as in the design system's Dialog states (D170): UI-ROLE-02, UI-ROLE-04 to UI-ROLE-09, BR-17, BR-18 |
 | ST28 | The break-glass admin | UI-USERS-01, BR-02, LA-04, ACCT-17 |
