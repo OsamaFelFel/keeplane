@@ -54,7 +54,7 @@ def commands(monkeypatch, tmp_path):
 def test_fresh_process_and_migration_precede_application_and_enrollment(commands):
     f = commands
     assert f.install() == "http://127.0.0.1:5001/v1"
-    assert f.calls[1] == ["stop", "gateway", "app"]
+    assert f.calls[1] == ["stop", "model-enroller", "gateway", "app"]
     assert f.calls[2] == ["run", "--rm", "--no-deps", "runtime-init"]
     assert f.calls[3] == [
         "up",
@@ -70,11 +70,13 @@ def test_fresh_process_and_migration_precede_application_and_enrollment(commands
     assert f.calls[6][-1] == "register_cli_client"
     assert f.calls[7][-2:] == ["register_cli_client", "--device"]
     assert f.calls[8][-1] == "app" and f.wait_calls == 1
-    assert f.calls[-1][-4:] == ["--model", "model-a", "--model", "model-b"]
+    assert f.calls[-2][-4:] == ["--model", "model-a", "--model", "model-b"]
+    assert f.calls[-1][0] == "up" and f.calls[-1][-1] == "model-enroller"
 
 
 @pytest.mark.parametrize(
-    "fault", ["same-process", "init", "migration", "registration", "enrollment"]
+    "fault",
+    ["same-process", "init", "migration", "registration", "enrollment", "enroller"],
 )
 def test_every_setup_failure_stops_gateway_and_hides_private_output(commands, fault):
     f = commands
@@ -84,17 +86,26 @@ def test_every_setup_failure_stops_gateway_and_hides_private_output(commands, fa
         or (fault == "migration" and "migrate" in args)
         or (fault == "registration" and "register_cli_client" in args)
         or (fault == "enrollment" and "install_runtime_guard" in args)
+        or (fault == "enroller" and args[-1:] == ["model-enroller"] and "up" in args)
     )
     with pytest.raises(RuntimeError, match="gateway is stopped") as error:
         f.install()
     assert "private output" not in str(error.value)
-    assert f.calls[-1] == ["stop", "gateway"]
+    assert f.calls[-1] == ["stop", "model-enroller", "gateway"]
     assert all("down" not in args and "--volumes" not in args for args in f.calls)
 
 
 def test_stop_failure_is_reported_as_unconfirmed(commands):
     f = commands
-    f.fail = lambda args: "install_runtime_guard" in args or args == ["stop", "gateway"]
+    f.fail = lambda args: (
+        "install_runtime_guard" in args
+        or args
+        == [
+            "stop",
+            "model-enroller",
+            "gateway",
+        ]
+    )
     with pytest.raises(RuntimeError, match="could not be confirmed"):
         f.install()
 
@@ -110,4 +121,4 @@ def test_timeout_still_stops_only_managed_gateway(commands, monkeypatch):
     monkeypatch.setattr(launcher.subprocess, "run", timeout)
     with pytest.raises(RuntimeError, match="gateway is stopped"):
         commands.install()
-    assert commands.calls[-1] == ["stop", "gateway"]
+    assert commands.calls[-1] == ["stop", "model-enroller", "gateway"]

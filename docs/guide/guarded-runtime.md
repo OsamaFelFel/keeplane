@@ -32,10 +32,35 @@ Fix the reported setup problem, then rerun the same opt-in command. Existing
 accounts, API models and keys remain stored. Do not edit the generated manifest
 to make a failed check pass. Ordinary startup without runtime flags is unchanged.
 
-After changing a model, shared key or gateway configuration, rerun the opt-in
-command so a fresh gateway verifies the new state. Personal key changes apply
-to the next request. Normal provider failures can recover on the next request;
-endpoint eviction or wiring changes still require fresh enrollment.
+After enrollment the launcher starts the private model enroller
+(`model-enroller`). It keeps the protected checks in step with the models saved
+in Models and routing, without restarting the gateway or the app:
+
+- A model you add is enrolled within a few seconds.
+- A developer's own provider key needs no enrollment: a new or replaced one
+  applies to their next request. A shared key is different (see the next
+  point).
+- A model you remove is refused as soon as you remove it.
+- A model you edit (or a shared key you replace) is refused at once. Its new
+  setup is enrolled after about 3 minutes and 16 seconds, once every request
+  that started under the old setup has finished its retries. While a change
+  waits, every protected model can be refused if the gateway's own state moved;
+  the enroller's log says "A model change is waiting".
+
+The enroller has no port, reads models through a read-only database connection
+and is the only service that writes the private installation volume after
+enrollment; the app's copy of that volume stays read-only. Check it with
+`docker compose -f compose.yaml -f deploy/local/runtime.yaml logs model-enroller`.
+If it reports that enrollment did not complete, protected access stays refused
+and it tries again every 2 seconds. To stop automatic changes, stop the
+`model-enroller` service. Access then stays as last enrolled until a model
+changes; after that, protected models are refused until you start it again or
+rerun the launcher.
+
+Changing the gateway configuration itself still needs the opt-in command again
+so a fresh gateway verifies it. Personal key changes apply to the next request.
+Normal provider failures can recover on the next request; endpoint eviction or
+wiring changes still require fresh enrollment.
 After upgrading to the new health signature, rerun the launcher once to enroll
 a fresh gateway. Existing manifests are not accepted automatically.
 
@@ -46,7 +71,8 @@ the retry until you rerun the launcher once after upgrading.
 
 This is an opt-in managed local trial. Virtual/fallback models,
 customer gateways, Kubernetes, replicas and a release image are outside its
-current scope. The installer, isolated CLI journey and host installation/restart
+current scope. The enroller has been checked only against a simulated gateway;
+it has not yet been run against the real gateway image. The installer, isolated CLI journey and host installation/restart
 flow have native acceptance. The host check does not run the full preview
 bootstrap in `up.py`. See the
 [operator contract](../architecture/runtime-authorization.md#managed-operator-contract)

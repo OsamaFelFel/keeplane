@@ -201,7 +201,7 @@ The internal managed installer now publishes only file-owned policy overlays;
 raw API model values and approval fingerprints stay unchanged. It requires a
 fresh gateway with an exact trusted JSON baseline, verifies complete applied
 entry/final/provider wiring, and rechecks every enrollment before enabling the
-manifest. Re-enrollment requires a new gateway process: native request routing
+manifest. Operator re-enrollment starts a new gateway process: native request routing
 and backend policy reads do not share one lifetime snapshot. A failed final
 filesystem publication reports an unconfirmed state and the launcher must stop
 the gateway. The opt-in Compose launcher owns this workflow; its full host execution remains
@@ -218,10 +218,42 @@ Admin model changes now read the changed model back from every serving copy
 listed in `GATEWAY_COPY_URLS` before they are acknowledged; see
 [every gateway copy](model-registration.md#every-gateway-copy). A copy that
 can't confirm leaves the change unapproved (or, for a removal, withdrawn and
-reported), and other models are untouched. The remaining integration must
-re-enroll the installed runtime's per-model bindings from that confirmed state
-without restarting the gateway, give the chart a per-copy address list, and
-cover customer-run gateways that don't share one model store.
+reported), and other models are untouched. In the Docker preview, the private model enroller now re-enrolls from that
+confirmed state without restarting the gateway (see
+[the model enroller](#model-enroller)). The remaining integration must run it
+beside every Kubernetes gateway copy and cover customer-run gateways that don't
+share one model store.
+
+## Model enroller
+
+`manage.py run_model_enroller` runs as its own service in the gateway's network
+namespace. It has no listener and takes nothing from the app. Its database
+connection is read-only (`KEEPLANE_DATABASE_READ_ONLY=1` opens SQLite with
+`mode=ro` and makes every PostgreSQL transaction read-only; in PostgreSQL its
+role must also be read-only). Every 2 seconds it:
+
+1. works out the models to enroll: every saved approval whose fingerprint
+   matches the gateway's current definition and passes the installer's checks.
+   A model that fails them is left out (refused) without blocking the others;
+2. does nothing when the enabled declaration already lists exactly those models
+   and still verifies against the gateway;
+3. holds the change for `HOLD_SECONDS` (196 seconds: three 60-second attempts,
+   two 0.5-second backoffs and 15 seconds' margin) when it would change or
+   remove the guard of a model that is being served, leaving the old guard and
+   declaration in place. A request keeps its backend snapshot through its
+   retries while it reads backend policy afresh, so replacing or removing a
+   guard earlier could pair an old destination with the new guard, or leave it
+   without a final check. The app refuses the changed model throughout, because
+   its old guard's fingerprint no longer matches the saved approval. Adding a
+   model changes no existing guard and is not held. If the record of served
+   models (`served.json`) is unreadable, every change is held once;
+4. otherwise disables the declaration, writes the new guard, reads it back from
+   the applied state, and enables the declaration for exactly those models, as
+   the installer does. With nothing to enroll it restores the trusted base and
+   confirms the protected port has closed.
+
+It shares the installer's private lock, so the two never write at once. A
+failure leaves the declaration disabled and is retried on the next pass.
 
 ## Managed operator contract
 
@@ -232,8 +264,9 @@ again for every decision. A missing, disabled, malformed or changed declaration
 stops the protected request.
 A model or topology change stops access while declared and serving state differ.
 Restoring identical declared and applied state can restore access. A different
-definition or configuration needs operator re-enrollment and guard verification;
-this first installation does not update enrollment automatically.
+definition needs re-enrollment and guard verification, which
+the [model enroller](#model-enroller) does automatically in the Docker preview.
+A gateway configuration change still needs operator re-enrollment.
 
 The declaration has exactly these fields:
 
@@ -292,7 +325,8 @@ compiled entry/final guards, private operator routes, stable model targets and
 provider definitions before enabling. Desired management readback alone is
 insufficient. If replacing the enabled manifest fails, it attempts to disable it;
 if cleanup also fails, the access state is unconfirmed and the launcher stops the
-gateway. Re-enrollment always starts a fresh gateway process.
+gateway. Operator re-enrollment always starts a fresh gateway process; the
+model enroller replaces guards on a running one, holding changes as described above.
 Existing gateways, Kubernetes, replicas and release gateway selection remain
 separate work.
 

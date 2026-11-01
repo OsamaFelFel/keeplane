@@ -53,5 +53,45 @@ services:
       - app-secrets:/run/secrets:ro
       - provider-keys:/provider-keys:ro
 
+  # ADR 027: the only writer of the guard after enrollment. It has no port,
+  # reads approvals from a read-only database connection and shares the
+  # gateway's network namespace to read the loopback-only applied state.
+  model-enroller:
+    profiles: ["runtime"]
+    image: ${KEEPLANE_RUNTIME_APP_IMAGE:-keeplane-preview:docker-local}
+    pull_policy: never
+    network_mode: service:gateway
+    command: ["python", "manage.py", "run_model_enroller"]
+    restart: unless-stopped
+    environment:
+      GATEWAY_URL: http://127.0.0.1:4000
+      GATEWAY_ADMIN_KEY_FILE: /run/secrets/gateway-admin-key
+      GATEWAY_RUNTIME_KEY_FILE: /run/secrets/gateway-runtime-key
+      RUNTIME_AUTHORIZER_KEY_FILE: /installed/callback-key
+      RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
+      GATEWAY_FILE_CONFIG: /installed/gateway.json
+      PROVIDER_KEY_DIR: /provider-keys
+      PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
+      GATEWAY_MODE: managed
+      KEEPLANE_DATABASE_READ_ONLY: "1"
+    volumes:
+      - ./components/control-plane:/app:ro
+      - runtime-installation:/installed
+      - account-data:/state:ro
+      # Only the two gateway keys, not the first admin password.
+      - type: volume
+        source: app-secrets
+        target: /run/secrets/gateway-admin-key
+        read_only: true
+        volume:
+          subpath: gateway-admin-key
+      - type: volume
+        source: app-secrets
+        target: /run/secrets/gateway-runtime-key
+        read_only: true
+        volume:
+          subpath: gateway-runtime-key
+      - provider-keys:/provider-keys:ro
+
 volumes:
   runtime-installation:

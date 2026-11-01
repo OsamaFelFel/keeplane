@@ -203,7 +203,7 @@ def test_owned_host_runtime_launcher_preserves_state_and_stops_on_failure(
         assert failure_steps[-2]["operation"] == "install_runtime_guard"
         assert failure_steps[-1] == {
             "operation": "stop",
-            "services": ["gateway"],
+            "services": ["model-enroller", "gateway"],
             "exit_code": 0,
         }
         assert (

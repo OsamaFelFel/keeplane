@@ -179,6 +179,13 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
                     "PYTHONDONTWRITEBYTECODE": "1",
                 },
             },
+            "model-enroller": {
+                "working_dir": "/app",
+                "environment": {
+                    "PYTHONPATH": "/app:/opt/oauth",
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                },
+            },
         }
         for service in services.values():
             service.update(
@@ -285,7 +292,9 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
         config = json.loads(
             self.compose("--profile", "*", "config", "--format", "json")
         )
-        assert {"runtime-init", "runtime-install"} <= config["services"].keys()
+        assert {"runtime-init", "runtime-install", "model-enroller"} <= config[
+            "services"
+        ].keys()
         assert config["name"] == self.project
         assert all(
             not row.get("external") and row["name"].startswith(self.project + "_")

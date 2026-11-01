@@ -188,6 +188,17 @@ else:
         }
     }
 
+# ADR 027: the model enroller only reads. Its own role must be read-only; this
+# also makes every transaction read-only, so a mistaken write fails instead.
+if os.environ.get("KEEPLANE_DATABASE_READ_ONLY") == "1":
+    database = DATABASES["default"]
+    if database["ENGINE"] == "django.db.backends.sqlite3":
+        # as_uri() percent-encodes the path, so "?" or "#" in it stay literal.
+        database["NAME"] = Path(database["NAME"]).resolve().as_uri() + "?mode=ro"
+        database["OPTIONS"] = {"timeout": 20, "uri": True}
+    else:
+        database["OPTIONS"]["options"] = "-c default_transaction_read_only=on"
+
 ADMIN_UI_DIR = Path(os.environ.get("KEEPLANE_UI_DIR", "/ui"))
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
