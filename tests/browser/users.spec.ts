@@ -155,6 +155,61 @@ test('BR-05: Change role uses the account API and updates Users', async ({ page 
   await expect(page.getByRole('row', { name: /developer-example/ })).toContainText('Admin')
 })
 
+test('BR-12: a live admin creates a user with a role, changes the role, and the developer sees the CLI page', async ({ page, request }) => {
+  const username = `br12-${Date.now().toString(36)}`
+  const userPassword = 'br12-disposable-password-1'
+  await page.goto('/app/')
+  await page.getByLabel('Username').fill('first-admin')
+  await page.getByLabel('Password').fill(firstAdminPassword())
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
+  let userId = ''
+  try {
+    await page.getByRole('button', { name: 'Create user' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Create user' })
+    await dialog.getByLabel('Username', { exact: true }).fill(username)
+    await dialog.getByLabel('Password', { exact: true }).fill(userPassword)
+    await dialog.getByRole('radio', { name: 'Admin' }).check()
+    const created = page.waitForResponse(response => new URL(response.url()).pathname === '/api/users'
+      && response.request().method() === 'POST')
+    await dialog.getByRole('button', { name: 'Create user' }).click()
+    userId = (await (await created).json()).id
+    await expect(page.getByRole('status')).toContainText(`Created ${username}.`)
+    await page.getByLabel('Search users').fill(username)
+    const row = page.getByRole('row', { name: new RegExp(username) })
+    await expect(page.getByRole('row')).toHaveCount(2)
+    await expect(row).toContainText('Admin')
+    await expect(row).toContainText('Username and password')
+
+    await row.getByRole('button', { name: 'Change role' }).click()
+    await page.getByRole('radio', { name: 'Developer' }).check()
+    await page.getByRole('button', { name: 'Save role' }).click()
+    await expect(page.getByRole('status')).toContainText(`Changed ${username}'s role to developer.`)
+    await expect(row).toContainText('Developer')
+
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page).toHaveURL(/\/sign-in$/)
+    await page.getByLabel('Username').fill(username)
+    await page.getByLabel('Password').fill(userPassword)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page.getByRole('heading', { name: 'The web UI is for admins' })).toBeVisible()
+    await expect(page.getByRole('navigation')).toHaveCount(0)
+    expect((await page.request.get('/api/users')).status()).toBe(403)
+  } finally {
+    if (userId) {
+      const baseURL = test.info().project.use.baseURL!
+      const token = async () => (await (await request.get('/api/auth-options')).json()).csrf_token as string
+      const session = await request.post('/api/session', { headers: { Origin: baseURL, 'X-CSRFToken': await token() },
+        data: { username: 'first-admin', password: firstAdminPassword() } })
+      expect(session.ok()).toBe(true)
+      const removed = await request.delete(`/api/users/${userId}`, { data: {}, headers: {
+        Origin: baseURL, 'X-CSRFToken': await token(), 'X-Keeplane-Action': '1', 'Content-Type': 'application/json',
+      } })
+      expect(removed.status()).toBe(200)
+    }
+  }
+})
+
 test('BR-06: Create user returns keyboard focus to its trigger', async ({ page }) => {
   await mockAdmin(page)
   await page.goto('/app/')

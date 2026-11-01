@@ -32,8 +32,35 @@
 | ACCT-26 | Submit an array instead of sign-in details. | The API returns 400, and the caller stays anonymous. |
 | ACCT-27 | Submit arrays to Create user, Change role and Editions preferences. | Each API returns 400 without changing account state. |
 
-`test_local_identity.py` runs ACCT-21 and ACCT-22 without a Docker stack. The HTTP suite does not prove visual layout. Compare Users and Editions in a browser with the supplied canvas. Team behavior is absent from Open Source.
+`test_local_identity.py` runs ACCT-17, ACCT-21 and ACCT-22 without a Docker stack. The HTTP suite does not prove visual layout. Compare Users and Editions in a browser with the supplied canvas. Team behavior is absent from Open Source.
 
 `test_account_security.py` runs ACCT-24–ACCT-27 against either preview, using
 disposable accounts. The [isolated limit cases](../integration/login-limits-cases.md)
 also cover concurrency, restart, expiry, credential rotation and storage failure.
+
+## Spec 003 scenarios (ST6–ST8, ST28)
+
+Each scenario in Spec 003 and the cases that prove it. LA cases are the
+[account API cases](../integration/local-accounts-cases.md), UI cases the
+[React unit cases](../unit/ui/cases.md) and BR/BSEC cases the
+[browser cases](../browser/users-cases.md). ACCT cases are the live cases above.
+
+| Story | Scenario | Checked by |
+| --- | --- | --- |
+| ST6 | An admin signs in | LA-01, ACCT-02, BSEC-01, BR-02 |
+| ST6 | A developer opens the web UI | LA-02, ACCT-05, BR-11 (layout), BR-12 (live) |
+| ST6 | Sign out | LA-01, ACCT-03, BSEC-01, BR-12 |
+| ST6 | No single sign-on yet | LA-03, UI-SIGN-01, BR-01 |
+| ST6 | Single sign-on connected | UI-SIGN-02 shows the option when the server reports a provider. No provider can be connected yet; the end-to-end case waits for task 003-04. |
+| ST7 | First sign-in after install | ACCT-21, ACCT-02, BR-02; rotation keeps the same account: ACCT-22, LA-05 |
+| ST7 | The break-glass admin in Users | LA-04, ACCT-16, ACCT-17, UI-USERS-01, BR-02 |
+| ST8 | Create a user with a role | LA-06, UI-02, ACCT-04, BR-12 |
+| ST8 | Developer by default | UI-01, BR-02; the API needs an explicit role: LA-07 |
+| ST8 | No answer | UI-03 (10 seconds, Check and Cancel), UI-05 (server errors), UI-06, BR-04 |
+| ST8 | Check finds the user | UI-03, LA-09, ACCT-18 |
+| ST8 | Check doesn't find the user | UI-04, LA-09, LA-10, BR-04 |
+| ST8 | Sent twice | LA-08, UI-04, ACCT-18, ACCT-19, BR-04 |
+| ST8 | Find a user | LA-11, UI-USERS-02, ACCT-07, BR-07 |
+| ST8 | No self sign-up | LA-03, UI-SIGN-01, ACCT-11, BR-01 |
+| ST28 | Change a role | LA-12, BR-05, BR-12, ACCT-20 |
+| ST28 | The break-glass admin | UI-USERS-01, BR-02, LA-04, ACCT-17 |
