@@ -88,7 +88,9 @@ class Enrolment:
 class DjangoModelEnroller:
     """The only writer of one gateway copy's private guard directory."""
 
-    def __init__(self, installation, *, deadline=15.0, sleep=time.sleep, now=time.time):
+    def __init__(
+        self, installation, *, deadline=15.0, sleep=time.sleep, now=time.monotonic
+    ):
         if not isinstance(installation, DjangoRuntimeInstallation):
             raise TypeError("A managed runtime installation is required")
         self.installation = installation
@@ -229,7 +231,13 @@ class DjangoModelEnroller:
                 pending = record.get("pending") if record else None
                 key = digest(wanted)
                 now = self.now()
-                if pending is None or pending.get("plan") != key:
+                # A start in the future means the monotonic clock restarted
+                # (a reboot); start the hold again rather than trust it.
+                if (
+                    pending is None
+                    or pending.get("plan") != key
+                    or pending["since"] > now
+                ):
                     value = {
                         "served": served or {},
                         "pending": {"plan": key, "since": now},

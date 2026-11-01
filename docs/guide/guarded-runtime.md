@@ -36,7 +36,10 @@ After enrollment the launcher starts the private model enroller
 (`model-enroller`). It keeps the protected checks in step with the models saved
 in Models and routing, without restarting the gateway or the app:
 
-- A model you add, or a key you replace, is enrolled within a few seconds.
+- A model you add is enrolled within a few seconds.
+- A developer's own provider key needs no enrollment: a new or replaced one
+  applies to their next request. A shared key is different (see the next
+  point).
 - A model you remove is refused as soon as you remove it.
 - A model you edit (or a shared key you replace) is refused at once. Its new
   setup is enrolled after about 3 minutes and 16 seconds, once every request

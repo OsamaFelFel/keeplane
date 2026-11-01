@@ -385,6 +385,24 @@ def test_a_further_change_during_the_hold_starts_it_again(gateway):
     }
 
 
+def test_a_hold_that_starts_in_the_future_starts_again(gateway):
+    # The monotonic clock restarts with the host; a stored start can then be
+    # ahead of it. That start is not trusted.
+    f = gateway
+    f.enroller.reconcile()
+    f.resources[0] = model("demo", revision=2)
+    approve("demo", f.resources)
+    assert f.enroller.reconcile().state == "held"
+    f.clock = 5.0
+    assert f.enroller.reconcile().state == "held"
+    record = json.loads((f.directory / "served.json").read_text())
+    assert record["pending"]["since"] == 5.0
+    f.clock += model_enroller.HOLD_SECONDS - 1
+    assert f.enroller.reconcile().state == "held"
+    f.clock += 1
+    assert f.enroller.reconcile().state == "enrolled"
+
+
 @pytest.mark.parametrize("record", ["missing-after-install", "unreadable"])
 def test_the_served_record_is_never_guessed(gateway, record):
     f = gateway
@@ -450,37 +468,65 @@ with connection.cursor() as cursor:
 """
 
 
-def test_the_enroller_database_connection_cannot_write(tmp_path):
-    database = tmp_path / "keeplane.sqlite3"
-    connection = sqlite3.connect(database)
-    connection.execute("CREATE TABLE approvals (model_id TEXT)")
-    connection.execute("INSERT INTO approvals VALUES ('demo')")
-    connection.commit()
-    connection.close()
+def settings_process(probe, **values):
     environment = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith(("KEEPLANE_DATABASE", "DJANGO_"))
+        if not key.startswith(("KEEPLANE_DATABASE", "KEEPLANE_SQLITE", "DJANGO_"))
     }
     environment.update(
         DJANGO_SETTINGS_MODULE="config.settings",
-        KEEPLANE_SQLITE_PATH=str(database),
         KEEPLANE_DATABASE_READ_ONLY="1",
         PYTHONPATH=str(
             Path(__file__).resolve().parents[2] / "components/control-plane"
         ),
+        **values,
     )
-    result = subprocess.run(
-        [sys.executable, "-c", PROBE],
+    return subprocess.run(
+        [sys.executable, "-c", probe],
         env=environment,
         capture_output=True,
         text=True,
         timeout=60,
         check=True,
     )
+
+
+def test_the_enroller_database_connection_cannot_write(tmp_path):
+    # URI characters in the path must not end the path or add parameters.
+    folder = tmp_path / "state ?mode=rwc#x"
+    folder.mkdir()
+    database = folder / "keeplane.sqlite3"
+    connection = sqlite3.connect(database)
+    connection.execute("CREATE TABLE approvals (model_id TEXT)")
+    connection.execute("INSERT INTO approvals VALUES ('demo')")
+    connection.commit()
+    connection.close()
+    result = settings_process(PROBE, KEEPLANE_SQLITE_PATH=str(database))
     assert result.stdout.split() == ["1", "OperationalError"]
     connection = sqlite3.connect(database)
     try:
         assert connection.execute("SELECT count(*) FROM approvals").fetchone() == (1,)
     finally:
         connection.close()
+
+
+def test_the_enroller_postgresql_connection_is_read_only(tmp_path):
+    """Settings only: no PostgreSQL server runs in these checks. The live
+    PostgreSQL suites cover connections; the role must be read-only as well."""
+    password = tmp_path / "password"
+    password.write_text("synthetic-database-value")
+    secret = tmp_path / "secret"
+    secret.write_text("s" * 48)
+    result = settings_process(
+        "import json\nfrom django.conf import settings\n"
+        "print(json.dumps(settings.DATABASES['default']['OPTIONS']))",
+        KEEPLANE_DATABASE_HOST="db.invalid",
+        KEEPLANE_DATABASE_NAME="keeplane",
+        KEEPLANE_DATABASE_USER="enroller",
+        KEEPLANE_DATABASE_PASSWORD_FILE=str(password),
+        DJANGO_SECRET_KEY_FILE=str(secret),
+    )
+    options = json.loads(result.stdout)
+    assert options["options"] == "-c default_transaction_read_only=on"
+    assert options["sslmode"] == "verify-full"

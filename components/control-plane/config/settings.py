@@ -184,7 +184,8 @@ else:
 if os.environ.get("KEEPLANE_DATABASE_READ_ONLY") == "1":
     database = DATABASES["default"]
     if database["ENGINE"] == "django.db.backends.sqlite3":
-        database["NAME"] = "file:" + str(database["NAME"]) + "?mode=ro"
+        # as_uri() percent-encodes the path, so "?" or "#" in it stay literal.
+        database["NAME"] = Path(database["NAME"]).resolve().as_uri() + "?mode=ro"
         database["OPTIONS"] = {"timeout": 20, "uri": True}
     else:
         database["OPTIONS"]["options"] = "-c default_transaction_read_only=on"

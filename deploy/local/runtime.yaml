@@ -78,7 +78,19 @@ services:
       - ./components/control-plane:/app:ro
       - runtime-installation:/installed
       - account-data:/state:ro
-      - app-secrets:/run/secrets:ro
+      # Only the two gateway keys, not the first admin password.
+      - type: volume
+        source: app-secrets
+        target: /run/secrets/gateway-admin-key
+        read_only: true
+        volume:
+          subpath: gateway-admin-key
+      - type: volume
+        source: app-secrets
+        target: /run/secrets/gateway-runtime-key
+        read_only: true
+        volume:
+          subpath: gateway-runtime-key
       - provider-keys:/provider-keys:ro
 
 volumes:
