@@ -34,7 +34,9 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
   const [unconfirmed, setUnconfirmed] = useState(false)
   // Keeplane's reason when it answered and refused, so nothing was saved
   const [refusal, setRefusal] = useState('')
-  const [checkError, setCheckError] = useState('')
+  // true when Check itself got no answer; the dialog stays in No answer
+  const [checkFailed, setCheckFailed] = useState(false)
+  const [checking, setChecking] = useState(false)
 
   function close(open: boolean) {
     if (!open && phase === 'saving') return
@@ -47,7 +49,7 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
 
   async function save() {
     if (!user) return
-    setRefusal(''); setCheckError(''); setPhase('saving')
+    setRefusal(''); setCheckFailed(false); setPhase('saving')
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 10_000)
     try {
@@ -68,13 +70,14 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
   // Check reads the role back: the requested role means the change was made;
   // anything else brings the form back with the chosen role.
   async function check() {
-    if (!user) return
-    setCheckError('')
+    if (!user || checking) return
+    setChecking(true)
     try {
       const current = await readBack(user)
       if (current && current.role === role) done(current)
-      else setPhase('form')
-    } catch { setCheckError('Keeplane did not answer. Check again.') }
+      else { setCheckFailed(false); setPhase('form') }
+    } catch { setCheckFailed(true) }
+    finally { setChecking(false) }
   }
 
   const username = user?.username
@@ -82,19 +85,19 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
     <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}>
       <DialogHeader><DialogTitle className="text-[22px] font-semibold">Change role</DialogTitle></DialogHeader>
       <fieldset disabled={phase !== 'form'}>
-        <legend className="keeplane-field-label wrap-anywhere">Role for <span className="text-muted-foreground">{username}</span></legend>
+        <legend className="keeplane-field-label wrap-anywhere">Role for {username}</legend>
         <RadioGroup value={role} onValueChange={value => setRole(value as Role)} disabled={phase !== 'form'} className="gap-1">
           <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="admin" id="role-admin" className="size-[18px]" /><Label htmlFor="role-admin" className="text-[15px]">Admin</Label></div>
           <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="developer" id="role-developer" className="size-[18px]" /><Label htmlFor="role-developer" className="text-[15px]">Developer</Label></div>
         </RadioGroup>
       </fieldset>
-      {phase === 'no-answer' && <FailureAlert title={`It isn't clear whether ${username}'s role was changed`}>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
+      {phase === 'no-answer' && <FailureAlert title={`It isn't clear whether ${username}'s role was changed`}>{checkFailed ? "Keeplane didn't answer in time. Check again."
+        : unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
       {refusal && phase === 'form' && <FailureAlert title={`${username}'s role wasn't changed`}>{refusal} Nothing was saved. Check the details and try again.</FailureAlert>}
-      {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
       {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={() => close(false)} disabled={phase === 'saving'}>Cancel</Button>
-        {phase === 'no-answer' ? <Button onClick={check}>Check</Button>
+        {phase === 'no-answer' ? <Button onClick={check} disabled={checking}>Check</Button>
           : <Button onClick={save} disabled={phase === 'saving' || role === user?.role}>{phase === 'saving' && <UpdateIcon className="animate-spin" />}Change role</Button>}
       </div>
     </DialogContent>

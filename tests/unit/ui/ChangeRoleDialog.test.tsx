@@ -90,7 +90,9 @@ test('UI-ROLE-03: the dialog reads "Role for [Username]" and a "Change role" but
   expect(screen.getByRole('heading', { name: 'Change role' })).toBeTruthy()
   const legend = document.querySelector('legend')!
   expect(legend.textContent).toBe('Role for developer-example')
-  expect(legend.querySelector('span')!.className).toContain('text-muted-foreground')
+  // A real username is in ink at the legend's own weight; only bracketed placeholders are ink-muted.
+  expect(legend.querySelector('span')).toBeNull()
+  expect(legend.className).not.toContain('text-muted-foreground')
   expect(screen.getByRole('group', { name: 'Role for developer-example' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Change role' })).toHaveProperty('disabled', true)
   expect(screen.queryByRole('button', { name: 'Save role' })).toBeNull()
@@ -166,22 +168,36 @@ test('UI-ROLE-07: Check finds the user beyond the first page of partial matches,
   expect(request.mock.calls.filter(([path]) => path.startsWith('/api/users?'))).toHaveLength(2)
 
   cleanup()
-  fixture(async () => response({ error: 'Internal error' }, 502), async () => listing([]))
+  let attempt = 0
+  fixture(async () => (attempt += 1) === 1 ? response({ error: 'Internal error' }, 502) : response({ error: 'Account not found' }, 404),
+    async () => listing([]))
   const second = await saveAdmin()
   expect(await screen.findByText(unconfirmed)).toBeTruthy()
   await second.user.click(screen.getByRole('button', { name: 'Check' }))
-  expect(await screen.findByRole('button', { name: 'Change role' })).toBeTruthy()
+  const again = await screen.findByRole('button', { name: 'Change role' })
+  expect(screen.queryByRole('alert')).toBeNull()
+  await second.user.click(again)
+  await expectFailureMessage("developer-example's role wasn't changed",
+    'Account not found. Nothing was saved. Check the details and try again.')
   expect(second.onChanged).not.toHaveBeenCalled()
 })
 
-test('UI-ROLE-08: Check that gets no answer says so and keeps Check', async () => {
-  fixture(async () => { throw new TypeError('Failed to fetch') }, async () => { throw new TypeError('Failed to fetch') })
+test('UI-ROLE-08: Check that gets no answer stays in No answer with "Check again", and Check is off while it runs', async () => {
+  let answer: () => void = () => {}
+  const request = fixture(async () => { throw new TypeError('Failed to fetch') },
+    () => new Promise((_resolve, reject) => { answer = () => reject(new TypeError('Failed to fetch')) }))
   const { user, onChanged } = await saveAdmin()
   expect(await screen.findByText(noAnswer)).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Check' }))
-  expect(await screen.findByText('Keeplane did not answer. Check again.')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Check' })).toBeTruthy()
-  expect(screen.getByText(unclear)).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Check' })).toHaveProperty('disabled', true)
+  await user.click(screen.getByRole('button', { name: 'Check' }))
+  expect(request.mock.calls.filter(([path]) => path.startsWith('/api/users?'))).toHaveLength(1)
+  await act(async () => { answer() })
+  await expectFailureMessage(unclear, "Keeplane didn't answer in time. Check again.")
+  expect(screen.queryByText(/did not/)).toBeNull()
+  expect(screen.getByRole('button', { name: 'Check' })).toHaveProperty('disabled', false)
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty('disabled', false)
+  expect(screen.getByRole('radio', { name: 'Admin' })).toHaveProperty('disabled', true)
   expect(onChanged).not.toHaveBeenCalled()
 })
 

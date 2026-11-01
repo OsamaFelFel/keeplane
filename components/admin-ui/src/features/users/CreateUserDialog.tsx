@@ -29,6 +29,9 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
   // the username Keeplane refused, kept while the admin edits the field again
   const [refused, setRefused] = useState('')
   const [checkError, setCheckError] = useState('')
+  // true when Check itself got no answer; the dialog stays in No answer
+  const [checkFailed, setCheckFailed] = useState(false)
+  const [checking, setChecking] = useState(false)
   const operationId = useRef<string | null>(null)
   const { reset, register, handleSubmit, control, formState: { errors } } = useForm<Fields>({ resolver: zodResolver(schema), defaultValues: { username: '', password: '', role: 'developer' } })
 
@@ -39,13 +42,13 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
   function close(value: boolean) {
     if (!value && phase === 'saving') return
     if (!value) {
-      reset(); setPhase('form'); setError(''); setCheckError(''); operationId.current = null
+      reset(); setPhase('form'); setError(''); setCheckError(''); setCheckFailed(false); operationId.current = null
     }
     onOpenChange(value)
   }
 
   async function save(fields: Fields) {
-    setError(''); setPhase('saving')
+    setError(''); setCheckError(''); setCheckFailed(false); setPhase('saving')
     operationId.current ||= crypto.randomUUID()
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 10_000)
@@ -70,14 +73,16 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
   }
 
   async function check() {
-    if (!operationId.current) return
-    setCheckError('')
+    if (!operationId.current || checking) return
+    setCheckError(''); setChecking(true)
     try {
       const result = await api<UserOperation>(`/api/user-operations/${operationId.current}`)
+      setCheckFailed(false)
       if (result.status === 'created' && result.user) closeAfterSuccess(result.user)
       else if (result.status === 'not_found') setPhase('form')
       else setCheckError('Keeplane is still saving. Check again.')
-    } catch { setCheckError('Keeplane did not answer. Check again.') }
+    } catch { setCheckFailed(true) }
+    finally { setChecking(false) }
   }
 
   return <Dialog open={open} onOpenChange={close}>
@@ -103,13 +108,14 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
             <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="developer" id="create-developer" className="size-[18px]" /><Label htmlFor="create-developer" className="text-[15px]">Developer</Label></div>
           </RadioGroup>} />
         </fieldset>
-        {phase === 'no-answer' && <FailureAlert title={`It isn't clear whether ${username} was created`}>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
+        {phase === 'no-answer' && <FailureAlert title={`It isn't clear whether ${username} was created`}>{checkFailed ? "Keeplane didn't answer in time. Check again."
+          : unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
         {error && <FailureAlert title={`${refused || 'User'} wasn't created`}>{error} Nothing was saved. Check the details and try again.</FailureAlert>}
         {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
         {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => close(false)} disabled={phase === 'saving'}>Cancel</Button>
-          {phase === 'no-answer' ? <Button type="button" onClick={check}>Check</Button>
+          {phase === 'no-answer' ? <Button type="button" onClick={check} disabled={checking}>Check</Button>
             : <Button type="submit" disabled={phase === 'saving'}>{phase === 'saving' && <UpdateIcon className="animate-spin" />}Create user</Button>}
         </div>
       </form>

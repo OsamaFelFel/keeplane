@@ -182,3 +182,27 @@ test.each([
   expect(icon.dataset.icon).toBe('circle-alert')
   expect(icon.querySelector('circle')).toBeTruthy()
 })
+
+test('UI-10: Check that gets no answer stays in No answer with "Check again", and Check is off while it runs', async () => {
+  let answer: () => void = () => {}
+  const request = fixture(async () => { throw new TypeError('Failed to fetch') },
+    () => new Promise((_resolve, reject) => { answer = () => reject(new TypeError('Failed to fetch')) }))
+  const user = userEvent.setup()
+  const onCreated = open()
+  await fill(user)
+  await user.click(screen.getByRole('button', { name: 'Create user' }))
+  expect(await screen.findByText(noAnswer)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Check' }))
+  expect(screen.getByRole('button', { name: 'Check' })).toHaveProperty('disabled', true)
+  await user.click(screen.getByRole('button', { name: 'Check' }))
+  expect(request.mock.calls.filter(([path]) => path.startsWith('/api/user-operations/'))).toHaveLength(1)
+  await act(async () => { answer() })
+  expect(await screen.findByText("Keeplane didn't answer in time. Check again.")).toBeTruthy()
+  expect(screen.getByText("It isn't clear whether example-user was created")).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toBe("It isn't clear whether example-user was createdKeeplane didn't answer in time. Check again.")
+  expect(screen.queryByText(/did not/)).toBeNull()
+  expect(screen.getByRole('button', { name: 'Check' })).toHaveProperty('disabled', false)
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty('disabled', false)
+  expect(screen.getByLabelText('Username')).toHaveProperty('disabled', true)
+  expect(onCreated).not.toHaveBeenCalled()
+})
