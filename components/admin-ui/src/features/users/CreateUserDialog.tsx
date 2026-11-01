@@ -31,6 +31,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
   returnFocusRef: RefObject<HTMLButtonElement | null>
 }) {
   const [phase, setPhase] = useState<'form' | 'saving' | 'no-answer'>('form')
+  // true when Keeplane answered but the answer doesn't confirm the result
+  const [unconfirmed, setUnconfirmed] = useState(false)
   const [error, setError] = useState('')
   const [checkError, setCheckError] = useState('')
   const operationId = useRef<string | null>(null)
@@ -57,11 +59,12 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
       const user = await action<User>('/api/users', 'POST', { ...fields, operation_id: operationId.current }, controller.signal)
       // An answer that names no user (for example a body cut off at the time limit) proves nothing.
       if (typeof user?.username === 'string') closeAfterSuccess(user)
-      else setPhase('no-answer')
+      else { setUnconfirmed(!controller.signal.aborted); setPhase('no-answer') }
     } catch (cause) {
       if (!controller.signal.aborted && definiteRefusal(cause)) {
         setPhase('form'); setError(cause.message)
       } else {
+        setUnconfirmed(!controller.signal.aborted && cause instanceof ApiError && cause.status >= 500)
         setPhase('no-answer')
       }
     } finally { window.clearTimeout(timeout) }
@@ -106,7 +109,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
             <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="developer" id="create-developer" className="size-[18px]" /><Label htmlFor="create-developer" className="text-[15px]">Developer</Label></div>
           </RadioGroup>} />
         </fieldset>
-        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>It isn't clear whether {username} was created</AlertTitle><AlertDescription>Keeplane didn't answer in time. Check to find out.</AlertDescription></Alert>}
+        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>It isn't clear whether {username} was created</AlertTitle><AlertDescription>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</AlertDescription></Alert>}
         {error && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>User wasn't created</AlertTitle><AlertDescription>{error} Nothing was saved. Check the details and try again.</AlertDescription></Alert>}
         {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
         {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}

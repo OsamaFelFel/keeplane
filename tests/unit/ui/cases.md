@@ -8,10 +8,10 @@ colocated tests.
 | --- | --- | --- |
 | UI-01 | Open Create user, enter a too-short username and password, then submit. | Developer is selected by default, validation explains both inputs, and no request reaches the account API. |
 | UI-02 | Create an Admin. | One protected request carries the chosen role and an operation ID; the dialog reports the new user. |
-| UI-03 | Create a user when Keeplane doesn't answer, then choose Check, which finds it. | Nothing changes before 10 seconds; at 10 seconds the dialog says it isn't clear whether the user was created and offers Check and Cancel; Check closes it with the user. The write is not repeated. |
-| UI-04 | Lose the answer, choose Check, which finds nothing, then send again. | The form shows what was typed, including the role, and the second request reuses the operation ID. |
-| UI-05 | Create user gets a 500, 502, 503 or 504. | The result is uncertain, so the dialog offers Check instead of saying nothing was saved. |
-| UI-06 | Create user gets a success answer that names no user. | The dialog offers Check and reports no user. |
+| UI-03 | Create a user when Keeplane doesn't answer, then choose Check, which finds it. | Nothing changes before 10 seconds; at 10 seconds the dialog says it isn't clear whether the user was created, that Keeplane didn't answer in time, and offers Check and Cancel; Check closes it with the user. The write is not repeated. |
+| UI-04 | Lose the answer, choose Check, which finds nothing, then send again. | The dialog says Keeplane didn't answer in time. After Check the form shows what was typed, including the role, and the second request reuses the operation ID. |
+| UI-05 | Create user gets a 500, 502, 503 or 504. | The dialog says it isn't clear whether the user was created and "Keeplane couldn't confirm the result. Check to find out.", and offers Check instead of saying nothing was saved. |
+| UI-06 | Create user gets a success answer that names no user. | The dialog says Keeplane couldn't confirm the result, offers Check and reports no user. |
 | UI-07 | Keeplane refuses the user, for example a taken name. | The dialog says the user wasn't created, keeps what was typed and offers no Check. |
 | UI-SIGN-01 | Open sign-in while no single sign-on provider is connected. | Only username, password and Sign in appear; there is no single sign-on or sign-up control. |
 | UI-SIGN-02 | Open sign-in while the server reports a connected provider. | Sign in with single sign-on also appears. |

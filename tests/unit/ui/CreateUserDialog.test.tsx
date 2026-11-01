@@ -26,10 +26,12 @@ function fixture(write: (options: RequestInit) => Promise<object>, check: () => 
 const writes = (request: ReturnType<typeof fixture>) =>
   request.mock.calls.filter(([path]) => path === '/api/users').map(([, options]) => JSON.parse(options!.body as string))
 
-function open(onCreated = vi.fn()) {
-  render(<CreateUserDialog open onOpenChange={() => {}} onCreated={onCreated} returnFocusRef={createRef<HTMLButtonElement>()} />)
+function open(onCreated = vi.fn(), onOpenChange = vi.fn()) {
+  render(<CreateUserDialog open onOpenChange={onOpenChange} onCreated={onCreated} returnFocusRef={createRef<HTMLButtonElement>()} />)
   return onCreated
 }
+const noAnswer = "Keeplane didn't answer in time. Check to find out."
+const unconfirmed = "Keeplane couldn't confirm the result. Check to find out."
 
 async function fill(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Username'), 'example-user')
@@ -71,7 +73,8 @@ test('UI-03: no answer within 10 seconds offers Check and Cancel, and Check that
     options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))),
   async () => response({ status: 'created', user: created }))
   const user = userEvent.setup()
-  const onCreated = open()
+  const onOpenChange = vi.fn()
+  const onCreated = open(vi.fn(), onOpenChange)
   await fill(user)
   vi.useFakeTimers()
   fireEvent.click(screen.getByRole('button', { name: 'Create user' }))
@@ -79,10 +82,12 @@ test('UI-03: no answer within 10 seconds offers Check and Cancel, and Check that
   expect(screen.queryByRole('button', { name: 'Check' })).toBeNull()
   await act(async () => { await vi.advanceTimersByTimeAsync(100) })
   expect(screen.getByText("It isn't clear whether example-user was created")).toBeTruthy()
+  expect(screen.getByText(noAnswer)).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
   vi.useRealTimers()
   await user.click(screen.getByRole('button', { name: 'Check' }))
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created))
+  expect(onOpenChange).toHaveBeenCalledWith(false)
   expect(writes(request)).toHaveLength(1)
 })
 
@@ -97,7 +102,8 @@ test('UI-04: Check that finds nothing shows the typed form again and a retry reu
   const onCreated = open()
   await fill(user)
   await user.click(screen.getByRole('button', { name: 'Create user' }))
-  await user.click(await screen.findByRole('button', { name: 'Check' }))
+  expect(await screen.findByText(noAnswer)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Check' }))
   expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('example-user')
   expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('a-test-password-123456')
   expect(screen.getByRole('radio', { name: 'Admin' }).getAttribute('aria-checked')).toBe('true')
@@ -108,13 +114,16 @@ test('UI-04: Check that finds nothing shows the typed form again and a retry reu
   expect(sent[1].operation_id).toBe(sent[0].operation_id)
 })
 
-test.each([500, 502, 503, 504])('UI-05: a %i answer is uncertain, so the dialog offers Check instead of saying nothing was saved', async status => {
+test.each([500, 502, 503, 504])('UI-05: a %i answer is uncertain, so the dialog says the result is unconfirmed and offers Check', async status => {
   fixture(async () => response({ error: 'Upstream problem' }, status))
   const user = userEvent.setup()
   open()
   await fill(user)
   await user.click(screen.getByRole('button', { name: 'Create user' }))
   expect(await screen.findByRole('button', { name: 'Check' })).toBeTruthy()
+  expect(screen.getByText("It isn't clear whether example-user was created")).toBeTruthy()
+  expect(screen.getByText(unconfirmed)).toBeTruthy()
+  expect(screen.queryByText(noAnswer)).toBeNull()
   expect(screen.queryByText("User wasn't created")).toBeNull()
 })
 
@@ -125,6 +134,7 @@ test('UI-06: a success answer that names no user is uncertain', async () => {
   await fill(user)
   await user.click(screen.getByRole('button', { name: 'Create user' }))
   expect(await screen.findByRole('button', { name: 'Check' })).toBeTruthy()
+  expect(screen.getByText(unconfirmed)).toBeTruthy()
   expect(onCreated).not.toHaveBeenCalled()
 })
 

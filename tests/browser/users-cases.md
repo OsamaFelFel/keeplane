@@ -3,9 +3,10 @@
 Run `npm ci && npx playwright install chromium --only-shell && npm test` from
 `tests/browser/` while the local Docker preview is running. Set `KEEPLANE_BASE_URL=http://127.0.0.1:13000` to repeat against kind. Tests live under
 the repository's top-level `tests/` tree, as required by ADR 017. The browser
-suite uses the real local sign-in for BR-02; the layout and network-failure
-cases use fixed API responses so they do not create accounts or depend on the
-current database contents.
+suite uses the real local sign-in for BR-02 and BR-12. BR-12 creates one
+disposable user and removes it afterwards. The layout and network-failure cases
+use fixed API responses so they do not create accounts or depend on the current
+database contents.
 
 | Case | Plain-English action | Expected result |
 | --- | --- | --- |
@@ -19,8 +20,8 @@ current database contents.
 | BR-08 | Sign in while the API returns a one-minute attempt limit. | The form explains the wait, retains the username, and allows another attempt. |
 | BR-09 | Sign in with invalid credentials. | The same generic message hides which usernames exist. |
 | BR-10 | Sign in while account storage is unavailable. | The form explains the storage problem and allows retry; it does not blame the password. |
-| BR-12 | Against the running server, sign in as the infrastructure admin, create an Admin, search for it, change it to Developer, sign out and sign in as that user. | Users shows the new user with each role in turn; the user then sees the developer page with no admin navigation, and the Users API refuses them. The test removes its user afterwards. |
 | BR-11 | Open the web UI as a developer at desktop and 320px widths. | It shows the CLI prerequisite, a sign-in command using this server and an explicit private profile, and the device option. The page stays within the viewport and loads no admin navigation or admin APIs. |
+| BR-12 | Against the running server, sign in as the infrastructure admin, create an Admin, search for it, change it to Developer, sign out and sign in as that user. | Users shows the new user with each role in turn; the user then sees the developer page with no admin navigation, and the Users API refuses them. The test removes its user afterwards. |
 
 The real Docker and kind account and Audit suites separately test backend permissions,
 database effects and idempotent writes. Browser mocks here isolate UI behavior.

@@ -10,9 +10,10 @@ Choose **Create user**, enter a username and password, and choose Admin or
 Developer. Developer is selected by default. Search and paging help find an
 existing user; **Change role** updates their access.
 
-If creation takes more than ten seconds, or Keeplane answers with a server
-error, the dialog says it isn't clear whether the user was created and offers
-**Check**. Use it to find whether the account was created before retrying. If
+If Keeplane doesn't answer within ten seconds, the dialog says it isn't clear
+whether the user was created because Keeplane didn't answer in time. If Keeplane
+answers with a server error, it says Keeplane couldn't confirm the result. Both
+offer **Check**. Use it to find whether the account was created before retrying. If
 Check finds nothing, the form comes back with what you typed; sending it again
 creates at most one account. Only when Keeplane refuses the request, for example
 because the name is taken, does the dialog say nothing was saved. There is no
