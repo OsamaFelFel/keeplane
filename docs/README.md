@@ -14,6 +14,7 @@
 | Use a managed or customer-run gateway | [Gateway configuration](guide/gateway-configuration.md) |
 | Try Kubernetes deployment | [Kubernetes](guide/kubernetes-local.md) |
 | Check Secrets, readiness, storage, ports and gateway modes for a Kubernetes install | [Kubernetes installation reference](guide/kubernetes-installation-reference.md) |
+| Give an installer only the permissions a Kubernetes install needs in one namespace | [Kubernetes namespace permissions](guide/kubernetes-namespace-permissions.md) |
 | Configure PostgreSQL, credentials and recovery | [PostgreSQL](guide/postgres-accounts.md), [gateway database credentials](guide/gateway-database-secret.md) |
 | Preview an existing Claude, Codex or Qwen project setup | [CLI migration preview](guide/cli-migration-preview.md) |
 | Run tests and retain their results | [Testing](guide/regression-local.md) |
