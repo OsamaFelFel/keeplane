@@ -47,11 +47,12 @@ async function mockAdmin(page: Page, listedUsers = users) {
 
 test('BR-01: local sign-in offers no SSO or self-registration', async ({ page }) => {
   await page.goto('/app/')
-  await expect(page.getByRole('heading', { name: 'Sign in to Keeplane' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
   await expect(page.getByLabel('Username')).toBeVisible()
   await expect(page.getByLabel('Password')).toBeVisible()
   await expect(page.getByText('Sign in with single sign-on')).toHaveCount(0)
   await expect(page.getByText('Create an account')).toHaveCount(0)
+  await expect(page.getByText('No account? Ask your admin.', { exact: true })).toBeVisible()
 })
 
 test('BR-02: the live first admin can open Users but has no role action', async ({ page }) => {
@@ -284,7 +285,7 @@ test('BR-13: the sign-in card title uses page-title on desktop and narrow screen
   for (const width of [1280, 320]) {
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/app/')
-    const title = page.getByRole('heading', { level: 1, name: 'Sign in to Keeplane' })
+    const title = page.getByRole('heading', { level: 1, name: 'Sign in', exact: true })
     await expect(title).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     // page-title in product/design/system/tokens.json: IBM Plex Sans 28px on 36px at 600
@@ -321,4 +322,99 @@ test('BR-14: a refused create names the username, in full, even at the longest a
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
   await page.getByLabel('Username', { exact: true }).fill('example-user')
   await expect(title).toBeVisible()
+})
+
+type Look = { fontSize: string, lineHeight: string, fontWeight: string, color: string }
+const look = (element: Element): Look => {
+  const style = getComputedStyle(element)
+  return { fontSize: style.fontSize, lineHeight: style.lineHeight, fontWeight: style.fontWeight, color: style.color }
+}
+
+// The failure message in product/design/system/components.md ("Errors"):
+// on ground, control-border edge, radius-md, 14px 16px padding, 20px circle-alert, first line 15/22 at 600.
+async function expectFailureMessage(page: Page, title: string) {
+  const alert = page.getByRole('alert').filter({ hasText: title })
+  await expect(alert).toBeVisible()
+  expect(await alert.evaluate(element => {
+    const style = getComputedStyle(element)
+    const icon = element.querySelector('svg')!
+    return {
+      background: style.backgroundColor, border: style.borderTopColor, radius: style.borderTopLeftRadius,
+      padding: [style.paddingTop, style.paddingLeft],
+      icon: [icon.getBoundingClientRect().width, icon.querySelectorAll('circle').length, icon.querySelectorAll('path').length],
+    }
+  })).toEqual({
+    background: 'rgb(244, 245, 246)', border: 'rgb(122, 133, 143)', radius: '8px',
+    padding: ['14px', '16px'], icon: [20, 1, 0],
+  })
+  expect(await alert.getByText(title, { exact: true }).evaluate(look)).toEqual({
+    fontSize: '15px', lineHeight: '22px', fontWeight: '600', color: 'rgb(30, 37, 43)',
+  })
+}
+
+test('BR-15: the sign-in card follows its design on desktop and narrow screens', async ({ page }) => {
+  for (const [sso, note] of [
+    [false, 'No account? Ask your admin.'],
+    [true, 'No account? Signing in with single sign-on creates one. For a username and password, ask your admin.'],
+  ] as const) {
+    await page.unrouteAll()
+    await page.route('**/api/auth-options', route => route.fulfill({ json: { sso_connected: sso, csrf_token: 'masked' } }))
+    await page.route('**/api/session', route => route.fulfill({ status: 401, json: { error: 'Invalid username or password' } }))
+    for (const width of [1280, 320]) {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/app/')
+      await page.evaluate(() => document.fonts.ready)
+      const title = page.getByRole('heading', { level: 1, name: 'Sign in', exact: true })
+      const brand = page.getByText('Keeplane', { exact: true })
+      await expect(brand).toBeVisible()
+      // Main.dc.html: a 40px mark and "Keeplane" at 20px 600 sit above the title
+      const mark = brand.locator('img')
+      expect(await mark.evaluate(image => [image.getBoundingClientRect().width, (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0])).toEqual([40, true])
+      expect(await brand.evaluate(element => [getComputedStyle(element).fontSize, getComputedStyle(element).fontWeight])).toEqual(['20px', '600'])
+      expect((await brand.boundingBox())!.y).toBeLessThan((await title.boundingBox())!.y)
+      // "No account?" is `small` in ink-muted
+      const noAccount = page.getByText(note, { exact: true })
+      await expect(noAccount).toBeVisible()
+      expect(await noAccount.evaluate(look)).toEqual({ fontSize: '14px', lineHeight: '20px', fontWeight: '400', color: 'rgb(86, 97, 107)' })
+      const ssoButton = page.getByRole('link', { name: 'Sign in with single sign-on' })
+      await expect(ssoButton).toHaveCount(sso ? 1 : 0)
+      if (sso) {
+        // an outline button, at least 44px tall, below the note
+        const box = (await ssoButton.boundingBox())!
+        expect(box.height).toBeGreaterThanOrEqual(44)
+        expect(box.y).toBeGreaterThan((await noAccount.boundingBox())!.y)
+        expect(await ssoButton.evaluate(element => getComputedStyle(element).textDecorationLine)).toBe('none')
+      }
+      await page.getByLabel('Username').fill('missing-user')
+      await page.getByLabel('Password').fill('disposable-test-password')
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+      await expectFailureMessage(page, 'The username or password is wrong.')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    }
+  }
+})
+
+test('BR-16: the Create user alerts use a circle-alert icon and a weight-600 title', async ({ page }) => {
+  await mockAdmin(page)
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { sso_connected: false, csrf_token: 'masked' } }))
+  let status = 409
+  await page.route(url => url.pathname === '/api/users' && !url.searchParams.has('page'),
+    route => route.fulfill({ status, json: { error: 'That name already exists.' } }))
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 800 })
+    for (const [answer, title] of [
+      [409, "example-user wasn't created"],
+      [503, "It isn't clear whether example-user was created"],
+    ] as const) {
+      status = answer
+      await page.goto('/app/')
+      await page.getByRole('button', { name: 'Create user' }).click()
+      await page.getByLabel('Username', { exact: true }).fill('example-user')
+      await page.getByLabel('Password', { exact: true }).fill('a-test-password-123456')
+      await page.getByRole('dialog').getByRole('button', { name: 'Create user' }).click()
+      await page.evaluate(() => document.fonts.ready)
+      await expectFailureMessage(page, title)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    }
+  }
 })

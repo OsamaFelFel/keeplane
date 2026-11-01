@@ -102,7 +102,7 @@ for (const width of [1280, 320]) {
     await page.setViewportSize({ width, height: 800 })
     const record = await keeplaneOnly(page)
     await page.goto('/sign-in')
-    await expect(page.getByRole('heading', { name: 'Sign in to Keeplane' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
     await expectPlex(page, [['h1', 600], ['label', 500], ['button[type=submit]', 600]])
     expectInside(record)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)

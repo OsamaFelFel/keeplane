@@ -2,9 +2,9 @@ import { useRef, useState, type RefObject } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ExclamationTriangleIcon, UpdateIcon } from '@radix-ui/react-icons'
+import { UpdateIcon } from '@radix-ui/react-icons'
 import { api, action, ApiError, type User, type UserOperation } from '@/app/api'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { FailureAlert } from '@/components/FailureAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -111,8 +111,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
             <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="developer" id="create-developer" className="size-[18px]" /><Label htmlFor="create-developer" className="text-[15px]">Developer</Label></div>
           </RadioGroup>} />
         </fieldset>
-        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle className="wrap-anywhere">It isn't clear whether {username} was created</AlertTitle><AlertDescription>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</AlertDescription></Alert>}
-        {error && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle className="wrap-anywhere">{refused || 'User'} wasn't created</AlertTitle><AlertDescription>{error} Nothing was saved. Check the details and try again.</AlertDescription></Alert>}
+        {phase === 'no-answer' && <FailureAlert title={`It isn't clear whether ${username} was created`}>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
+        {error && <FailureAlert title={`${refused || 'User'} wasn't created`}>{error} Nothing was saved. Check the details and try again.</FailureAlert>}
         {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
         {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
         <div className="flex justify-end gap-3">
