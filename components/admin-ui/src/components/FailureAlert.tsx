@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 // Lucide's circle-alert, drawn as in the design system: 2px stroke in ink.
+// Source: lucide-static 1.59.0 icons/circle-alert.svg, ISC (Lucide) and MIT
+// (Feather, which it derives from); see licenses/lucide-static-1.59.0.json.
 export function CircleAlertIcon({ className }: { className?: string }) {
   return <svg data-icon="circle-alert" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

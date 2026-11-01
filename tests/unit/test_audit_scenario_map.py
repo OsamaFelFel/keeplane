@@ -24,6 +24,19 @@ SCENARIOS = {
 # Waiting on detection (task 005-03); listed but not yet provable.
 NOT_BUILT = {("ST21", "Held-back requests")}
 CASE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-\d+\b")
+# The catalog each case prefix belongs to, as the map's intro paragraph links
+# them. A case counts only if its row is in its own catalog, so a row with the
+# same ID in another catalog can't satisfy it.
+CATALOGS = {
+    "AS": "integration/audit-persistence-cases.md",
+    "AU-UI": "browser/audit-cases.md",
+    "AUD": "e2e/audit-cases.md",
+    "BG": "e2e/audit-cases.md",
+    "BGS": "integration/break-glass-sign-in-cases.md",
+    "CL-INT": "integration/complexity-level-cases.md",
+    "MA": "integration/model-answer-record-cases.md",
+    "SC": "integration/settings-change-record-cases.md",
+}
 
 
 def scenario_rows():
@@ -38,11 +51,7 @@ def scenario_rows():
     return rows
 
 
-def catalog_text():
-    return "\n".join(path.read_text() for path in TESTS.rglob("*.md"))
-
-
-def test_text():
+def source_text():
     paths = [
         path
         for pattern in ("*.py", "*.ts", "*.tsx")
@@ -74,12 +83,15 @@ def test_asm_02_built_scenarios_name_cases_and_unbuilt_ones_say_so():
             assert CASE.findall(checked_by), scenario
 
 
-def test_asm_03_every_named_case_has_a_catalog_row_and_a_test():
-    catalogs, code = catalog_text(), test_text()
+def test_asm_03_every_named_case_has_a_row_in_its_own_catalog_and_a_test():
+    code = source_text()
     named = {case for cell in scenario_rows().values() for case in CASE.findall(cell)}
     assert named
     for case in sorted(named):
+        prefix = case.rsplit("-", 1)[0]
+        assert prefix in CATALOGS, f"{case} has no known catalog"
+        catalog = (TESTS / CATALOGS[prefix]).read_text()
         assert re.search(
-            rf"^\|\s*{re.escape(case)}\b", catalogs, re.MULTILINE
-        ), f"{case} has no catalog row"
+            rf"^\|\s*{re.escape(case)}\b", catalog, re.MULTILINE
+        ), f"{case} has no row in {CATALOGS[prefix]}"
         assert is_tested(case, code), f"{case} has no test"

@@ -1,0 +1,11 @@
+{
+  "name": "lucide-static",
+  "version": "1.59.0",
+  "license": "ISC AND MIT",
+  "source_url": "https://registry.npmjs.org/lucide-static/-/lucide-static-1.59.0.tgz",
+  "source_file": "package/LICENSE",
+  "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+  "copied": "The circle-alert icon (icons/circle-alert.svg), drawn inline as an SVG. Lucide lists it as derived from Feather (alert-circle), so the MIT notice in this file applies as well as Lucide's ISC notice.",
+  "modifications": "Redrawn as JSX with the same circle; the two lines are at y 7-13 and 17 instead of 8-12 and 16.",
+  "copied_into": ["src/components/FailureAlert.tsx"]
+}

@@ -3,7 +3,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { UpdateIcon } from '@radix-ui/react-icons'
-import { api, action, ApiError, type User, type UserOperation } from '@/app/api'
+import { api, action, ApiError, definiteRefusal, type User, type UserOperation } from '@/app/api'
 import { FailureAlert } from '@/components/FailureAlert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,14 +17,6 @@ const schema = z.object({
   role: z.enum(['admin', 'developer']),
 })
 type Fields = z.infer<typeof schema>
-
-// Only Keeplane's own refusal (4xx), or a request the browser never sent, proves
-// nothing was saved. A server or proxy error after sending may follow a commit.
-function definiteRefusal(cause: unknown): cause is ApiError {
-  if (!(cause instanceof ApiError)) return false
-  if (cause.status >= 400 && cause.status < 500) return true
-  return cause.status === 0 && cause.message !== 'Keeplane did not answer.'
-}
 
 export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef }: {
   open: boolean; onOpenChange: (value: boolean) => void; onCreated: (user: User) => void

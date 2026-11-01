@@ -28,3 +28,10 @@ fails on any external address not on its documented list.
 project MIT notice is retained under `licenses/` with a pinned source and hash.
 That source declares 2.3.7; correspondence to the 2.3.8 release remains unresolved.
 The notice records this exception and does not establish distribution clearance.
+
+Artwork drawn into the source rather than imported, such as the circle-alert
+icon in `src/components/FailureAlert.tsx` (from Lucide 1.59.0, ISC, and
+Feather, MIT), has a record under `licenses/` naming its source, hash,
+modifications and the files it is in. The build adds it to the notices file
+under "Copied artwork", and `npm run test:notices` fails if a file that says
+it draws a Lucide icon isn't listed in the record.

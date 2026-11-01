@@ -31,6 +31,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T
 }
 
+// Only Keeplane's own refusal (4xx), or a request the browser never sent, proves
+// nothing was saved. A server or proxy error after sending may follow a commit.
+export function definiteRefusal(cause: unknown): cause is ApiError {
+  if (!(cause instanceof ApiError)) return false
+  if (cause.status >= 400 && cause.status < 500) return true
+  return cause.status === 0 && cause.message !== 'Keeplane did not answer.'
+}
+
 export function action<T>(path: string, method: 'POST' | 'PUT', payload: object, signal?: AbortSignal): Promise<T> {
   return api<T>(path, { method, signal, headers: { 'Content-Type': 'application/json', 'X-Keeplane-Action': '1' }, body: JSON.stringify(payload) })
 }
