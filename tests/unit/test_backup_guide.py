@@ -1,6 +1,6 @@
 """The backup guide's commands match the Docker preview, the chart and the app.
 
-Cases BG-01 to BG-09 in backup-guide-cases.md. Nothing here starts Docker,
+Cases BKG-01 to BKG-09 in backup-guide-cases.md. Nothing here starts Docker,
 Kubernetes or Helm: the guide's shell blocks are read as text and checked
 against compose.yaml, the app image, the chart templates and the app's own
 management commands, so a rename in any of them fails here first.
@@ -127,7 +127,7 @@ def docker_target(line):
     return action, rest[index], extra
 
 
-def test_bg01_every_docker_line_names_a_preview_service_and_its_mounts():
+def test_bkg01_every_docker_line_names_a_preview_service_and_its_mounts():
     assert DOCKER, "the guide has no Docker preview commands"
     for line in DOCKER:
         action, service, extra = docker_target(line)
@@ -142,7 +142,7 @@ def test_bg01_every_docker_line_names_a_preview_service_and_its_mounts():
             assert service == "app" and "python manage.py " in line, line
 
 
-def test_bg02_every_check_is_shown_for_docker_and_kubernetes():
+def test_bkg02_every_check_is_shown_for_docker_and_kubernetes():
     def checks(lines):
         return Counter(re.search(r"manage\.py (\w+)", line).group(1)
                        for line in lines if "manage.py" in line)
@@ -159,7 +159,7 @@ def test_bg02_every_check_is_shown_for_docker_and_kubernetes():
     assert ("./components/control-plane", "/app") in SERVICES["app"]["volumes"]
 
 
-def test_bg03_named_commands_and_flags_exist():
+def test_bkg03_named_commands_and_flags_exist():
     named = set(re.findall(r"manage\.py (\w+)((?: --?[\w-]+)*)", GUIDE))
     assert named
     commands = get_commands()
@@ -169,7 +169,7 @@ def test_bg03_named_commands_and_flags_exist():
         parser.parse_args(flags.split())
 
 
-def test_bg04_docker_volume_names_and_owners_match_compose():
+def test_bkg04_docker_volume_names_and_owners_match_compose():
     names = compose_volume_names()
     for volume in ("account-data", "provider-keys", "gateway-data"):
         assert f"`{volume}`" in GUIDE
@@ -193,7 +193,7 @@ def test_bg04_docker_volume_names_and_owners_match_compose():
     assert f"`{gateway_owner.replace(':', ' ')}`" in GUIDE
 
 
-def test_bg05_kubernetes_names_match_the_chart():
+def test_bkg05_kubernetes_names_match_the_chart():
     assert re.search(r"kind: Deployment\nmetadata:\n  name: \{\{ \.Release\.Name \}\}-app\n",
                      APP_TEMPLATE)
     assert "app: {{ .Release.Name }}-app" in APP_TEMPLATE
@@ -221,7 +221,7 @@ def test_bg05_kubernetes_names_match_the_chart():
             assert "/" + match.group(1) in {"/state", "/provider-keys", "/app"}, line
 
 
-def test_bg06_paths_in_the_guide_are_the_apps_defaults():
+def test_bkg06_paths_in_the_guide_are_the_apps_defaults():
     assert '"/state/keeplane.sqlite3"' in SETTINGS
     assert '"/state/django-secret-key"' in SETTINGS
     assert "/state/keeplane.sqlite3" in GUIDE and "/state/django-secret-key" in GUIDE
@@ -233,7 +233,7 @@ def test_bg06_paths_in_the_guide_are_the_apps_defaults():
     assert "if not signing_key.exists():" in (ROOT / "deploy/local/prepare_volumes.py").read_text()
 
 
-def test_bg07_inline_python_is_the_tested_python(tmp_path):
+def test_bkg07_inline_python_is_the_tested_python(tmp_path):
     snippets = set(re.findall(r'python -c "([^"]+)"', GUIDE))
     assert snippets == {SQLITE_COPY, COPY_IN, SIGNING_SECRET_WRITE, NEW_SIGNING_SECRET}
     # The signing-secret restore writes the backup's bytes into the existing
@@ -258,7 +258,7 @@ def anchors(path):
             if line.startswith("#")}
 
 
-def test_bg08_links_and_anchors_resolve():
+def test_bkg08_links_and_anchors_resolve():
     links = re.findall(r"\]\(([^)\s]+)\)", GUIDE)
     assert links
     for link in links:
@@ -280,7 +280,7 @@ GATEWAY_WRITE = (
 
 @pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() != 0,
                     reason="giving files to the gateway's UID needs root")
-def test_bg09_gateway_restore_leaves_a_file_the_gateway_can_open():
+def test_bkg09_gateway_restore_leaves_a_file_the_gateway_can_open():
     """The guide's restore as root, then its chown: the gateway's user can write."""
     import shutil
     import sqlite3

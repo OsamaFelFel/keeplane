@@ -222,8 +222,10 @@ def test_ma_17_a_request_that_later_fails_keeps_its_record(
     assert [row["what"] for row in model_answers(f)] == [
         "Request sent to model private; project Callback"
     ]
-    # The model then fails and the developer's retry is refused because they
-    # signed out: the first request keeps its record and the retry adds none.
+    # No model is called here: Keeplane hears nothing after the final check, so
+    # whatever the model then does, including failing, can't touch the record.
+    # The developer's retry is refused because they signed out: the first
+    # request keeps its record and the retry adds none.
     f.stores.identity.logout(f.token)
     assert final().status_code == 401
     rows = model_answers(f)

@@ -418,3 +418,36 @@ test('BR-16: the Create user alerts use a circle-alert icon and a weight-600 tit
     }
   }
 })
+
+test("BR-17: Change role's failure messages match the design system on desktop and narrow screens", async ({ page }) => {
+  await mockAdmin(page)
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { sso_connected: false, csrf_token: 'masked' } }))
+  let status = 404
+  await page.route('**/api/users/developer-1/role', route => status === 0
+    ? route.abort('connectionreset')
+    : route.fulfill({ status, json: { error: 'Account not found' } }))
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 800 })
+    for (const [answer, title, second] of [
+      [404, "developer-example's role wasn't changed", 'Account not found. Nothing was saved. Check the details and try again.'],
+      [503, "It isn't clear whether developer-example's role was changed", "Keeplane couldn't confirm the result. Save the role again to make sure; it won't be changed twice."],
+      [0, "It isn't clear whether developer-example's role was changed", "Keeplane didn't answer in time. Save the role again to make sure; it won't be changed twice."],
+    ] as const) {
+      status = answer
+      await page.goto('/app/')
+      await page.getByRole('row', { name: /developer-example/ }).getByRole('button', { name: 'Change role' }).click()
+      const dialog = page.getByRole('dialog', { name: 'Change role' })
+      await dialog.getByRole('radio', { name: 'Admin' }).check()
+      await dialog.getByRole('button', { name: 'Save role' }).click()
+      await page.evaluate(() => document.fonts.ready)
+      await expectFailureMessage(page, title)
+      await expect(dialog.getByText(second, { exact: true })).toBeVisible()
+      // The message sits inside the dialog, above its buttons.
+      const alert = (await dialog.getByRole('alert').boundingBox())!
+      const box = (await dialog.boundingBox())!
+      expect(alert.x + alert.width).toBeLessThanOrEqual(box.x + box.width)
+      expect(alert.y + alert.height).toBeLessThanOrEqual((await dialog.getByRole('button', { name: 'Save role' }).boundingBox())!.y)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    }
+  }
+})

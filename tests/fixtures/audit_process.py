@@ -599,27 +599,32 @@ def outage(command):
     database, not from patched application code. PostgreSQL reports a full
     disk; SQLite reports a missing table. Both are operational errors, as a
     real outage would be (a constraint error would instead make Django pick a
-    new session key and try again).
+    new session key and try again). On PostgreSQL each table's trigger has its
+    own function, so repairing one table drops both and leaves the other
+    table's outage in place.
     """
     table = OUTAGE_TABLES[command["table"]]
     trigger = "keeplane_test_outage_" + command["table"]
+    function = trigger
     postgres = connection.vendor == "postgresql"
     with connection.cursor() as cursor:
         if not command["down"]:
             cursor.execute(
                 f"DROP TRIGGER IF EXISTS {trigger}" + (f" ON {table}" if postgres else "")
             )
+            if postgres:
+                cursor.execute(f"DROP FUNCTION IF EXISTS {function}()")
             return {"down": False}
         if postgres:
             cursor.execute(
-                "CREATE OR REPLACE FUNCTION keeplane_test_outage() RETURNS trigger "
+                f"CREATE OR REPLACE FUNCTION {function}() RETURNS trigger "
                 "LANGUAGE plpgsql AS $$ BEGIN "
                 "RAISE EXCEPTION 'test storage outage' USING ERRCODE = 'disk_full'; "
                 "END $$"
             )
             cursor.execute(
                 f"CREATE TRIGGER {trigger} BEFORE INSERT ON {table} "
-                "FOR EACH ROW EXECUTE FUNCTION keeplane_test_outage()"
+                f"FOR EACH ROW EXECUTE FUNCTION {function}()"
             )
         else:
             cursor.execute(

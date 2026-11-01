@@ -43,6 +43,19 @@ function bundledNotices(): Plugin {
             text += `\n${record.correspondence}\nSource: ${record.source_url}\n\n${notice.toString('utf8')}\n`
           }
         }
+        // Artwork copied into the source, such as an icon drawn inline, isn't an
+        // npm dependency; its record names the files it was copied into.
+        for (const file of readdirSync(new URL('./licenses/', import.meta.url)).filter(name => name.endsWith('.json')).sort()) {
+          const record = JSON.parse(readFileSync(new URL(`./licenses/${file}`, import.meta.url), 'utf8'))
+          if (!record.copied_into) continue
+          const notice = readFileSync(new URL(`./licenses/${record.name}-${record.version}.txt`, import.meta.url))
+          if (createHash('sha256').update(notice).digest('hex') !== record.sha256) {
+            this.error(`Invalid copied artwork notice for ${record.name}`)
+          }
+          // Not "name - version (": that heading form lists bundled npm packages.
+          text += `\n## Copied artwork: ${record.name} ${record.version}, ${record.license}\n`
+          text += `\n${record.copied}\nModifications: ${record.modifications}\nSource: ${record.source_url} (${record.source_file})\n\n${notice.toString('utf8')}\n`
+        }
         delete bundle[metadataFile]
         this.emitFile({ type: 'asset', fileName: 'assets/THIRD_PARTY_LICENSES.txt', source: text })
       },
