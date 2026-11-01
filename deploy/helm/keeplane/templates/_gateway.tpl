@@ -43,3 +43,74 @@ from the StatefulSet and headless Service in gateway-copies.yaml.
         path: ca.crt
 {{- end }}
 {{- end -}}
+
+{{- /*
+agentgateway-standalone.extraVolumes as the managed gateway copies mount them,
+given the agentgateway-standalone values. A Secret volume, or a projected
+volume with a Secret source, gets defaultMode 0440 when it sets none, as every
+Secret Keeplane mounts itself; a looser mode is refused. Kubernetes makes the
+files owned by root with the pod's fsGroup as their group, so the non-root
+gateway user can read them only through fsGroup, and Helm refuses a Secret
+volume without one.
+*/ -}}
+{{- define "keeplane.gatewayExtraVolumes" -}}
+{{- $fsGroup := index (.podSecurityContext | default dict) "fsGroup" -}}
+{{- $volumes := list -}}
+{{- range $index, $original := (.extraVolumes | default list) -}}
+{{- $volume := deepCopy $original -}}
+{{- $where := printf "agentgateway-standalone.extraVolumes[%d] (%s)" $index ($volume.name | default "unnamed") -}}
+{{- $holder := dict -}}
+{{- $secrets := list -}}
+{{- if hasKey $volume "secret" -}}
+{{- $holder = $volume.secret | default dict -}}
+{{- $_ := set $volume "secret" $holder -}}
+{{- $secrets = list $holder -}}
+{{- else if hasKey $volume "projected" -}}
+{{- $holder = $volume.projected | default dict -}}
+{{- $_ := set $volume "projected" $holder -}}
+{{- range ($holder.sources | default list) -}}
+{{- if and (kindIs "map" .) (hasKey . "secret") -}}
+{{- $secrets = append $secrets (.secret | default dict) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $secrets -}}
+{{- if or (kindIs "invalid" $fsGroup) (not $fsGroup) -}}
+{{- fail (printf "%s mounts a Secret into the managed gateway copies, but agentgateway-standalone.podSecurityContext.fsGroup is unset. Its files would be owned by root, so the non-root gateway could read them only if every user in the pod could. Give the gateway this value through an agentgateway-standalone.extraEnv entry with valueFrom.secretKeyRef, or set podSecurityContext.fsGroup (such as 65532) on a gateway that does not mount the shared provider-key volume." $where) -}}
+{{- end -}}
+{{- if kindIs "invalid" (index $holder "defaultMode") -}}
+{{- $_ := set $holder "defaultMode" 288 -}}
+{{- else -}}
+{{- include "keeplane.gatewaySecretMode.check" (dict "mode" (index $holder "defaultMode") "where" $where) -}}
+{{- end -}}
+{{- range $secret := $secrets -}}
+{{- range $item := ($secret.items | default list) -}}
+{{- if and (kindIs "map" $item) (not (kindIs "invalid" (index $item "mode"))) -}}
+{{- include "keeplane.gatewaySecretMode.check" (dict "mode" (index $item "mode") "where" (printf "%s item %s" $where ($item.key | default "unnamed"))) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $volumes = append $volumes $volume -}}
+{{- end -}}
+{{- toYaml $volumes -}}
+{{- end -}}
+
+{{- /*
+Refuses a file mode on a Secret the installer mounts into the managed gateway
+copies unless it is owner and group read (0440) or stricter: no write or
+execute bit and nothing for other users. Takes a dict with "mode" and "where".
+*/ -}}
+{{- define "keeplane.gatewaySecretMode.check" -}}
+{{- $mode := .mode -}}
+{{- if not (or (kindIs "float64" $mode) (kindIs "int64" $mode) (kindIs "int" $mode)) -}}
+{{- fail (printf "%s sets a Secret file mode that is not a number (%v). Leave it unset for 0440, or give an octal number such as 0440 or 0400." .where $mode) -}}
+{{- end -}}
+{{- $mode = int $mode -}}
+{{- $owner := mod (div $mode 64) 8 -}}
+{{- $group := mod (div $mode 8) 8 -}}
+{{- $other := mod $mode 8 -}}
+{{- if or (lt $mode 0) (gt $mode 511) (ne $other 0) (and (ne $owner 0) (ne $owner 4)) (and (ne $group 0) (ne $group 4)) -}}
+{{- fail (printf "%s gives Secret files mode %#o. The managed gateway copies accept only owner and group read (0440) or stricter, such as 0400: no write or execute bit and nothing for other users. Leave the mode unset and the chart uses 0440." .where $mode) -}}
+{{- end -}}
+{{- end -}}

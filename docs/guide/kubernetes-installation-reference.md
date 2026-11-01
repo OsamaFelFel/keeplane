@@ -55,12 +55,43 @@ non-root user 65532 can read it, other users cannot, and nobody can change it
 each certificate Keeplane checks; see
 [check and renew certificates](certificate-operations.md).
 
-The managed gateway reads Secrets only through `extraEnv` entries with
-`secretKeyRef` under `agentgateway-standalone`. Keep the `${NAME}` placeholder in
-its database URL and load `NAME` that way; the local values load `password` from
+The managed gateway reads its database password and key hashes only through
+`extraEnv` entries with `secretKeyRef` under `agentgateway-standalone`. Keep
+the `${NAME}` placeholder in its database URL and load `NAME` that way; the
+local values load `password` from
 `keeplane-gateway-db`. Its key policies are part of the chart: see
 [gateway access keys](#gateway-access-keys). In the local trial the app's
 signing key is generated on the state volume.
+
+Prefer `secretKeyRef` for anything else the managed gateway needs. If it must
+read a Secret as files, add a `secret` volume (or a `projected` volume with a
+`secret` source) to `agentgateway-standalone.extraVolumes`, and mount it with
+`extraVolumeMounts`. The gateway copies then get these files with mode 0440
+when the volume sets no mode. Helm keeps a stricter mode, such as 0400, and
+refuses a looser one: any write or execute bit, or any access for other users,
+such as Kubernetes' usual 0644. Because the files belong to root, the non-root
+gateway can read 0440 files only through the pod's group, so Helm also refuses
+a Secret volume unless `agentgateway-standalone.podSecurityContext.fsGroup` is
+set (for example to 65532); Kubernetes then adds group read, so 0400 files are
+written 0440. Leave `fsGroup` unset on a gateway that mounts the
+shared provider-key volume; that gateway has to use `secretKeyRef`
+([CM-04 to CM-06](../../tests/integration/chart-credential-mounts-cases.md)).
+With `gateway.mode=existing` the chart runs no gateway, so it ignores these
+settings. The chart offers no extra volumes for the app.
+
+```yaml
+agentgateway-standalone:
+  podSecurityContext:
+    fsGroup: 65532
+  extraVolumes:
+    - name: provider-ca
+      secret:
+        secretName: provider-ca   # mounted with mode 0440
+  extraVolumeMounts:
+    - name: provider-ca
+      mountPath: /run/provider-ca
+      readOnly: true
+```
 
 ## Gateway access keys
 
