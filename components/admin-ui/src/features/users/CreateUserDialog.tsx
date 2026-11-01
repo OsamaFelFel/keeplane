@@ -34,6 +34,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
   // true when Keeplane answered but the answer doesn't confirm the result
   const [unconfirmed, setUnconfirmed] = useState(false)
   const [error, setError] = useState('')
+  // the username Keeplane refused, kept while the admin edits the field again
+  const [refused, setRefused] = useState('')
   const [checkError, setCheckError] = useState('')
   const operationId = useRef<string | null>(null)
   const { reset, register, handleSubmit, control, formState: { errors } } = useForm<Fields>({ resolver: zodResolver(schema), defaultValues: { username: '', password: '', role: 'developer' } })
@@ -62,7 +64,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
       else { setUnconfirmed(!controller.signal.aborted); setPhase('no-answer') }
     } catch (cause) {
       if (!controller.signal.aborted && definiteRefusal(cause)) {
-        setPhase('form'); setError(cause.message)
+        setPhase('form'); setRefused(fields.username); setError(cause.message)
       } else {
         setUnconfirmed(!controller.signal.aborted && cause instanceof ApiError && cause.status >= 500)
         setPhase('no-answer')
@@ -109,8 +111,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
             <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="developer" id="create-developer" className="size-[18px]" /><Label htmlFor="create-developer" className="text-[15px]">Developer</Label></div>
           </RadioGroup>} />
         </fieldset>
-        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>It isn't clear whether {username} was created</AlertTitle><AlertDescription>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</AlertDescription></Alert>}
-        {error && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>User wasn't created</AlertTitle><AlertDescription>{error} Nothing was saved. Check the details and try again.</AlertDescription></Alert>}
+        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle className="wrap-anywhere">It isn't clear whether {username} was created</AlertTitle><AlertDescription>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</AlertDescription></Alert>}
+        {error && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle className="wrap-anywhere">{refused || 'User'} wasn't created</AlertTitle><AlertDescription>{error} Nothing was saved. Check the details and try again.</AlertDescription></Alert>}
         {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
         {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
         <div className="flex justify-end gap-3">

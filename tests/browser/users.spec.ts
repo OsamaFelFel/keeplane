@@ -279,3 +279,46 @@ test('BR-10: unavailable sign-in storage is explained without blaming the passwo
   await expect(page.getByRole('alert')).toContainText('contact your operator')
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled()
 })
+
+test('BR-13: the sign-in card title uses page-title on desktop and narrow screens', async ({ page }) => {
+  for (const width of [1280, 320]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/app/')
+    const title = page.getByRole('heading', { level: 1, name: 'Sign in to Keeplane' })
+    await expect(title).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    // page-title in product/design/system/tokens.json: IBM Plex Sans 28px on 36px at 600
+    expect(await title.evaluate(element => {
+      const style = getComputedStyle(element)
+      return [style.fontSize, style.lineHeight, style.fontWeight, style.fontFamily.split(',')[0].replace(/["']/g, '').trim()]
+    })).toEqual(['28px', '36px', '600', 'IBM Plex Sans'])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+  }
+})
+
+test('BR-14: a refused create names the username, in full, even at the longest allowed length', async ({ page }) => {
+  await mockAdmin(page)
+  await page.route('**/api/auth-options', route => route.fulfill({ json: { sso_connected: false, csrf_token: 'masked' } }))
+  await page.route(url => url.pathname === '/api/users' && !url.searchParams.has('page'),
+    route => route.fulfill({ status: 409, json: { error: 'That name already exists.' } }))
+  await page.setViewportSize({ width: 320, height: 800 })
+  await page.goto('/app/')
+  await page.getByRole('button', { name: 'Create user' }).click()
+  const long = 'a'.repeat(64)
+  await page.getByLabel('Username', { exact: true }).fill(long)
+  await page.getByLabel('Password', { exact: true }).fill('a-test-password-123456')
+  await page.getByRole('dialog').getByRole('button', { name: 'Create user' }).click()
+  const title = page.getByText(`${long} wasn't created`)
+  await expect(title).toBeVisible()
+  await expect(page.getByText('That name already exists. Nothing was saved. Check the details and try again.')).toBeVisible()
+  // The title wraps inside the dialog instead of running past it.
+  const fits = await title.evaluate(element => {
+    const dialog = element.closest('[role="dialog"]')!.getBoundingClientRect()
+    const box = element.getBoundingClientRect()
+    return box.right <= dialog.right && element.scrollWidth <= element.clientWidth
+  })
+  expect(fits).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  await page.getByLabel('Username', { exact: true }).fill('example-user')
+  await expect(title).toBeVisible()
+})

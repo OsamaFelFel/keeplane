@@ -124,7 +124,7 @@ test.each([500, 502, 503, 504])('UI-05: a %i answer is uncertain, so the dialog 
   expect(screen.getByText("It isn't clear whether example-user was created")).toBeTruthy()
   expect(screen.getByText(unconfirmed)).toBeTruthy()
   expect(screen.queryByText(noAnswer)).toBeNull()
-  expect(screen.queryByText("User wasn't created")).toBeNull()
+  expect(screen.queryByText("example-user wasn't created")).toBeNull()
 })
 
 test('UI-06: a success answer that names no user is uncertain', async () => {
@@ -144,9 +144,24 @@ test('UI-07: Keeplane refusing the user keeps what was typed and says nothing wa
   const onCreated = open()
   await fill(user)
   await user.click(screen.getByRole('button', { name: 'Create user' }))
-  expect(await screen.findByText("User wasn't created")).toBeTruthy()
+  expect(await screen.findByText("example-user wasn't created")).toBeTruthy()
   expect(screen.getByText(/That name already exists/)).toBeTruthy()
   expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('example-user')
   expect(screen.queryByRole('button', { name: 'Check' })).toBeNull()
   expect(onCreated).not.toHaveBeenCalled()
+  // the title keeps naming the refused username while the admin types a new one
+  await user.type(screen.getByLabelText('Username'), '-2')
+  expect(screen.getByText("example-user wasn't created")).toBeTruthy()
+})
+
+test('UI-08: a refused 64-character username is named in full and the title can wrap', async () => {
+  const long = 'a'.repeat(64)
+  fixture(async () => response({ error: 'That name already exists' }, 409))
+  const user = userEvent.setup()
+  open()
+  await user.type(screen.getByLabelText('Username'), long)
+  await user.type(screen.getByLabelText('Password'), 'a-test-password-123456')
+  await user.click(screen.getByRole('button', { name: 'Create user' }))
+  const title = await screen.findByText(`${long} wasn't created`)
+  expect(title.className).toContain('wrap-anywhere')
 })
