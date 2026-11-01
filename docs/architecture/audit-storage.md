@@ -14,7 +14,7 @@ flowchart LR
   B -- "sign-in session + break-glass record,<br/>one transaction" --> Records
   Gateway[Managed gateway: installed final check] --> C[App process]
   Customer[Customer-run gateway: shared final check] --> C
-  C -- "allowed request,<br/>own transaction" --> Records
+  C -- "allowed or held request,<br/>own transaction" --> Records
   A -- "Show, search, page" --> Records
   B -- "Show, search, page" --> Records
   subgraph DB["Django database: SQLite file or PostgreSQL"]
@@ -59,11 +59,34 @@ flowchart LR
   failed write never refuses the request: it is rolled back, logged as a
   warning with only the error kind, and the decision is still returned. Each
   native retry passes the final check again and so writes its own record.
+- **Held-back requests** are written by the entry check, the gateway's first
+  check of each request (Spec 006 ST21, ADR 025, governance issue #29). A
+  managed gateway calls `POST /internal/runtime/installed/entry`; a
+  customer-run (`existing`) gateway calls the shared
+  `POST /internal/runtime/authorize` at its route. When personal-data
+  detection holds the request to the detection class,
+  `held_request_records.record_held_request` writes one record in its own
+  transaction, after the decision is made: whether the requested model was
+  allowed (it is approved for the class) or refused (it isn't). Detection
+  also runs at the final selected-model check, but that check runs again for
+  every backend attempt, so it never records a hold: one held request gets one
+  record, however often it is retried. The shared route check does not record
+  on a managed install. The record's account is the developer whose session
+  made the request. Its description gives a random reference (`HR-` and 12
+  hex digits, derived from nothing in the request), the class, the reason
+  category (personal data detected, request could not be read, detector
+  unavailable, check took too long, detector failed), the project and the
+  model. A refused model ID Keeplane doesn't know is not copied. A failed
+  write is handled as for model answers: rolled back, logged as a warning
+  with only the error kind, and the decision stands, so a held request is
+  never let through to a model that isn't approved for its class. A request
+  the entry check found clean but the final check held (the detector became
+  unavailable or too slow in between) is held but not recorded.
 - **Break-glass sign-ins** are always written, in the same transaction as the
   session. If the record cannot be written, the sign-in fails.
 - A record holds its kind, UTC time, account ID, username and a short
   description. It never holds passwords, session tokens, provider keys,
-  prompts, answers or other request text.
+  prompts, answers, other request text or anything detection found.
 
 ## Finding records
 
@@ -112,6 +135,9 @@ writes on the same databases. The
 [model-answer cases](../../tests/integration/model-answer-record-cases.md)
 cover the switch, refused requests, failed writes, leaks and other developers'
 records in both gateway modes, with the producer also run on both databases. The
+[held-back request cases](../../tests/integration/held-request-record-cases.md)
+cover one record per held request, each reason, refused and allowed requests,
+failed writes, leaks and other developers' records in both gateway modes. The
 [break-glass sign-in cases](../../tests/integration/break-glass-sign-in-cases.md)
 sign in through the API on both databases, including after a restart, after a
 password rotation and while the database refuses Audit or session rows. The

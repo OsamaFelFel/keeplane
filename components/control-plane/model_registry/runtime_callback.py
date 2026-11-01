@@ -29,6 +29,7 @@ from rest_framework.response import Response
 
 from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .developer_keys import DeveloperKeyMissing
+from .held_request_records import record_held_request
 from .installed_runtime import DjangoInstalledRuntimeGate, unique_pairs
 from .model_answer_records import record_sent_request
 from .models import ModelApproval, ProviderKeyChoice
@@ -174,26 +175,36 @@ def personal_data_verdict(policy, body):
     return inspector().check(text)
 
 
-def held_request(result, verdict):
-    """Where task 006-02 records a held request, never its text (ADR 025).
+def held_request(hold, verdict):
+    """Record a request held back by detection (Spec 006 ST21, ADR 025).
 
-    A held request's reference, time, developer, project, detection class and
-    reason (``verdict.reason``) are known here. Recording them, once per
-    request rather than per retry, belongs to the Audit work; nothing is
-    recorded yet.
+    Never raises and never changes the decision; see held_request_records.
     """
+    record_held_request(hold, verdict)
 
 
-def authorized_model(request, body):
+def authorized_model(request, body, *, record_hold=False):
+    """Authorize; at a gateway's entry check, also record a held request.
+
+    Only the entry check records (``record_hold``): it runs once per request,
+    while the selected-model check runs again for every backend attempt.
+    """
     policy = model_policy()
     verdict = personal_data_verdict(policy, body)
-    result = DjangoModelAuthorization(
-        RuntimeIdentity(IDENTITY),
-        policy,
-        project_access=organization_project_access,
-    ).authorize(
-        request.auth, body["project_id"], body["model_id"], personal_data=verdict
-    )
+    try:
+        result = DjangoModelAuthorization(
+            RuntimeIdentity(IDENTITY),
+            policy,
+            project_access=organization_project_access,
+        ).authorize(
+            request.auth, body["project_id"], body["model_id"], personal_data=verdict
+        )
+    except ModelAccessDenied as error:
+        if record_hold and error.held is not None:
+            held_request(error.held, verdict)
+        raise
+    if record_hold and "held_class" in result:
+        held_request({**result, "allowed": True}, verdict)
     return result, verdict
 
 
@@ -210,12 +221,14 @@ def decision(result):
 def authorize(request, *, selected=False):
     """The shared check a customer-run gateway calls.
 
-    `/internal/runtime/authorize` may run several times for one request (at the
-    route and again per model backend), so it writes no record. The
-    `/selected` variant is the last check before the model: in customer-run
-    mode it writes the "Model answers" record. A managed gateway records on its
-    installed final check instead, so `/selected` refuses there; one request is
-    never recorded by both.
+    `/internal/runtime/authorize` is the route check, once per request: in
+    customer-run mode it writes the "Held-back requests" record when detection
+    holds the request, and never a "Model answers" record. The `/selected`
+    variant is the last check before the model, run again for each backend
+    attempt: in customer-run mode it writes the "Model answers" record and
+    never a held-back one. A managed gateway records on its installed checks
+    instead, so `/selected` refuses there and the plain check records no hold;
+    one request is never recorded by both.
     """
     try:
         body = callback_metadata(request)
@@ -226,7 +239,10 @@ def authorize(request, *, selected=False):
                 {"error": "Managed gateways use the installed runtime checks"},
                 status=503,
             )
-        result, verdict = authorized_model(request, body)
+        managed = os.environ.get("GATEWAY_MODE", "managed") == "managed"
+        result, _ = authorized_model(
+            request, body, record_hold=not selected and not managed
+        )
         DjangoSharedKeyAvailability(
             MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")
         ).require_available(result["model_id"])
@@ -237,8 +253,6 @@ def authorize(request, *, selected=False):
     if selected:
         # The final check before the model: the request is sent from here on.
         record_sent_request(result)
-        if "held_class" in result:
-            held_request(result, verdict)
     return Response(decision(result))
 
 
@@ -260,7 +274,7 @@ def authorize_installed(request, *, selected=False):
             settings.RUNTIME_GUARD_MANIFEST_FILE,
             os.environ.get("PROVIDER_KEY_DIR", ""),
         ).require_installed(body["model_id"], body.get("definition_fingerprint"))
-        result, verdict = authorized_model(request, body)
+        result, _ = authorized_model(request, body, record_hold=not selected)
         if not selected and enrollment["key_choice"] == "personal":
             # Missing keys must fail before native backend selection, where a
             # failed token exchange would change the enrolled backend's health.
@@ -286,8 +300,6 @@ def authorize_installed(request, *, selected=False):
     if selected:
         # The final check before the model: the request is sent from here on.
         record_sent_request(result)
-        if "held_class" in result:
-            held_request(result, verdict)
     return Response(decision(result))
 
 

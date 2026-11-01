@@ -21,8 +21,8 @@ SCENARIOS = {
     ("ST21", "One kind only"),
     ("ST22", "Find records"),
 }
-# Waiting on detection (task 005-03); listed but not yet provable.
-NOT_BUILT = {("ST21", "Held-back requests")}
+# Scenarios listed but not yet provable; none since task 006-02.
+NOT_BUILT = set()
 CASE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-\d+\b")
 # The catalog each case prefix belongs to, as the map's intro paragraph links
 # them. A case counts only if its row is in its own catalog, so a row with the
@@ -34,6 +34,7 @@ CATALOGS = {
     "BG": "e2e/audit-cases.md",
     "BGS": "integration/break-glass-sign-in-cases.md",
     "CL-INT": "integration/complexity-level-cases.md",
+    "HR": "integration/held-request-record-cases.md",
     "MA": "integration/model-answer-record-cases.md",
     "SC": "integration/settings-change-record-cases.md",
 }
