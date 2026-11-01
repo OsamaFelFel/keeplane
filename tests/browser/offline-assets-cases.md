@@ -9,11 +9,13 @@ against the live application with its real sign-in.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
-| OFF-UI-01 | Open the sign-in page with everything outside Keeplane blocked. | Nothing was blocked and no Keeplane asset failed. The heading and field labels are set in IBM Plex Sans, and the browser reports it drew them with the bundled Plex Sans semibold and regular files. Both Sans files and the Mono file load from Keeplane with status 200. The page fits the width. |
-| OFF-UI-02 | Sign in as the first admin and open Models and routing with everything outside Keeplane blocked. | The same as OFF-UI-01 for the admin page heading and description. |
+| OFF-UI-01 | Open the sign-in page with everything outside Keeplane blocked. | Nothing was blocked and no Keeplane asset failed. The heading, field labels and Sign in button are set in IBM Plex Sans at the design weights (600, 500, 600), and the browser reports it drew each with the matching bundled file: semibold, medium, semibold. The regular, medium and semibold Sans files and the Mono file load from Keeplane with status 200. The page fits the width. |
+| OFF-UI-02 | Sign in as the first admin and open Models and routing with everything outside Keeplane blocked. | The same as OFF-UI-01, checked on the page heading (semibold), its description (regular) and the first button in the page (medium). |
 
-The Mono file is loaded on request because these pages show no code text; this
-still proves Keeplane serves it. The [static cases](../unit/ui-offline-assets-cases.md)
+A face a page does not draw is loaded on request: the Mono file on both pages,
+which show no code text, and the regular Sans file on sign-in. This still proves
+Keeplane serves every declared file. A weight drawn with a neighbouring file or a
+synthesized face fails, because the browser reports the file that drew the text. The [static cases](../unit/ui-offline-assets-cases.md)
 check the build for external addresses.
 
 Run `npm test -- offline-assets.spec.ts` from this directory with the

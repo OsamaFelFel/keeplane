@@ -85,7 +85,7 @@ origin and HTTPS scheme come from deployment configuration, not client headers.
 
 The web UI loads only from Keeplane, so it works on an isolated network
 (ADR 009). Django serves the built page, scripts and styles under `/app/assets/` and the
-bundled IBM Plex Sans (regular, semibold) and IBM Plex Mono (regular) files
+bundled IBM Plex Sans (regular, medium, semibold) and IBM Plex Mono (regular) files
 under `/fonts/` and `/app/fonts/`, with their SIL Open Font License in
 `/fonts/LICENSE.txt`. The UI uses no font service, CDN, analytics, telemetry or
 update check. A [static check](../../tests/unit/ui-offline-assets-cases.md)
