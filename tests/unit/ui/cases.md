@@ -12,7 +12,8 @@ colocated tests.
 | UI-04 | Lose the answer, choose Check, which finds nothing, then send again. | The dialog says Keeplane didn't answer in time. After Check the form shows what was typed, including the role, and the second request reuses the operation ID. |
 | UI-05 | Create user gets a 500, 502, 503 or 504. | The dialog says it isn't clear whether the user was created and "Keeplane couldn't confirm the result. Check to find out.", and offers Check instead of saying nothing was saved. |
 | UI-06 | Create user gets a success answer that names no user. | The dialog says Keeplane couldn't confirm the result, offers Check and reports no user. |
-| UI-07 | Keeplane refuses the user, for example a taken name. | The dialog says the user wasn't created, keeps what was typed and offers no Check. |
+| UI-07 | Keeplane refuses the user, for example a taken name, then the admin edits the username. | The dialog says "[Username] wasn't created" with the username Keeplane refused, keeps what was typed and offers no Check. The title keeps naming the refused username while the field changes. |
+| UI-08 | Keeplane refuses a 64-character username, the longest allowed. | The title names the whole username, not shortened, and may break inside it to wrap within the dialog, as table text wraps in the design system. |
 | UI-SIGN-01 | Open sign-in while no single sign-on provider is connected. | Only username, password and Sign in appear; there is no single sign-on or sign-up control. |
 | UI-SIGN-02 | Open sign-in while the server reports a connected provider. | Sign in with single sign-on also appears. |
 | UI-USERS-01 | Open Users with the break-glass admin and a local user. | The break-glass row says it is managed at infrastructure level and has no action; other rows have Change role; there is no edit or remove action. |
@@ -47,3 +48,5 @@ colocated tests.
 - Set class submits the explicit choice through the protected action, including React StrictMode.
 - A refused write keeps the choice. A lost reply or ten-second timeout offers Check without repeating the write.
 - Readback confirms the saved class. If classes were turned off, the dialog keeps the result uncertain rather than clearing an assignment.
+
+The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`.

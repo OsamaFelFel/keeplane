@@ -28,7 +28,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: () => void }) {
   }
   return <main className="flex min-h-svh items-center justify-center p-4">
     <Card className="w-full max-w-[400px] rounded-[10px] border-border bg-card p-8 shadow-none">
-      <CardHeader className="p-0 pb-6"><h1 className="text-[24px] font-semibold">Sign in to Keeplane</h1></CardHeader>
+      <CardHeader className="p-0 pb-6"><h1 className="text-[28px] leading-[36px] font-semibold">Sign in to Keeplane</h1></CardHeader>
       <CardContent className="p-0"><form onSubmit={submit} className="grid gap-5">
         <div><Label htmlFor="username" className="keeplane-field-label">Username</Label><Input id="username" name="username" autoComplete="username" required /></div>
         <div><Label htmlFor="password" className="keeplane-field-label">Password</Label><Input id="password" name="password" type="password" autoComplete="current-password" required /></div>
