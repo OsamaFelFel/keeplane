@@ -16,14 +16,17 @@ from .readiness import schema_ready
 log = logging.getLogger(__name__)
 
 
-def gateway_runtime():
+def gateway_runtime(log_refusal=False):
     """Read the gateway's runtime API; say plainly when it refuses the admin key."""
     status, result = MODEL_GATEWAY.request("/api/runtime", timeout=10)
     if status in (401, 403):
         # Typically a key rotation half done: the mounted admin key and the
         # gateway's loaded hash differ. Never pass the gateway's 401 on: the
         # admin's browser would read it as their own sign-in having ended.
-        log.warning("%s (HTTP %s)", KEY_REFUSED, status)
+        # Only the signed-in admin path logs, so public /health probes can't
+        # fill the log.
+        if log_refusal:
+            log.warning("%s (HTTP %s)", KEY_REFUSED, status)
         return 503, {"error": KEY_REFUSED}
     return status, result
 
@@ -104,7 +107,7 @@ def gateway_status(request):
     _, denied = admin(request)
     if denied:
         return JsonResponse(denied.data, status=denied.status_code)
-    status, result = gateway_runtime()
+    status, result = gateway_runtime(log_refusal=True)
     return JsonResponse(
         {
             "gateway": {

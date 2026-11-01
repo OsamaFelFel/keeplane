@@ -105,7 +105,8 @@ def gateway():
     from common.api import MODEL_GATEWAY
     from common.web import gateway_runtime
 
-    runtime_status, runtime_body = gateway_runtime()
+    # As the signed-in admin's status page asks it, which logs a refusal.
+    runtime_status, runtime_body = gateway_runtime(log_refusal=True)
     models_status, _ = MODEL_GATEWAY.request("/v1/models", timeout=10)
     return {
         "runtime_status": runtime_status,

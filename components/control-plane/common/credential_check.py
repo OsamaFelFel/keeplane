@@ -28,13 +28,20 @@ def key_status(status, body):
 
 
 PREVIOUS_PASSWORD = "connected with the previous password; the database refuses the mounted one"
+# What a new process, such as `kubectl exec ... check_credentials`, sees between
+# writing a new password to the Secret and changing the role: unlike the
+# serving copies, it has no previous password in memory.
+PASSWORD_REFUSED = "the database refuses the mounted password"
+UNREACHABLE = "unreachable"
 
 
 def database_status():
+    from common.database_password import is_authentication_failure
+
     try:
         connection.ensure_connection()
-    except DatabaseError:
-        return "refused or unreachable"
+    except DatabaseError as error:
+        return PASSWORD_REFUSED if is_authentication_failure(error) else UNREACHABLE
     finally:
         connection.close()
     path = connection.settings_dict.get("PASSWORD_FILE")

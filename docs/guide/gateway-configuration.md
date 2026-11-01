@@ -275,7 +275,7 @@ refused calls:
    for pod in $(kubectl -n "$NS" get pods -l app="$RELEASE"-app -o name); do
      echo "$pod $(mounted_sha "$pod" /run/gateway-keys/admin-key) $(mounted_sha "$pod" /run/gateway-keys/runtime-key)"
    done
-   shasum -a 256 < admin-key; shasum -a 256 < runtime-key
+   tr -d '\n' < admin-key | shasum -a 256; tr -d '\n' < runtime-key | shasum -a 256
    ```
 
 4. Remove the old keys from your gateway, run `check_credentials` until it

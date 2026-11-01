@@ -16,6 +16,7 @@ database has not accepted, writes a password anywhere, or logs one.
 """
 
 import logging
+import re
 import threading
 from pathlib import Path
 
@@ -24,6 +25,23 @@ log = logging.getLogger(__name__)
 
 class DatabasePasswordUnavailable(OSError):
     pass
+
+
+# libpq gives no SQLSTATE for a failed connection, only the server's message.
+# These are PostgreSQL's messages for SQLSTATE 28P01 (invalid_password) and
+# 28000 (invalid_authorization_specification) with English server messages,
+# which is the server default. Anything else, such as a refused TCP connection,
+# a timeout or a TLS failure, is "unreachable", never a password refusal.
+AUTHENTICATION_FAILURE = re.compile(
+    r"28P01|28000|password authentication failed|authentication failed for user"
+    r"|no pg_hba\.conf entry|password is required|role \"[^\"]*\" is not permitted to log in",
+    re.IGNORECASE,
+)
+
+
+def is_authentication_failure(error):
+    """True when the server was reached and refused the credentials."""
+    return bool(AUTHENTICATION_FAILURE.search(str(error)))
 
 
 def read_password(path):
@@ -51,11 +69,14 @@ class RotatingPassword:
         with self._lock:
             return self._previous_in_use
 
-    def connect(self, open_connection, refused):
+    def connect(self, open_connection, failed, refused=is_authentication_failure):
         """Open a connection with the file's password, or the last accepted one.
 
-        `open_connection(password)` opens one connection; `refused` is the
-        exception class it raises when the database does not let it in.
+        `open_connection(password)` opens one connection and raises `failed`
+        when it can't. Only a failure for which `refused(error)` is true (the
+        server refused the password) moves on to the other password; any other
+        failure, such as the server being unreachable, is raised at once and
+        changes nothing.
         """
         with self._lock:
             accepted, previous_in_use = self._accepted, self._previous_in_use
@@ -79,7 +100,9 @@ class RotatingPassword:
         for password in order:
             try:
                 connection = open_connection(password)
-            except refused as error:
+            except failed as error:
+                if not refused(error):
+                    raise
                 failure = error
                 continue
             self._accepted_now(password, current)

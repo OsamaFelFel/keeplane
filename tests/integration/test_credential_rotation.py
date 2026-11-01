@@ -346,9 +346,11 @@ def test_cr_04_postgresql_password_rotates_in_order_without_refused_requests(rol
     report = app.ask("check_credentials")
     assert report["exit"] == 1
     assert report["report"]["database"].startswith("connected with the previous password")
-    # A new process has no previous password and reports the mismatch.
+    # A new process, as `kubectl exec ... check_credentials` starts, has no
+    # previous password: it reports the refusal plainly, not "unreachable".
     fresh = installation.start().ask("check_credentials")
-    assert fresh["report"]["database"] == "refused or unreachable"
+    assert fresh["exit"] == 1
+    assert fresh["report"]["database"] == "the database refuses the mounted password"
 
     # 2. The role's password changes; the running process follows at once.
     role["set_password"](second)
@@ -387,10 +389,28 @@ def test_cr_06_a_wrong_password_in_the_secret_keeps_the_app_on_the_working_one(r
     assert app.ask("check_credentials")["exit"] == 1
     assert sum("still using the previous password" in line
                for line in app.ask("logged")["logged"]) == 1
+    # What the installer's `kubectl exec` check shows meanwhile.
+    fresh = installation.start().ask("check_credentials")
+    assert fresh["report"]["database"] == "the database refuses the mounted password"
     # Recovery: put the working password back.
     installation.write("database-password", role["first"])
     assert app.ask("database") == {"ok": True, "snapshot": before}
     assert app.ask("check_credentials")["exit"] == 0
+
+
+def test_cr_10_an_unreachable_database_is_not_reported_as_a_refused_password(role_installation):
+    import socket
+
+    installation, _ = role_installation
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        closed = str(probe.getsockname()[1])
+    installation.database = dict(
+        installation.database, KEEPLANE_DATABASE_HOST="127.0.0.1", KEEPLANE_DATABASE_PORT=closed
+    )
+    report = installation.start().ask("check_credentials")
+    assert report["exit"] == 1
+    assert report["report"]["database"] == "unreachable"
 
 
 # --- How each credential reaches the pods (Helm render) --------------------

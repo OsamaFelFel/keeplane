@@ -15,16 +15,28 @@ class Refused(Exception):
     pass
 
 
+AUTH_FAILED = (
+    'connection failed: connection to server at "10.0.0.5", port 5432 failed: '
+    'FATAL:  password authentication failed for user "keeplane_app"'
+)
+NETWORK_DOWN = (
+    'connection failed: connection to server at "10.0.0.5", port 5432 failed: '
+    "Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"
+)
+
+
 class Database:
-    """A role with one password, as PostgreSQL has."""
+    """A role with one password, as PostgreSQL has, that may be unreachable."""
 
     def __init__(self, password):
-        self.password, self.attempts = password, []
+        self.password, self.attempts, self.reachable = password, [], True
 
     def open(self, password):
         self.attempts.append(password)
+        if not self.reachable:
+            raise Refused(NETWORK_DOWN)
         if password != self.password:
-            raise Refused()
+            raise Refused(AUTH_FAILED)
         return "connection"
 
 
@@ -94,10 +106,45 @@ def test_cr_u3b_unreadable_file_keeps_the_accepted_password(tmp_path):
     assert database.attempts == ["right", "right", "right"]
 
 
+def test_cr_u3c_an_unreachable_database_is_not_a_refused_password(tmp_path, caplog):
+    secret = tmp_path / "password"
+    secret.write_text("first")
+    rotating, database = RotatingPassword(secret), Database("first")
+    rotating.connect(database.open, Refused)
+    secret.write_text("second")
+    database.reachable = False
+    caplog.set_level(logging.WARNING)
+    with pytest.raises(Refused):
+        rotating.connect(database.open, Refused)
+    # The network error was raised at once: no other password was tried, the
+    # process did not switch to "previous password" mode, nothing was logged.
+    assert database.attempts == ["first", "second"]
+    assert rotating.previous_in_use is False
+    assert caplog.records == []
+
+
+@pytest.mark.parametrize(
+    ("message", "refused"),
+    [
+        (AUTH_FAILED, True),
+        ('FATAL:  no pg_hba.conf entry for host "10.0.0.9", user "app"', True),
+        ('FATAL:  role "app" is not permitted to log in', True),
+        (NETWORK_DOWN, False),
+        ("timeout expired", False),
+        ("SSL error: certificate verify failed", False),
+        ('could not translate host name "db" to address', False),
+    ],
+)
+def test_cr_u3d_password_refusal_is_told_apart_from_unreachable(message, refused):
+    from common.database_password import is_authentication_failure
+
+    assert is_authentication_failure(Refused(message)) is refused
+
+
 def test_cr_u4_gateway_key_refusal_is_reported_as_unavailable_not_signed_out(caplog):
     caplog.set_level(logging.WARNING)
     with patch.object(web.MODEL_GATEWAY, "request", return_value=(401, {"error": "x"})):
-        status, body = web.gateway_runtime()
+        status, body = web.gateway_runtime(log_refusal=True)
     assert status == 503
     assert body == {"error": credential_check.KEY_REFUSED}
     assert "restart the gateway copies" in body["error"]
@@ -106,12 +153,16 @@ def test_cr_u4_gateway_key_refusal_is_reported_as_unavailable_not_signed_out(cap
         assert web.gateway_runtime() == (503, {"error": "down"})
 
 
-def test_cr_u5_gateway_health_fails_on_a_refused_key(rf):
+def test_cr_u5_gateway_health_fails_on_a_refused_key_without_logging(rf, caplog):
+    caplog.set_level(logging.WARNING)
     with patch.object(web.MODEL_GATEWAY, "request", return_value=(403, {})):
-        response = web.gateway_health(rf.get("/health"))
+        for _ in range(5):
+            response = web.gateway_health(rf.get("/health"))
     assert response.status_code == 503
-    # The public endpoint says only that the gateway is unavailable.
+    # The public endpoint says only that the gateway is unavailable, and a
+    # probe calling it repeatedly writes nothing to the log.
     assert response.content == b'{"gateway": "unavailable"}'
+    assert caplog.records == []
 
 
 @pytest.mark.parametrize(

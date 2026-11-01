@@ -254,6 +254,19 @@ It shows whether the database accepts the app's password and whether every
 gateway copy accepts the admin and runtime keys, and it lists the registered
 gateway models (with their definition fingerprints) and Keeplane's approvals.
 It never prints a password, key or key hash. Start only when `"passed": true`.
+Its `"database"` line is one of:
+
+| `"database"` | Meaning |
+| --- | --- |
+| `connected` | The database accepts the password in the mounted file. |
+| `the database refuses the mounted password` | The server was reached and refused the login: the role's password differs from the Secret, or the role or `pg_hba.conf` doesn't allow it. |
+| `unreachable` | No answer from the server: network, DNS, TLS verification or the server being down. |
+
+The check runs in a new process inside the pod, not in the serving process,
+so it only ever knows the password in the file. It never reports what the
+serving copies are using; their log shows that (below). If your server sends
+its messages in a language other than English (`lc_messages`), a refused login
+shows as `unreachable`.
 After the rotation, save `after.json` the same way and compare:
 
 ```sh
@@ -298,11 +311,21 @@ refused along the way ([CR-04](../../tests/integration/credential-rotation-cases
    ```
 
 2. Wait until every app pod shows the new file's SHA-256 (above), or until each
-   pod has logged "still using the previous password":
+   pod has logged "still using the previous password". That line means the
+   copy has the new file and is still serving with the old password. The
+   readiness probe opens a connection every 5 seconds, so it appears soon
+   after the file arrives:
 
    ```sh
    kubectl -n "$NS" logs -l app="$RELEASE"-app -c app --since=10m --prefix | grep 'previous password'
    ```
+
+   From now until step 3, `check_credentials` reports `"database": "the
+   database refuses the mounted password"` and `"passed": false`. That is
+   expected: the role still has the old password. The pods stay ready and
+   requests keep succeeding; `kubectl -n "$NS" get pods -l app="$RELEASE"-app`
+   shows them all `1/1 Running`. If the check says `unreachable` instead, stop:
+   that is a network or TLS problem, not this rotation.
 
 3. Change the role's password. psql's `\password` asks for it and sends only a
    SCRAM hash, so the password stays out of shell history and server logs.
@@ -314,8 +337,8 @@ refused along the way ([CR-04](../../tests/integration/credential-rotation-cases
    ```
 
 4. Within a few seconds each pod logs "accepted the password in the mounted
-   file". Save `after.json`: `"database": "connected"`, `"passed": true`, and
-   the models and approvals unchanged.
+   file". `check_credentials` now reports `"database": "connected"`. Save
+   `after.json`: `"passed": true`, and the models and approvals unchanged.
 
 Don't restart or scale the app between steps 1 and 3: a copy that starts in
 that window has only the new password, can't start, and Kubernetes restarts it
@@ -327,10 +350,15 @@ If something goes wrong:
   storage as unavailable and turn unready until the new file reaches them.
   Finish step 1 at once; they recover on their own, without a restart
   ([CR-05](../../tests/integration/credential-rotation-cases.md)).
-- **The Secret holds a wrong password.** Copies keep working on the previous
-  one, the log line stays, and `check_credentials` reports "connected with the
-  previous password". Write the right password to the Secret before step 3
-  ([CR-06](../../tests/integration/credential-rotation-cases.md)).
+- **The Secret holds a wrong password.** From the outside this looks the same
+  as the expected state between steps 1 and 3: the copies keep serving with
+  the previous password and log "still using the previous password", and
+  `check_credentials` reports "the database refuses the mounted password". So
+  before step 3, check that the pods' SHA-256 matches your `app-db-password`
+  file. If it doesn't, write the right password to the Secret. If you already
+  ran step 3 with a different value, the copies can't connect: put the
+  password you set on the role into the Secret, and they recover without a
+  restart ([CR-06](../../tests/integration/credential-rotation-cases.md)).
 - **A pod never shows the new file.** Restart the app copies with
   `kubectl -n "$NS" rollout restart deployment/"$RELEASE"-app`, after step 3.
 - **To back out before step 3**, put the old password back in the Secret.
