@@ -11,9 +11,11 @@ from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer
 from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
+from common.middleware import CHECK_LIMIT
 from django.conf import settings
 from django.db import DatabaseError
 from django.views.decorators.cache import never_cache
+from personal_data.inspection import NOT_SENT, Verdict, inspector, request_text
 from projects.access import organization_project_access
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.decorators import (
@@ -99,13 +101,24 @@ def callback_metadata(request, *, selected=False, with_project=True):
         return Response({"error": "Gateway credential is invalid"}, status=403)
     if request.content_type != "application/json":
         return Response({"error": "Send JSON metadata"}, status=415)
-    raw = request.read(4097)
-    if len(raw) > 4096:
+    raw = request.read(MAX_CHECKED_BODY + 1)
+    if len(raw) > MAX_CHECKED_BODY:
         return Response({"error": "Authorization metadata is too large"}, status=413)
     try:
         body = json.loads(raw, object_pairs_hook=unique_pairs)
     except (ValueError, UnicodeDecodeError, RecursionError):
+        if len(raw) > 4096:
+            return Response(
+                {"error": "Authorization metadata is too large"}, status=413
+            )
         return Response({"error": "Send valid JSON metadata"}, status=400)
+    # A request check may carry the request's messages for personal-data
+    # detection (Spec 005 ST20); metadata alone keeps its 4 KiB limit.
+    messages = MISSING
+    if with_project and isinstance(body, dict) and "messages" in body:
+        messages = body.pop("messages")
+    elif len(raw) > 4096:
+        return Response({"error": "Authorization metadata is too large"}, status=413)
     fields = {"model_id"}
     if with_project:
         fields.add("project_id")
@@ -137,15 +150,56 @@ def callback_metadata(request, *, selected=False, with_project=True):
             else "Send only model validation metadata"
         )
         return Response({"error": message}, status=400)
+    if messages is not MISSING:
+        body["messages"] = messages
     return body
 
 
+# The largest request check read: metadata plus the request's messages.
+# A larger one is refused before any decision, never passed on unchecked.
+MAX_CHECKED_BODY = CHECK_LIMIT
+MISSING = object()
+
+
+def personal_data_verdict(policy, body):
+    """Inspect the request only while detection is on; text never leaves here.
+
+    While detection reads as off, the request is marked not inspected: the
+    locked policy read ignores that unless detection was turned on in
+    between, and then holds the request.
+    """
+    if not policy.detection_on():
+        return Verdict(True, NOT_SENT)
+    text = request_text(body.get("messages")) if "messages" in body else None
+    return inspector().check(text)
+
+
+def held_request(result, verdict):
+    """Where task 006-02 records a held request, never its text (ADR 025).
+
+    A held request's reference, time, developer, project, detection class and
+    reason (``verdict.reason``) are known here. Recording them, once per
+    request rather than per retry, belongs to the Audit work; nothing is
+    recorded yet.
+    """
+
+
 def authorized_model(request, body):
-    return DjangoModelAuthorization(
+    policy = model_policy()
+    verdict = personal_data_verdict(policy, body)
+    result = DjangoModelAuthorization(
         RuntimeIdentity(IDENTITY),
-        model_policy(),
+        policy,
         project_access=organization_project_access,
-    ).authorize(request.auth, body["project_id"], body["model_id"])
+    ).authorize(
+        request.auth, body["project_id"], body["model_id"], personal_data=verdict
+    )
+    return result, verdict
+
+
+def decision(result):
+    """The response: actor, project and model only, as before detection."""
+    return {key: result[key] for key in ("actor_id", "project_id", "model_id")}
 
 
 @never_cache
@@ -172,7 +226,7 @@ def authorize(request, *, selected=False):
                 {"error": "Managed gateways use the installed runtime checks"},
                 status=503,
             )
-        result = authorized_model(request, body)
+        result, verdict = authorized_model(request, body)
         DjangoSharedKeyAvailability(
             MODEL_GATEWAY, os.environ.get("PROVIDER_KEY_DIR", "")
         ).require_available(result["model_id"])
@@ -183,7 +237,9 @@ def authorize(request, *, selected=False):
     if selected:
         # The final check before the model: the request is sent from here on.
         record_sent_request(result)
-    return Response(result)
+        if "held_class" in result:
+            held_request(result, verdict)
+    return Response(decision(result))
 
 
 @never_cache
@@ -204,7 +260,7 @@ def authorize_installed(request, *, selected=False):
             settings.RUNTIME_GUARD_MANIFEST_FILE,
             os.environ.get("PROVIDER_KEY_DIR", ""),
         ).require_installed(body["model_id"], body.get("definition_fingerprint"))
-        result = authorized_model(request, body)
+        result, verdict = authorized_model(request, body)
         if not selected and enrollment["key_choice"] == "personal":
             # Missing keys must fail before native backend selection, where a
             # failed token exchange would change the enrolled backend's health.
@@ -230,7 +286,9 @@ def authorize_installed(request, *, selected=False):
     if selected:
         # The final check before the model: the request is sent from here on.
         record_sent_request(result)
-    return Response(result)
+        if "held_class" in result:
+            held_request(result, verdict)
+    return Response(decision(result))
 
 
 @never_cache

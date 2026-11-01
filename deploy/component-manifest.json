@@ -55,6 +55,11 @@
         },
         "cli_sign_in": {
           "django-oauth-toolkit": "3.4.1"
+        },
+        "personal_data_detection": {
+          "presidio-analyzer": "2.2.364",
+          "spacy": "3.8.18",
+          "en_core_web_lg": "3.8.0"
         }
       }
     },
@@ -95,7 +100,7 @@
     "migration_heads": {
       "accounts": "0003_cli_credential_binding",
       "audit": "0001_initial",
-      "data_classes": "0001_initial",
+      "data_classes": "0002_personal_data_detection",
       "gateway_publications": "0002_definitionpublication",
       "model_registry": "0008_persona_rules",
       "projects": "0001_initial"
@@ -118,6 +123,7 @@
       "ingress",
       "local_trial",
       "optional_audit_kinds",
+      "personal_data_detection",
       "postgres"
     ]
   },

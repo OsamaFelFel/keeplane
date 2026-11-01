@@ -1,12 +1,20 @@
 """Data-class settings and model approvals in Django transactions."""
 
 import uuid
-from django.db.models import Count, Max
 
-from .contracts import DataClassError, STARTERS
-from .models import DataClass, ProjectClass, Settings
-from model_registry.models import ModelApproval
 from common.storage import settings_change, storage_service
+from django.db.models import Count, Max
+from model_registry.models import ModelApproval
+from personal_data.inspection import detection_available
+
+from .contracts import (
+    CLASS_IN_USE,
+    DETECTION_DEFAULT,
+    NOT_INSTALLED,
+    STARTERS,
+    DataClassError,
+)
+from .models import DataClass, ProjectClass, Settings
 
 
 @storage_service
@@ -62,6 +70,66 @@ class DjangoDataClassStore:
                         ),
                     )
         return {"enabled": enabled}
+
+    def detection(self):
+        """Personal-data detection settings (Spec 005 ST20); off by default."""
+        settings = Settings.objects.filter(pk=1).values(
+            "detection_enabled", "detection_class_id"
+        ).first() or {"detection_enabled": False, "detection_class_id": None}
+        class_id = settings["detection_class_id"]
+        if class_id is None and DataClass.objects.filter(pk=DETECTION_DEFAULT).exists():
+            class_id = DETECTION_DEFAULT
+        return {
+            "enabled": settings["detection_enabled"],
+            "class_id": class_id,
+            "available": bool(detection_available()),
+        }
+
+    def set_detection(self, body, actor=None):
+        if not isinstance(body, dict) or type(body.get("enabled")) is not bool:
+            raise DataClassError(400, "Choose whether to detect personal data")
+        if set(body) - {"enabled", "class_id"}:
+            raise DataClassError(400, "Send only detection settings")
+        with settings_change() as settings:
+            self._require_enabled()
+            class_id = body.get("class_id", settings.detection_class_id)
+            if class_id is None:
+                class_id = DETECTION_DEFAULT
+            if not isinstance(class_id, str):
+                raise DataClassError(400, "Choose a class for detected requests")
+            row = DataClass.objects.filter(pk=class_id).first()
+            if row is None:
+                raise DataClassError(400, "Choose a class for detected requests")
+            if (
+                body["enabled"]
+                and not settings.detection_enabled
+                and not detection_available()
+            ):
+                raise DataClassError(409, NOT_INSTALLED)
+            previous = settings.detection_class or DataClass.objects.filter(
+                pk=DETECTION_DEFAULT
+            ).first()
+            changes = []
+            if body["enabled"] and not settings.detection_enabled:
+                changes.append(
+                    "Turned personal-data detection on; "
+                    f"detected requests handled as {row.name}"
+                )
+            elif settings.detection_enabled and not body["enabled"]:
+                changes.append("Turned personal-data detection off")
+            if (previous is None or previous.pk != row.pk) and not (
+                body["enabled"] and not settings.detection_enabled
+            ):
+                changes.append(
+                    "Changed the class for detected requests: "
+                    f"{previous.name if previous else 'none'} to {row.name}"
+                )
+            settings.detection_enabled = body["enabled"]
+            settings.detection_class = row
+            settings.save(update_fields=["detection_enabled", "detection_class"])
+            if actor and changes:
+                self.audit.record_in_transaction("settings", *actor, "; ".join(changes))
+        return {"enabled": body["enabled"], "class_id": row.pk}
 
     def list(self, effective_model_ids=None):
         approvals = self._approvals()
@@ -172,6 +240,10 @@ class DjangoDataClassStore:
                 raise DataClassError(404, "Class not found")
             if ProjectClass.objects.filter(data_class=row).exists():
                 raise DataClassError(409, "Projects still use this class")
+            # Also while detection is off: its chosen class is kept for later
+            # use. Before detection is first set, no class is chosen yet.
+            if Settings.objects.filter(pk=1, detection_class=row).exists():
+                raise DataClassError(409, CLASS_IN_USE)
             if DataClass.objects.count() == 1:
                 raise DataClassError(409, "Keep at least one data class")
             approved_for = [

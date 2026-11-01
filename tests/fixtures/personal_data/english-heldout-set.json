@@ -1,0 +1,3574 @@
+{
+ "version": "2026-10-31.h1",
+ "language": "en",
+ "about": "Held-out English set for task 005-03. Built after the code-aware filter was frozen; used to measure it, never to tune it. All values are synthetic; see build_heldout_set.py for the rules. kind=positive: holds personal data of a scored type; kind=clean: no personal data, any detection is a false alarm.",
+ "types": [
+  "PERSON",
+  "ADDRESS",
+  "EMAIL",
+  "PHONE",
+  "CARD"
+ ],
+ "cases": [
+  {
+   "id": "ENH-001",
+   "kind": "positive",
+   "form": "person-0",
+   "split": "hold",
+   "text": "```python\n# TODO: ask Dorian Quartermaine about the retry limit\nMAX_RETRIES = 3\n```\nIs that too many?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Dorian Quartermaine"
+    }
+   ]
+  },
+  {
+   "id": "ENH-002",
+   "kind": "positive",
+   "form": "person-1",
+   "split": "hold",
+   "text": "Our on-call this week is Cosima Grimaldi; can you draft the handover note for the payments outage?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Cosima Grimaldi"
+    }
+   ]
+  },
+  {
+   "id": "ENH-003",
+   "kind": "positive",
+   "form": "person-2",
+   "split": "hold",
+   "text": "git log shows `Author: Zoltan Rothwell` on the commit that broke the migration. How do I revert just that file?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Zoltan Rothwell"
+    }
+   ]
+  },
+  {
+   "id": "ENH-004",
+   "kind": "positive",
+   "form": "person-3",
+   "split": "hold",
+   "text": "assignee: Jarrah Nightingale\nlabels: [bug, p2]\ntitle: export times out",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Jarrah Nightingale"
+    }
+   ]
+  },
+  {
+   "id": "ENH-005",
+   "kind": "positive",
+   "form": "person-4",
+   "split": "hold",
+   "text": "logger.info(\"refund approved by %s\", \"Jarrah Wetherby\")\nWhy does the log show the format string?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Jarrah Wetherby"
+    }
+   ]
+  },
+  {
+   "id": "ENH-006",
+   "kind": "positive",
+   "form": "person-5",
+   "split": "hold",
+   "text": "2026-03-08 20:09:38,384 WARN  hr.sync employee \"Wilhelmina Esterhazy\" missing manager_id",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Wilhelmina Esterhazy"
+    }
+   ]
+  },
+  {
+   "id": "ENH-007",
+   "kind": "positive",
+   "form": "person-6",
+   "split": "hold",
+   "text": "Thanks Bartholomew Prendergast for the review! Can you also explain why the cache key includes the tenant?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Bartholomew Prendergast"
+    }
+   ]
+  },
+  {
+   "id": "ENH-008",
+   "kind": "positive",
+   "form": "person-7",
+   "split": "hold",
+   "text": "Why does this fail with KeyError?\n\n    reviewer = \"Orrin Trelawney\"\n    approve(pr, reviewers[reviewer])",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Orrin Trelawney"
+    }
+   ]
+  },
+  {
+   "id": "ENH-009",
+   "kind": "positive",
+   "form": "person-0",
+   "split": "hold",
+   "text": "```python\n# TODO: ask Bartholomew Zamora about the retry limit\nMAX_RETRIES = 7\n```\nIs that too many?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Bartholomew Zamora"
+    }
+   ]
+  },
+  {
+   "id": "ENH-010",
+   "kind": "positive",
+   "form": "person-1",
+   "split": "hold",
+   "text": "Our on-call this week is Henrik Esterhazy; can you draft the handover note for the payments outage?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Henrik Esterhazy"
+    }
+   ]
+  },
+  {
+   "id": "ENH-011",
+   "kind": "positive",
+   "form": "person-2",
+   "split": "hold",
+   "text": "git log shows `Author: Caoimhe Oyelaran` on the commit that broke the migration. How do I revert just that file?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Caoimhe Oyelaran"
+    }
+   ]
+  },
+  {
+   "id": "ENH-012",
+   "kind": "positive",
+   "form": "person-3",
+   "split": "hold",
+   "text": "assignee: Giedre Trelawney\nlabels: [bug, p3]\ntitle: export times out",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Giedre Trelawney"
+    }
+   ]
+  },
+  {
+   "id": "ENH-013",
+   "kind": "positive",
+   "form": "person-4",
+   "split": "hold",
+   "text": "logger.info(\"refund approved by %s\", \"Caoimhe Jorgensen\")\nWhy does the log show the format string?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Caoimhe Jorgensen"
+    }
+   ]
+  },
+  {
+   "id": "ENH-014",
+   "kind": "positive",
+   "form": "person-5",
+   "split": "hold",
+   "text": "2026-06-13 10:01:14,945 WARN  hr.sync employee \"Agnieszka Cardenas-Holt\" missing manager_id",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Agnieszka Cardenas-Holt"
+    }
+   ]
+  },
+  {
+   "id": "ENH-015",
+   "kind": "positive",
+   "form": "person-6",
+   "split": "hold",
+   "text": "Thanks Perpetua Ashcombe for the review! Can you also explain why the cache key includes the tenant?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Perpetua Ashcombe"
+    }
+   ]
+  },
+  {
+   "id": "ENH-016",
+   "kind": "positive",
+   "form": "person-7",
+   "split": "hold",
+   "text": "Why does this fail with KeyError?\n\n    reviewer = \"Perpetua Grimaldi\"\n    approve(pr, reviewers[reviewer])",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Perpetua Grimaldi"
+    }
+   ]
+  },
+  {
+   "id": "ENH-017",
+   "kind": "positive",
+   "form": "person-0",
+   "split": "hold",
+   "text": "```python\n# TODO: ask Bartholomew Nightingale about the retry limit\nMAX_RETRIES = 7\n```\nIs that too many?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Bartholomew Nightingale"
+    }
+   ]
+  },
+  {
+   "id": "ENH-018",
+   "kind": "positive",
+   "form": "person-1",
+   "split": "hold",
+   "text": "Our on-call this week is Xavier Yardley; can you draft the handover note for the payments outage?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Xavier Yardley"
+    }
+   ]
+  },
+  {
+   "id": "ENH-019",
+   "kind": "positive",
+   "form": "person-2",
+   "split": "hold",
+   "text": "git log shows `Author: Niamh Zamora` on the commit that broke the migration. How do I revert just that file?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Niamh Zamora"
+    }
+   ]
+  },
+  {
+   "id": "ENH-020",
+   "kind": "positive",
+   "form": "person-3",
+   "split": "hold",
+   "text": "assignee: Dariusz Jorgensen\nlabels: [bug, p3]\ntitle: export times out",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Dariusz Jorgensen"
+    }
+   ]
+  },
+  {
+   "id": "ENH-021",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "hold",
+   "text": "```bash\ngit config user.email henrikwetherby@example.com\n```\nThe commit still shows the old address.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "henrikwetherby@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-022",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "hold",
+   "text": "2026-07-04 01:50:35,228 INFO  auth.login ok user=radomirzamora@example.org mfa=totp",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "radomirzamora@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-023",
+   "kind": "positive",
+   "form": "email-2",
+   "split": "hold",
+   "text": "contacts.csv:\nid,email\n48,caoimhe.hollingsworth@example.net\nThe importer skips this row.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "caoimhe.hollingsworth@example.net"
+    }
+   ]
+  },
+  {
+   "id": "ENH-024",
+   "kind": "positive",
+   "form": "email-3",
+   "split": "hold",
+   "text": "Forward the deploy report to g_jorgensen9@example.net every Monday. How do I do that in a scheduled workflow?",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "g_jorgensen9@example.net"
+    }
+   ]
+  },
+  {
+   "id": "ENH-025",
+   "kind": "positive",
+   "form": "email-4",
+   "split": "hold",
+   "text": "ValueError: invalid recipient 'katarinalockhart@example.net' in notify.send()",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "katarinalockhart@example.net"
+    }
+   ]
+  },
+  {
+   "id": "ENH-026",
+   "kind": "positive",
+   "form": "email-5",
+   "split": "hold",
+   "text": "<user><mail>k_kilbride9@example.net</mail></user>\nXPath //user/email returns nothing.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "k_kilbride9@example.net"
+    }
+   ]
+  },
+  {
+   "id": "ENH-027",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "hold",
+   "text": "```bash\ngit config user.email henrik.featherstone@example.org\n```\nThe commit still shows the old address.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "henrik.featherstone@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-028",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "hold",
+   "text": "2026-06-21 23:32:19,518 INFO  auth.login ok user=b_ivanova1@example.net mfa=totp",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "b_ivanova1@example.net"
+    }
+   ]
+  },
+  {
+   "id": "ENH-029",
+   "kind": "positive",
+   "form": "email-2",
+   "split": "hold",
+   "text": "contacts.csv:\nid,email\n967,sandoval.v@example.org\nThe importer skips this row.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "sandoval.v@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-030",
+   "kind": "positive",
+   "form": "email-3",
+   "split": "hold",
+   "text": "Forward the deploy report to ilse.moreaublaine@example.org every Monday. How do I do that in a scheduled workflow?",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "ilse.moreaublaine@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-031",
+   "kind": "positive",
+   "form": "email-4",
+   "split": "hold",
+   "text": "ValueError: invalid recipient 'sandoval.c@example.org' in notify.send()",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "sandoval.c@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-032",
+   "kind": "positive",
+   "form": "email-5",
+   "split": "hold",
+   "text": "<user><mail>e_quartermaine7@example.com</mail></user>\nXPath //user/email returns nothing.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "e_quartermaine7@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-033",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "hold",
+   "text": "```bash\ngit config user.email perpetuasandoval@example.org\n```\nThe commit still shows the old address.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "perpetuasandoval@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-034",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "hold",
+   "text": "2026-06-06 17:28:41,331 INFO  auth.login ok user=b_esterhazy1@example.com mfa=totp",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "b_esterhazy1@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-035",
+   "kind": "positive",
+   "form": "email-2",
+   "split": "hold",
+   "text": "contacts.csv:\nid,email\n379,y_bergstrom2@example.net\nThe importer skips this row.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "y_bergstrom2@example.net"
+    }
+   ]
+  },
+  {
+   "id": "ENH-036",
+   "kind": "positive",
+   "form": "email-3",
+   "split": "hold",
+   "text": "Forward the deploy report to g_jorgensen2@example.com every Monday. How do I do that in a scheduled workflow?",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "g_jorgensen2@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-037",
+   "kind": "positive",
+   "form": "email-4",
+   "split": "hold",
+   "text": "ValueError: invalid recipient 'dariusz.rothwell@example.org' in notify.send()",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "dariusz.rothwell@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-038",
+   "kind": "positive",
+   "form": "email-5",
+   "split": "hold",
+   "text": "<user><mail>vesna.wetherby@example.com</mail></user>\nXPath //user/email returns nothing.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "vesna.wetherby@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-039",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "hold",
+   "text": "```bash\ngit config user.email l_umberfield4@example.org\n```\nThe commit still shows the old address.",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "l_umberfield4@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-040",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "hold",
+   "text": "2026-10-10 23:16:24,201 INFO  auth.login ok user=y_lockhart7@example.com mfa=totp",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "y_lockhart7@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-041",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "hold",
+   "text": "2026-02-15 08:25:42,801 ERROR sms.gateway send failed to=+1 (602) 555-0170 code=21211",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 (602) 555-0170"
+    }
+   ]
+  },
+  {
+   "id": "ENH-042",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Please call me back on 919-555-0132 if the deploy fails tonight.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "919-555-0132"
+    }
+   ]
+  },
+  {
+   "id": "ENH-043",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "hold",
+   "text": "SUPPORT_PHONE = \"+44 20 7946 0648\"  # front desk\nShould this live in settings?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 20 7946 0648"
+    }
+   ]
+  },
+  {
+   "id": "ENH-044",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "| team | phone |\n|---|---|\n| front desk | 919-555-0194 |\nHow do I render this table in React?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "919-555-0194"
+    }
+   ]
+  },
+  {
+   "id": "ENH-045",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "hold",
+   "text": "The E.164 normaliser turns 0161 496 0438 into something odd. Bug or expected?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "0161 496 0438"
+    }
+   ]
+  },
+  {
+   "id": "ENH-046",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "hold",
+   "text": "2026-05-25 07:06:28,637 ERROR sms.gateway send failed to=0161 496 0998 code=21211",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "0161 496 0998"
+    }
+   ]
+  },
+  {
+   "id": "ENH-047",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Please call me back on 0161 496 0330 if the deploy fails tonight.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "0161 496 0330"
+    }
+   ]
+  },
+  {
+   "id": "ENH-048",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "hold",
+   "text": "SUPPORT_PHONE = \"+44 121 496 0218\"  # front desk\nShould this live in settings?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 121 496 0218"
+    }
+   ]
+  },
+  {
+   "id": "ENH-049",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "| team | phone |\n|---|---|\n| front desk | 303-555-0124 |\nHow do I render this table in React?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "303-555-0124"
+    }
+   ]
+  },
+  {
+   "id": "ENH-050",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "hold",
+   "text": "The E.164 normaliser turns +44 121 496 0229 into something odd. Bug or expected?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 121 496 0229"
+    }
+   ]
+  },
+  {
+   "id": "ENH-051",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "hold",
+   "text": "2026-07-20 16:59:58,135 ERROR sms.gateway send failed to=+1 (404) 555-0116 code=21211",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 (404) 555-0116"
+    }
+   ]
+  },
+  {
+   "id": "ENH-052",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Please call me back on +44 121 496 0282 if the deploy fails tonight.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 121 496 0282"
+    }
+   ]
+  },
+  {
+   "id": "ENH-053",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "hold",
+   "text": "SUPPORT_PHONE = \"0161 496 0344\"  # front desk\nShould this live in settings?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "0161 496 0344"
+    }
+   ]
+  },
+  {
+   "id": "ENH-054",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "| team | phone |\n|---|---|\n| front desk | 713-555-0150 |\nHow do I render this table in React?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "713-555-0150"
+    }
+   ]
+  },
+  {
+   "id": "ENH-055",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "hold",
+   "text": "The E.164 normaliser turns +44 121 496 0713 into something odd. Bug or expected?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 121 496 0713"
+    }
+   ]
+  },
+  {
+   "id": "ENH-056",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "hold",
+   "text": "2026-06-26 21:41:05,107 ERROR sms.gateway send failed to=+44 121 496 0878 code=21211",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 121 496 0878"
+    }
+   ]
+  },
+  {
+   "id": "ENH-057",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Please call me back on 0161 496 0551 if the deploy fails tonight.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "0161 496 0551"
+    }
+   ]
+  },
+  {
+   "id": "ENH-058",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "hold",
+   "text": "SUPPORT_PHONE = \"+1 (404) 555-0101\"  # front desk\nShould this live in settings?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 (404) 555-0101"
+    }
+   ]
+  },
+  {
+   "id": "ENH-059",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "| team | phone |\n|---|---|\n| front desk | 0161 496 0418 |\nHow do I render this table in React?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "0161 496 0418"
+    }
+   ]
+  },
+  {
+   "id": "ENH-060",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "hold",
+   "text": "The E.164 normaliser turns 602-555-0140 into something odd. Bug or expected?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "602-555-0140"
+    }
+   ]
+  },
+  {
+   "id": "ENH-061",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "hold",
+   "text": "2026-04-15 09:41:09,909 WARN  checkout.retry card_number=4302-2359-2872-4821 attempt=2",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "4302-2359-2872-4821"
+    }
+   ]
+  },
+  {
+   "id": "ENH-062",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "hold",
+   "text": "Refund failed for card 2210-4318-3102-3600, gateway says expired. Can I retry with the same token?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "2210-4318-3102-3600"
+    }
+   ]
+  },
+  {
+   "id": "ENH-063",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "hold",
+   "text": "```json\n{\"pan\": \"6011 8388 2892 4123\", \"cvv\": \"***\"}\n```\nShould we log this payload?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6011 8388 2892 4123"
+    }
+   ]
+  },
+  {
+   "id": "ENH-064",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "hold",
+   "text": "test_charge(card=\"5380-2215-8910-9033\") raises CardError in staging",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5380-2215-8910-9033"
+    }
+   ]
+  },
+  {
+   "id": "ENH-065",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "hold",
+   "text": "Support pasted 6577568131609337 into the chat transcript. How do we scrub it?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6577568131609337"
+    }
+   ]
+  },
+  {
+   "id": "ENH-066",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "hold",
+   "text": "2026-07-18 17:26:18,023 WARN  checkout.retry card_number=5546 2697 7496 8250 attempt=2",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5546 2697 7496 8250"
+    }
+   ]
+  },
+  {
+   "id": "ENH-067",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "hold",
+   "text": "Refund failed for card 5193 0065 7414 9186, gateway says expired. Can I retry with the same token?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5193 0065 7414 9186"
+    }
+   ]
+  },
+  {
+   "id": "ENH-068",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "hold",
+   "text": "```json\n{\"pan\": \"6552 4957 2453 3576\", \"cvv\": \"***\"}\n```\nShould we log this payload?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6552 4957 2453 3576"
+    }
+   ]
+  },
+  {
+   "id": "ENH-069",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "hold",
+   "text": "test_charge(card=\"5157 4205 6135 2519\") raises CardError in staging",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5157 4205 6135 2519"
+    }
+   ]
+  },
+  {
+   "id": "ENH-070",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "hold",
+   "text": "Support pasted 5597 9991 8180 2449 into the chat transcript. How do we scrub it?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5597 9991 8180 2449"
+    }
+   ]
+  },
+  {
+   "id": "ENH-071",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "hold",
+   "text": "2026-02-04 16:54:12,049 WARN  checkout.retry card_number=6575 6454 3163 1872 attempt=2",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6575 6454 3163 1872"
+    }
+   ]
+  },
+  {
+   "id": "ENH-072",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "hold",
+   "text": "Refund failed for card 2295 4479 4308 8370, gateway says expired. Can I retry with the same token?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "2295 4479 4308 8370"
+    }
+   ]
+  },
+  {
+   "id": "ENH-073",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "hold",
+   "text": "```json\n{\"pan\": \"3794 881423 97348\", \"cvv\": \"***\"}\n```\nShould we log this payload?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "3794 881423 97348"
+    }
+   ]
+  },
+  {
+   "id": "ENH-074",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "hold",
+   "text": "test_charge(card=\"5358-7706-4682-6623\") raises CardError in staging",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5358-7706-4682-6623"
+    }
+   ]
+  },
+  {
+   "id": "ENH-075",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "hold",
+   "text": "Support pasted 4371 3003 5358 4573 into the chat transcript. How do we scrub it?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "4371 3003 5358 4573"
+    }
+   ]
+  },
+  {
+   "id": "ENH-076",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "hold",
+   "text": "2026-08-02 23:23:58,662 WARN  checkout.retry card_number=3412 353645 77965 attempt=2",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "3412 353645 77965"
+    }
+   ]
+  },
+  {
+   "id": "ENH-077",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "hold",
+   "text": "Refund failed for card 5550598799814872, gateway says expired. Can I retry with the same token?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5550598799814872"
+    }
+   ]
+  },
+  {
+   "id": "ENH-078",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "hold",
+   "text": "```json\n{\"pan\": \"2293 8522 1321 3008\", \"cvv\": \"***\"}\n```\nShould we log this payload?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "2293 8522 1321 3008"
+    }
+   ]
+  },
+  {
+   "id": "ENH-079",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "hold",
+   "text": "test_charge(card=\"4759-3262-4465-5043\") raises CardError in staging",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "4759-3262-4465-5043"
+    }
+   ]
+  },
+  {
+   "id": "ENH-080",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "hold",
+   "text": "Support pasted 2299 8956 1419 9882 into the chat transcript. How do we scrub it?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "2299 8956 1419 9882"
+    }
+   ]
+  },
+  {
+   "id": "ENH-081",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "hold",
+   "text": "Ship the replacement to 2823 Marigold Crescent, Tulsa, OK 74103 and mark the order as priority.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "2823 Marigold Crescent, Tulsa, OK 74103"
+    }
+   ]
+  },
+  {
+   "id": "ENH-082",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "hold",
+   "text": "address_line = \"Flat 8, 55 Cinder Path, Carlisle CA3 8QG\"\nparts = address_line.split(\",\")\nWhy does the postcode end up in the town?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "Flat 8, 55 Cinder Path, Carlisle CA3 8QG"
+    }
+   ]
+  },
+  {
+   "id": "ENH-083",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "hold",
+   "text": "2026-09-11 18:09:49,812 INFO  geo.lookup query=\"8698 Sandpiper Way, Fresno, CA 93721\" results=0",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "8698 Sandpiper Way, Fresno, CA 93721"
+    }
+   ]
+  },
+  {
+   "id": "ENH-084",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "hold",
+   "text": "billing_address:\n  full: \"1532 Wildmoor Grove, Savannah, GA 31401\"\n  verified: false",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "1532 Wildmoor Grove, Savannah, GA 31401"
+    }
+   ]
+  },
+  {
+   "id": "ENH-085",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "hold",
+   "text": "The label printer cuts off Flat 6, 40 Weavers Yard, Lincoln LN2 1PZ after 30 characters.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "Flat 6, 40 Weavers Yard, Lincoln LN2 1PZ"
+    }
+   ]
+  },
+  {
+   "id": "ENH-086",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "hold",
+   "text": "Ship the replacement to 6169 Pennywort Close, Fresno, CA 93721 and mark the order as priority.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "6169 Pennywort Close, Fresno, CA 93721"
+    }
+   ]
+  },
+  {
+   "id": "ENH-087",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "hold",
+   "text": "address_line = \"3870 Wildmoor Grove, Eugene, OR 97401\"\nparts = address_line.split(\",\")\nWhy does the postcode end up in the town?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "3870 Wildmoor Grove, Eugene, OR 97401"
+    }
+   ]
+  },
+  {
+   "id": "ENH-088",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "hold",
+   "text": "2026-03-26 03:25:00,293 INFO  geo.lookup query=\"67 Old Forge Road, Carlisle CA3 8QG\" results=0",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "67 Old Forge Road, Carlisle CA3 8QG"
+    }
+   ]
+  },
+  {
+   "id": "ENH-089",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "hold",
+   "text": "billing_address:\n  full: \"9202 Marigold Crescent, Savannah, GA 31401\"\n  verified: false",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "9202 Marigold Crescent, Savannah, GA 31401"
+    }
+   ]
+  },
+  {
+   "id": "ENH-090",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "hold",
+   "text": "The label printer cuts off 5254 Ropewalk Lane, Fresno, CA 93721 after 30 characters.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "5254 Ropewalk Lane, Fresno, CA 93721"
+    }
+   ]
+  },
+  {
+   "id": "ENH-091",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "hold",
+   "text": "Ship the replacement to 1849 Old Forge Road, Albany, NY 12207 and mark the order as priority.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "1849 Old Forge Road, Albany, NY 12207"
+    }
+   ]
+  },
+  {
+   "id": "ENH-092",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "hold",
+   "text": "address_line = \"3945 Cinder Path, Fresno, CA 93721\"\nparts = address_line.split(\",\")\nWhy does the postcode end up in the town?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "3945 Cinder Path, Fresno, CA 93721"
+    }
+   ]
+  },
+  {
+   "id": "ENH-093",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "hold",
+   "text": "2026-02-18 15:53:27,559 INFO  geo.lookup query=\"37 Thistle Bank, Bath BA2 3QE\" results=0",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "37 Thistle Bank, Bath BA2 3QE"
+    }
+   ]
+  },
+  {
+   "id": "ENH-094",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "hold",
+   "text": "billing_address:\n  full: \"84 Lantern Street, Bath BA2 3QE\"\n  verified: false",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "84 Lantern Street, Bath BA2 3QE"
+    }
+   ]
+  },
+  {
+   "id": "ENH-095",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "hold",
+   "text": "The label printer cuts off Flat 2, 25 Thistle Bank, Carlisle CA3 8QG after 30 characters.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "Flat 2, 25 Thistle Bank, Carlisle CA3 8QG"
+    }
+   ]
+  },
+  {
+   "id": "ENH-096",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "hold",
+   "text": "Ship the replacement to Flat 9, 80 Marigold Crescent, Bath BA2 3QE and mark the order as priority.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "Flat 9, 80 Marigold Crescent, Bath BA2 3QE"
+    }
+   ]
+  },
+  {
+   "id": "ENH-097",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "hold",
+   "text": "address_line = \"55 Lantern Street, Lincoln LN2 1PZ\"\nparts = address_line.split(\",\")\nWhy does the postcode end up in the town?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "55 Lantern Street, Lincoln LN2 1PZ"
+    }
+   ]
+  },
+  {
+   "id": "ENH-098",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "hold",
+   "text": "2026-07-27 06:09:31,614 INFO  geo.lookup query=\"38 Thistle Bank, Swansea SA1 5BD\" results=0",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "38 Thistle Bank, Swansea SA1 5BD"
+    }
+   ]
+  },
+  {
+   "id": "ENH-099",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "hold",
+   "text": "billing_address:\n  full: \"60 Lantern Street, Lincoln LN2 1PZ\"\n  verified: false",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "60 Lantern Street, Lincoln LN2 1PZ"
+    }
+   ]
+  },
+  {
+   "id": "ENH-100",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "hold",
+   "text": "The label printer cuts off 9642 Cinder Path, Savannah, GA 31401 after 30 characters.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "9642 Cinder Path, Savannah, GA 31401"
+    }
+   ]
+  },
+  {
+   "id": "ENH-101",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "Customer Niamh Quartermaine says parcels to 9071 Thistle Bank, Omaha, NE 68102 keep going to the depot. Where is the routing rule?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Niamh Quartermaine"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "9071 Thistle Bank, Omaha, NE 68102"
+    }
+   ]
+  },
+  {
+   "id": "ENH-102",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "BEGIN:VCARD\nFN:Caoimhe Zamora\nTEL:+44 20 7946 0595\nEND:VCARD\nWhy does the parser drop TEL?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Caoimhe Zamora"
+    },
+    {
+     "type": "PHONE",
+     "value": "+44 20 7946 0595"
+    }
+   ]
+  },
+  {
+   "id": "ENH-103",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "docs: fix typo in README\n\nSigned-off-by: Radomir Oyelaran <oyelaran.r@example.com>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Radomir Oyelaran"
+    },
+    {
+     "type": "EMAIL",
+     "value": "oyelaran.r@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-104",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "docs: fix typo in README\n\nSigned-off-by: Mireille Hollingsworth <mireillehollingsworth@example.org>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Mireille Hollingsworth"
+    },
+    {
+     "type": "EMAIL",
+     "value": "mireillehollingsworth@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-105",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "BEGIN:VCARD\nFN:Vesna Grimaldi\nTEL:0161 496 0874\nEND:VCARD\nWhy does the parser drop TEL?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Vesna Grimaldi"
+    },
+    {
+     "type": "PHONE",
+     "value": "0161 496 0874"
+    }
+   ]
+  },
+  {
+   "id": "ENH-106",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "2026-02-28 14:11:57,000 ERROR billing.charge customer=ursulavandermeer@example.com pan=3740 556207 12234 status=declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "ursulavandermeer@example.com"
+    },
+    {
+     "type": "CARD",
+     "value": "3740 556207 12234"
+    }
+   ]
+  },
+  {
+   "id": "ENH-107",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "docs: fix typo in README\n\nSigned-off-by: Vesna Trelawney <v_trelawney1@example.org>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Vesna Trelawney"
+    },
+    {
+     "type": "EMAIL",
+     "value": "v_trelawney1@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-108",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "2026-03-04 03:19:07,118 ERROR billing.charge customer=zoltanesterhazy@example.net pan=4047052691059016 status=declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "zoltanesterhazy@example.net"
+    },
+    {
+     "type": "CARD",
+     "value": "4047052691059016"
+    }
+   ]
+  },
+  {
+   "id": "ENH-109",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "2026-05-27 06:50:42,306 ERROR billing.charge customer=barnabyfeatherstone@example.com pan=4265-1258-3060-7633 status=declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "barnabyfeatherstone@example.com"
+    },
+    {
+     "type": "CARD",
+     "value": "4265-1258-3060-7633"
+    }
+   ]
+  },
+  {
+   "id": "ENH-110",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "docs: fix typo in README\n\nSigned-off-by: Radomir Wetherby <r_wetherby9@example.org>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Radomir Wetherby"
+    },
+    {
+     "type": "EMAIL",
+     "value": "r_wetherby9@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-111",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "Customer Zoltan Sandoval says parcels to 9716 Sandpiper Way, Savannah, GA 31401 keep going to the depot. Where is the routing rule?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Zoltan Sandoval"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "9716 Sandpiper Way, Savannah, GA 31401"
+    }
+   ]
+  },
+  {
+   "id": "ENH-112",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "docs: fix typo in README\n\nSigned-off-by: Ilse Ivanova <ilse.ivanova@example.org>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Ilse Ivanova"
+    },
+    {
+     "type": "EMAIL",
+     "value": "ilse.ivanova@example.org"
+    }
+   ]
+  },
+  {
+   "id": "ENH-113",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "2026-04-18 00:19:10,011 ERROR billing.charge customer=yardley.v@example.org pan=3756 668151 69102 status=declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "yardley.v@example.org"
+    },
+    {
+     "type": "CARD",
+     "value": "3756 668151 69102"
+    }
+   ]
+  },
+  {
+   "id": "ENH-114",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "Customer Eleanora Nightingale says parcels to 8238 Lantern Street, Savannah, GA 31401 keep going to the depot. Where is the routing rule?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Eleanora Nightingale"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "8238 Lantern Street, Savannah, GA 31401"
+    }
+   ]
+  },
+  {
+   "id": "ENH-115",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "Customer Thaddeus Ivanova says parcels to 8258 Lantern Street, Fresno, CA 93721 keep going to the depot. Where is the routing rule?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Thaddeus Ivanova"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "8258 Lantern Street, Fresno, CA 93721"
+    }
+   ]
+  },
+  {
+   "id": "ENH-116",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "docs: fix typo in README\n\nSigned-off-by: Barnaby Prendergast <b_prendergast4@example.com>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Barnaby Prendergast"
+    },
+    {
+     "type": "EMAIL",
+     "value": "b_prendergast4@example.com"
+    }
+   ]
+  },
+  {
+   "id": "ENH-117",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "BEGIN:VCARD\nFN:Wilhelmina Zamora\nTEL:0161 496 0787\nEND:VCARD\nWhy does the parser drop TEL?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Wilhelmina Zamora"
+    },
+    {
+     "type": "PHONE",
+     "value": "0161 496 0787"
+    }
+   ]
+  },
+  {
+   "id": "ENH-118",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "Customer Ursula Umberfield says parcels to Flat 1, 75 Thistle Bank, Swansea SA1 5BD keep going to the depot. Where is the routing rule?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Ursula Umberfield"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "Flat 1, 75 Thistle Bank, Swansea SA1 5BD"
+    }
+   ]
+  },
+  {
+   "id": "ENH-119",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "BEGIN:VCARD\nFN:Radomir Sandoval\nTEL:0117 496 0404\nEND:VCARD\nWhy does the parser drop TEL?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Radomir Sandoval"
+    },
+    {
+     "type": "PHONE",
+     "value": "0117 496 0404"
+    }
+   ]
+  },
+  {
+   "id": "ENH-120",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "2026-09-06 16:50:55,782 ERROR billing.charge customer=zamora.b@example.com pan=5337237263267925 status=declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "zamora.b@example.com"
+    },
+    {
+     "type": "CARD",
+     "value": "5337237263267925"
+    }
+   ]
+  },
+  {
+   "id": "ENH-121",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Jakarta 12.25.7 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-122",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Quarkus to Quarkus. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-123",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Pulsar keeps restarting with OOMKilled after the 8.29.15 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-124",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade falcon ./charts/bottle --set replicas=1\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-125",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Explain Kadane's algorithm with a small Python example.",
+   "expect": []
+  },
+  {
+   "id": "ENH-126",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Gaussian elimination beat a brute-force loop for n=75615?",
+   "expect": []
+  },
+  {
+   "id": "ENH-127",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=America/Chicago app:8.15.1 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-128",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "ZoneInfo(\"America/Sao_Paulo\") raises ZoneInfoNotFoundError on Alpine.",
+   "expect": []
+  },
+  {
+   "id": "ENH-129",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"34 3 * * *\"\n  timezone: America/Sao_Paulo\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-130",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:298)\n\tat com.example.orders.AppKt.main(App.kt:48)",
+   "expect": []
+  },
+  {
+   "id": "ENH-131",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [9] with length 0\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:101 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-132",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:171:35)\n    at Module._compile (node:internal/modules/cjs/loader:1195:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-133",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 255",
+   "expect": []
+  },
+  {
+   "id": "ENH-134",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "from django.contrib.auth import get_user_model\nimport pandas as pd\nWhy is the first import so slow?",
+   "expect": []
+  },
+  {
+   "id": "ENH-135",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 10.7.0.",
+   "expect": []
+  },
+  {
+   "id": "ENH-136",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "using Microsoft.Extensions.Logging;\nusing Serilog.Sinks.Console;\nThe logger writes nothing.",
+   "expect": []
+  },
+  {
+   "id": "ENH-137",
+   "kind": "clean",
+   "form": "path",
+   "split": "hold",
+   "text": "Where does /etc/nginx/conf.d/auth.conf get loaded from? Changes there do nothing.",
+   "expect": []
+  },
+  {
+   "id": "ENH-138",
+   "kind": "clean",
+   "form": "path",
+   "split": "hold",
+   "text": "ENOENT: no such file or directory, open 'packages/web/src/Settings.tsx'",
+   "expect": []
+  },
+  {
+   "id": "ENH-139",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `TempoClient.connect()` hang for 46 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-140",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final GsonMapper mapper;\n    private final int retries = 4;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-141",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 9 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-142",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "kubectl -n payments get pods -l app=billing --field-selector status.phase!=Running\nreturns 8 pods",
+   "expect": []
+  },
+  {
+   "id": "ENH-143",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "tar -czf backup-2025.tgz -C /var/lib/app data/ prints 'file changed as we read it'",
+   "expect": []
+  },
+  {
+   "id": "ENH-144",
+   "kind": "clean",
+   "form": "cloud_place",
+   "split": "hold",
+   "text": "Is eu-central-1 (Frankfurt) or eu-west-1 (Ireland) better for latency from Warsaw?",
+   "expect": []
+  },
+  {
+   "id": "ENH-145",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-08-26 12:05:40,212 DEBUG cache.miss key=session:17127d69-40ad-4071-867f-0e2d23134a73 ttl=2633",
+   "expect": []
+  },
+  {
+   "id": "ENH-146",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:bdae8b74bf60c095cd43dd1ad6b09996597238aa4d6d30ecbb639cd05e1a68a9 not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-147",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@3.22.8 required by next@11.17.7",
+   "expect": []
+  },
+  {
+   "id": "ENH-148",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://198.51.100.251:9200/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-149",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 7081023274834006  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-150",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-09-09 10:44:40,947 INFO  kafka.offset partition=10 offset=6892342316839643 lag=286",
+   "expect": []
+  },
+  {
+   "id": "ENH-151",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 8735. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-152",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0x22240afb and event id 6588.",
+   "expect": []
+  },
+  {
+   "id": "ENH-153",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "[database]\nhost = db.internal.test\nport = 5432\npool_size = 33\nWhy does SQLAlchemy ignore pool_size?",
+   "expect": []
+  },
+  {
+   "id": "ENH-154",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 62 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-155",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "What's a good way to structure feature flags so they get removed after launch?",
+   "expect": []
+  },
+  {
+   "id": "ENH-156",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-02-20 06:48:33,977 WARN  ratelimit tenant=502ff490 limit=232/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-157",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Svelte 7.1.2 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-158",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Istio to Jakarta. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-159",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Presto keeps restarting with OOMKilled after the 7.27.2 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-160",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade nuxt ./charts/falcon --set replicas=5\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-161",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Explain Kosaraju's algorithm with a small Python example.",
+   "expect": []
+  },
+  {
+   "id": "ENH-162",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would a Merkle tree beat a brute-force loop for n=23199?",
+   "expect": []
+  },
+  {
+   "id": "ENH-163",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=America/Sao_Paulo app:9.18.3 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-164",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "ZoneInfo(\"Europe/Madrid\") raises ZoneInfoNotFoundError on Alpine.",
+   "expect": []
+  },
+  {
+   "id": "ENH-165",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"5 10 * * *\"\n  timezone: Asia/Dubai\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-166",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:258)\n\tat com.example.orders.AppKt.main(App.kt:8)",
+   "expect": []
+  },
+  {
+   "id": "ENH-167",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [3] with length 1\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:35 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-168",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:92:33)\n    at Module._compile (node:internal/modules/cjs/loader:1423:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-169",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 31",
+   "expect": []
+  },
+  {
+   "id": "ENH-170",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 9.7.8.",
+   "expect": []
+  },
+  {
+   "id": "ENH-171",
+   "kind": "clean",
+   "form": "path",
+   "split": "hold",
+   "text": "ENOENT: no such file or directory, open 'packages/web/src/Profile.tsx'",
+   "expect": []
+  },
+  {
+   "id": "ENH-172",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `CaddyClient.connect()` hang for 30 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-173",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final GsonMapper mapper;\n    private final int retries = 9;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-174",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 4 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-175",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "kubectl -n payments get pods -l app=billing --field-selector status.phase!=Running\nreturns 3 pods",
+   "expect": []
+  },
+  {
+   "id": "ENH-176",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "tar -czf backup-2024.tgz -C /var/lib/app data/ prints 'file changed as we read it'",
+   "expect": []
+  },
+  {
+   "id": "ENH-177",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-08-07 08:04:23,426 DEBUG cache.miss key=session:7ee0ff6f-f056-4ba1-8d6b-4fc5dd25bd2d ttl=33",
+   "expect": []
+  },
+  {
+   "id": "ENH-178",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:5522c94af0d670f543c7a15a23b62428021fbfe741e5b3de9895d615aba3257c not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-179",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@12.7.4 required by next@9.1.13",
+   "expect": []
+  },
+  {
+   "id": "ENH-180",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://198.51.100.34:3000/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-181",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 5205188486362221  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-182",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-06-08 13:03:23,464 INFO  kafka.offset partition=11 offset=6071280804414184 lag=938",
+   "expect": []
+  },
+  {
+   "id": "ENH-183",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 8538. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-184",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0x24ec16b3 and event id 4934.",
+   "expect": []
+  },
+  {
+   "id": "ENH-185",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "[database]\nhost = db.internal.test\nport = 5432\npool_size = 20\nWhy does SQLAlchemy ignore pool_size?",
+   "expect": []
+  },
+  {
+   "id": "ENH-186",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 60 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-187",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-03-02 15:01:41,156 WARN  ratelimit tenant=266a4bab limit=243/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-188",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Puppet 7.24.6 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-189",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Caddy to Trino. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-190",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Celery keeps restarting with OOMKilled after the 10.20.4 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-191",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade flink ./charts/jackson --set replicas=3\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-192",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Explain Lamport clocks with a small Python example.",
+   "expect": []
+  },
+  {
+   "id": "ENH-193",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Karatsuba multiplication beat a brute-force loop for n=30985?",
+   "expect": []
+  },
+  {
+   "id": "ENH-194",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=Asia/Kolkata app:5.1.11 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-195",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "ZoneInfo(\"Asia/Kolkata\") raises ZoneInfoNotFoundError on Alpine.",
+   "expect": []
+  },
+  {
+   "id": "ENH-196",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"4 6 * * *\"\n  timezone: Europe/Dublin\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-197",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:218)\n\tat com.example.orders.AppKt.main(App.kt:72)",
+   "expect": []
+  },
+  {
+   "id": "ENH-198",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [6] with length 0\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:74 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-199",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:67:28)\n    at Module._compile (node:internal/modules/cjs/loader:1404:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-200",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 44",
+   "expect": []
+  },
+  {
+   "id": "ENH-201",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 2.12.7.",
+   "expect": []
+  },
+  {
+   "id": "ENH-202",
+   "kind": "clean",
+   "form": "path",
+   "split": "hold",
+   "text": "Where does /etc/nginx/conf.d/orders.conf get loaded from? Changes there do nothing.",
+   "expect": []
+  },
+  {
+   "id": "ENH-203",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `VaultClient.connect()` hang for 31 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-204",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final GsonMapper mapper;\n    private final int retries = 5;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-205",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 5 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-206",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "kubectl -n payments get pods -l app=billing --field-selector status.phase!=Running\nreturns 6 pods",
+   "expect": []
+  },
+  {
+   "id": "ENH-207",
+   "kind": "clean",
+   "form": "cloud_place",
+   "split": "hold",
+   "text": "Is eu-central-1 (Frankfurt) or eu-west-1 (Ireland) better for latency from Prague?",
+   "expect": []
+  },
+  {
+   "id": "ENH-208",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-02-15 16:57:44,021 DEBUG cache.miss key=session:1a5ab7ec-7557-45ff-8476-7e4cbf42de27 ttl=2948",
+   "expect": []
+  },
+  {
+   "id": "ENH-209",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:e873449916494f658589b3134290beb58816c05827f041f9999ad02623410ac3 not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-210",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@3.30.11 required by next@10.1.14",
+   "expect": []
+  },
+  {
+   "id": "ENH-211",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://10.148.189.169:8000/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-212",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 8168574608625751  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-213",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-08-04 21:04:21,196 INFO  kafka.offset partition=4 offset=3183689957865451 lag=96",
+   "expect": []
+  },
+  {
+   "id": "ENH-214",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 9079. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-215",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0xdb6d2582 and event id 5835.",
+   "expect": []
+  },
+  {
+   "id": "ENH-216",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "[database]\nhost = db.internal.test\nport = 5432\npool_size = 49\nWhy does SQLAlchemy ignore pool_size?",
+   "expect": []
+  },
+  {
+   "id": "ENH-217",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 36 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-218",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-02-15 19:00:16,102 WARN  ratelimit tenant=59716820 limit=588/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-219",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Sanic 2.10.14 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-220",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Gatsby to Luigi. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-221",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Sanic keeps restarting with OOMKilled after the 3.30.0 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-222",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade jakarta ./charts/druid --set replicas=6\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-223",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Kosaraju's algorithm beat a brute-force loop for n=21666?",
+   "expect": []
+  },
+  {
+   "id": "ENH-224",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=America/Sao_Paulo app:8.24.2 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-225",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "ZoneInfo(\"Africa/Lagos\") raises ZoneInfoNotFoundError on Alpine.",
+   "expect": []
+  },
+  {
+   "id": "ENH-226",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"56 13 * * *\"\n  timezone: Asia/Kolkata\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-227",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:218)\n\tat com.example.orders.AppKt.main(App.kt:77)",
+   "expect": []
+  },
+  {
+   "id": "ENH-228",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [4] with length 1\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:192 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-229",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:106:6)\n    at Module._compile (node:internal/modules/cjs/loader:1207:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-230",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 250",
+   "expect": []
+  },
+  {
+   "id": "ENH-231",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 4.9.14.",
+   "expect": []
+  },
+  {
+   "id": "ENH-232",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `PrestoClient.connect()` hang for 11 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-233",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final GsonMapper mapper;\n    private final int retries = 6;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-234",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 8 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-235",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "kubectl -n payments get pods -l app=billing --field-selector status.phase!=Running\nreturns 4 pods",
+   "expect": []
+  },
+  {
+   "id": "ENH-236",
+   "kind": "clean",
+   "form": "cloud_place",
+   "split": "hold",
+   "text": "Is eu-central-1 (Frankfurt) or eu-west-1 (Ireland) better for latency from Vienna?",
+   "expect": []
+  },
+  {
+   "id": "ENH-237",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-03-20 14:23:12,875 DEBUG cache.miss key=session:360a1db4-ee83-4b5f-8dd2-6a44a77384d3 ttl=939",
+   "expect": []
+  },
+  {
+   "id": "ENH-238",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:7c2c48e41df986ec7a618cd5b9040cfc64cc20e4b15dfeea07a84fa71acd855b not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-239",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@7.22.2 required by next@6.28.3",
+   "expect": []
+  },
+  {
+   "id": "ENH-240",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://10.136.134.123:9200/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-241",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 0087890235088543  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-242",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-05-11 16:20:28,450 INFO  kafka.offset partition=0 offset=7595397434850975 lag=501",
+   "expect": []
+  },
+  {
+   "id": "ENH-243",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 9002. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-244",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0x163604e8 and event id 9780.",
+   "expect": []
+  },
+  {
+   "id": "ENH-245",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "[database]\nhost = db.internal.test\nport = 5432\npool_size = 50\nWhy does SQLAlchemy ignore pool_size?",
+   "expect": []
+  },
+  {
+   "id": "ENH-246",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 9 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-247",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-02-06 04:30:38,253 WARN  ratelimit tenant=a7f739cb limit=589/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-248",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Zipkin 12.1.3 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-249",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Pyramid to Gatsby. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-250",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Jackson keeps restarting with OOMKilled after the 9.30.15 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-251",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade zipkin ./charts/zipkin --set replicas=5\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-252",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Explain a Markov chain with a small Python example.",
+   "expect": []
+  },
+  {
+   "id": "ENH-253",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Gaussian elimination beat a brute-force loop for n=56569?",
+   "expect": []
+  },
+  {
+   "id": "ENH-254",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=Africa/Lagos app:7.18.9 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-255",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"33 18 * * *\"\n  timezone: Asia/Kolkata\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-256",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:66)\n\tat com.example.orders.AppKt.main(App.kt:42)",
+   "expect": []
+  },
+  {
+   "id": "ENH-257",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [9] with length 0\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:64 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-258",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:128:31)\n    at Module._compile (node:internal/modules/cjs/loader:1145:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-259",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 10",
+   "expect": []
+  },
+  {
+   "id": "ENH-260",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 9.24.11.",
+   "expect": []
+  },
+  {
+   "id": "ENH-261",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `TraefikClient.connect()` hang for 37 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-262",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 0 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-263",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "kubectl -n payments get pods -l app=billing --field-selector status.phase!=Running\nreturns 2 pods",
+   "expect": []
+  },
+  {
+   "id": "ENH-264",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-08-18 14:06:58,006 DEBUG cache.miss key=session:8c963f38-459b-4295-849c-2ef3dbea718d ttl=386",
+   "expect": []
+  },
+  {
+   "id": "ENH-265",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:4306d7b872b0bc29cc109a8a6f270d7e77af683856af073ae99965244efd58cf not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-266",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@8.0.4 required by next@1.18.6",
+   "expect": []
+  },
+  {
+   "id": "ENH-267",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://198.51.100.225:8000/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-268",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 6282615372709822  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-269",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-08-20 17:13:36,111 INFO  kafka.offset partition=8 offset=3439888552849247 lag=789",
+   "expect": []
+  },
+  {
+   "id": "ENH-270",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 9030. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-271",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0xf9cd44ec and event id 8174.",
+   "expect": []
+  },
+  {
+   "id": "ENH-272",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 65 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-273",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-08-15 21:10:13,558 WARN  ratelimit tenant=4d2b9aa7 limit=810/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-274",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Jenkins 2.12.1 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-275",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Trino to Trino. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-276",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Hive keeps restarting with OOMKilled after the 6.16.14 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-277",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade tempo ./charts/istio --set replicas=5\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-278",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Explain Karatsuba multiplication with a small Python example.",
+   "expect": []
+  },
+  {
+   "id": "ENH-279",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Kadane's algorithm beat a brute-force loop for n=72029?",
+   "expect": []
+  },
+  {
+   "id": "ENH-280",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=Europe/Dublin app:11.20.5 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-281",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"16 16 * * *\"\n  timezone: Europe/Dublin\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-282",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:266)\n\tat com.example.orders.AppKt.main(App.kt:11)",
+   "expect": []
+  },
+  {
+   "id": "ENH-283",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [2] with length 0\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:134 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-284",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:83:24)\n    at Module._compile (node:internal/modules/cjs/loader:1054:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-285",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 230",
+   "expect": []
+  },
+  {
+   "id": "ENH-286",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 4.5.8.",
+   "expect": []
+  },
+  {
+   "id": "ENH-287",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `TempoClient.connect()` hang for 59 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-288",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final MoshiMapper mapper;\n    private final int retries = 4;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-289",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 6 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-290",
+   "kind": "clean",
+   "form": "cli",
+   "split": "hold",
+   "text": "kubectl -n payments get pods -l app=billing --field-selector status.phase!=Running\nreturns 9 pods",
+   "expect": []
+  },
+  {
+   "id": "ENH-291",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-08-17 16:06:26,950 DEBUG cache.miss key=session:2defc3e9-6c4e-45ae-8bc6-bb018e0634ad ttl=1490",
+   "expect": []
+  },
+  {
+   "id": "ENH-292",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:333384eda1a32f53d124392bc8dd5a2627847f4e19d0614a2b6f5f87eb319b5d not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-293",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@4.16.1 required by next@12.0.11",
+   "expect": []
+  },
+  {
+   "id": "ENH-294",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://192.168.196.56:3000/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-295",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 4661421291411282  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-296",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-08-26 20:27:47,434 INFO  kafka.offset partition=11 offset=3739969568788433 lag=869",
+   "expect": []
+  },
+  {
+   "id": "ENH-297",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 8135. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-298",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0x4aa6a77d and event id 2431.",
+   "expect": []
+  },
+  {
+   "id": "ENH-299",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "[database]\nhost = db.internal.test\nport = 5432\npool_size = 35\nWhy does SQLAlchemy ignore pool_size?",
+   "expect": []
+  },
+  {
+   "id": "ENH-300",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 41 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-301",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-05-08 18:16:35,177 WARN  ratelimit tenant=62c271dc limit=430/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-302",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Fluentd 5.5.4 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-303",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Vault to Mimir. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-304",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Tempo keeps restarting with OOMKilled after the 9.6.10 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-305",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade quarkus ./charts/traefik --set replicas=6\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-306",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Welford's algorithm beat a brute-force loop for n=55421?",
+   "expect": []
+  },
+  {
+   "id": "ENH-307",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=Pacific/Auckland app:11.7.3 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-308",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "ZoneInfo(\"Asia/Dubai\") raises ZoneInfoNotFoundError on Alpine.",
+   "expect": []
+  },
+  {
+   "id": "ENH-309",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"28 17 * * *\"\n  timezone: Europe/Madrid\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-310",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:172)\n\tat com.example.orders.AppKt.main(App.kt:18)",
+   "expect": []
+  },
+  {
+   "id": "ENH-311",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [4] with length 1\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:176 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-312",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:7:36)\n    at Module._compile (node:internal/modules/cjs/loader:1408:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-313",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 94",
+   "expect": []
+  },
+  {
+   "id": "ENH-314",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 10.28.3.",
+   "expect": []
+  },
+  {
+   "id": "ENH-315",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `LinkerdClient.connect()` hang for 22 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-316",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final GsonMapper mapper;\n    private final int retries = 3;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-317",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-04-07 00:20:23,637 DEBUG cache.miss key=session:94ac509b-df12-4e0d-8345-67b54be7e14f ttl=2401",
+   "expect": []
+  },
+  {
+   "id": "ENH-318",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:f7bb63af87ee70376d20b9a449da45fcf5c81b4a74d987ad276bddb30ef2b402 not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-319",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@11.11.10 required by next@11.3.9",
+   "expect": []
+  },
+  {
+   "id": "ENH-320",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://198.51.100.207:3000/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-321",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 2401118722498282  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-322",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-10-26 04:30:45,555 INFO  kafka.offset partition=9 offset=4255873295525115 lag=877",
+   "expect": []
+  },
+  {
+   "id": "ENH-323",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 9598. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-324",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0x1cb0ce55 and event id 7358.",
+   "expect": []
+  },
+  {
+   "id": "ENH-325",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 39 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-326",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-09-13 07:24:50,668 WARN  ratelimit tenant=c4df07fa limit=745/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-327",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Zipkin 4.10.3 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-328",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Druid to Elixir. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-329",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Sanic keeps restarting with OOMKilled after the 7.27.2 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-330",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade flink ./charts/puppet --set replicas=3\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-331",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would Prim's algorithm beat a brute-force loop for n=17909?",
+   "expect": []
+  },
+  {
+   "id": "ENH-332",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=Pacific/Auckland app:2.22.13 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-333",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"16 8 * * *\"\n  timezone: Asia/Dubai\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-334",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:30)\n\tat com.example.orders.AppKt.main(App.kt:78)",
+   "expect": []
+  },
+  {
+   "id": "ENH-335",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "panic: runtime error: index out of range [8] with length 1\n\ngoroutine 1 [running]:\nmain.parseHeader(...)\n\t/home/runner/work/gateway/header.go:42 +0x1d",
+   "expect": []
+  },
+  {
+   "id": "ENH-336",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "TypeError: Cannot read properties of undefined (reading 'map')\n    at Object.<anonymous> (/srv/web/src/orders.js:73:22)\n    at Module._compile (node:internal/modules/cjs/loader:1022:14)",
+   "expect": []
+  },
+  {
+   "id": "ENH-337",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements\n   at Contoso.Billing.InvoiceService.Post() in /src/Billing/InvoiceService.cs:line 108",
+   "expect": []
+  },
+  {
+   "id": "ENH-338",
+   "kind": "clean",
+   "form": "import",
+   "split": "hold",
+   "text": "import com.fasterxml.jackson.databind.ObjectMapper;\nimport org.springframework.stereotype.Service;\nGradle says the symbol cannot be found after 11.27.6.",
+   "expect": []
+  },
+  {
+   "id": "ENH-339",
+   "kind": "clean",
+   "form": "code_tick",
+   "split": "hold",
+   "text": "Why does `JenkinsClient.connect()` hang for 38 seconds?",
+   "expect": []
+  },
+  {
+   "id": "ENH-340",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```java\npublic class OrderService {\n    private final MoshiMapper mapper;\n    private final int retries = 8;\n}\n```\nThe field is null at runtime.",
+   "expect": []
+  },
+  {
+   "id": "ENH-341",
+   "kind": "clean",
+   "form": "code_fence",
+   "split": "hold",
+   "text": "```ts\nexport const Lincoln = defineStore('lincoln', { state: () => ({ count: 1 }) });\n```\nWhy is the store reset on reload?",
+   "expect": []
+  },
+  {
+   "id": "ENH-342",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-06-14 06:35:29,850 DEBUG cache.miss key=session:d971c7f0-bdf4-456f-889a-5c4191382380 ttl=3125",
+   "expect": []
+  },
+  {
+   "id": "ENH-343",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "docker pull fails: digest sha256:ef08b8a7c8e6e0f0942a69494be8f6a1abca399cdd1a45eade6e7815f1192a91 not found",
+   "expect": []
+  },
+  {
+   "id": "ENH-344",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "npm ERR! peer dep: react@1.28.4 required by next@8.30.6",
+   "expect": []
+  },
+  {
+   "id": "ENH-345",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "curl http://10.142.231.227:8000/health hangs, but localhost works.",
+   "expect": []
+  },
+  {
+   "id": "ENH-346",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "invoice_number = 1612606736847725  # from the ERP export\nExcel shows it as 1.2E+15.",
+   "expect": []
+  },
+  {
+   "id": "ENH-347",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-04-24 16:44:01,647 INFO  kafka.offset partition=6 offset=8218618174115772 lag=317",
+   "expect": []
+  },
+  {
+   "id": "ENH-348",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "NodePort range is 30000-32767 but I need 8420. Can I change it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-349",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Windows update fails with 0xaedce6e1 and event id 1550.",
+   "expect": []
+  },
+  {
+   "id": "ENH-350",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "[database]\nhost = db.internal.test\nport = 5432\npool_size = 40\nWhy does SQLAlchemy ignore pool_size?",
+   "expect": []
+  },
+  {
+   "id": "ENH-351",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I write a migration that renames a column without downtime on a table with 68 million rows?",
+   "expect": []
+  },
+  {
+   "id": "ENH-352",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-06-15 14:25:26,426 WARN  ratelimit tenant=2e7c252c limit=676/min remaining=0",
+   "expect": []
+  },
+  {
+   "id": "ENH-353",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Is Trino 9.18.8 compatible with Python 3.13, or do I need to pin it?",
+   "expect": []
+  },
+  {
+   "id": "ENH-354",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "We're moving from Fluentd to Zookeeper. What breaks first?",
+   "expect": []
+  },
+  {
+   "id": "ENH-355",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Presto keeps restarting with OOMKilled after the 12.29.15 upgrade.",
+   "expect": []
+  },
+  {
+   "id": "ENH-356",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "helm upgrade micronaut ./charts/kong --set replicas=4\nError: UPGRADE FAILED",
+   "expect": []
+  },
+  {
+   "id": "ENH-357",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Would a Markov chain beat a brute-force loop for n=4666?",
+   "expect": []
+  },
+  {
+   "id": "ENH-358",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "docker run -e TZ=Asia/Dubai app:2.21.12 still logs in UTC. Why?",
+   "expect": []
+  },
+  {
+   "id": "ENH-359",
+   "kind": "clean",
+   "form": "timezone",
+   "split": "hold",
+   "text": "schedule:\n  cron: \"29 12 * * *\"\n  timezone: Europe/Madrid\nThe job runs an hour late after the clock change.",
+   "expect": []
+  },
+  {
+   "id": "ENH-360",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Exception in thread \"main\" java.lang.NullPointerException\n\tat io.ktor.server.engine.BaseApplicationEngine.start(BaseApplicationEngine.kt:93)\n\tat com.example.orders.AppKt.main(App.kt:23)",
+   "expect": []
+  }
+ ]
+}

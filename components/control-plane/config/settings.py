@@ -11,6 +11,15 @@ PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "http://127.0.0.1:3000")
 PUBLIC_ORIGIN_ALIASES = os.environ.get("PUBLIC_ORIGIN_ALIASES", "")
 RUNTIME_AUTHORIZER_KEY_FILE = os.environ.get("RUNTIME_AUTHORIZER_KEY_FILE", "")
 RUNTIME_GUARD_MANIFEST_FILE = os.environ.get("RUNTIME_GUARD_MANIFEST_FILE", "")
+# Personal-data detection model: an installed package name or a directory.
+# Never downloaded; when it is missing, detected-on requests are all held.
+PERSONAL_DATA_MODEL = os.environ.get("KEEPLANE_PERSONAL_DATA_MODEL", "en_core_web_lg")
+# The install sends request messages to the gateway checks (Spec 005 ST20).
+# Off by default: gateway checks then carry metadata only, exactly as before,
+# and the admin switch for detection can't be turned on.
+PERSONAL_DATA_DETECTION_INSTALLED = (
+    os.environ.get("KEEPLANE_PERSONAL_DATA_DETECTION", "0") == "1"
+)
 CSRF_TRUSTED_ORIGINS = [
     value.strip()
     for value in (PUBLIC_ORIGIN + "," + PUBLIC_ORIGIN_ALIASES).split(",")

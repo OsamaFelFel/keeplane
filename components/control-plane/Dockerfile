@@ -52,6 +52,19 @@ RUN pip install --prefix /cli-auth-dependencies/usr/local --ignore-installed --n
 FROM postgres AS postgres-cli-auth-trial
 COPY --from=cli-auth-dependencies /cli-auth-dependencies/usr/local/ /usr/local/
 
+# Optional personal-data detection with its bundled model; never the default build.
+FROM core AS detection
+USER 0
+COPY components/control-plane/licenses/personal-data-detection.md \
+     components/control-plane/licenses/personal-data-detection.json \
+     components/control-plane/licenses/presidio-analyzer-2.2.364-LICENSE.txt \
+     /usr/share/keeplane/licenses/
+RUN pip install --no-cache-dir --only-binary=:all: --require-hashes --no-deps \
+        -r /app/requirements-detection.txt \
+    && python /app/remove_runtime_installers.py
+ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
+USER 65532:65532
+
 FROM core AS preview
 USER 0
 RUN python /app/remove_runtime_installers.py

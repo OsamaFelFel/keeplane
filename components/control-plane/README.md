@@ -9,6 +9,7 @@ uses Django accounts, password hashing, database sessions and ORM storage.
 | `accounts/` | Accounts, roles, sign-in budgets and Editions preferences |
 | `model_registry/` | Model setup, approvals and registration use cases |
 | `data_classes/` | Class settings and approved-model associations |
+| `personal_data/` | Optional personal-data detection for gateway request checks ([notices](licenses/personal-data-detection.md)) |
 | `audit/` | Mandatory sign-in and optional event records |
 | `integrations/` | Gateway and runner API adapters |
 | `common/` | Shared request protection, storage boundaries and service assembly |

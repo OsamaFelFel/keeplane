@@ -139,7 +139,18 @@ the Bearer credential and the private gateway credential in
 | The route that carries developer model traffic | `POST /internal/runtime/authorize` | Never |
 | Each model backend, after the gateway picks the model | `POST /internal/runtime/authorize/selected` | One per request sent, when **Model answers** is on |
 
-Both send only `project_id` and `model_id`, never the prompt. A gateway that
+Both send only `project_id` and `model_id`, never the prompt, unless the
+install is set up for
+[personal-data detection](data-classes-local.md#install-detection)
+(`KEEPLANE_PERSONAL_DATA_DETECTION=1`). Then both also send the request's
+`messages` array, unchanged, which Keeplane reads only to look for personal
+data while an admin has detection on, and never stores, logs or forwards. With
+detection on, a check without `messages` is held to the detection class. On
+agentgateway, add this to each check's CEL body:
+`"messages": size(request.body) <= 1048576 ? json(request.body).messages : null`.
+The size guard sends `null` for a body over 1 MiB, which Keeplane holds, so a
+large request is never refused for its size. A check body may be up to 8 MiB.
+A gateway that
 calls only the first check still protects the model, but writes no
 **Model answers** records. The backend check runs again for each retry, so a
 retried request is recorded once per try, as on the managed gateway. A managed

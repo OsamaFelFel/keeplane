@@ -1,0 +1,3702 @@
+{
+ "version": "2026-10-31.1",
+ "language": "en",
+ "about": "Fixed English release-bar set for task 005-03 (issue #40, option 1). All values are synthetic; see build_english_set.py for the rules. kind=positive: holds personal data of a scored type; kind=clean: no personal data, any detection is a false alarm; kind=lookalike: published test cards, placeholder names and bot addresses, reported separately.",
+ "types": [
+  "PERSON",
+  "ADDRESS",
+  "EMAIL",
+  "PHONE",
+  "CARD"
+ ],
+ "cases": [
+  {
+   "id": "EN2-001",
+   "kind": "positive",
+   "form": "person-0",
+   "split": "tune",
+   "text": "fix(auth): handle expired refresh tokens\n\nReported-by: Tamsin Halvorsen\nRefs: #882",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Tamsin Halvorsen"
+    }
+   ]
+  },
+  {
+   "id": "EN2-002",
+   "kind": "positive",
+   "form": "person-1",
+   "split": "hold",
+   "text": "2026-09-02T06:15:30.226Z INFO  orders.api created order=83748 customer_name=\"Yusuf Castellano\" total=42.10",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Yusuf Castellano"
+    }
+   ]
+  },
+  {
+   "id": "EN2-003",
+   "kind": "positive",
+   "form": "person-2",
+   "split": "tune",
+   "text": "Why does this test fail?\n\ndef test_display_name():\n    user = User(full_name=\"Keiko Delacroix\")\n    assert user.initials() == \"KD\"",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Keiko Delacroix"
+    }
+   ]
+  },
+  {
+   "id": "EN2-004",
+   "kind": "positive",
+   "form": "person-3",
+   "split": "hold",
+   "text": "# owners.yaml\nservice: billing-worker\nowner: Kwame Cuthbertson\non_call: true\nversion: 9.2.8",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Kwame Cuthbertson"
+    }
+   ]
+  },
+  {
+   "id": "EN2-005",
+   "kind": "positive",
+   "form": "person-4",
+   "split": "tune",
+   "text": "Can you help me write an apology email to Oona Castellano? Their invoice export broke after our 3.36.15 upgrade.",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Oona Castellano"
+    }
+   ]
+  },
+  {
+   "id": "EN2-006",
+   "kind": "positive",
+   "form": "person-5",
+   "split": "hold",
+   "text": "INSERT INTO customers (id, full_name, tier) VALUES (6194, 'Lucien Zielinski', 'gold');\n-- ERROR: duplicate key value violates unique constraint",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Lucien Zielinski"
+    }
+   ]
+  },
+  {
+   "id": "EN2-007",
+   "kind": "positive",
+   "form": "person-6",
+   "split": "tune",
+   "text": "{\n  \"ticket\": 4926,\n  \"requester\": \"Ximena Achterberg\",\n  \"subject\": \"cannot reset password\"\n}\nHow do I map this to a pydantic model?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Ximena Achterberg"
+    }
+   ]
+  },
+  {
+   "id": "EN2-008",
+   "kind": "positive",
+   "form": "person-7",
+   "split": "hold",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/crm/sync.py\", line 226, in push\n    contact.save()\ncrm.errors.ValidationError: contact 'Greta Brennecke' has no account",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Greta Brennecke"
+    }
+   ]
+  },
+  {
+   "id": "EN2-009",
+   "kind": "positive",
+   "form": "person-0",
+   "split": "tune",
+   "text": "fix(auth): handle expired refresh tokens\n\nReported-by: Keiko Underhill\nRefs: #524",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Keiko Underhill"
+    }
+   ]
+  },
+  {
+   "id": "EN2-010",
+   "kind": "positive",
+   "form": "person-1",
+   "split": "hold",
+   "text": "2026-06-15T11:24:23.664Z INFO  orders.api created order=52735 customer_name=\"Fintan Rasmussen\" total=42.10",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Fintan Rasmussen"
+    }
+   ]
+  },
+  {
+   "id": "EN2-011",
+   "kind": "positive",
+   "form": "person-2",
+   "split": "tune",
+   "text": "Why does this test fail?\n\ndef test_display_name():\n    user = User(full_name=\"Ximena Delacroix\")\n    assert user.initials() == \"XD\"",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Ximena Delacroix"
+    }
+   ]
+  },
+  {
+   "id": "EN2-012",
+   "kind": "positive",
+   "form": "person-3",
+   "split": "hold",
+   "text": "# owners.yaml\nservice: billing-worker\nowner: Jovan Underhill\non_call: true\nversion: 4.11.1",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Jovan Underhill"
+    }
+   ]
+  },
+  {
+   "id": "EN2-013",
+   "kind": "positive",
+   "form": "person-4",
+   "split": "tune",
+   "text": "Can you help me write an apology email to Bram Castellano? Their invoice export broke after our 4.24.3 upgrade.",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Bram Castellano"
+    }
+   ]
+  },
+  {
+   "id": "EN2-014",
+   "kind": "positive",
+   "form": "person-5",
+   "split": "hold",
+   "text": "INSERT INTO customers (id, full_name, tier) VALUES (3200, 'Nadia Halvorsen', 'gold');\n-- ERROR: duplicate key value violates unique constraint",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Nadia Halvorsen"
+    }
+   ]
+  },
+  {
+   "id": "EN2-015",
+   "kind": "positive",
+   "form": "person-6",
+   "split": "tune",
+   "text": "{\n  \"ticket\": 4282,\n  \"requester\": \"Ingrid Delacroix\",\n  \"subject\": \"cannot reset password\"\n}\nHow do I map this to a pydantic model?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Ingrid Delacroix"
+    }
+   ]
+  },
+  {
+   "id": "EN2-016",
+   "kind": "positive",
+   "form": "person-7",
+   "split": "hold",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/crm/sync.py\", line 272, in push\n    contact.save()\ncrm.errors.ValidationError: contact 'Farid Fairweather' has no account",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Farid Fairweather"
+    }
+   ]
+  },
+  {
+   "id": "EN2-017",
+   "kind": "positive",
+   "form": "person-0",
+   "split": "tune",
+   "text": "fix(auth): handle expired refresh tokens\n\nReported-by: Pavel Cuthbertson\nRefs: #191",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Pavel Cuthbertson"
+    }
+   ]
+  },
+  {
+   "id": "EN2-018",
+   "kind": "positive",
+   "form": "person-1",
+   "split": "hold",
+   "text": "2026-06-13T16:35:14.089Z INFO  orders.api created order=44149 customer_name=\"Bogdan Halvorsen\" total=42.10",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Bogdan Halvorsen"
+    }
+   ]
+  },
+  {
+   "id": "EN2-019",
+   "kind": "positive",
+   "form": "person-2",
+   "split": "tune",
+   "text": "Why does this test fail?\n\ndef test_display_name():\n    user = User(full_name=\"Kwame Rasmussen\")\n    assert user.initials() == \"KR\"",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Kwame Rasmussen"
+    }
+   ]
+  },
+  {
+   "id": "EN2-020",
+   "kind": "positive",
+   "form": "person-3",
+   "split": "hold",
+   "text": "# owners.yaml\nservice: billing-worker\nowner: Marisol Gallagher\non_call: true\nversion: 7.28.20",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Marisol Gallagher"
+    }
+   ]
+  },
+  {
+   "id": "EN2-021",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "tune",
+   "text": "2026-03-02T08:02:58.058Z WARN  mailer.bounce to=jovan.eriksen@example.net reason=mailbox_full attempt=3",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "jovan.eriksen@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-022",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "hold",
+   "text": "Why does this regex reject greta.abernathy@example.com?\n\nEMAIL_RE = re.compile(r\"^[a-z]+@[a-z]+\\.[a-z]{2,3}$\")",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "greta.abernathy@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-023",
+   "kind": "positive",
+   "form": "email-2",
+   "split": "tune",
+   "text": "# alerts.yaml\nreceivers:\n  - name: billing\n    email_configs:\n      - to: ximena_halvorsen@example.net\n        send_resolved: true",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "ximena_halvorsen@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-024",
+   "kind": "positive",
+   "form": "email-3",
+   "split": "hold",
+   "text": "curl -X POST https://api.internal.test/v1/invites -d '{\"email\": \"soren_gallagher@example.net\", \"role\": \"viewer\"}'\n# returns 409, why?",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "soren_gallagher@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-025",
+   "kind": "positive",
+   "form": "email-4",
+   "split": "tune",
+   "text": "SELECT * FROM users WHERE email = 'jovan_kowalczyk@example.org';\n-- returns 0 rows but the user can log in",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "jovan_kowalczyk@example.org"
+    }
+   ]
+  },
+  {
+   "id": "EN2-026",
+   "kind": "positive",
+   "form": "email-5",
+   "split": "hold",
+   "text": "smtplib.SMTPRecipientsRefused: {'desmond.quigley@example.com': (550, b'5.1.1 user unknown')}",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "desmond.quigley@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-027",
+   "kind": "positive",
+   "form": "email-6",
+   "split": "tune",
+   "text": "Please refactor this so the address isn't hard-coded:\n\nSUPPORT_CONTACT = \"soren72@example.net\"",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "soren72@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-028",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "hold",
+   "text": "2026-09-20T09:05:48.569Z WARN  mailer.bounce to=rcastellano@example.com reason=mailbox_full attempt=3",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "rcastellano@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-029",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "tune",
+   "text": "Why does this regex reject quentin_nakashima@example.com?\n\nEMAIL_RE = re.compile(r\"^[a-z]+@[a-z]+\\.[a-z]{2,3}$\")",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "quentin_nakashima@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-030",
+   "kind": "positive",
+   "form": "email-2",
+   "split": "hold",
+   "text": "# alerts.yaml\nreceivers:\n  - name: billing\n    email_configs:\n      - to: esther_cuthbertson@example.net\n        send_resolved: true",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "esther_cuthbertson@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-031",
+   "kind": "positive",
+   "form": "email-3",
+   "split": "tune",
+   "text": "curl -X POST https://api.internal.test/v1/invites -d '{\"email\": \"nmbekirowe@example.com\", \"role\": \"viewer\"}'\n# returns 409, why?",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "nmbekirowe@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-032",
+   "kind": "positive",
+   "form": "email-4",
+   "split": "hold",
+   "text": "SELECT * FROM users WHERE email = 'nadia_achterberg@example.net';\n-- returns 0 rows but the user can log in",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "nadia_achterberg@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-033",
+   "kind": "positive",
+   "form": "email-5",
+   "split": "tune",
+   "text": "smtplib.SMTPRecipientsRefused: {'rosalind_castellano@example.net': (550, b'5.1.1 user unknown')}",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "rosalind_castellano@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-034",
+   "kind": "positive",
+   "form": "email-6",
+   "split": "hold",
+   "text": "Please refactor this so the address isn't hard-coded:\n\nSUPPORT_CONTACT = \"adaeze_zielinski@example.org\"",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "adaeze_zielinski@example.org"
+    }
+   ]
+  },
+  {
+   "id": "EN2-035",
+   "kind": "positive",
+   "form": "email-0",
+   "split": "tune",
+   "text": "2026-02-28T07:21:15.106Z WARN  mailer.bounce to=zofia.brennecke@example.net reason=mailbox_full attempt=3",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "zofia.brennecke@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-036",
+   "kind": "positive",
+   "form": "email-1",
+   "split": "hold",
+   "text": "Why does this regex reject quentin_thorvaldsen@example.com?\n\nEMAIL_RE = re.compile(r\"^[a-z]+@[a-z]+\\.[a-z]{2,3}$\")",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "quentin_thorvaldsen@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-037",
+   "kind": "positive",
+   "form": "email-2",
+   "split": "tune",
+   "text": "# alerts.yaml\nreceivers:\n  - name: billing\n    email_configs:\n      - to: ximena_quigley@example.com\n        send_resolved: true",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "ximena_quigley@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-038",
+   "kind": "positive",
+   "form": "email-3",
+   "split": "hold",
+   "text": "curl -X POST https://api.internal.test/v1/invites -d '{\"email\": \"tamsin.yilmaz@example.com\", \"role\": \"viewer\"}'\n# returns 409, why?",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "tamsin.yilmaz@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-039",
+   "kind": "positive",
+   "form": "email-4",
+   "split": "tune",
+   "text": "SELECT * FROM users WHERE email = 'crasmussen@example.com';\n-- returns 0 rows but the user can log in",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "crasmussen@example.com"
+    }
+   ]
+  },
+  {
+   "id": "EN2-040",
+   "kind": "positive",
+   "form": "email-5",
+   "split": "hold",
+   "text": "smtplib.SMTPRecipientsRefused: {'kwame.dunmore@example.org': (550, b'5.1.1 user unknown')}",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "kwame.dunmore@example.org"
+    }
+   ]
+  },
+  {
+   "id": "EN2-041",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "tune",
+   "text": "2026-05-10T21:15:34.225Z INFO  sms.send to=\"+1 212 555 0195\" template=otp status=queued",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 212 555 0195"
+    }
+   ]
+  },
+  {
+   "id": "EN2-042",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Why does phonenumbers.parse fail for \"+44 113 496 0517\" with region None?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 113 496 0517"
+    }
+   ]
+  },
+  {
+   "id": "EN2-043",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "tune",
+   "text": "{\n  \"contact\": {\n    \"phone\": \"+1 415 555 0144\",\n    \"preferred\": \"sms\"\n  }\n}\nThe validator says the phone is invalid.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 415 555 0144"
+    }
+   ]
+  },
+  {
+   "id": "EN2-044",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "# escalation.yaml\nprimary_pager: \"020 7946 0497\"\nretry_minutes: 5",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "020 7946 0497"
+    }
+   ]
+  },
+  {
+   "id": "EN2-045",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "tune",
+   "text": "Customer called from (720) 555-0129 saying checkout hangs at step 3. Where should I look in the logs?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "(720) 555-0129"
+    }
+   ]
+  },
+  {
+   "id": "EN2-046",
+   "kind": "positive",
+   "form": "phone-5",
+   "split": "hold",
+   "text": "UPDATE contacts SET phone = '020 7946 0469' WHERE id = 4226;\n-- ERROR: value too long for type character varying(12)",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "020 7946 0469"
+    }
+   ]
+  },
+  {
+   "id": "EN2-047",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "tune",
+   "text": "2026-07-17T09:35:08.945Z INFO  sms.send to=\"+44 113 496 0397\" template=otp status=queued",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 113 496 0397"
+    }
+   ]
+  },
+  {
+   "id": "EN2-048",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Why does phonenumbers.parse fail for \"020 7946 0480\" with region None?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "020 7946 0480"
+    }
+   ]
+  },
+  {
+   "id": "EN2-049",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "tune",
+   "text": "{\n  \"contact\": {\n    \"phone\": \"+1 312 555 0130\",\n    \"preferred\": \"sms\"\n  }\n}\nThe validator says the phone is invalid.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 312 555 0130"
+    }
+   ]
+  },
+  {
+   "id": "EN2-050",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "# escalation.yaml\nprimary_pager: \"020 7946 0725\"\nretry_minutes: 5",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "020 7946 0725"
+    }
+   ]
+  },
+  {
+   "id": "EN2-051",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "tune",
+   "text": "Customer called from 415.555.0158 saying checkout hangs at step 3. Where should I look in the logs?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "415.555.0158"
+    }
+   ]
+  },
+  {
+   "id": "EN2-052",
+   "kind": "positive",
+   "form": "phone-5",
+   "split": "hold",
+   "text": "UPDATE contacts SET phone = '415.555.0114' WHERE id = 7229;\n-- ERROR: value too long for type character varying(12)",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "415.555.0114"
+    }
+   ]
+  },
+  {
+   "id": "EN2-053",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "tune",
+   "text": "2026-07-01T00:44:10.639Z INFO  sms.send to=\"+1 415 555 0130\" template=otp status=queued",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 415 555 0130"
+    }
+   ]
+  },
+  {
+   "id": "EN2-054",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Why does phonenumbers.parse fail for \"+44 113 496 0352\" with region None?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 113 496 0352"
+    }
+   ]
+  },
+  {
+   "id": "EN2-055",
+   "kind": "positive",
+   "form": "phone-2",
+   "split": "tune",
+   "text": "{\n  \"contact\": {\n    \"phone\": \"+44 113 496 0969\",\n    \"preferred\": \"sms\"\n  }\n}\nThe validator says the phone is invalid.",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+44 113 496 0969"
+    }
+   ]
+  },
+  {
+   "id": "EN2-056",
+   "kind": "positive",
+   "form": "phone-3",
+   "split": "hold",
+   "text": "# escalation.yaml\nprimary_pager: \"+1 212 555 0118\"\nretry_minutes: 5",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "+1 212 555 0118"
+    }
+   ]
+  },
+  {
+   "id": "EN2-057",
+   "kind": "positive",
+   "form": "phone-4",
+   "split": "tune",
+   "text": "Customer called from (617) 555-0192 saying checkout hangs at step 3. Where should I look in the logs?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "(617) 555-0192"
+    }
+   ]
+  },
+  {
+   "id": "EN2-058",
+   "kind": "positive",
+   "form": "phone-5",
+   "split": "hold",
+   "text": "UPDATE contacts SET phone = '020 7946 0672' WHERE id = 5363;\n-- ERROR: value too long for type character varying(12)",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "020 7946 0672"
+    }
+   ]
+  },
+  {
+   "id": "EN2-059",
+   "kind": "positive",
+   "form": "phone-0",
+   "split": "tune",
+   "text": "2026-06-21T22:53:47.981Z INFO  sms.send to=\"415.555.0145\" template=otp status=queued",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "415.555.0145"
+    }
+   ]
+  },
+  {
+   "id": "EN2-060",
+   "kind": "positive",
+   "form": "phone-1",
+   "split": "hold",
+   "text": "Why does phonenumbers.parse fail for \"020 7946 0851\" with region None?",
+   "expect": [
+    {
+     "type": "PHONE",
+     "value": "020 7946 0851"
+    }
+   ]
+  },
+  {
+   "id": "EN2-061",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "tune",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/payments/charge.py\", line 43, in charge\n    gateway.capture(card_number=\"4526-0947-0080-9031\", amount=6480)\npayments.errors.DeclinedError: do_not_honor",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "4526-0947-0080-9031"
+    }
+   ]
+  },
+  {
+   "id": "EN2-062",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "hold",
+   "text": "2026-06-17T07:08:20.858Z ERROR payments.tokenize failed pan=5484934950042071 code=invalid_expiry",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5484934950042071"
+    }
+   ]
+  },
+  {
+   "id": "EN2-063",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "tune",
+   "text": "My Luhn check returns False for 5141954194797178, is my loop wrong?\n\nfor i, d in enumerate(reversed(digits)):\n    ...",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5141954194797178"
+    }
+   ]
+  },
+  {
+   "id": "EN2-064",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "hold",
+   "text": "{\n  \"payment\": {\n    \"card\": \"5443963465299538\",\n    \"exp\": \"03/27\"\n  }\n}",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5443963465299538"
+    }
+   ]
+  },
+  {
+   "id": "EN2-065",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "tune",
+   "text": "A customer pasted their card 5554808459166422 into the notes field. How do I stop the form accepting card numbers?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5554808459166422"
+    }
+   ]
+  },
+  {
+   "id": "EN2-066",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "hold",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/payments/charge.py\", line 15, in charge\n    gateway.capture(card_number=\"3416 600741 55036\", amount=3711)\npayments.errors.DeclinedError: do_not_honor",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "3416 600741 55036"
+    }
+   ]
+  },
+  {
+   "id": "EN2-067",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "tune",
+   "text": "2026-10-19T21:03:34.179Z ERROR payments.tokenize failed pan=4392226127794013 code=invalid_expiry",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "4392226127794013"
+    }
+   ]
+  },
+  {
+   "id": "EN2-068",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "hold",
+   "text": "My Luhn check returns False for 6011890469547606, is my loop wrong?\n\nfor i, d in enumerate(reversed(digits)):\n    ...",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6011890469547606"
+    }
+   ]
+  },
+  {
+   "id": "EN2-069",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "tune",
+   "text": "{\n  \"payment\": {\n    \"card\": \"6011323572870806\",\n    \"exp\": \"06/27\"\n  }\n}",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6011323572870806"
+    }
+   ]
+  },
+  {
+   "id": "EN2-070",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "hold",
+   "text": "A customer pasted their card 6011744123142397 into the notes field. How do I stop the form accepting card numbers?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6011744123142397"
+    }
+   ]
+  },
+  {
+   "id": "EN2-071",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "tune",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/payments/charge.py\", line 71, in charge\n    gateway.capture(card_number=\"5470873252200159\", amount=7444)\npayments.errors.DeclinedError: do_not_honor",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5470873252200159"
+    }
+   ]
+  },
+  {
+   "id": "EN2-072",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "hold",
+   "text": "2026-09-24T18:00:28.314Z ERROR payments.tokenize failed pan=6011766564619807 code=invalid_expiry",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6011766564619807"
+    }
+   ]
+  },
+  {
+   "id": "EN2-073",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "tune",
+   "text": "My Luhn check returns False for 6011-6977-4236-7342, is my loop wrong?\n\nfor i, d in enumerate(reversed(digits)):\n    ...",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "6011-6977-4236-7342"
+    }
+   ]
+  },
+  {
+   "id": "EN2-074",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "hold",
+   "text": "{\n  \"payment\": {\n    \"card\": \"5463983499351118\",\n    \"exp\": \"09/29\"\n  }\n}",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5463983499351118"
+    }
+   ]
+  },
+  {
+   "id": "EN2-075",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "tune",
+   "text": "A customer pasted their card 5211267764988415 into the notes field. How do I stop the form accepting card numbers?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5211267764988415"
+    }
+   ]
+  },
+  {
+   "id": "EN2-076",
+   "kind": "positive",
+   "form": "card-0",
+   "split": "hold",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/payments/charge.py\", line 66, in charge\n    gateway.capture(card_number=\"5300744517447354\", amount=9059)\npayments.errors.DeclinedError: do_not_honor",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5300744517447354"
+    }
+   ]
+  },
+  {
+   "id": "EN2-077",
+   "kind": "positive",
+   "form": "card-1",
+   "split": "tune",
+   "text": "2026-07-22T13:34:51.069Z ERROR payments.tokenize failed pan=5141 9785 0250 8837 code=invalid_expiry",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5141 9785 0250 8837"
+    }
+   ]
+  },
+  {
+   "id": "EN2-078",
+   "kind": "positive",
+   "form": "card-2",
+   "split": "hold",
+   "text": "My Luhn check returns False for 5219-5704-9574-7535, is my loop wrong?\n\nfor i, d in enumerate(reversed(digits)):\n    ...",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5219-5704-9574-7535"
+    }
+   ]
+  },
+  {
+   "id": "EN2-079",
+   "kind": "positive",
+   "form": "card-3",
+   "split": "tune",
+   "text": "{\n  \"payment\": {\n    \"card\": \"5594659353649795\",\n    \"exp\": \"04/29\"\n  }\n}",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5594659353649795"
+    }
+   ]
+  },
+  {
+   "id": "EN2-080",
+   "kind": "positive",
+   "form": "card-4",
+   "split": "hold",
+   "text": "A customer pasted their card 5424-4317-2850-3883 into the notes field. How do I stop the form accepting card numbers?",
+   "expect": [
+    {
+     "type": "CARD",
+     "value": "5424-4317-2850-3883"
+    }
+   ]
+  },
+  {
+   "id": "EN2-081",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "tune",
+   "text": "Geocoding returns nothing for \"139 Gorse Hill Way, York YO10 5DD\". Is the comma confusing it?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "139 Gorse Hill Way, York YO10 5DD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-082",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "hold",
+   "text": "{\n  \"shipping\": {\n    \"line1\": \"3528 Tannery Row, Dayton, OH 45409\"\n  },\n  \"status\": \"undeliverable\"\n}\nWhat does the carrier's 422 mean here?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "3528 Tannery Row, Dayton, OH 45409"
+    }
+   ]
+  },
+  {
+   "id": "EN2-083",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "tune",
+   "text": "2026-05-28T14:17:17.605Z WARN  shipping.label address=\"3618 Millbrook Avenue, Tacoma, WA 98405\" carrier=ups error=ADDRESS_NOT_FOUND",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "3618 Millbrook Avenue, Tacoma, WA 98405"
+    }
+   ]
+  },
+  {
+   "id": "EN2-084",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "hold",
+   "text": "# delivery fixture copied from prod\ndeliver_to: \"89 Copperfield Street, Norwich NR2 1JD\"\nwindow: 09:00-12:00",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "89 Copperfield Street, Norwich NR2 1JD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-085",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "tune",
+   "text": "Write a test that a parcel to 94 Kestrel Drive, Norwich NR2 1JD gets the regional surcharge.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "94 Kestrel Drive, Norwich NR2 1JD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-086",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "hold",
+   "text": "Geocoding returns nothing for \"140 Orchard Mews, Exeter EX4 6PX\". Is the comma confusing it?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "140 Orchard Mews, Exeter EX4 6PX"
+    }
+   ]
+  },
+  {
+   "id": "EN2-087",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "tune",
+   "text": "{\n  \"shipping\": {\n    \"line1\": \"176 Copperfield Street, Bristol BS3 4QT\"\n  },\n  \"status\": \"undeliverable\"\n}\nWhat does the carrier's 422 mean here?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "176 Copperfield Street, Bristol BS3 4QT"
+    }
+   ]
+  },
+  {
+   "id": "EN2-088",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "hold",
+   "text": "2026-08-11T14:49:13.939Z WARN  shipping.label address=\"9029 Juniper Close, Madison, WI 53703\" carrier=ups error=ADDRESS_NOT_FOUND",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "9029 Juniper Close, Madison, WI 53703"
+    }
+   ]
+  },
+  {
+   "id": "EN2-089",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "tune",
+   "text": "# delivery fixture copied from prod\ndeliver_to: \"30 Wexford Terrace, York YO10 5DD\"\nwindow: 09:00-12:00",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "30 Wexford Terrace, York YO10 5DD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-090",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "hold",
+   "text": "Write a test that a parcel to 51 Quarry Hill Road, Cardiff CF24 3AA gets the regional surcharge.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "51 Quarry Hill Road, Cardiff CF24 3AA"
+    }
+   ]
+  },
+  {
+   "id": "EN2-091",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "tune",
+   "text": "Geocoding returns nothing for \"98 Bramblewood Court, York YO10 5DD\". Is the comma confusing it?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "98 Bramblewood Court, York YO10 5DD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-092",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "hold",
+   "text": "{\n  \"shipping\": {\n    \"line1\": \"107 Kestrel Drive, Norwich NR2 1JD\"\n  },\n  \"status\": \"undeliverable\"\n}\nWhat does the carrier's 422 mean here?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "107 Kestrel Drive, Norwich NR2 1JD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-093",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "tune",
+   "text": "2026-08-21T14:18:32.020Z WARN  shipping.label address=\"8279 Orchard Mews, Madison, WI 53703\" carrier=ups error=ADDRESS_NOT_FOUND",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "8279 Orchard Mews, Madison, WI 53703"
+    }
+   ]
+  },
+  {
+   "id": "EN2-094",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "hold",
+   "text": "# delivery fixture copied from prod\ndeliver_to: \"57 Kestrel Drive, Exeter EX4 6PX\"\nwindow: 09:00-12:00",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "57 Kestrel Drive, Exeter EX4 6PX"
+    }
+   ]
+  },
+  {
+   "id": "EN2-095",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "tune",
+   "text": "Write a test that a parcel to 54 Copperfield Street, York YO10 5DD gets the regional surcharge.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "54 Copperfield Street, York YO10 5DD"
+    }
+   ]
+  },
+  {
+   "id": "EN2-096",
+   "kind": "positive",
+   "form": "address-0",
+   "split": "hold",
+   "text": "Geocoding returns nothing for \"8694 Millbrook Avenue, Durham, NC 27701\". Is the comma confusing it?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "8694 Millbrook Avenue, Durham, NC 27701"
+    }
+   ]
+  },
+  {
+   "id": "EN2-097",
+   "kind": "positive",
+   "form": "address-1",
+   "split": "tune",
+   "text": "{\n  \"shipping\": {\n    \"line1\": \"7176 Millbrook Avenue, Madison, WI 53703\"\n  },\n  \"status\": \"undeliverable\"\n}\nWhat does the carrier's 422 mean here?",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "7176 Millbrook Avenue, Madison, WI 53703"
+    }
+   ]
+  },
+  {
+   "id": "EN2-098",
+   "kind": "positive",
+   "form": "address-2",
+   "split": "hold",
+   "text": "2026-07-02T22:18:22.884Z WARN  shipping.label address=\"5839 Wexford Terrace, Dayton, OH 45409\" carrier=ups error=ADDRESS_NOT_FOUND",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "5839 Wexford Terrace, Dayton, OH 45409"
+    }
+   ]
+  },
+  {
+   "id": "EN2-099",
+   "kind": "positive",
+   "form": "address-3",
+   "split": "tune",
+   "text": "# delivery fixture copied from prod\ndeliver_to: \"4756 Gorse Hill Way, Dayton, OH 45409\"\nwindow: 09:00-12:00",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "4756 Gorse Hill Way, Dayton, OH 45409"
+    }
+   ]
+  },
+  {
+   "id": "EN2-100",
+   "kind": "positive",
+   "form": "address-4",
+   "split": "hold",
+   "text": "Write a test that a parcel to 51 Gorse Hill Way, Exeter EX4 6PX gets the regional surcharge.",
+   "expect": [
+    {
+     "type": "ADDRESS",
+     "value": "51 Gorse Hill Way, Exeter EX4 6PX"
+    }
+   ]
+  },
+  {
+   "id": "EN2-101",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "Can you turn this into a CSV row? Linnea Szabo, 206.555.0167, account 26561",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Linnea Szabo"
+    },
+    {
+     "type": "PHONE",
+     "value": "206.555.0167"
+    }
+   ]
+  },
+  {
+   "id": "EN2-102",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Adaeze Brennecke <adaeze.brennecke@example.net>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Adaeze Brennecke"
+    },
+    {
+     "type": "EMAIL",
+     "value": "adaeze.brennecke@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-103",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "{\"customer\": {\"name\": \"Pavel Rasmussen\", \"phone\": \"+44 113 496 0395\", \"address\": \"162 Bramblewood Court, Cardiff CF24 3AA\"}}\nWhy does schema validation reject this?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Pavel Rasmussen"
+    },
+    {
+     "type": "PHONE",
+     "value": "+44 113 496 0395"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "162 Bramblewood Court, Cardiff CF24 3AA"
+    }
+   ]
+  },
+  {
+   "id": "EN2-104",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "2026-06-25T03:34:09.545Z ERROR checkout failed user=adaeze_gallagher@example.org card=3495 855039 47624 reason=card_declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "adaeze_gallagher@example.org"
+    },
+    {
+     "type": "CARD",
+     "value": "3495 855039 47624"
+    }
+   ]
+  },
+  {
+   "id": "EN2-105",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "2026-06-05T14:02:46.210Z ERROR checkout failed user=marisol35@example.net card=5467 8719 9930 9742 reason=card_declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "marisol35@example.net"
+    },
+    {
+     "type": "CARD",
+     "value": "5467 8719 9930 9742"
+    }
+   ]
+  },
+  {
+   "id": "EN2-106",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Jovan Dunmore <jovan_dunmore@example.net>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Jovan Dunmore"
+    },
+    {
+     "type": "EMAIL",
+     "value": "jovan_dunmore@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-107",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "2026-02-15T19:45:28.408Z ERROR checkout failed user=jovan_blackwood@example.org card=5351 5267 7494 8598 reason=card_declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "jovan_blackwood@example.org"
+    },
+    {
+     "type": "CARD",
+     "value": "5351 5267 7494 8598"
+    }
+   ]
+  },
+  {
+   "id": "EN2-108",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Keiko Vasquez-Lowe <keiko_vasquezlowe@example.org>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Keiko Vasquez-Lowe"
+    },
+    {
+     "type": "EMAIL",
+     "value": "keiko_vasquezlowe@example.org"
+    }
+   ]
+  },
+  {
+   "id": "EN2-109",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Pavel Lindgren <pavel27@example.net>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Pavel Lindgren"
+    },
+    {
+     "type": "EMAIL",
+     "value": "pavel27@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-110",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "{\"customer\": {\"name\": \"Marisol Underhill\", \"phone\": \"020 7946 0362\", \"address\": \"31 Quarry Hill Road, Leeds LS6 2HX\"}}\nWhy does schema validation reject this?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Marisol Underhill"
+    },
+    {
+     "type": "PHONE",
+     "value": "020 7946 0362"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "31 Quarry Hill Road, Leeds LS6 2HX"
+    }
+   ]
+  },
+  {
+   "id": "EN2-111",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "{\"customer\": {\"name\": \"Rosalind Iwasaki\", \"phone\": \"(212) 555-0130\", \"address\": \"77 Copperfield Street, Bristol BS3 4QT\"}}\nWhy does schema validation reject this?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Rosalind Iwasaki"
+    },
+    {
+     "type": "PHONE",
+     "value": "(212) 555-0130"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "77 Copperfield Street, Bristol BS3 4QT"
+    }
+   ]
+  },
+  {
+   "id": "EN2-112",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Matthias Blackwood <mblackwood@example.org>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Matthias Blackwood"
+    },
+    {
+     "type": "EMAIL",
+     "value": "mblackwood@example.org"
+    }
+   ]
+  },
+  {
+   "id": "EN2-113",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "Can you turn this into a CSV row? Dmitri Kowalczyk, 0113 496 0886, account 11599",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Dmitri Kowalczyk"
+    },
+    {
+     "type": "PHONE",
+     "value": "0113 496 0886"
+    }
+   ]
+  },
+  {
+   "id": "EN2-114",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "Can you turn this into a CSV row? Jovan Eriksen, +1 415 555 0166, account 25347",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Jovan Eriksen"
+    },
+    {
+     "type": "PHONE",
+     "value": "+1 415 555 0166"
+    }
+   ]
+  },
+  {
+   "id": "EN2-115",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "2026-02-05T20:24:52.679Z ERROR checkout failed user=kwame.castellano@example.com card=5492-8754-6225-4748 reason=card_declined",
+   "expect": [
+    {
+     "type": "EMAIL",
+     "value": "kwame.castellano@example.com"
+    },
+    {
+     "type": "CARD",
+     "value": "5492-8754-6225-4748"
+    }
+   ]
+  },
+  {
+   "id": "EN2-116",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "{\"customer\": {\"name\": \"Wendell Dunmore\", \"phone\": \"(312) 555-0149\", \"address\": \"134 Quarry Hill Road, Cardiff CF24 3AA\"}}\nWhy does schema validation reject this?",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Wendell Dunmore"
+    },
+    {
+     "type": "PHONE",
+     "value": "(312) 555-0149"
+    },
+    {
+     "type": "ADDRESS",
+     "value": "134 Quarry Hill Road, Cardiff CF24 3AA"
+    }
+   ]
+  },
+  {
+   "id": "EN2-117",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "Can you turn this into a CSV row? Pavel Blackwood, 0113 496 0403, account 97616",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Pavel Blackwood"
+    },
+    {
+     "type": "PHONE",
+     "value": "0113 496 0403"
+    }
+   ]
+  },
+  {
+   "id": "EN2-118",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Keiko Vasquez-Lowe <keiko.vasquezlowe@example.net>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Keiko Vasquez-Lowe"
+    },
+    {
+     "type": "EMAIL",
+     "value": "keiko.vasquezlowe@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-119",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "tune",
+   "text": "Can you turn this into a CSV row? Elif Nakashima, 020 7946 0735, account 16210",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Elif Nakashima"
+    },
+    {
+     "type": "PHONE",
+     "value": "020 7946 0735"
+    }
+   ]
+  },
+  {
+   "id": "EN2-120",
+   "kind": "positive",
+   "form": "mixed",
+   "split": "hold",
+   "text": "fix(billing): round VAT per line\n\nCo-authored-by: Greta Underhill <greta_underhill@example.net>",
+   "expect": [
+    {
+     "type": "PERSON",
+     "value": "Greta Underhill"
+    },
+    {
+     "type": "EMAIL",
+     "value": "greta_underhill@example.net"
+    }
+   ]
+  },
+  {
+   "id": "EN2-121",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "2026-08-08T01:28:01.668Z INFO  jobs.runner started job=60d48ada-b54f-45ca-aed1-e65aaf777973 parent=c8a9e78d-b020-4699-a879-da213c66436d attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-122",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"ad99ea5c-1f17-45af-a825-c1bcc694fc\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-123",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "git bisect says 8d73447eea043616c960bf2cefc47a65811989c0 is the first bad commit. The diff touches only Cargo.lock.",
+   "expect": []
+  },
+  {
+   "id": "EN2-124",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "sha256sum mismatch:\n  expected 47de244acee33184414f0c2b7f46230503557fa25094e5e47feed17ee0b5f5e1\n  got      66d8766a08402d914f54ff1eabf08a6d288074a11071ef585992cc065b83f4f9\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-125",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "After upgrading from 3.12.15 to 4.27.14 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-126",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "requirements.txt\nrequests==0.35.19\nurllib3==7.34.4\ncertifi==2025.1.11\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-127",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "2026-09-04T20:19:26.150Z WARN  ingress upstream=192.168.133.112:5432 latency_ms=3657 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-128",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "iptables -A INPUT -s 203.0.113.73/32 -p tcp --dport 9090 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-129",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "Why does Date.parse(\"2026-08-08T07:48:00.562Z\") differ from moment by one hour in tz America/Los_Angeles?",
+   "expect": []
+  },
+  {
+   "id": "EN2-130",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "cron: \"41 10 * * 4\" ran at 2026-05-19T12:28:07.117Z instead of the expected time. TZ=America/Los_Angeles",
+   "expect": []
+  },
+  {
+   "id": "EN2-131",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "order_id = 8637840314241071  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-132",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-06-13T06:51:43.315Z INFO  trace_id=7423796744763880 span_id=9541785372900399 duration_ms=340",
+   "expect": []
+  },
+  {
+   "id": "EN2-133",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "assert parse_amount_minor(\"6670571096119236\") == 60544  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-134",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "Epoch nanoseconds 3367249394624121509 converted to 2026-06-02T23:05:16.108Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-135",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "ports:\n  - \"6000:9008\"\n  - \"4491:8651\"\nmemory: 1778M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-136",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Build 6779-497-7939 failed at step 10 of 35: exit code 1",
+   "expect": []
+  },
+  {
+   "id": "EN2-137",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "HTTP 429 after 927 requests in 16s; limit header says 3815/1min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-138",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Kafka 9.29.20 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-139",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Should I use Rails or Pandas for this? The service handles about 3433 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-140",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>guava-bridge</artifactId>\n  <version>5.34.0</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-141",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Our Rails pipeline and the Celery exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-142",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Implement Dijkstra's algorithm in Go for a graph with 4065 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-143",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "tune",
+   "text": "Is Huffman coding overkill here? I only need the top 17 results.",
+   "expect": []
+  },
+  {
+   "id": "EN2-144",
+   "kind": "clean",
+   "form": "region",
+   "split": "hold",
+   "text": "terraform plan wants to recreate the bucket in us-east-1. Why? provider version 7.1.6",
+   "expect": []
+  },
+  {
+   "id": "EN2-145",
+   "kind": "clean",
+   "form": "region",
+   "split": "tune",
+   "text": "Set TZ=Europe/Berlin in the Dockerfile but logs still show UTC. Base image python:3.12-slim.",
+   "expect": []
+  },
+  {
+   "id": "EN2-146",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "def retry(fn, attempts=5, backoff=2.0):\n    for i in range(attempts):\n        try:\n            return fn()\n        except TimeoutError:\n            time.sleep(backoff * 2 ** i)\nWhy does mypy complain about the return type?",
+   "expect": []
+  },
+  {
+   "id": "EN2-147",
+   "kind": "clean",
+   "form": "code",
+   "split": "tune",
+   "text": "const user = await db.users.findUnique({ where: { id: 9326 } });\nif (!user) throw new NotFoundError();\nPrisma returns null even though the row exists.",
+   "expect": []
+  },
+  {
+   "id": "EN2-148",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "class Customer(BaseModel):\n    id: int\n    full_name: str\n    email: EmailStr\n    phone: str | None = None\nHow do I make phone validate E.164?",
+   "expect": []
+  },
+  {
+   "id": "EN2-149",
+   "kind": "clean",
+   "form": "config",
+   "split": "tune",
+   "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing-55be99\nspec:\n  replicas: 4\n  template:\n    spec:\n      containers:\n        - image: registry.internal.test/billing:3.29.18\nThe rollout hangs at 1/6.",
+   "expect": []
+  },
+  {
+   "id": "EN2-150",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "DATABASE_URL=postgres://app:${DB_PASSWORD}@db.internal.test:5432/app\nREDIS_URL=redis://cache.internal.test:6379/13\nWhy does the app connect to localhost?",
+   "expect": []
+  },
+  {
+   "id": "EN2-151",
+   "kind": "clean",
+   "form": "trace",
+   "split": "tune",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/worker.py\", line 255, in run\n    result = pool.map(process, chunks)\n  File \"/usr/lib/python3.12/multiprocessing/pool.py\", line 367, in map\nMemoryError",
+   "expect": []
+  },
+  {
+   "id": "EN2-152",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "java.lang.IllegalStateException: Connection pool shut down\n\tat org.apache.http.impl.conn.PoolingHttpClientConnectionManager.requestConnection(PoolingHttpClientConnectionManager.java:341)\n\tat com.example.billing.Client.send(Client.java:102)",
+   "expect": []
+  },
+  {
+   "id": "EN2-153",
+   "kind": "clean",
+   "form": "chat",
+   "split": "tune",
+   "text": "How do I paginate a GraphQL query with cursors when the page size is 100?",
+   "expect": []
+  },
+  {
+   "id": "EN2-154",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "What's the difference between a mutex and a semaphore in Rust? I keep getting a deadlock in test 32.",
+   "expect": []
+  },
+  {
+   "id": "EN2-155",
+   "kind": "clean",
+   "form": "log",
+   "split": "tune",
+   "text": "2026-08-22T04:37:39.875Z ERROR db.pool timeout acquiring connection after 22274ms (active=42, idle=0)",
+   "expect": []
+  },
+  {
+   "id": "EN2-156",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-06-14T02:03:56.664Z INFO  http GET /api/v2/orders/77032/items?page=9 200 216ms",
+   "expect": []
+  },
+  {
+   "id": "EN2-157",
+   "kind": "clean",
+   "form": "hex",
+   "split": "tune",
+   "text": "Why is the button colour #6cdab3 instead of #bc78bd in dark mode? MAC of the test kiosk is 02:00:5e:1c:d3:27.",
+   "expect": []
+  },
+  {
+   "id": "EN2-158",
+   "kind": "clean",
+   "form": "placeholder_field",
+   "split": "hold",
+   "text": "The form has fields full_name, email, phone and card_number. How do I mask card_number in the logs before 0.34.11?",
+   "expect": []
+  },
+  {
+   "id": "EN2-159",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "2026-08-18T20:12:45.923Z INFO  jobs.runner started job=bb009d44-a031-4667-a3fb-6e2384b410f4 parent=b870307a-7c68-41e0-a317-c8d10e4f1a99 attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-160",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"b7b5a65b-7bac-4b21-a19d-76796b80d7\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-161",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "git bisect says cdc2a33f21874eabb49a4fd33eb8e881c58ccaf9 is the first bad commit. The diff touches only go.sum.",
+   "expect": []
+  },
+  {
+   "id": "EN2-162",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "sha256sum mismatch:\n  expected d349dd7743a37988cbe9bd0b25790896ea599c60a49b21e010739f24b82aefc4\n  got      a5905fbc236946587fe91979dc62b86acd777dd04514474ea655211ca8b91377\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-163",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "After upgrading from 3.25.16 to 7.2.9 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-164",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "requirements.txt\nrequests==3.29.13\nurllib3==7.33.18\ncertifi==2024.1.18\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-165",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "2026-06-06T17:01:36.072Z WARN  ingress upstream=172.28.161.103:8443 latency_ms=3081 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-166",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "iptables -A INPUT -s 192.168.16.154/32 -p tcp --dport 9090 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-167",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "Why does Date.parse(\"2026-01-09T23:42:10.241Z\") differ from moment by one hour in tz Europe/Berlin?",
+   "expect": []
+  },
+  {
+   "id": "EN2-168",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "cron: \"1 23 * * 2\" ran at 2026-03-13T23:54:21.577Z instead of the expected time. TZ=Australia/Sydney",
+   "expect": []
+  },
+  {
+   "id": "EN2-169",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "order_id = 9471243917084445  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-170",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-03-09T05:11:49.126Z INFO  trace_id=3745065259303217 span_id=9383792412626403 duration_ms=372",
+   "expect": []
+  },
+  {
+   "id": "EN2-171",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "assert parse_amount_minor(\"6184079047483736\") == 78641  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-172",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "Epoch nanoseconds 8185370807197532091 converted to 2026-08-27T02:17:43.316Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-173",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "ports:\n  - \"7139:9989\"\n  - \"4953:9563\"\nmemory: 854M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-174",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Build 7576-728-3023 failed at step 22 of 39: exit code 2",
+   "expect": []
+  },
+  {
+   "id": "EN2-175",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "HTTP 429 after 997 requests in 25s; limit header says 3910/19min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-176",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Jaeger 2.12.15 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-177",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Should I use Cassandra or Dapper for this? The service handles about 2476 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-178",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>consul-bridge</artifactId>\n  <version>8.18.14</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-179",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Our Jasmine pipeline and the Sentry exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-180",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Implement Levenshtein distance in Go for a graph with 6660 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-181",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "tune",
+   "text": "Is a Kalman filter overkill here? I only need the top 16 results.",
+   "expect": []
+  },
+  {
+   "id": "EN2-182",
+   "kind": "clean",
+   "form": "region",
+   "split": "hold",
+   "text": "terraform plan wants to recreate the bucket in eu-west-2. Why? provider version 2.0.20",
+   "expect": []
+  },
+  {
+   "id": "EN2-183",
+   "kind": "clean",
+   "form": "region",
+   "split": "tune",
+   "text": "Set TZ=Asia/Singapore in the Dockerfile but logs still show UTC. Base image python:3.12-slim.",
+   "expect": []
+  },
+  {
+   "id": "EN2-184",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "def retry(fn, attempts=4, backoff=1.0):\n    for i in range(attempts):\n        try:\n            return fn()\n        except TimeoutError:\n            time.sleep(backoff * 2 ** i)\nWhy does mypy complain about the return type?",
+   "expect": []
+  },
+  {
+   "id": "EN2-185",
+   "kind": "clean",
+   "form": "code",
+   "split": "tune",
+   "text": "const user = await db.users.findUnique({ where: { id: 53626 } });\nif (!user) throw new NotFoundError();\nPrisma returns null even though the row exists.",
+   "expect": []
+  },
+  {
+   "id": "EN2-186",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing-0d030f\nspec:\n  replicas: 3\n  template:\n    spec:\n      containers:\n        - image: registry.internal.test/billing:1.30.17\nThe rollout hangs at 1/4.",
+   "expect": []
+  },
+  {
+   "id": "EN2-187",
+   "kind": "clean",
+   "form": "config",
+   "split": "tune",
+   "text": "DATABASE_URL=postgres://app:${DB_PASSWORD}@db.internal.test:5432/app\nREDIS_URL=redis://cache.internal.test:6379/8\nWhy does the app connect to localhost?",
+   "expect": []
+  },
+  {
+   "id": "EN2-188",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/worker.py\", line 197, in run\n    result = pool.map(process, chunks)\n  File \"/usr/lib/python3.12/multiprocessing/pool.py\", line 367, in map\nMemoryError",
+   "expect": []
+  },
+  {
+   "id": "EN2-189",
+   "kind": "clean",
+   "form": "trace",
+   "split": "tune",
+   "text": "java.lang.IllegalStateException: Connection pool shut down\n\tat org.apache.http.impl.conn.PoolingHttpClientConnectionManager.requestConnection(PoolingHttpClientConnectionManager.java:119)\n\tat com.example.billing.Client.send(Client.java:114)",
+   "expect": []
+  },
+  {
+   "id": "EN2-190",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "What's the difference between a mutex and a semaphore in Rust? I keep getting a deadlock in test 10.",
+   "expect": []
+  },
+  {
+   "id": "EN2-191",
+   "kind": "clean",
+   "form": "log",
+   "split": "tune",
+   "text": "2026-07-13T10:39:39.128Z ERROR db.pool timeout acquiring connection after 11949ms (active=15, idle=0)",
+   "expect": []
+  },
+  {
+   "id": "EN2-192",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-08-03T22:56:10.856Z INFO  http GET /api/v2/orders/31066/items?page=6 200 767ms",
+   "expect": []
+  },
+  {
+   "id": "EN2-193",
+   "kind": "clean",
+   "form": "hex",
+   "split": "tune",
+   "text": "Why is the button colour #036a72 instead of #321786 in dark mode? MAC of the test kiosk is 02:00:5e:42:ae:fc.",
+   "expect": []
+  },
+  {
+   "id": "EN2-194",
+   "kind": "clean",
+   "form": "placeholder_field",
+   "split": "hold",
+   "text": "The form has fields full_name, email, phone and card_number. How do I mask card_number in the logs before 2.14.20?",
+   "expect": []
+  },
+  {
+   "id": "EN2-195",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "2026-01-16T08:19:40.722Z INFO  jobs.runner started job=deed0a00-3be7-4694-ae87-d922176d6c42 parent=0d5d81e6-793c-47e8-a6a6-79c221af2510 attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-196",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"eae5b5c5-64da-4dee-a4fc-b18312bc9d\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-197",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "git bisect says 806739c176760ecda7021d42681a4277241c6262 is the first bad commit. The diff touches only go.sum.",
+   "expect": []
+  },
+  {
+   "id": "EN2-198",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "sha256sum mismatch:\n  expected 1753c8cf388f9b168aa7ad21c393405ffed59b505e622eeace02347115a23815\n  got      3796fa022744501935e59937e0d0206f52a7ef715b2ba03ac6c25670bfc43151\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-199",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "After upgrading from 6.16.1 to 3.32.20 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-200",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "requirements.txt\nrequests==8.25.2\nurllib3==1.38.12\ncertifi==2023.5.6\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-201",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "2026-07-18T23:03:54.400Z WARN  ingress upstream=192.168.186.37:6379 latency_ms=2145 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-202",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "iptables -A INPUT -s 172.17.119.91/32 -p tcp --dport 443 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-203",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "Why does Date.parse(\"2026-08-22T23:54:46.655Z\") differ from moment by one hour in tz Europe/Berlin?",
+   "expect": []
+  },
+  {
+   "id": "EN2-204",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "cron: \"31 13 * * 2\" ran at 2026-01-05T02:14:20.282Z instead of the expected time. TZ=Europe/Berlin",
+   "expect": []
+  },
+  {
+   "id": "EN2-205",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "order_id = 5067182956729709  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-206",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-04-09T12:16:02.199Z INFO  trace_id=9625067086978576 span_id=4193319943239473 duration_ms=96",
+   "expect": []
+  },
+  {
+   "id": "EN2-207",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "assert parse_amount_minor(\"4881177364410421\") == 22127  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-208",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "Epoch nanoseconds 8852222518991403387 converted to 2026-10-07T07:13:07.572Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-209",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "ports:\n  - \"7344:5783\"\n  - \"8106:3015\"\nmemory: 2545M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-210",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Build 7560-188-8858 failed at step 17 of 45: exit code 143",
+   "expect": []
+  },
+  {
+   "id": "EN2-211",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "HTTP 429 after 886 requests in 54s; limit header says 1562/38min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-212",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Guava 9.10.5 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-213",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Should I use Consul or Chai for this? The service handles about 1875 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-214",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>jaeger-bridge</artifactId>\n  <version>1.2.2</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-215",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Our Polly pipeline and the Jest exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-216",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Implement Kruskal's algorithm in Go for a graph with 8705 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-217",
+   "kind": "clean",
+   "form": "region",
+   "split": "tune",
+   "text": "terraform plan wants to recreate the bucket in us-east-1. Why? provider version 3.18.12",
+   "expect": []
+  },
+  {
+   "id": "EN2-218",
+   "kind": "clean",
+   "form": "region",
+   "split": "hold",
+   "text": "Set TZ=America/New_York in the Dockerfile but logs still show UTC. Base image python:3.12-slim.",
+   "expect": []
+  },
+  {
+   "id": "EN2-219",
+   "kind": "clean",
+   "form": "code",
+   "split": "tune",
+   "text": "def retry(fn, attempts=9, backoff=5.0):\n    for i in range(attempts):\n        try:\n            return fn()\n        except TimeoutError:\n            time.sleep(backoff * 2 ** i)\nWhy does mypy complain about the return type?",
+   "expect": []
+  },
+  {
+   "id": "EN2-220",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "const user = await db.users.findUnique({ where: { id: 83791 } });\nif (!user) throw new NotFoundError();\nPrisma returns null even though the row exists.",
+   "expect": []
+  },
+  {
+   "id": "EN2-221",
+   "kind": "clean",
+   "form": "config",
+   "split": "tune",
+   "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing-6b2b85\nspec:\n  replicas: 5\n  template:\n    spec:\n      containers:\n        - image: registry.internal.test/billing:1.11.6\nThe rollout hangs at 1/8.",
+   "expect": []
+  },
+  {
+   "id": "EN2-222",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "DATABASE_URL=postgres://app:${DB_PASSWORD}@db.internal.test:5432/app\nREDIS_URL=redis://cache.internal.test:6379/6\nWhy does the app connect to localhost?",
+   "expect": []
+  },
+  {
+   "id": "EN2-223",
+   "kind": "clean",
+   "form": "trace",
+   "split": "tune",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/worker.py\", line 32, in run\n    result = pool.map(process, chunks)\n  File \"/usr/lib/python3.12/multiprocessing/pool.py\", line 367, in map\nMemoryError",
+   "expect": []
+  },
+  {
+   "id": "EN2-224",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "java.lang.IllegalStateException: Connection pool shut down\n\tat org.apache.http.impl.conn.PoolingHttpClientConnectionManager.requestConnection(PoolingHttpClientConnectionManager.java:274)\n\tat com.example.billing.Client.send(Client.java:135)",
+   "expect": []
+  },
+  {
+   "id": "EN2-225",
+   "kind": "clean",
+   "form": "chat",
+   "split": "tune",
+   "text": "What's the difference between a mutex and a semaphore in Rust? I keep getting a deadlock in test 41.",
+   "expect": []
+  },
+  {
+   "id": "EN2-226",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-08-20T01:19:05.418Z ERROR db.pool timeout acquiring connection after 23400ms (active=45, idle=0)",
+   "expect": []
+  },
+  {
+   "id": "EN2-227",
+   "kind": "clean",
+   "form": "log",
+   "split": "tune",
+   "text": "2026-01-04T21:13:19.722Z INFO  http GET /api/v2/orders/9653/items?page=3 200 578ms",
+   "expect": []
+  },
+  {
+   "id": "EN2-228",
+   "kind": "clean",
+   "form": "hex",
+   "split": "hold",
+   "text": "Why is the button colour #0ac633 instead of #f7676b in dark mode? MAC of the test kiosk is 02:00:5e:c3:f9:2e.",
+   "expect": []
+  },
+  {
+   "id": "EN2-229",
+   "kind": "clean",
+   "form": "placeholder_field",
+   "split": "tune",
+   "text": "The form has fields full_name, email, phone and card_number. How do I mask card_number in the logs before 0.29.4?",
+   "expect": []
+  },
+  {
+   "id": "EN2-230",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-07-22T15:38:53.886Z INFO  jobs.runner started job=42490efa-13d3-4ab0-a7fe-cf2220a5ac65 parent=4aff3333-7147-479b-a337-56af652f5161 attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-231",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"4e421212-ba9e-4f3e-a279-bcbfe298af\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-232",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "git bisect says dbed3f74a0b33d425c5c71147857479cdd944f1a is the first bad commit. The diff touches only poetry.lock.",
+   "expect": []
+  },
+  {
+   "id": "EN2-233",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "sha256sum mismatch:\n  expected a8d0ce76f9d529225fd7740e91062bc1c9f4b32a86a8be73b3676fe0044760ff\n  got      b468f38db1bbbf1826cae0977e82d1fc1d75c992409cd721f6b7cb74face60f1\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-234",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "After upgrading from 3.6.3 to 2.27.0 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-235",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "requirements.txt\nrequests==9.7.6\nurllib3==3.33.2\ncertifi==2025.11.1\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-236",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "2026-04-15T02:36:10.108Z WARN  ingress upstream=203.0.113.55:8443 latency_ms=1535 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-237",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "iptables -A INPUT -s 203.0.113.83/32 -p tcp --dport 9090 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-238",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "Why does Date.parse(\"2026-05-13T23:07:03.065Z\") differ from moment by one hour in tz America/New_York?",
+   "expect": []
+  },
+  {
+   "id": "EN2-239",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "cron: \"18 7 * * 3\" ran at 2026-10-10T19:25:36.897Z instead of the expected time. TZ=Asia/Tokyo",
+   "expect": []
+  },
+  {
+   "id": "EN2-240",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "order_id = 3580837020636439  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-241",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "2026-08-04T03:51:06.866Z INFO  trace_id=1213187123443841 span_id=5823365605704855 duration_ms=838",
+   "expect": []
+  },
+  {
+   "id": "EN2-242",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "assert parse_amount_minor(\"1657286639510074\") == 7565  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-243",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "Epoch nanoseconds 7630602116582227564 converted to 2026-07-14T04:41:06.552Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-244",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "ports:\n  - \"5808:6949\"\n  - \"3132:7818\"\nmemory: 4036M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-245",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "Build 1674-925-5813 failed at step 20 of 30: exit code 137",
+   "expect": []
+  },
+  {
+   "id": "EN2-246",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "HTTP 429 after 787 requests in 26s; limit header says 1543/5min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-247",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Sentry 3.0.11 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-248",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Should I use Jenkins or Polly for this? The service handles about 1801 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-249",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>django-bridge</artifactId>\n  <version>1.30.18</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-250",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Our Sidekiq pipeline and the Consul exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-251",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "tune",
+   "text": "Implement Dijkstra's algorithm in Go for a graph with 4076 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-252",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Is Bresenham's line algorithm overkill here? I only need the top 15 results.",
+   "expect": []
+  },
+  {
+   "id": "EN2-253",
+   "kind": "clean",
+   "form": "region",
+   "split": "tune",
+   "text": "terraform plan wants to recreate the bucket in westeurope. Why? provider version 5.7.1",
+   "expect": []
+  },
+  {
+   "id": "EN2-254",
+   "kind": "clean",
+   "form": "region",
+   "split": "hold",
+   "text": "Set TZ=America/Los_Angeles in the Dockerfile but logs still show UTC. Base image python:3.12-slim.",
+   "expect": []
+  },
+  {
+   "id": "EN2-255",
+   "kind": "clean",
+   "form": "code",
+   "split": "tune",
+   "text": "def retry(fn, attempts=2, backoff=1.0):\n    for i in range(attempts):\n        try:\n            return fn()\n        except TimeoutError:\n            time.sleep(backoff * 2 ** i)\nWhy does mypy complain about the return type?",
+   "expect": []
+  },
+  {
+   "id": "EN2-256",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "const user = await db.users.findUnique({ where: { id: 95172 } });\nif (!user) throw new NotFoundError();\nPrisma returns null even though the row exists.",
+   "expect": []
+  },
+  {
+   "id": "EN2-257",
+   "kind": "clean",
+   "form": "config",
+   "split": "tune",
+   "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing-34b670\nspec:\n  replicas: 5\n  template:\n    spec:\n      containers:\n        - image: registry.internal.test/billing:1.10.8\nThe rollout hangs at 1/3.",
+   "expect": []
+  },
+  {
+   "id": "EN2-258",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/worker.py\", line 125, in run\n    result = pool.map(process, chunks)\n  File \"/usr/lib/python3.12/multiprocessing/pool.py\", line 367, in map\nMemoryError",
+   "expect": []
+  },
+  {
+   "id": "EN2-259",
+   "kind": "clean",
+   "form": "trace",
+   "split": "tune",
+   "text": "java.lang.IllegalStateException: Connection pool shut down\n\tat org.apache.http.impl.conn.PoolingHttpClientConnectionManager.requestConnection(PoolingHttpClientConnectionManager.java:147)\n\tat com.example.billing.Client.send(Client.java:154)",
+   "expect": []
+  },
+  {
+   "id": "EN2-260",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "How do I paginate a GraphQL query with cursors when the page size is 20?",
+   "expect": []
+  },
+  {
+   "id": "EN2-261",
+   "kind": "clean",
+   "form": "chat",
+   "split": "tune",
+   "text": "What's the difference between a mutex and a semaphore in Rust? I keep getting a deadlock in test 58.",
+   "expect": []
+  },
+  {
+   "id": "EN2-262",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-02-22T09:00:23.317Z ERROR db.pool timeout acquiring connection after 5135ms (active=34, idle=0)",
+   "expect": []
+  },
+  {
+   "id": "EN2-263",
+   "kind": "clean",
+   "form": "log",
+   "split": "tune",
+   "text": "2026-08-05T07:07:01.484Z INFO  http GET /api/v2/orders/6241/items?page=1 200 14ms",
+   "expect": []
+  },
+  {
+   "id": "EN2-264",
+   "kind": "clean",
+   "form": "hex",
+   "split": "hold",
+   "text": "Why is the button colour #a7a869 instead of #a8b8e8 in dark mode? MAC of the test kiosk is 02:00:5e:17:e8:79.",
+   "expect": []
+  },
+  {
+   "id": "EN2-265",
+   "kind": "clean",
+   "form": "placeholder_field",
+   "split": "tune",
+   "text": "The form has fields full_name, email, phone and card_number. How do I mask card_number in the logs before 4.29.18?",
+   "expect": []
+  },
+  {
+   "id": "EN2-266",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-03-03T22:29:50.113Z INFO  jobs.runner started job=886ea4c1-c6c2-453d-a03d-d76fcfb90447 parent=a9197bce-1898-4f24-aba1-4aff0210b23e attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-267",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"4f7091a9-0396-4487-a68b-7591f20c3e\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-268",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "git bisect says 10eb7a88f1feb9dd2113dd3b6d7f478483a5fd66 is the first bad commit. The diff touches only Cargo.lock.",
+   "expect": []
+  },
+  {
+   "id": "EN2-269",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "sha256sum mismatch:\n  expected 81cd2fc7ee34bc5ed02a3547bd89901c01fe2d947176e4a007aa5feca4f847c5\n  got      ca98b0045da1cb95f388ec3206dd65e05861bfa7c6f0bb62eb1af5ddf5c50af3\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-270",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "After upgrading from 0.1.20 to 0.4.13 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-271",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "requirements.txt\nrequests==6.4.3\nurllib3==8.5.18\ncertifi==2024.7.14\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-272",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "2026-08-12T17:32:43.904Z WARN  ingress upstream=203.0.113.236:8080 latency_ms=2055 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-273",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "iptables -A INPUT -s 203.0.113.183/32 -p tcp --dport 9090 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-274",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "Why does Date.parse(\"2026-09-17T00:12:16.849Z\") differ from moment by one hour in tz Asia/Tokyo?",
+   "expect": []
+  },
+  {
+   "id": "EN2-275",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "cron: \"48 21 * * 5\" ran at 2026-05-13T14:18:58.309Z instead of the expected time. TZ=Australia/Sydney",
+   "expect": []
+  },
+  {
+   "id": "EN2-276",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "order_id = 5209657682624235  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-277",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "2026-02-28T22:19:15.155Z INFO  trace_id=2615419858867415 span_id=6516370435508384 duration_ms=147",
+   "expect": []
+  },
+  {
+   "id": "EN2-278",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "assert parse_amount_minor(\"5412998920352634\") == 29041  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-279",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "Epoch nanoseconds 5504096527317731940 converted to 2026-04-02T16:26:14.474Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-280",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "ports:\n  - \"5173:4778\"\n  - \"6989:7067\"\nmemory: 2745M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-281",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "Build 4210-402-9589 failed at step 5 of 34: exit code 137",
+   "expect": []
+  },
+  {
+   "id": "EN2-282",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "HTTP 429 after 480 requests in 31s; limit header says 3236/46min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-283",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Mocha 7.32.6 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-284",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Should I use Sinatra or Sentry for this? The service handles about 2418 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-285",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>ansible-bridge</artifactId>\n  <version>5.8.2</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-286",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Our Karma pipeline and the Sinon exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-287",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "tune",
+   "text": "Implement a Bloom filter in Go for a graph with 9262 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-288",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Is a Fenwick tree overkill here? I only need the top 7 results.",
+   "expect": []
+  },
+  {
+   "id": "EN2-289",
+   "kind": "clean",
+   "form": "region",
+   "split": "tune",
+   "text": "terraform plan wants to recreate the bucket in eu-west-2. Why? provider version 1.4.7",
+   "expect": []
+  },
+  {
+   "id": "EN2-290",
+   "kind": "clean",
+   "form": "region",
+   "split": "hold",
+   "text": "Set TZ=Asia/Tokyo in the Dockerfile but logs still show UTC. Base image python:3.12-slim.",
+   "expect": []
+  },
+  {
+   "id": "EN2-291",
+   "kind": "clean",
+   "form": "code",
+   "split": "tune",
+   "text": "def retry(fn, attempts=5, backoff=4.0):\n    for i in range(attempts):\n        try:\n            return fn()\n        except TimeoutError:\n            time.sleep(backoff * 2 ** i)\nWhy does mypy complain about the return type?",
+   "expect": []
+  },
+  {
+   "id": "EN2-292",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "const user = await db.users.findUnique({ where: { id: 39752 } });\nif (!user) throw new NotFoundError();\nPrisma returns null even though the row exists.",
+   "expect": []
+  },
+  {
+   "id": "EN2-293",
+   "kind": "clean",
+   "form": "config",
+   "split": "tune",
+   "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing-538443\nspec:\n  replicas: 5\n  template:\n    spec:\n      containers:\n        - image: registry.internal.test/billing:8.24.14\nThe rollout hangs at 1/9.",
+   "expect": []
+  },
+  {
+   "id": "EN2-294",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "DATABASE_URL=postgres://app:${DB_PASSWORD}@db.internal.test:5432/app\nREDIS_URL=redis://cache.internal.test:6379/14\nWhy does the app connect to localhost?",
+   "expect": []
+  },
+  {
+   "id": "EN2-295",
+   "kind": "clean",
+   "form": "trace",
+   "split": "tune",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/worker.py\", line 78, in run\n    result = pool.map(process, chunks)\n  File \"/usr/lib/python3.12/multiprocessing/pool.py\", line 367, in map\nMemoryError",
+   "expect": []
+  },
+  {
+   "id": "EN2-296",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "java.lang.IllegalStateException: Connection pool shut down\n\tat org.apache.http.impl.conn.PoolingHttpClientConnectionManager.requestConnection(PoolingHttpClientConnectionManager.java:172)\n\tat com.example.billing.Client.send(Client.java:26)",
+   "expect": []
+  },
+  {
+   "id": "EN2-297",
+   "kind": "clean",
+   "form": "chat",
+   "split": "tune",
+   "text": "How do I paginate a GraphQL query with cursors when the page size is 50?",
+   "expect": []
+  },
+  {
+   "id": "EN2-298",
+   "kind": "clean",
+   "form": "chat",
+   "split": "hold",
+   "text": "What's the difference between a mutex and a semaphore in Rust? I keep getting a deadlock in test 29.",
+   "expect": []
+  },
+  {
+   "id": "EN2-299",
+   "kind": "clean",
+   "form": "log",
+   "split": "tune",
+   "text": "2026-01-10T13:37:00.165Z ERROR db.pool timeout acquiring connection after 21210ms (active=9, idle=0)",
+   "expect": []
+  },
+  {
+   "id": "EN2-300",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-06-02T01:24:53.688Z INFO  http GET /api/v2/orders/90868/items?page=1 200 150ms",
+   "expect": []
+  },
+  {
+   "id": "EN2-301",
+   "kind": "clean",
+   "form": "hex",
+   "split": "tune",
+   "text": "Why is the button colour #3239fd instead of #7bb5da in dark mode? MAC of the test kiosk is 02:00:5e:f7:65:fb.",
+   "expect": []
+  },
+  {
+   "id": "EN2-302",
+   "kind": "clean",
+   "form": "placeholder_field",
+   "split": "hold",
+   "text": "The form has fields full_name, email, phone and card_number. How do I mask card_number in the logs before 8.15.0?",
+   "expect": []
+  },
+  {
+   "id": "EN2-303",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "2026-02-13T20:11:25.823Z INFO  jobs.runner started job=5caca5b3-41a2-4e37-a714-9ef4777bd1cf parent=4c6b6f1c-1613-449f-ab1d-68cbb8387f76 attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-304",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"b372a70c-52a3-4b86-aff3-77d80d63be\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-305",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "git bisect says 1591fc0ca1b024f5e63ea3342b8b846a9d323e74 is the first bad commit. The diff touches only poetry.lock.",
+   "expect": []
+  },
+  {
+   "id": "EN2-306",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "sha256sum mismatch:\n  expected d374f0586f53eadf1c81fb1ff344e1d7003f2c7004bfc8197f2f390ab75cb53e\n  got      f2678b2a9553c677dec2e9065190d0a267a877ed5ac61ec3a442e5447eddbcea\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-307",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "After upgrading from 6.15.4 to 5.2.7 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-308",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "requirements.txt\nrequests==6.22.8\nurllib3==9.26.7\ncertifi==2026.7.13\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-309",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "2026-05-12T11:25:54.597Z WARN  ingress upstream=172.22.207.166:8443 latency_ms=2937 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-310",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "iptables -A INPUT -s 10.228.14.60/32 -p tcp --dport 9090 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-311",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "Why does Date.parse(\"2026-09-18T03:58:48.917Z\") differ from moment by one hour in tz Australia/Sydney?",
+   "expect": []
+  },
+  {
+   "id": "EN2-312",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "cron: \"22 0 * * 1\" ran at 2026-03-25T01:47:42.349Z instead of the expected time. TZ=Asia/Tokyo",
+   "expect": []
+  },
+  {
+   "id": "EN2-313",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "order_id = 2664603585481617  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-314",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "2026-02-10T14:10:26.469Z INFO  trace_id=2120716411302169 span_id=2915571999083099 duration_ms=224",
+   "expect": []
+  },
+  {
+   "id": "EN2-315",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "assert parse_amount_minor(\"0402697158046822\") == 63039  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-316",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "Epoch nanoseconds 0548845363940145374 converted to 2026-04-08T16:22:21.764Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-317",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "ports:\n  - \"6175:6149\"\n  - \"5993:7377\"\nmemory: 3266M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-318",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "Build 1434-937-3750 failed at step 5 of 48: exit code 137",
+   "expect": []
+  },
+  {
+   "id": "EN2-319",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "HTTP 429 after 363 requests in 26s; limit header says 2729/60min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-320",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Ansible 8.2.9 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-321",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Should I use Flask or Nomad for this? The service handles about 3777 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-322",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>jaeger-bridge</artifactId>\n  <version>3.38.17</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-323",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Our Dapper pipeline and the Django exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-324",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Implement Knuth-Morris-Pratt in Go for a graph with 1380 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-325",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "tune",
+   "text": "Is Levenshtein distance overkill here? I only need the top 4 results.",
+   "expect": []
+  },
+  {
+   "id": "EN2-326",
+   "kind": "clean",
+   "form": "region",
+   "split": "hold",
+   "text": "terraform plan wants to recreate the bucket in us-central1. Why? provider version 0.24.0",
+   "expect": []
+  },
+  {
+   "id": "EN2-327",
+   "kind": "clean",
+   "form": "region",
+   "split": "tune",
+   "text": "Set TZ=Australia/Sydney in the Dockerfile but logs still show UTC. Base image python:3.12-slim.",
+   "expect": []
+  },
+  {
+   "id": "EN2-328",
+   "kind": "clean",
+   "form": "code",
+   "split": "hold",
+   "text": "def retry(fn, attempts=4, backoff=2.0):\n    for i in range(attempts):\n        try:\n            return fn()\n        except TimeoutError:\n            time.sleep(backoff * 2 ** i)\nWhy does mypy complain about the return type?",
+   "expect": []
+  },
+  {
+   "id": "EN2-329",
+   "kind": "clean",
+   "form": "code",
+   "split": "tune",
+   "text": "const user = await db.users.findUnique({ where: { id: 2687 } });\nif (!user) throw new NotFoundError();\nPrisma returns null even though the row exists.",
+   "expect": []
+  },
+  {
+   "id": "EN2-330",
+   "kind": "clean",
+   "form": "config",
+   "split": "hold",
+   "text": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing-a030f0\nspec:\n  replicas: 3\n  template:\n    spec:\n      containers:\n        - image: registry.internal.test/billing:9.17.12\nThe rollout hangs at 1/2.",
+   "expect": []
+  },
+  {
+   "id": "EN2-331",
+   "kind": "clean",
+   "form": "trace",
+   "split": "tune",
+   "text": "Traceback (most recent call last):\n  File \"/srv/app/worker.py\", line 35, in run\n    result = pool.map(process, chunks)\n  File \"/usr/lib/python3.12/multiprocessing/pool.py\", line 367, in map\nMemoryError",
+   "expect": []
+  },
+  {
+   "id": "EN2-332",
+   "kind": "clean",
+   "form": "trace",
+   "split": "hold",
+   "text": "java.lang.IllegalStateException: Connection pool shut down\n\tat org.apache.http.impl.conn.PoolingHttpClientConnectionManager.requestConnection(PoolingHttpClientConnectionManager.java:329)\n\tat com.example.billing.Client.send(Client.java:77)",
+   "expect": []
+  },
+  {
+   "id": "EN2-333",
+   "kind": "clean",
+   "form": "chat",
+   "split": "tune",
+   "text": "What's the difference between a mutex and a semaphore in Rust? I keep getting a deadlock in test 54.",
+   "expect": []
+  },
+  {
+   "id": "EN2-334",
+   "kind": "clean",
+   "form": "log",
+   "split": "hold",
+   "text": "2026-06-01T15:54:34.366Z ERROR db.pool timeout acquiring connection after 18710ms (active=10, idle=0)",
+   "expect": []
+  },
+  {
+   "id": "EN2-335",
+   "kind": "clean",
+   "form": "log",
+   "split": "tune",
+   "text": "2026-02-14T04:03:48.249Z INFO  http GET /api/v2/orders/94893/items?page=2 200 873ms",
+   "expect": []
+  },
+  {
+   "id": "EN2-336",
+   "kind": "clean",
+   "form": "hex",
+   "split": "hold",
+   "text": "Why is the button colour #941546 instead of #89a0a4 in dark mode? MAC of the test kiosk is 02:00:5e:46:30:aa.",
+   "expect": []
+  },
+  {
+   "id": "EN2-337",
+   "kind": "clean",
+   "form": "placeholder_field",
+   "split": "tune",
+   "text": "The form has fields full_name, email, phone and card_number. How do I mask card_number in the logs before 7.23.16?",
+   "expect": []
+  },
+  {
+   "id": "EN2-338",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "hold",
+   "text": "2026-06-20T22:27:28.964Z INFO  jobs.runner started job=9bc6480f-d346-403d-ae27-bac776bc1bb0 parent=62f511b2-f030-41b7-a5ee-943139ecd23b attempt=1",
+   "expect": []
+  },
+  {
+   "id": "EN2-339",
+   "kind": "clean",
+   "form": "uuid",
+   "split": "tune",
+   "text": "Why does Postgres say invalid input syntax for type uuid: \"4a245c3e-68f4-4f76-ae75-484f5cff8d\"?",
+   "expect": []
+  },
+  {
+   "id": "EN2-340",
+   "kind": "clean",
+   "form": "hash",
+   "split": "hold",
+   "text": "git bisect says 699981f05891c87c5ff4be212801ee0faac4eec0 is the first bad commit. The diff touches only poetry.lock.",
+   "expect": []
+  },
+  {
+   "id": "EN2-341",
+   "kind": "clean",
+   "form": "hash",
+   "split": "tune",
+   "text": "sha256sum mismatch:\n  expected 242b12f5dd050be1eaed95c8a2f8ce599f3a750c365ffac5469796266abee79f\n  got      fa0a66609852550355a477f59227754ef8472a793d125bef110fa868b12617f1\nIs the mirror stale?",
+   "expect": []
+  },
+  {
+   "id": "EN2-342",
+   "kind": "clean",
+   "form": "version",
+   "split": "hold",
+   "text": "After upgrading from 1.20.5 to 3.31.7 the build fails with `error[E0599]: no method named as_str`. Downgrade or patch?",
+   "expect": []
+  },
+  {
+   "id": "EN2-343",
+   "kind": "clean",
+   "form": "version",
+   "split": "tune",
+   "text": "requirements.txt\nrequests==9.35.7\nurllib3==7.17.17\ncertifi==2025.1.18\nWhy does pip resolve a different urllib3?",
+   "expect": []
+  },
+  {
+   "id": "EN2-344",
+   "kind": "clean",
+   "form": "ip",
+   "split": "hold",
+   "text": "2026-07-22T06:37:15.733Z WARN  ingress upstream=203.0.113.64:8080 latency_ms=2840 status=504",
+   "expect": []
+  },
+  {
+   "id": "EN2-345",
+   "kind": "clean",
+   "form": "ip",
+   "split": "tune",
+   "text": "iptables -A INPUT -s 10.0.165.223/32 -p tcp --dport 22 -j ACCEPT\nThis rule doesn't seem to apply, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-346",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "hold",
+   "text": "Why does Date.parse(\"2026-05-20T16:03:57.226Z\") differ from moment by one hour in tz Asia/Tokyo?",
+   "expect": []
+  },
+  {
+   "id": "EN2-347",
+   "kind": "clean",
+   "form": "timestamp",
+   "split": "tune",
+   "text": "cron: \"50 16 * * 2\" ran at 2026-08-14T14:49:41.471Z instead of the expected time. TZ=Europe/London",
+   "expect": []
+  },
+  {
+   "id": "EN2-348",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "order_id = 8170051006657962  # snowflake-style id from the queue\nWhy does JSON.parse round it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-349",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "2026-10-22T08:12:15.368Z INFO  trace_id=7969379020759821 span_id=4177460236941975 duration_ms=375",
+   "expect": []
+  },
+  {
+   "id": "EN2-350",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "hold",
+   "text": "assert parse_amount_minor(\"8150356665716884\") == 82206  # fails with OverflowError",
+   "expect": []
+  },
+  {
+   "id": "EN2-351",
+   "kind": "clean",
+   "form": "card_like",
+   "split": "tune",
+   "text": "Epoch nanoseconds 9891736187224669544 converted to 2026-08-03T19:10:32.678Z, is that right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-352",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "ports:\n  - \"4096:7827\"\n  - \"6115:6281\"\nmemory: 2707M\nWhy is the second port not reachable?",
+   "expect": []
+  },
+  {
+   "id": "EN2-353",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "tune",
+   "text": "Build 7593-941-7256 failed at step 21 of 33: exit code 137",
+   "expect": []
+  },
+  {
+   "id": "EN2-354",
+   "kind": "clean",
+   "form": "phone_like",
+   "split": "hold",
+   "text": "HTTP 429 after 940 requests in 45s; limit header says 2835/7min. How do I back off?",
+   "expect": []
+  },
+  {
+   "id": "EN2-355",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "Rails 4.5.6 throws a NullPointerException when I serialize an Optional field. Is there a config flag?",
+   "expect": []
+  },
+  {
+   "id": "EN2-356",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Should I use Sentry or Flask for this? The service handles about 4001 jobs per minute.",
+   "expect": []
+  },
+  {
+   "id": "EN2-357",
+   "kind": "clean",
+   "form": "library",
+   "split": "tune",
+   "text": "<dependency>\n  <groupId>com.example</groupId>\n  <artifactId>gunicorn-bridge</artifactId>\n  <version>0.32.13</version>\n</dependency>\nMaven can't resolve it.",
+   "expect": []
+  },
+  {
+   "id": "EN2-358",
+   "kind": "clean",
+   "form": "library",
+   "split": "hold",
+   "text": "Our Dapper pipeline and the Serilog exporter disagree on the metric count. Which one is right?",
+   "expect": []
+  },
+  {
+   "id": "EN2-359",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "tune",
+   "text": "Implement a Fenwick tree in Go for a graph with 4176 nodes. Keep it allocation-free.",
+   "expect": []
+  },
+  {
+   "id": "EN2-360",
+   "kind": "clean",
+   "form": "algorithm",
+   "split": "hold",
+   "text": "Is a Bloom filter overkill here? I only need the top 14 results.",
+   "expect": []
+  },
+  {
+   "id": "EN2-361",
+   "kind": "lookalike",
+   "form": "test_card",
+   "split": "tune",
+   "text": "Stripe test mode rejects 4242 4242 4242 4242 with exp 12/34, why?",
+   "expect": []
+  },
+  {
+   "id": "EN2-362",
+   "kind": "lookalike",
+   "form": "test_card",
+   "split": "hold",
+   "text": "card_number = \"4111111111111111\"  # Visa test number from the docs",
+   "expect": []
+  },
+  {
+   "id": "EN2-363",
+   "kind": "lookalike",
+   "form": "test_card",
+   "split": "tune",
+   "text": "Our sandbox fixture uses 5555555555554444; is that still accepted?",
+   "expect": []
+  },
+  {
+   "id": "EN2-364",
+   "kind": "lookalike",
+   "form": "test_card",
+   "split": "hold",
+   "text": "amex = \"378282246310005\"  # gateway test card",
+   "expect": []
+  },
+  {
+   "id": "EN2-365",
+   "kind": "lookalike",
+   "form": "test_card",
+   "split": "tune",
+   "text": "Why does 6011111111111117 fail our BIN lookup in tests?",
+   "expect": []
+  },
+  {
+   "id": "EN2-366",
+   "kind": "lookalike",
+   "form": "placeholder_name",
+   "split": "hold",
+   "text": "user = User(name=\"John Doe\", email=None)\nWhy is the email required?",
+   "expect": []
+  },
+  {
+   "id": "EN2-367",
+   "kind": "lookalike",
+   "form": "placeholder_name",
+   "split": "tune",
+   "text": "In this protocol Alice sends Bob a signed nonce. Where does Eve fit?",
+   "expect": []
+  },
+  {
+   "id": "EN2-368",
+   "kind": "lookalike",
+   "form": "placeholder_name",
+   "split": "hold",
+   "text": "Replace the placeholder Jane Doe in the seed script with faker output.",
+   "expect": []
+  },
+  {
+   "id": "EN2-369",
+   "kind": "lookalike",
+   "form": "placeholder_email",
+   "split": "tune",
+   "text": "git config user.email \"you@example.com\" is still set, how do I change it?",
+   "expect": []
+  },
+  {
+   "id": "EN2-370",
+   "kind": "lookalike",
+   "form": "placeholder_email",
+   "split": "hold",
+   "text": "The docs say to send to user@example.com for testing. Is that safe?",
+   "expect": []
+  },
+  {
+   "id": "EN2-371",
+   "kind": "lookalike",
+   "form": "bot_address",
+   "split": "tune",
+   "text": "Commits from 49699333+dependabot[bot]@users.noreply.github.com break the DCO check.",
+   "expect": []
+  },
+  {
+   "id": "EN2-372",
+   "kind": "lookalike",
+   "form": "bot_address",
+   "split": "hold",
+   "text": "Who is noreply@github.com in our CODEOWNERS?",
+   "expect": []
+  },
+  {
+   "id": "EN2-373",
+   "kind": "lookalike",
+   "form": "placeholder_phone",
+   "split": "tune",
+   "text": "The phone field defaults to 555-555-5555; should we use a reserved range?",
+   "expect": []
+  },
+  {
+   "id": "EN2-374",
+   "kind": "lookalike",
+   "form": "placeholder_address",
+   "split": "hold",
+   "text": "Our test address is 123 Main Street, Anytown; the validator accepts it.",
+   "expect": []
+  }
+ ]
+}
