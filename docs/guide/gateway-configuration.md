@@ -18,7 +18,8 @@ management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
 A Secret you add to the managed gateway copies through
 `agentgateway-standalone.extraVolumes` is mounted with mode 0440 unless you
-set a stricter one, and needs the pod's `fsGroup`; see
+set a stricter one, and needs the pod's `fsGroup`, which PostgreSQL and
+local-trial installs keep unset, so they use `secretKeyRef`; see
 [Secrets](kubernetes-installation-reference.md#secrets).
 In `existing` mode the customer-run gateway keeps its own key setup. To change
 the keys later, see [rotate the gateway keys](#rotate-the-gateway-keys).

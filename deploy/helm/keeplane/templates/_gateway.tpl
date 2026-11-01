@@ -51,7 +51,8 @@ volume with a Secret source, gets defaultMode 0440 when it sets none, as every
 Secret Keeplane mounts itself; a looser mode is refused. Kubernetes makes the
 files owned by root with the pod's fsGroup as their group, so the non-root
 gateway user can read them only through fsGroup, and Helm refuses a Secret
-volume without one.
+volume without one. app.yaml already refuses a gateway fsGroup with
+app.postgres or app.localTrial, so those installs use secretKeyRef.
 */ -}}
 {{- define "keeplane.gatewayExtraVolumes" -}}
 {{- $fsGroup := index (.podSecurityContext | default dict) "fsGroup" -}}
@@ -76,7 +77,7 @@ volume without one.
 {{- end -}}
 {{- if $secrets -}}
 {{- if or (kindIs "invalid" $fsGroup) (not $fsGroup) -}}
-{{- fail (printf "%s mounts a Secret into the managed gateway copies, but agentgateway-standalone.podSecurityContext.fsGroup is unset. Its files would be owned by root, so the non-root gateway could read them only if every user in the pod could. Give the gateway this value through an agentgateway-standalone.extraEnv entry with valueFrom.secretKeyRef, or set podSecurityContext.fsGroup (such as 65532) on a gateway that does not mount the shared provider-key volume." $where) -}}
+{{- fail (printf "%s mounts a Secret into the managed gateway copies, but agentgateway-standalone.podSecurityContext.fsGroup is unset. Its files would be owned by root, so the non-root gateway could read them only if every user in the pod could. Give the gateway this value through an agentgateway-standalone.extraEnv entry with valueFrom.secretKeyRef. Only an install without app.postgres or app.localTrial may set podSecurityContext.fsGroup (such as 65532) instead; with either, the gateway shares the provider-key volume and fsGroup stays unset." $where) -}}
 {{- end -}}
 {{- if kindIs "invalid" (index $holder "defaultMode") -}}
 {{- $_ := set $holder "defaultMode" 288 -}}

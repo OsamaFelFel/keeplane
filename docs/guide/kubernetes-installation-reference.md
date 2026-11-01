@@ -73,8 +73,9 @@ such as Kubernetes' usual 0644. Because the files belong to root, the non-root
 gateway can read 0440 files only through the pod's group, so Helm also refuses
 a Secret volume unless `agentgateway-standalone.podSecurityContext.fsGroup` is
 set (for example to 65532); Kubernetes then adds group read, so 0400 files are
-written 0440. Leave `fsGroup` unset on a gateway that mounts the
-shared provider-key volume; that gateway has to use `secretKeyRef`
+written 0440. With `app.postgres` or `app.localTrial` the gateway shares the
+provider-key volume and Helm refuses any gateway `fsGroup`, so those installs
+cannot mount Secret files into the gateway and use `secretKeyRef` instead
 ([CM-04 to CM-06](../../tests/integration/chart-credential-mounts-cases.md)).
 With `gateway.mode=existing` the chart runs no gateway, so it ignores these
 settings. The chart offers no extra volumes for the app.

@@ -211,15 +211,22 @@ STRICT_EXPECTED = {"provider-ca": (0o400, []), "provider-token": (0o440, [0o400]
                    "provider-bundle": (0o040, [0o400])}
 
 
-def gateway_secret_values(mode, volumes, fs_group=GATEWAY_GROUP):
-    """A PostgreSQL install whose managed gateway mounts the given Secret volumes.
+def gateway_secret_values(install, volumes, fs_group=GATEWAY_GROUP):
+    """Values whose gateway settings mount the given Secret volumes.
 
-    The gateway has its own fsGroup and no shared provider-key volume; the
-    guides keep fsGroup unset on a gateway that mounts that volume.
+    "minimal" is a managed install with neither PostgreSQL nor the local trial,
+    the only kind whose gateway may set fsGroup: with either of them the
+    gateway shares the provider-key volume and Helm refuses a gateway fsGroup.
+    "postgres" and "existing" are the PostgreSQL installs with each gateway mode.
     """
     from tests.integration import test_chart_installation_shape as shape
 
-    values = shape.postgres_values(mode)
+    if install == "minimal":
+        values = {"gateway": {"mode": "managed", "install": True,
+                              "keysSecret": "keeplane-gateway-keys"},
+                  "agentgateway-standalone": shape.gateway_values()}
+    else:
+        values = shape.postgres_values("existing" if install == "existing" else "managed")
     gateway = values["agentgateway-standalone"]
     gateway["podSecurityContext"] = {"fsGroup": fs_group}
     gateway["extraVolumes"] = [dict(volume) for volume in volumes]
@@ -258,7 +265,7 @@ def copies_volumes(chart, output):
 def test_cm_04_gateway_secret_volumes_without_a_mode_get_0440(chart, tmp_path):
     observed = {}
     result = render_values(chart, tmp_path, "unset",
-                           gateway_secret_values("managed", UNSET_VOLUMES))
+                           gateway_secret_values("minimal", UNSET_VOLUMES))
     assert result.returncode == 0, result.stderr
     copies, volumes = copies_volumes(chart, result.stdout)
     for name, (mode, item_modes) in UNSET_EXPECTED.items():
@@ -293,7 +300,7 @@ def test_cm_04_gateway_secret_volumes_without_a_mode_get_0440(chart, tmp_path):
 
 def test_cm_05_gateway_secret_volumes_keep_a_stricter_mode(chart, tmp_path):
     result = render_values(chart, tmp_path, "strict",
-                           gateway_secret_values("managed", STRICT_VOLUMES))
+                           gateway_secret_values("minimal", STRICT_VOLUMES))
     assert result.returncode == 0, result.stderr
     _, volumes = copies_volumes(chart, result.stdout)
     for name, expected in STRICT_EXPECTED.items():
@@ -303,44 +310,52 @@ def test_cm_05_gateway_secret_volumes_keep_a_stricter_mode(chart, tmp_path):
 
 
 def refused_volumes():
-    """Gateway Secret volumes Helm must refuse, with the message it gives."""
+    """Gateway Secret volumes Helm must refuse: (volumes, message, fsGroup, install)."""
     looser = "accept only owner and group read (0440) or stricter"
     secret = lambda **fields: [{"name": "provider-ca",
                                 "secret": {"secretName": "provider-ca", **fields}}]
     return {
-        "default-0644": (secret(defaultMode=0o644), looser, GATEWAY_GROUP),
-        "everyone-reads-0444": (secret(defaultMode=0o444), looser, GATEWAY_GROUP),
-        "owner-writes-0640": (secret(defaultMode=0o640), looser, GATEWAY_GROUP),
-        "group-writes-0460": (secret(defaultMode=0o460), looser, GATEWAY_GROUP),
-        "executable-0550": (secret(defaultMode=0o550), looser, GATEWAY_GROUP),
-        "setuid-04440": (secret(defaultMode=0o4440), looser, GATEWAY_GROUP),
+        "default-0644": (secret(defaultMode=0o644), looser, GATEWAY_GROUP, "minimal"),
+        "everyone-reads-0444": (secret(defaultMode=0o444), looser, GATEWAY_GROUP, "minimal"),
+        "owner-writes-0640": (secret(defaultMode=0o640), looser, GATEWAY_GROUP, "minimal"),
+        "group-writes-0460": (secret(defaultMode=0o460), looser, GATEWAY_GROUP, "minimal"),
+        "executable-0550": (secret(defaultMode=0o550), looser, GATEWAY_GROUP, "minimal"),
+        "setuid-04440": (secret(defaultMode=0o4440), looser, GATEWAY_GROUP, "minimal"),
         "item-0644": (secret(items=[{"key": "ca.crt", "path": "ca.crt", "mode": 0o644}]),
-                      looser, GATEWAY_GROUP),
+                      looser, GATEWAY_GROUP, "minimal"),
         "projected-0644": ([{"name": "provider-bundle", "projected": {
             "defaultMode": 0o644, "sources": [{"secret": {"name": "provider-client"}}]}}],
-            looser, GATEWAY_GROUP),
+            looser, GATEWAY_GROUP, "minimal"),
         "projected-item-0604": ([{"name": "provider-bundle", "projected": {"sources": [
             {"secret": {"name": "provider-client", "items": [
                 {"key": "tls.key", "path": "tls.key", "mode": 0o604}]}}]}}],
-            looser, GATEWAY_GROUP),
-        "mode-as-text": (secret(defaultMode="0440"), "is not a number", GATEWAY_GROUP),
-        "no-fs-group": (secret(), "podSecurityContext.fsGroup is unset", None),
+            looser, GATEWAY_GROUP, "minimal"),
+        "mode-as-text": (secret(defaultMode="0440"), "is not a number", GATEWAY_GROUP, "minimal"),
+        "no-fs-group": (secret(), "podSecurityContext.fsGroup is unset", None, "minimal"),
         "no-fs-group-strict": (secret(defaultMode=0o440),
-                               "podSecurityContext.fsGroup is unset", None),
+                               "podSecurityContext.fsGroup is unset", None, "minimal"),
         "no-fs-group-projected": ([{"name": "provider-bundle", "projected": {
             "sources": [{"secret": {"name": "provider-client"}}]}}],
-            "podSecurityContext.fsGroup is unset", None),
+            "podSecurityContext.fsGroup is unset", None, "minimal"),
+        # PostgreSQL (and the local trial) share the provider-key volume with
+        # the gateway: Helm refuses its fsGroup, and without one any Secret volume.
+        "postgres-fs-group": (secret(), "Leave the managed gateway fsGroup unset",
+                              GATEWAY_GROUP, "postgres"),
+        "postgres-no-fs-group": (secret(), "podSecurityContext.fsGroup is unset", None,
+                                 "postgres"),
     }
 
 
 def test_cm_06_gateway_secret_volumes_with_a_looser_mode_are_refused(chart, tmp_path):
     observed = {}
-    for label, (volumes, message, fs_group) in refused_volumes().items():
+    for label, (volumes, message, fs_group, install) in refused_volumes().items():
         result = render_values(chart, tmp_path, label,
-                               gateway_secret_values("managed", volumes, fs_group))
+                               gateway_secret_values(install, volumes, fs_group))
         assert result.returncode != 0, label
         assert message in result.stderr, (label, result.stderr)
-        assert "agentgateway-standalone.extraVolumes[0]" in result.stderr, (label, result.stderr)
+        if label != "postgres-fs-group":
+            assert "agentgateway-standalone.extraVolumes[0]" in result.stderr, (label,
+                                                                             result.stderr)
         observed[label] = result.stderr.strip().splitlines()[-1][-160:]
     # A looser mode is ignored with an existing gateway: no pod mounts it.
     existing = render_values(chart, tmp_path, "existing-loose", gateway_secret_values(
