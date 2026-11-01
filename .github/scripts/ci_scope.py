@@ -6,6 +6,10 @@ import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
+# Guides whose commands a test checks against the code; editing one runs the
+# application checks so the guide can't drift from what it describes.
+CHECKED_GUIDES = {"docs/guide/backup-and-restore.md"}
+
 
 def docs_only(event_name, event_path, *, directory=None):
     if event_name != "pull_request":
@@ -53,8 +57,9 @@ def docs_only(event_name, event_path, *, directory=None):
             }:
                 return False
             path = name.decode("utf-8")
-            allowed = path in {"README.md", "components/cli/README.md"} or (
-                path.startswith("docs/") and PurePosixPath(path).suffix == ".md"
+            allowed = path not in CHECKED_GUIDES and (
+                path in {"README.md", "components/cli/README.md"}
+                or (path.startswith("docs/") and PurePosixPath(path).suffix == ".md")
             )
             if not allowed:
                 return False
