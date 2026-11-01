@@ -49,6 +49,9 @@ gateway:
   # Installer-created Secret with runtime-key, admin-key, runtime-key-hash and
   # admin-key-hash. Required for the managed gateway: the chart refuses to
   # install it without this Secret and its hash variables in extraEnv below.
+  # During a key rotation the same Secret also holds the next keys
+  # (runtime-key-next, admin-key-next, runtime-key-hash-next,
+  # admin-key-hash-next); see docs/guide/gateway-configuration.md.
   keysSecret: ""
   # Managed mode: how many gateway copies run (1-32). Each copy gets its own
   # private address and the app reads every one back after a model change.
@@ -127,6 +130,8 @@ agentgateway-standalone:
   # GATEWAY_ADMIN_KEY_HASH from gateway.keysSecret (keys runtime-key-hash and
   # admin-key-hash) with secretKeyRef entries here. Helm cannot pass the Secret
   # name into this bundled chart, so the chart checks these entries instead.
+  # Only while a key rotation runs, GATEWAY_*_KEY_HASH_NEXT may be added the
+  # same way (keys runtime-key-hash-next and admin-key-hash-next, not optional).
   extraEnv: []
   config:
     gateways:
@@ -134,6 +139,8 @@ agentgateway-standalone:
         port: 4000
     # Both key policies are part of the chart: management and model calls on
     # port 4000 always require a key. Helm refuses an install that removes them.
+    # A key rotation may add one second keyHash, ${GATEWAY_ADMIN_KEY_HASH_NEXT}
+    # or ${GATEWAY_RUNTIME_KEY_HASH_NEXT}, after the current one; nothing else.
     ui:
       gateways: default
       policies:

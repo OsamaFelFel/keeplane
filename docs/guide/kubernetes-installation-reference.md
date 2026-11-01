@@ -64,8 +64,8 @@ key hash.
 
    ```sh
    umask 077
-   openssl rand -base64 32 | tr -d '\n' > runtime-key
-   openssl rand -base64 32 | tr -d '\n' > admin-key
+   openssl rand -hex 32 | tr -d '\n' > runtime-key
+   openssl rand -hex 32 | tr -d '\n' > admin-key
    for name in runtime admin; do
      printf 'sha256:%s' "$(shasum -a 256 < $name-key | cut -d ' ' -f 1)" > $name-key-hash
    done
@@ -74,8 +74,11 @@ key hash.
      --from-file=runtime-key-hash --from-file=admin-key-hash
    ```
 
-   Keep the two keys separate. Delete the local files once the Secret exists, or
-   store them only where your other installation secrets live.
+   A key may hold only letters, digits, `-` and `_`, 32 to 256 of them; Keeplane
+   refuses any other runtime key. `openssl rand -hex 32` makes 64 such
+   characters. Don't use `openssl rand -base64`: its keys can hold `+`, `/` and
+   `=`. Keep the two keys separate. Delete the local files once the Secret
+   exists, or store them only where your other installation secrets live.
 2. Set `gateway.keysSecret` to the Secret's name.
 3. Load both hashes into the gateway. Helm cannot pass the Secret name into the
    bundled gateway chart, so add these entries to `agentgateway-standalone.extraEnv`
@@ -102,7 +105,11 @@ Helm refuses the managed install, before creating anything, when
 given a literal value or read from another Secret, and when your values remove
 or loosen `agentgateway-standalone.config.ui.policies.apiKey` or
 `agentgateway-standalone.config.llm.policies.apiKey`. Do not set those two
-policies in your values; the chart's are used. The
+policies in your values; the chart's are used. The one exception is a key
+rotation, which may add a second hash, `${GATEWAY_ADMIN_KEY_HASH_NEXT}` or
+`${GATEWAY_RUNTIME_KEY_HASH_NEXT}`, read from the same Secret; see
+[rotate the gateway keys](gateway-configuration.md#rotate-the-gateway-keys).
+The
 [`deploy/local/values.yaml`](../../deploy/local/values.yaml) file shows the full
 form. These keys apply to the managed gateway alongside the gateway
 NetworkPolicy below, so the gateway stays closed even where a cluster does not

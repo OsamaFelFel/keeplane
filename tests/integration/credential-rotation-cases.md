@@ -9,15 +9,18 @@ and [gateway keys](../../docs/guide/gateway-configuration.md#rotate-the-gateway-
 Developers' own provider keys and TLS ingress certificates are outside these
 cases.
 
-CR-01 to CR-06 run separate control-plane processes, as pods do, and change
-their mounted credential files underneath them the way Kubernetes updates a
-mounted Secret. The gateway copies are small in-process stand-ins that check
-key hashes like the chart's two strict key policies and share one model store
-holding a Keeplane-added model and a customer's model. CR-01 to CR-03 run on
-SQLite and, in CI, on PostgreSQL. CR-04 to CR-06 need PostgreSQL role
-passwords and run only in CI's PostgreSQL job (or locally with
-`KEEPLANE_TEST_POSTGRES_*`). CR-07 to CR-09 render the chart with Helm and are
-skipped where Helm is missing. CR-10 needs PostgreSQL's client driver and runs with CR-04 to CR-06. CR-U1 to CR-U6 (with CR-U3b to CR-U3d) are unit cases.
+CR-01 to CR-06, CR-11 and CR-12 run separate control-plane processes, as pods
+do, and change their mounted credential files underneath them the way
+Kubernetes updates a mounted Secret. The gateway copies are small in-process
+stand-ins that check key hashes like the chart's two strict key policies
+(including the optional next hash during a rotation) and share one model store
+holding a Keeplane-added model and a customer's model. CR-01 to CR-03, CR-11
+and CR-12 run on SQLite and, in CI, on PostgreSQL. CR-04 to CR-06 need
+PostgreSQL role passwords and run only in CI's PostgreSQL job (or locally with
+`KEEPLANE_TEST_POSTGRES_*`). CR-07 to CR-09, CR-13 and CR-14 render the chart
+with Helm and are skipped where Helm is missing. CR-10 needs PostgreSQL's
+client driver and runs with CR-04 to CR-06. CR-U1 to CR-U8 (with CR-U3b to
+CR-U3d) are unit cases.
 
 | Case | Given | Expected result |
 | --- | --- | --- |
@@ -29,8 +32,12 @@ skipped where Helm is missing. CR-10 needs PostgreSQL's client driver and runs w
 | CR-06 Wrong password in the Secret | A mistyped password is written to the file and the role is not changed | The process keeps working on the accepted password, logs the refusal once, and the check exits 1. A new process reports "the database refuses the mounted password". Writing the right password back clears it. |
 | CR-07 App credentials come from Secret files | The chart rendered for PostgreSQL in managed and customer-run modes | The app reads the database password, database CA, signing secret, first-admin password and both gateway keys only as files from read-only Secret volumes named in the values, with no `subPath` (which would never receive an update) and no credential in an environment value. The migration Secret never reaches the app. |
 | CR-08 Migration Job credentials | The same renders | The pre-install/pre-upgrade Job mounts the migration role's Secret and the CA Secret, never the app's password, so each Helm run reads the current ones. |
-| CR-09 Managed gateway key hashes | The managed render | Each gateway copy loads both key hashes from the keys Secret as environment variables read at start, with no `subPath`, and each key policy holds the single hash variable: a key change needs the copies restarted. |
+| CR-09 Managed gateway key hashes | The managed render | Each gateway copy loads both key hashes from the keys Secret as environment variables read at start, with no `subPath`, and each key policy holds the single hash variable: a key change needs the copies restarted. No next-key variable is rendered unless the installer adds the rotation lines. |
 | CR-10 Unreachable database | A new process pointed at a port where no server listens | `check_credentials` exits 1 with `"database": "unreachable"`, not a refused password. |
+| CR-11 Gateway keys rotate with no refused call | As CR-01. The next keys are added beside the current ones and the copies restart one at a time accepting both; Keeplane's keys are switched; the copies restart one at a time with only the new keys; the next keys leave the Secret | After every step the app's management and model calls are accepted, and every copy accepts the keys the app holds. While only one copy accepts the next keys, `check_credentials` exits 1 and names that copy's `admin_key_next` and `runtime_key_next` as `refused`, while the current keys stay `accepted`; once both copies accept them it passes. At the end the next-key lines are gone, the check passes with the same models and approvals, the old keys open nothing, and no report holds a key or key hash. |
+| CR-12 Wrong next key caught before the switch | The copies loaded a next admin hash made from a different key than the mounted next admin key | `check_credentials` exits 1 with `"admin_key_next": "refused"` on every copy, while Keeplane keeps working on its current keys. |
+| CR-13 Managed render during a rotation | The managed render with the documented rotation lines: both `_NEXT` entries and both two-hash key policies; then only the admin key's lines | Each copy reads both next hashes from the keys Secret (keys `runtime-key-hash-next` and `admin-key-hash-next`), not marked optional; each policy stays strict with the current hash then the next hash; no Secret, key or key hash is rendered. Rotating one key alone also renders. |
+| CR-14 Next key only from the keys Secret | Rotation renders where a policy has a second hash but no `_NEXT` entry, a `_NEXT` entry has no second hash, the entry is optional, a literal value, from another Secret, from the current hash's key or repeated, the hashes are swapped, a third literal hash is added, or `gateway.keysSecret` is empty | Helm refuses each before creating anything, naming `gateway.keysSecret` or the key policy, and never echoes a literal hash. |
 | CR-U1 Password read per connection | A password file changes after a connection | The next connection uses the new password; nothing else is tried. |
 | CR-U2 Documented order | The file changes, then the role | No connection fails; the database sees one refused try per process; exactly two log lines, neither holding a password. |
 | CR-U3 Unaccepted passwords | A wrong, empty or missing file | A wrong password fails the connection; an empty or missing file fails before any connection is tried. |
@@ -40,9 +47,12 @@ skipped where Helm is missing. CR-10 needs PostgreSQL's client driver and runs w
 | CR-U4 Refused gateway key | The gateway answers 401 to the admin key on the signed-in admin's status path | The app answers 503 with the plain message and logs it; other gateway failures pass through unchanged. |
 | CR-U5 Public gateway health | The gateway answers 403 to five `/health` calls | `/health` answers 503 `{"gateway": "unavailable"}`, says nothing more and logs nothing, so a probe can't fill the log. |
 | CR-U6 Key check outcomes | Gateway answers 200, 401, 403, an unreadable key file, or unavailable | Reported as accepted, refused, refused, unreadable and unreachable. |
+| CR-U7 Next keys in the check | No next key files, then `admin-key-next` and `runtime-key-next` beside the current key files; and reports with a next key accepted, refused, unreadable or absent | Next keys are checked only when mounted, each on the path that needs it at the copy's own address, and reported as `admin_key_next` and `runtime_key_next` with no key in the report. The check passes only when every reported next key is accepted. |
+| CR-U8 Documented key commands | The key-making commands in the Kubernetes installation reference and the managed rotation steps, run eight times each | Every key is 64 characters that Keeplane's key format check accepts (letters, digits, `-`, `_`) with no trailing newline, and each hash file is `sha256:` and that key's hash. No guide's shell block uses `openssl rand -base64`. |
 
 Not proven here: a live Kubernetes rotation (kubelet's Secret refresh delay,
-a real gateway image restarting, requests in flight across a rollout) and a
+a real gateway image restarting, the real gateway's `apiKey` policy accepting
+both hashes in its key list, requests in flight across a rollout) and a
 TLS server switching to a certificate from a new CA. The CA file is passed to
 libpq as a path, which libpq reads for each new connection; the existing chart
 fixture proves verified TLS and refusal of a wrong CA.

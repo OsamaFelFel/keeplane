@@ -9,6 +9,7 @@ way Kubernetes updates a mounted Secret.
 import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -43,8 +44,10 @@ class Gateway:
     """One gateway copy holding the key hashes it loaded when it started.
 
     Management (/api/) needs the admin key and model calls (/v1/) the runtime
-    key, as the chart's two strict key policies do. Its model store is shared
-    by every copy and is never touched by a key change.
+    key, as the chart's two strict key policies do. During a rotation each
+    policy may also hold the next key's hash (the chart's optional
+    *_KEY_HASH_NEXT). Its model store is shared by every copy and is never
+    touched by a key change.
     """
 
     store = None
@@ -60,9 +63,9 @@ class Gateway:
 
             def do_GET(self):
                 admin = self.path.startswith("/api/")
-                expected = gateway.admin_hash if admin else gateway.runtime_hash
+                accepted = gateway.admin_hashes if admin else gateway.runtime_hashes
                 supplied = self.headers.get("Authorization", "")
-                if not supplied.startswith("Bearer ") or key_hash(supplied[7:]) != expected:
+                if not supplied.startswith("Bearer ") or key_hash(supplied[7:]) not in accepted:
                     return self.answer(401, {"error": "authentication failure"})
                 if self.path == "/api/runtime":
                     return self.answer(200, {"build": {"version": "1.6.0"}})
@@ -84,9 +87,11 @@ class Gateway:
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-    def load(self, runtime_key, admin_key):
+    def load(self, runtime_key, admin_key, runtime_next=None, admin_next=None):
         """What a restart does: read the key hashes from the Secret again."""
         self.runtime_hash, self.admin_hash = key_hash(runtime_key), key_hash(admin_key)
+        self.runtime_hashes = {self.runtime_hash, *([key_hash(runtime_next)] if runtime_next else [])}
+        self.admin_hashes = {self.admin_hash, *([key_hash(admin_next)] if admin_next else [])}
 
     def stop(self):
         self.server.shutdown()
@@ -236,6 +241,109 @@ def test_cr_02_a_half_done_gateway_rotation_is_reported_not_hidden(installation)
     done = app.ask("check_credentials")
     assert done["exit"] == 0
     assert app.ask("database") == {"ok": True, "snapshot": before}
+
+
+def answers(copy, path, key):
+    """The status a gateway copy gives one key, as the app's adapter sends it."""
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    request = Request(copy.url + path, headers={"Authorization": "Bearer " + key})
+    try:
+        with urlopen(request, timeout=5) as response:
+            return response.status
+    except HTTPError as error:
+        return error.code
+
+
+def next_answers(result):
+    return [(row.get("admin_key_next"), row.get("runtime_key_next"))
+            for row in result["report"]["gateway"]]
+
+
+def test_cr_11_overlapping_gateway_rotation_refuses_no_call(installation):
+    app, before = installed(installation)
+    first = app.ask("check_credentials")
+    assert first["exit"] == 0 and next_answers(first) == [(None, None), (None, None)]
+    models_before = report_lists(first)
+    old_runtime, old_admin = installation.runtime_key, installation.admin_key
+    runtime_key, admin_key = new_key(), new_key()
+    every_call = []
+
+    def calls_succeed():
+        """The app's own calls, and the keys it holds now on every copy."""
+        seen = app.ask("gateway")
+        every_call.append(seen)
+        held = {name: (installation.files / name).read_text().strip()
+                for name in ("admin-key", "runtime-key")}
+        return seen == {
+            "runtime_status": 200, "runtime_error": None, "models_status": 200,
+        } and all(
+            answers(copy, "/api/runtime", held["admin-key"]) == 200
+            and answers(copy, "/v1/models", held["runtime-key"]) == 200
+            for copy in installation.copies
+        )
+
+    # Step 1: the next keys go into the Secret beside the current ones, and the
+    # copies restart one at a time accepting both.
+    installation.write("runtime-key-next", runtime_key)
+    installation.write("admin-key-next", admin_key)
+    installation.copies[1].load(old_runtime, old_admin, runtime_key, admin_key)
+    assert calls_succeed()
+    half = app.ask("check_credentials")
+    assert half["exit"] == 1 and half["report"]["passed"] is False
+    assert next_answers(half) == [("refused", "refused"), ("accepted", "accepted")]
+    assert [(row["admin_key"], row["runtime_key"]) for row in half["report"]["gateway"]] == [
+        ("accepted", "accepted"), ("accepted", "accepted"),
+    ]
+    installation.copies[0].load(old_runtime, old_admin, runtime_key, admin_key)
+    assert calls_succeed()
+    ready = app.ask("check_credentials")
+    assert ready["exit"] == 0
+    assert next_answers(ready) == [("accepted", "accepted"), ("accepted", "accepted")]
+
+    # Step 2: Keeplane switches to the next keys. Both keys open every copy.
+    installation.write("runtime-key", runtime_key)
+    installation.write("admin-key", admin_key)
+    assert calls_succeed()
+    assert app.ask("check_credentials")["exit"] == 0
+
+    # Step 3: the next keys become the only keys; the copies restart one at a
+    # time, then the next entries leave the Secret.
+    installation.copies[1].load(runtime_key, admin_key)
+    assert calls_succeed()
+    installation.copies[0].load(runtime_key, admin_key)
+    assert calls_succeed()
+    for name in ("runtime-key-next", "admin-key-next"):
+        (installation.files / name).unlink()
+    after = app.ask("check_credentials")
+    assert after["exit"] == 0 and next_answers(after) == [(None, None), (None, None)]
+
+    assert all(call["models_status"] == 200 for call in every_call)
+    assert report_lists(after) == models_before
+    assert app.ask("database") == {"ok": True, "snapshot": before}
+    # The old keys open nothing, and no report holds a key or key hash.
+    for copy in installation.copies:
+        assert answers(copy, "/api/runtime", old_admin) == 401
+        assert answers(copy, "/v1/models", old_runtime) == 401
+    reports = json.dumps([first, half, ready, after])
+    for secret in (old_runtime, old_admin, runtime_key, admin_key):
+        assert secret not in reports and key_hash(secret) not in reports
+
+
+def test_cr_12_a_wrong_next_key_is_caught_before_the_switch(installation):
+    app, _ = installed(installation)
+    runtime_key, admin_key = new_key(), new_key()
+    installation.write("runtime-key-next", runtime_key)
+    installation.write("admin-key-next", admin_key)
+    # The copies loaded a next hash made from a different admin key.
+    for copy in installation.copies:
+        copy.load(installation.runtime_key, installation.admin_key, runtime_key, new_key())
+    result = app.ask("check_credentials")
+    assert result["exit"] == 1
+    assert next_answers(result) == [("refused", "accepted"), ("refused", "accepted")]
+    # Keeplane itself still works on its current keys.
+    assert app.ask("gateway")["models_status"] == 200
 
 
 def test_cr_03_signing_secret_rotation_signs_everyone_out_and_keeps_settings(installation):
@@ -502,5 +610,100 @@ def test_cr_09_managed_gateway_loads_key_hashes_from_the_keys_secret(chart, tmp_
     assert hashes == {"GATEWAY_RUNTIME_KEY_HASH": True, "GATEWAY_ADMIN_KEY_HASH": True}
     assert "name: keeplane-gateway-keys" in container
     assert "subPath" not in copies
-    # Read at start: the copies restart to load new hashes (one hash per policy).
+    # Read at start: the copies restart to load new hashes. Without the
+    # rotation lines each policy holds only the current hash.
     assert "${GATEWAY_ADMIN_KEY_HASH}" in output and "${GATEWAY_RUNTIME_KEY_HASH}" in output
+    assert "_KEY_HASH_NEXT" not in output
+    policies = chart.key_policies("\n".join(chart.of_kind(output, "ConfigMap")))
+    assert policies == {"ui": ("strict", ["${GATEWAY_ADMIN_KEY_HASH}"]),
+                        "llm": ("strict", ["${GATEWAY_RUNTIME_KEY_HASH}"])}
+
+
+NEXT_ENV = {
+    "GATEWAY_RUNTIME_KEY_HASH_NEXT": "runtime-key-hash-next",
+    "GATEWAY_ADMIN_KEY_HASH_NEXT": "admin-key-hash-next",
+}
+
+
+def next_entry(name, key, **reference):
+    return {"name": name, "valueFrom": {"secretKeyRef": {
+        "name": "keeplane-gateway-keys", "key": key, **reference}}}
+
+
+def rotation_values(chart, extra_env=None, policies=("ui", "llm")):
+    """The documented rotation lines added to the managed PostgreSQL values."""
+    values = chart.postgres_values("managed")
+    gateway = values["agentgateway-standalone"]
+    entries = [next_entry(name, key) for name, key in NEXT_ENV.items()]
+    gateway["extraEnv"] = gateway["extraEnv"] + (entries if extra_env is None else extra_env)
+    variables = {"ui": "GATEWAY_ADMIN_KEY_HASH", "llm": "GATEWAY_RUNTIME_KEY_HASH"}
+    for section in policies:
+        variable = variables[section]
+        gateway["config"].setdefault(section, {})["policies"] = {"apiKey": {"keys": [
+            {"keyHash": "${" + variable + "}"}, {"keyHash": "${" + variable + "_NEXT}"},
+        ]}}
+    return values
+
+
+def render_values(chart, values, tmp_path, label):
+    path = tmp_path / (label + ".json")
+    path.write_text(json.dumps(values))
+    return chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane",
+                     "-f", str(path))
+
+
+def test_cr_13_a_rotation_adds_the_next_key_hash_from_the_keys_secret(chart, tmp_path):
+    result = render_values(chart, rotation_values(chart), tmp_path, "rotation")
+    assert result.returncode == 0, result.stderr
+    output = result.stdout
+    copies = workload(chart, output, "StatefulSet", "keeplane-gateway")
+    references = chart.gateway_env_refs(chart.containers(copies)[0])
+    for name, key in NEXT_ENV.items():
+        assert references[name] == ("keeplane-gateway-keys", key)
+    assert "optional:" not in copies
+    policies = chart.key_policies("\n".join(chart.of_kind(output, "ConfigMap")))
+    assert policies == {
+        "ui": ("strict", ["${GATEWAY_ADMIN_KEY_HASH}", "${GATEWAY_ADMIN_KEY_HASH_NEXT}"]),
+        "llm": ("strict", ["${GATEWAY_RUNTIME_KEY_HASH}", "${GATEWAY_RUNTIME_KEY_HASH_NEXT}"]),
+    }
+    # No key or key hash is rendered; only the Secret is referenced.
+    assert not re.search(r"(?<!@)sha256:[0-9a-f]{64}", output)
+    assert not chart.of_kind(output, "Secret")
+    # One policy can rotate on its own.
+    admin_only = rotation_values(
+        chart, [next_entry("GATEWAY_ADMIN_KEY_HASH_NEXT", "admin-key-hash-next")], ("ui",))
+    assert render_values(chart, admin_only, tmp_path, "admin-only").returncode == 0
+
+
+def test_cr_14_the_next_key_comes_only_from_the_keys_secret(chart, tmp_path):
+    literal = {"name": "GATEWAY_ADMIN_KEY_HASH_NEXT", "value": "sha256:" + "e" * 64}
+    runtime_next = next_entry("GATEWAY_RUNTIME_KEY_HASH_NEXT", "runtime-key-hash-next")
+    refused = {
+        "policy-without-env": rotation_values(chart, []),
+        "env-without-policy": rotation_values(chart, None, ()),
+        "optional-entry": rotation_values(chart, [runtime_next, next_entry(
+            "GATEWAY_ADMIN_KEY_HASH_NEXT", "admin-key-hash-next", optional=True)]),
+        "literal-hash": rotation_values(chart, [runtime_next, literal]),
+        "other-secret": rotation_values(chart, [runtime_next, {
+            "name": "GATEWAY_ADMIN_KEY_HASH_NEXT", "valueFrom": {"secretKeyRef": {
+                "name": "other-keys", "key": "admin-key-hash-next"}}}]),
+        "current-hash-as-next": rotation_values(chart, [runtime_next, next_entry(
+            "GATEWAY_ADMIN_KEY_HASH_NEXT", "admin-key-hash")]),
+        "repeated-entry": rotation_values(chart, [
+            runtime_next, *[next_entry("GATEWAY_ADMIN_KEY_HASH_NEXT", "admin-key-hash-next")] * 2]),
+    }
+    swapped = rotation_values(chart)
+    swapped["agentgateway-standalone"]["config"]["ui"]["policies"]["apiKey"]["keys"].reverse()
+    refused["swapped-order"] = swapped
+    third = rotation_values(chart)
+    third["agentgateway-standalone"]["config"]["llm"]["policies"]["apiKey"]["keys"].append(
+        {"keyHash": "sha256:" + "f" * 64})
+    refused["literal-third-hash"] = third
+    no_secret = rotation_values(chart)
+    no_secret["gateway"]["keysSecret"] = ""
+    refused["no-keys-secret"] = no_secret
+    for label, values in refused.items():
+        result = render_values(chart, values, tmp_path, label)
+        assert result.returncode != 0, label
+        assert "gateway.keysSecret" in result.stderr or "key policy" in result.stderr, label
+        assert "sha256:" + "e" * 64 not in result.stderr
