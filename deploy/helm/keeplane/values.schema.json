@@ -50,6 +50,11 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {"enabled": {"type": "boolean"}}
+        },
+        "personalDataDetection": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}}
         }
       }
     },

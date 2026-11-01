@@ -8,6 +8,19 @@ app:
   cliSignIn:
     # Requires the optional PostgreSQL + CLI sign-in image and fixed clients.
     enabled: false
+  personalDataDetection:
+    # Installs personal-data detection (Spec 005 ST20); off by default. Sets
+    # KEEPLANE_PERSONAL_DATA_DETECTION=1 on the app, so Keeplane's gateway
+    # checks may receive request messages and an admin can turn detection on
+    # under Data classes. app.image must be built from a detection image
+    # target (postgres-detection with app.postgres); Helm can't see inside an
+    # image, so the app logs and the Data classes page say if it is missing.
+    # The language model is in the image and loads at start, offline: give the
+    # app at least 1Gi of memory (Helm refuses a lower memory limit). Needs
+    # gateway.mode=existing for now: the managed gateway in this chart doesn't
+    # run Keeplane's checks yet. See
+    # docs/guide/kubernetes-installation-reference.md#personal-data-detection.
+    enabled: false
   runnerUrls: "http://qwen:8080"
   postgres:
     enabled: false

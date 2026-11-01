@@ -22,7 +22,9 @@ check this page against rendered manifests.
 | Local SQLite trial (`app.localTrial.enabled=true`) | A local tag is allowed | Pinned by default |
 
 The app copies, the provider-key init container, the migration Job and the
-existing-gateway preflight Job all use the same `app.image`. The gateway chart
+existing-gateway preflight Job all use the same `app.image`. To install
+[personal-data detection](#personal-data-detection), build that image from a
+detection target. The gateway chart
 dependency is pinned to an exact version and vendored under `charts/`; the
 [component manifest](../architecture/component-manifest.md) records the tested set.
 Copy every image to your internal registry before closing registry access.
@@ -175,12 +177,101 @@ app and preflight Job the keys that gateway accepts.
 | --- | --- | --- |
 | App, PostgreSQL mode | `GET /health/ready` on 3000 every 5 s; returns 503 while the database is unavailable or a known migration is pending | Liveness `GET /health/app` every 20 s, which does not depend on the database |
 | App, local trial | `GET /health/app` on 3000 every 5 s | Same liveness check |
+| App, with `app.personalDataDetection.enabled` | `GET /health/ready` in both modes; also returns 503 while the detector's language model loads for the first time, for at most 300 s | Same liveness check, which never waits for the model |
 | Managed gateway | `GET /healthz/ready` on 15021 every 10 s | Startup probe allows up to 60 s |
 
 The migration Job runs before install and upgrade, with no retry and a 180 s
 limit; a failure stops the Helm operation. In existing-gateway mode a preflight
 Job checks the supplied gateway first, with a 90 s limit. No PodDisruptionBudget
 is rendered.
+
+## Personal-data detection
+
+Detection is off by default and stays an admin choice: the chart only
+installs it, and an admin then turns it on under **Data classes** (see
+[data classes](data-classes-local.md#detect-personal-data-in-requests)).
+Request text is checked inside the app; nothing is downloaded at install or at
+run time.
+
+1. Build the app image from a detection target of
+   `components/control-plane/Dockerfile`, push it to your registry and pin it
+   by digest:
+
+   | Installation | Image target |
+   | --- | --- |
+   | PostgreSQL | `postgres-detection` |
+   | PostgreSQL with `app.cliSignIn.enabled` | `postgres-cli-auth-detection` |
+   | Local SQLite trial | `detection` |
+
+   ```sh
+   docker build -f components/control-plane/Dockerfile --target postgres-detection \
+     -t registry.example.com/keeplane-app:detection .
+   ```
+
+   The build is the only step that downloads the detector: its packages and
+   the `en_core_web_lg` language model are installed with pinned hashes and
+   baked into the image, with their notices under `/usr/share/keeplane/licenses`.
+   The image is about 750 MiB larger.
+
+2. Set the chart value. It adds `KEEPLANE_PERSONAL_DATA_DETECTION=1` to the
+   app container and changes nothing else:
+
+   ```yaml
+   app:
+     image: registry.example.com/keeplane-app@sha256:<digest>
+     personalDataDetection:
+       enabled: true
+     resources:
+       requests:
+         memory: 1Gi
+       limits:
+         memory: 1536Mi
+   ```
+
+3. Set up Keeplane's checks on your gateway so that they send each request's
+   messages, as in
+   [Keeplane's checks on a customer-run gateway](gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway).
+
+Helm refuses an install that:
+
+- turns detection on with the managed gateway. Requests reach Keeplane's
+  checks only on a customer-run gateway for now (`gateway.mode=existing`); the
+  managed gateway in this chart doesn't run them yet, so no request would be
+  checked;
+- sets `app.resources.limits.memory` below 1Gi, or writes it in a form other
+  than bytes or a unit such as `1536Mi` or `2Gi`. The language model alone uses
+  about 750 MiB once loaded. We suggest a 1Gi request and a 1536Mi limit;
+- sets `app.personalDataDetection.enabled` to anything but `true` or `false`.
+
+Helm can't see what an image contains, so it can't refuse an `app.image`
+built without the detector. That install still starts: the app logs
+"KEEPLANE_PERSONAL_DATA_DETECTION=1 is set, but this app image has no
+personal-data detector or model" and the Data classes page says "Personal-data
+detection isn't installed. Install it, then turn this on.", so detection can't
+be turned on. Check the log after the first install or upgrade with
+`kubectl logs deployment/<release>-app`.
+
+At run time:
+
+- **Start-up.** Each app copy loads the model from the image as it starts,
+  whether or not an admin has turned detection on. Readiness
+  (`/health/ready`) answers 503 until that first load finishes, so a new copy
+  takes no requests during a rollout until it can check them; liveness doesn't
+  wait. If the load fails or takes longer than 300 s, the copy becomes ready
+  anyway and, while detection is on, holds every request it can't check to the
+  detection class.
+- **Memory and CPU.** About 750 MiB of memory per app copy for the model. Each
+  check must finish within 200 ms, so on a busy or CPU-limited copy more long
+  requests are held; give the app at least one full CPU if requests are held
+  for being slow.
+- **Read-only root filesystem.** The app keeps `readOnlyRootFilesystem`,
+  user 65532, no added capabilities and no Kubernetes API token. The model is
+  read from the image and the detector writes no files, so it needs no extra
+  volume.
+- **No download.** The detector never fetches a model or a public-suffix list;
+  if the model is missing it reports itself unavailable. With
+  [network policies](#network-policies) on, it needs no destination beyond
+  those the app already has.
 
 ## What keeps state
 

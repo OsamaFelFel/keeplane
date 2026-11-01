@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 CHECKED_GUIDES = {
     "docs/guide/backup-and-restore.md",
     "docs/guide/certificate-operations.md",
+    "docs/guide/data-classes-local.md",
     "docs/guide/gateway-configuration.md",
     "docs/guide/gateway-database-secret.md",
     "docs/guide/kubernetes-installation-reference.md",

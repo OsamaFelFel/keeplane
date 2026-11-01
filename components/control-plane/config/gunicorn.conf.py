@@ -11,6 +11,11 @@ worker_tmp_dir = "/dev/shm"
 def post_worker_init(worker):
     import os
 
+    # Load an installed personal-data detector now, not on the first request.
+    from personal_data.inspection import warm_up
+
+    warm_up()
+
     if os.environ.get("FIRST_ADMIN_PASSWORD_FILE"):
         from common.stores import stores
         from django.db import connections

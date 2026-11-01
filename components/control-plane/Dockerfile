@@ -53,17 +53,34 @@ FROM postgres AS postgres-cli-auth-trial
 COPY --from=cli-auth-dependencies /cli-auth-dependencies/usr/local/ /usr/local/
 
 # Optional personal-data detection with its bundled model; never the default build.
-FROM core AS detection
+# Installed once, with hashes, then copied into the detection targets below.
+FROM core AS detection-dependencies
 USER 0
+RUN pip install --prefix /detection-dependencies/usr/local --ignore-installed --no-cache-dir \
+        --only-binary=:all: --require-hashes --no-deps \
+        -r /app/requirements-detection.txt
 COPY components/control-plane/licenses/personal-data-detection.md \
      components/control-plane/licenses/personal-data-detection.json \
      components/control-plane/licenses/presidio-analyzer-2.2.364-LICENSE.txt \
-     /usr/share/keeplane/licenses/
-RUN pip install --no-cache-dir --only-binary=:all: --require-hashes --no-deps \
-        -r /app/requirements-detection.txt \
-    && python /app/remove_runtime_installers.py
+     /detection-dependencies/usr/share/keeplane/licenses/
+
+# Local SQLite preview or Kubernetes local trial with detection.
+FROM core AS detection
+USER 0
+COPY --from=detection-dependencies /detection-dependencies/ /
+RUN python /app/remove_runtime_installers.py
 ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
 USER 65532:65532
+
+# Shared-database (PostgreSQL) package with detection, for Kubernetes installs.
+FROM postgres AS postgres-detection
+COPY --from=detection-dependencies /detection-dependencies/ /
+ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
+
+# Shared-database package with CLI sign-in and detection.
+FROM postgres-cli-auth-trial AS postgres-cli-auth-detection
+COPY --from=detection-dependencies /detection-dependencies/ /
+ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
 
 FROM core AS preview
 USER 0

@@ -87,7 +87,8 @@ service and never stored or logged.
 
 1. Build the app from the `detection` image target, which adds the detector
    and its language model (about 750 MiB more image and about 750 MiB more app
-   memory):
+   memory). For a shared PostgreSQL install use `postgres-detection`, or
+   `postgres-cli-auth-detection` with CLI sign-in:
 
    ```sh
    docker build -f components/control-plane/Dockerfile --target detection \
@@ -98,9 +99,15 @@ service and never stored or logged.
    managed runtime again so the gateway's checks send each request's messages
    to Keeplane. A customer-run gateway must add the messages to its own checks;
    see [gateway modes](gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway).
+   On Kubernetes, set `app.personalDataDetection.enabled: true` in the chart
+   values instead; see
+   [the installation reference](kubernetes-installation-reference.md#personal-data-detection).
 
 Without this setting the gateway's checks carry only the project and model, as
-they always have, and detection can't be turned on. Licences, notices and the
+they always have, and detection can't be turned on. With it, the app loads the
+language model as it starts, whether or not detection is on, and reports ready
+only once the model has loaded (at most 300 seconds); if the image has no
+detector, the app's start-up log says so. Licences, notices and the
 source offer for the detector are in
 [the detection notices](../../components/control-plane/licenses/personal-data-detection.md).
 Held requests are not yet recorded in Audit.

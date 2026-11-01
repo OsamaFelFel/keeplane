@@ -74,3 +74,62 @@ def test_squashed_migration_alternatives_are_accepted(monkeypatch, applied):
     for app, name in originals if applied == "originals" else (squash,):
         MigrationRecorder.Migration.objects.create(app=app, name=name)
     assert readiness.schema_ready(connection)
+
+
+# PD-13 in tests/unit/personal-data-detection-cases.md: an installed detector
+# keeps the app out of service only while its first load runs.
+class Loading:
+    def __init__(self, starting):
+        self.is_starting, self.asked = starting, 0
+
+    def starting(self):
+        self.asked += 1
+        return self.is_starting
+
+    def detector(self):
+        self.asked += 1
+
+
+@pytest.fixture
+def detection(settings, monkeypatch):
+    from personal_data import inspection
+
+    def install(setting, available, starting=False):
+        settings.PERSONAL_DATA_DETECTION_INSTALLED = setting
+        fake = Loading(starting)
+        monkeypatch.setattr(inspection, "detection_available", lambda: available)
+        monkeypatch.setattr(inspection, "inspector", lambda: fake)
+        return fake
+
+    return install
+
+
+def test_pd_13_readiness_is_unchanged_without_the_install_setting(detection):
+    from personal_data.inspection import warm_up
+
+    fake = detection(False, True, starting=True)
+    assert probe().status_code == 200
+    assert warm_up() is False and fake.asked == 0
+
+
+def test_pd_13_readiness_waits_while_the_installed_detector_loads(detection):
+    from personal_data.inspection import warm_up
+
+    fake = detection(True, True, starting=True)
+    assert warm_up() is True and fake.asked == 1
+    response = probe()
+    assert response.status_code == 503
+    assert json.loads(response.content) == {"app": "starting"}
+    fake.is_starting = False
+    assert probe().status_code == 200
+
+
+def test_pd_13_setting_on_without_the_detector_is_ready_and_logged(detection, caplog):
+    from personal_data.inspection import warm_up
+
+    fake = detection(True, False, starting=True)
+    with caplog.at_level("WARNING", logger="personal_data.inspection"):
+        assert warm_up() is False
+    assert probe().status_code == 200 and fake.asked == 0
+    assert "no personal-data detector" in caplog.text
+    assert "postgres-detection" in caplog.text

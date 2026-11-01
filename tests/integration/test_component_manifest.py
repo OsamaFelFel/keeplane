@@ -224,6 +224,14 @@ def test_control_plane_packages_match_requirements():
         assert detection_pins.get(name) == version or (
             f"/{name}-{version}/" in detection
         ), UPDATE
+    # The image targets that carry the detector: each copies its one install.
+    dockerfile = (CONTROL_PLANE / "Dockerfile").read_text()
+    targets = [
+        stage for stage in re.findall(r"^FROM \S+ AS (\S+)$", dockerfile, re.M)
+        if "--from=detection-dependencies" in
+        dockerfile.split(f" AS {stage}\n", 1)[1].split("\nFROM ", 1)[0]
+    ]
+    assert optional["personal_data_detection_image_targets"] == targets, UPDATE
 
 
 def test_admin_ui_and_cli_versions_match_their_packages():
@@ -289,6 +297,7 @@ CHART_SWITCHES = {
     "networkPolicy.appIngressEnabled": "app_ingress_network_policy",
     "networkPolicy.egressEnabled": "egress_network_policy",
     "ingress.enabled": "ingress",
+    "app.personalDataDetection.enabled": "personal_data_detection_install",
 }
 # Sub-settings that apply only once their parent feature is turned on.
 CHART_SUB_SETTINGS = {"app.postgres.migration.enabled"}
