@@ -3,6 +3,11 @@ The managed gateway always requires keys on port 4000. The installer creates
 the Secret named in gateway.keysSecret; the chart only references it and
 renders no key material. This file renders no object: it refuses an install
 whose managed gateway would not check those keys.
+During a key rotation each key policy may also accept a next key: its hash is
+read from <key>-hash-next in the same Secret, never from values, and only
+while the installer has added both the second hash variable to the policy and
+its extraEnv entry. The entry may not be optional, so a missing Secret key
+stops the copy from starting instead of leaving an empty hash.
 Helm renders deeper template paths first, so this check sits two folders down
 to run before the bundled gateway chart's own checks and show its message first.
 */ -}}
@@ -13,10 +18,19 @@ to run before the bundled gateway chart's own checks and show its message first.
 {{- end }}
 {{- $gateway := index .Values "agentgateway-standalone" }}
 {{- $env := $gateway.extraEnv | default (list) }}
-{{- range $variable, $key := dict "GATEWAY_RUNTIME_KEY_HASH" "runtime-key-hash" "GATEWAY_ADMIN_KEY_HASH" "admin-key-hash" }}
+{{- $config := $gateway.config | default (dict) }}
+{{- $policies := dict "ui" (list "GATEWAY_ADMIN_KEY_HASH" "admin-key-hash") "llm" (list "GATEWAY_RUNTIME_KEY_HASH" "runtime-key-hash") }}
+{{- range $section, $names := $policies }}
+{{- $variable := index $names 0 }}
+{{- $key := index $names 1 }}
+{{- $nextVariable := printf "%s_NEXT" $variable }}
+{{- $nextKey := printf "%s-next" $key }}
+{{- /* Every extraEnv entry named after this policy's current or next hash. */}}
+{{- $wiring := dict }}
+{{- range $name, $source := dict $variable $key $nextVariable $nextKey }}
 {{- $matches := list }}
 {{- range $env }}
-{{- if and (kindIs "map" .) (eq (toString (get . "name")) $variable) }}
+{{- if and (kindIs "map" .) (eq (toString (get . "name")) $name) }}
 {{- $matches = append $matches . }}
 {{- end }}
 {{- end }}
@@ -25,41 +39,52 @@ to run before the bundled gateway chart's own checks and show its message first.
 {{- $entry := first $matches }}
 {{- $reference := dig "valueFrom" "secretKeyRef" (dict) $entry }}
 {{- if and (not (hasKey $entry "value")) (kindIs "map" $reference) }}
-{{- if and (eq (toString (get $reference "name")) $secret) (eq (toString (get $reference "key")) $key) }}
+{{- if and (eq (toString (get $reference "name")) $secret) (eq (toString (get $reference "key")) $source) (not (eq (toString (get $reference "optional")) "true")) }}
 {{- $wired = true }}
 {{- end }}
 {{- end }}
 {{- end }}
-{{- if not $wired }}
+{{- $_ := set $wiring $name (dict "count" (len $matches) "wired" $wired) }}
+{{- end }}
+{{- if not (get (get $wiring $variable) "wired") }}
 {{- fail (printf "The managed gateway must read %s from key %s of Secret %s (gateway.keysSecret). Add exactly one agentgateway-standalone.extraEnv entry named %s with valueFrom.secretKeyRef name %s and key %s." $variable $key $secret $variable $secret $key) }}
 {{- end }}
-{{- end }}
-{{- $config := $gateway.config | default (dict) }}
-{{- range $section, $variable := dict "ui" "GATEWAY_ADMIN_KEY_HASH" "llm" "GATEWAY_RUNTIME_KEY_HASH" }}
+{{- /* The policy holds the current hash, or the current and the next hash. */}}
 {{- $expected := printf "${%s}" $variable }}
-{{- $closed := false }}
+{{- $expectedNext := printf "${%s}" $nextVariable }}
+{{- $hashes := list }}
+{{- $strict := false }}
 {{- $settings := get $config $section }}
 {{- if kindIs "map" $settings }}
-{{- $policies := get $settings "policies" }}
-{{- if kindIs "map" $policies }}
-{{- $policy := get $policies "apiKey" }}
+{{- $sectionPolicies := get $settings "policies" }}
+{{- if kindIs "map" $sectionPolicies }}
+{{- $policy := get $sectionPolicies "apiKey" }}
 {{- if kindIs "map" $policy }}
 {{- $keys := get $policy "keys" }}
 {{- if and (eq (toString (get $policy "mode")) "strict") (kindIs "slice" $keys) }}
-{{- if eq (len $keys) 1 }}
-{{- $only := first $keys }}
-{{- if kindIs "map" $only }}
-{{- if eq (toString (get $only "keyHash")) $expected }}
-{{- $closed = true }}
+{{- $strict = true }}
+{{- range $keys }}
+{{- if kindIs "map" . }}
+{{- $hashes = append $hashes (toString (get . "keyHash")) }}
+{{- else }}
+{{- $hashes = append $hashes "" }}
 {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
+{{- $current := and $strict (eq (len $hashes) 1) (eq (first $hashes | default "") $expected) }}
+{{- $overlap := and $strict (eq (len $hashes) 2) (eq (first $hashes | default "") $expected) (eq (last $hashes | default "") $expectedNext) }}
+{{- if not (or $current $overlap) }}
+{{- fail (printf "The managed gateway's %s key policy must stay strict with the single key hash %s, or with %s then %s while a key rotation adds the next key. Remove any other override of agentgateway-standalone.config.%s.policies.apiKey; the chart sets it. See docs/guide/gateway-configuration.md#rotate-the-gateway-keys." $section $expected $expected $expectedNext $section) }}
 {{- end }}
-{{- if not $closed }}
-{{- fail (printf "The managed gateway's %s key policy must stay strict with the single key hash %s. Remove the override of agentgateway-standalone.config.%s.policies.apiKey; the chart sets it." $section $expected $section) }}
+{{- $next := get $wiring $nextVariable }}
+{{- if and $overlap (not (get $next "wired")) }}
+{{- fail (printf "The managed gateway's %s key policy accepts a next key, so it must read %s from key %s of Secret %s (gateway.keysSecret). Add exactly one agentgateway-standalone.extraEnv entry named %s with valueFrom.secretKeyRef name %s and key %s, not optional." $section $nextVariable $nextKey $secret $nextVariable $secret $nextKey) }}
+{{- end }}
+{{- if and $current (gt (int (get $next "count")) 0) }}
+{{- fail (printf "agentgateway-standalone.extraEnv sets %s, but the managed gateway's %s key policy does not accept a next key. Remove the %s entry, or add the keyHash %s to agentgateway-standalone.config.%s.policies.apiKey.keys while the rotation runs." $nextVariable $section $nextVariable $expectedNext $section) }}
 {{- end }}
 {{- end }}
 {{- end }}

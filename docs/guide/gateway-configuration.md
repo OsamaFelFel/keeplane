@@ -184,7 +184,10 @@ Use `check_credentials` before and after, and compare the model and approval
 lists, as described in
 [before and after every rotation](postgres-accounts.md#before-and-after-every-rotation),
 which also sets the `NS`, `RELEASE` and `mounted_sha` used below. It shows each gateway copy's answer to each key: `accepted`, `refused`,
-`unreachable`, or `unreadable` for a missing key file. While a copy refuses
+`unreachable`, or `unreadable` for a missing key file. While the Secret also
+holds next keys (`admin-key-next`, `runtime-key-next`, used in a managed
+rotation below), it shows each copy's answer to them as `admin_key_next` and
+`runtime_key_next`, and passes only when they are accepted too. While a copy refuses
 Keeplane's admin key, the admin status API answers 503 "The gateway refused
 Keeplane's admin key…" and the app logs the same line
 ([CR-02](../../tests/integration/credential-rotation-cases.md)).
@@ -195,60 +198,156 @@ a copy that refuses the key leaves it unconfirmed.
 
 ### Managed gateway
 
-The gateway copies load `runtime-key-hash` and `admin-key-hash` when they
-start, and the chart allows exactly one hash per key policy. So the old and new
-keys can't both be accepted: between the Secret change and the end of the
-restart, some gateway calls are refused with 401. Keep that window short by
-running steps 2 and 3 back to back.
+The gateway copies load the key hashes from the keys Secret when they start.
+Each key policy accepts the current key and, only while a rotation runs, one
+next key. Its hash comes from `admin-key-hash-next` or `runtime-key-hash-next`
+in the same Secret, never from your values. So the old and new keys are both
+accepted while Keeplane switches, and no call is refused for its key
+([CR-11](../../tests/integration/credential-rotation-cases.md)). Rotate in three
+moves: add the new keys as the next keys, switch Keeplane to them, then remove
+the old ones.
 
-1. Make new keys and hashes, as at installation:
+1. Make the new keys and their hashes:
 
    ```sh
    umask 077
-   openssl rand -base64 32 | tr -d '\n' > runtime-key
-   openssl rand -base64 32 | tr -d '\n' > admin-key
+   openssl rand -hex 32 | tr -d '\n' > runtime-key-next
+   openssl rand -hex 32 | tr -d '\n' > admin-key-next
    for name in runtime admin; do
-     printf 'sha256:%s' "$(shasum -a 256 < $name-key | cut -d ' ' -f 1)" > $name-key-hash
+     printf 'sha256:%s' "$(shasum -a 256 < $name-key-next | cut -d ' ' -f 1)" > $name-key-hash-next
    done
    ```
 
-2. Replace the Secret's four keys, keeping its name:
+2. Add the four files to the Secret next to the current keys, which stay as
+   they are:
 
    ```sh
-   kubectl -n "$NS" create secret generic <keys-secret> \
-     --from-file=runtime-key --from-file=admin-key \
-     --from-file=runtime-key-hash --from-file=admin-key-hash \
-     --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+   printf '{"stringData":{"runtime-key-next":"%s","admin-key-next":"%s","runtime-key-hash-next":"%s","admin-key-hash-next":"%s"}}' \
+     "$(cat runtime-key-next)" "$(cat admin-key-next)" \
+     "$(cat runtime-key-hash-next)" "$(cat admin-key-hash-next)" > next.json
+   kubectl -n "$NS" patch secret <keys-secret> --type merge --patch-file next.json
+   rm next.json
    ```
 
-3. Restart the gateway copies so they load the new hashes. They restart one at
-   a time, highest number first:
+3. Let the gateway accept the next keys. Add these lines to your values file,
+   keeping your existing `extraEnv` entries, and run your usual `helm upgrade`
+   with it and `--wait`:
+
+   ```yaml
+   agentgateway-standalone:
+     extraEnv:
+       # ...your existing entries stay here...
+       - name: GATEWAY_RUNTIME_KEY_HASH_NEXT
+         valueFrom:
+           secretKeyRef:
+             name: keeplane-gateway-keys
+             key: runtime-key-hash-next
+       - name: GATEWAY_ADMIN_KEY_HASH_NEXT
+         valueFrom:
+           secretKeyRef:
+             name: keeplane-gateway-keys
+             key: admin-key-hash-next
+     config:
+       ui:
+         policies:
+           apiKey:
+             keys:
+               - keyHash: ${GATEWAY_ADMIN_KEY_HASH}
+               - keyHash: ${GATEWAY_ADMIN_KEY_HASH_NEXT}
+       llm:
+         policies:
+           apiKey:
+             keys:
+               - keyHash: ${GATEWAY_RUNTIME_KEY_HASH}
+               - keyHash: ${GATEWAY_RUNTIME_KEY_HASH_NEXT}
+   ```
+
+   The copies restart one at a time and still accept the current keys. Run
+   `check_credentials` until every copy shows `"admin_key_next": "accepted"`
+   and `"runtime_key_next": "accepted"` and the report says
+   `"passed": true`. The two lines appear once the app pod has received the
+   next key files (usually within two minutes); until they appear, the next
+   keys haven't been checked. Don't go on while any copy shows `refused`.
+
+4. Switch Keeplane to the new keys. Both keys are accepted, so this refuses
+   nothing:
 
    ```sh
-   kubectl -n "$NS" rollout restart statefulset/"$RELEASE"-gateway
-   kubectl -n "$NS" rollout status statefulset/"$RELEASE"-gateway
+   printf '{"stringData":{"runtime-key":"%s","admin-key":"%s"}}' \
+     "$(cat runtime-key-next)" "$(cat admin-key-next)" > switch.json
+   kubectl -n "$NS" patch secret <keys-secret> --type merge --patch-file switch.json
+   rm switch.json
    ```
 
-4. Run `check_credentials` until every copy shows `"admin_key": "accepted"` and
-   `"runtime_key": "accepted"`, usually within two minutes, then save
-   `after.json` and compare the lists: same models, same fingerprints, same
-   approvals.
+   Wait until every app pod reads the new files; compare file hashes, since the
+   check passes with either key:
 
-During steps 2 to 4, developers' model calls and admin model pages may fail
-and `/health` answers 503. A call a copy has already accepted carries on until
-that copy stops; the copy's 30-second shutdown cuts anything longer, and the
+   ```sh
+   for pod in $(kubectl -n "$NS" get pods -l app="$RELEASE"-app -o name); do
+     echo "$pod $(mounted_sha "$pod" /run/gateway-keys/admin-key) $(mounted_sha "$pod" /run/gateway-keys/runtime-key)"
+   done
+   shasum -a 256 < admin-key-next; shasum -a 256 < runtime-key-next
+   ```
+
+5. Make the new keys the only ones. First make the next hashes current:
+
+   ```sh
+   printf '{"stringData":{"runtime-key-hash":"%s","admin-key-hash":"%s"}}' \
+     "$(cat runtime-key-hash-next)" "$(cat admin-key-hash-next)" > current.json
+   kubectl -n "$NS" patch secret <keys-secret> --type merge --patch-file current.json
+   rm current.json
+   ```
+
+   Then remove step 3's lines from your values file and run `helm upgrade`
+   with `--wait` again. The copies restart one at a time and load only the new
+   hashes. Until this upgrade finishes, the old keys still open the gateway.
+
+6. Remove the next entries from the Secret and delete the local files:
+
+   ```sh
+   kubectl -n "$NS" patch secret <keys-secret> --type json -p '[
+     {"op":"remove","path":"/data/runtime-key-next"},
+     {"op":"remove","path":"/data/admin-key-next"},
+     {"op":"remove","path":"/data/runtime-key-hash-next"},
+     {"op":"remove","path":"/data/admin-key-hash-next"}]'
+   rm runtime-key-next admin-key-next runtime-key-hash-next admin-key-hash-next
+   ```
+
+   Run `check_credentials` until the `_next` lines are gone and it passes, then
+   save `after.json` and compare the lists: same models, same fingerprints,
+   same approvals.
+
+Helm refuses step 3 and step 5 when the lines don't match: a policy with a
+second hash needs its `_NEXT` entry, read with `secretKeyRef` from
+`gateway.keysSecret` under its own key, not marked `optional` and listed once;
+a `_NEXT` entry needs its policy's second hash; and the second hash must be
+the `_NEXT` variable, after the current one. You can rotate one key alone by
+adding only its entry and its policy lines. Each restart in steps 3 and 5 is an
+ordinary rolling restart: a call a copy has already accepted carries on until
+that copy stops, its 30-second shutdown cuts anything longer, and the
 developer sends it again.
 
 If something goes wrong:
 
-- **A copy still refuses after its restart.** Its hash doesn't match the key,
-  often because a hash was made from a file with a trailing newline. Make the
-  hashes again from step 1's files and repeat steps 2 and 3.
-- **The copies accept but an app pod is still refused after a few minutes.**
-  That pod hasn't received the new files yet; restart the app with
+- **A copy shows `"admin_key_next": "refused"` or `"runtime_key_next":
+  "refused"` after step 3.** Its next hash doesn't match the next key, often
+  because a hash was made from a file with a trailing newline. Make the hash
+  again from step 1's files, repeat step 2, then restart the copies with
+  `kubectl -n "$NS" rollout restart statefulset/"$RELEASE"-gateway`. Keeplane
+  still uses the current keys, so nothing is refused meanwhile.
+- **A copy doesn't start after step 3** (`CreateContainerConfigError`). The
+  Secret lacks a `-hash-next` key; repeat step 2. The other copies keep serving
+  on the current keys.
+- **An app pod is still refused after step 5.** It hadn't received the new
+  files when the copies restarted; restart the app with
   `kubectl -n "$NS" rollout restart deployment/"$RELEASE"-app`.
-- **To go back**, apply the previous four files the same way and restart the
-  copies again.
+- **To go back before step 4**, remove step 3's lines, run `helm upgrade`,
+  then do step 6. Nothing changed for Keeplane. After step 4, finish the
+  rotation instead: Keeplane already uses the new keys.
+
+If you can't change your values file, you can still replace the four current
+keys and restart the copies (`rollout restart`), but between the Secret change
+and the end of the restart some gateway calls are refused with 401.
 
 ### Customer-run gateway
 

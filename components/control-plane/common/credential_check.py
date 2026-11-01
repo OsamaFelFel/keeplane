@@ -4,8 +4,14 @@ Used before and after a credential rotation (manage.py check_credentials). It
 reports whether the database accepts the app's password, whether every gateway
 copy accepts the mounted admin and runtime keys, and lists the registered
 gateway models and Keeplane's model approvals so the two runs can be compared.
+During a managed gateway key rotation the keys Secret may also hold the next
+keys (admin-key-next, runtime-key-next) beside the current ones. Each copy's
+answer to them is reported too, so an installer knows every copy accepts the
+next keys before switching Keeplane to them.
 It only reads; it never prints a password, key, key hash or provider key.
 """
+
+from pathlib import Path
 
 from django.db import DatabaseError, connection
 from model_registry.fingerprints import fingerprint
@@ -15,6 +21,11 @@ KEY_REFUSED = (
     "gateway copies so they load the new key hashes, or check gateway.keysSecret."
 )
 CHECKS = {"admin_key": "/api/runtime", "runtime_key": "/v1/models"}
+# Report name -> (the key file it stands in for, the path that needs that key).
+NEXT_CHECKS = {
+    "admin_key_next": ("admin_key_file", "/api/runtime"),
+    "runtime_key_next": ("runtime_key_file", "/v1/models"),
+}
 
 
 def key_status(status, body):
@@ -53,17 +64,45 @@ def database_status():
     return "connected"
 
 
+def next_key_file(current):
+    """The next key mounted beside a current key file, or "" when none is."""
+    if not current:
+        return ""
+    candidate = Path(current).with_name(Path(current).name + "-next")
+    return str(candidate) if candidate.is_file() else ""
+
+
+def next_key_status(gateway, attribute, path):
+    """A copy's answer to the next key, or None when no next key is mounted."""
+    from integrations.gateway.adapter import AgentgatewayModelAdapter
+
+    files = {
+        "runtime_key_file": getattr(gateway, "runtime_key_file", ""),
+        "admin_key_file": getattr(gateway, "admin_key_file", ""),
+    }
+    files[attribute] = next_key_file(files[attribute])
+    if not files[attribute]:
+        return None
+    candidate = AgentgatewayModelAdapter(gateway.base_url, **files)
+    return key_status(*candidate.request(path, timeout=10))
+
+
 def gateway_status(gateways):
-    return [
-        {
+    rows = []
+    for gateway in gateways:
+        row = {
             "address": gateway.base_url,
             **{
                 name: key_status(*gateway.request(path, timeout=10))
                 for name, path in CHECKS.items()
             },
         }
-        for gateway in gateways
-    ]
+        for name, (attribute, path) in NEXT_CHECKS.items():
+            status = next_key_status(gateway, attribute, path)
+            if status is not None:
+                row[name] = status
+        rows.append(row)
+    return rows
 
 
 def gateway_models(gateway):
@@ -111,7 +150,10 @@ def check(primary, copies):
     passed = (
         report["database"] == "connected"
         and all(
-            row[name] == "accepted" for row in report["gateway"] for name in CHECKS
+            row[name] == "accepted"
+            for row in report["gateway"]
+            for name in (*CHECKS, *NEXT_CHECKS)
+            if name in row
         )
         and report["gateway_models"] is not None
         and report["approvals"] is not None
