@@ -104,6 +104,11 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ if $gw.serviceAccount.create }}{{ $gw.serviceAccount.name | default .Release.Name }}{{ else }}{{ $gw.serviceAccount.name | default "default" }}{{ end }}
+      {{- /* The gateway reads its configuration from the mounted ConfigMap
+      and its model store from PostgreSQL; it never calls the Kubernetes API,
+      so the copies get no API token. The account stays a pod identity only,
+      such as for a cloud IAM binding. */}}
+      automountServiceAccountToken: false
       {{- /* A null entry (such as fsGroup: null) means unset, as in the bundled chart. */}}
       {{- $podSecurity := dict }}
       {{- range $key, $value := ($gw.podSecurityContext | default dict) }}
