@@ -232,6 +232,10 @@ def gateway_secret_values(mode, volumes, fs_group=GATEWAY_GROUP):
 def render_values(chart, tmp_path, name, values):
     path = tmp_path / (name + ".json")
     path.write_text(json.dumps(values))
+    from tests.support.reporting import report_path
+    result = chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane",
+                       "-f", str(path))
+    report_path("render-" + name + ".txt").write_text(str(result.returncode) + "\n" + result.stderr)
     return chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane",
                      "-f", str(path))
 
@@ -243,6 +247,9 @@ def gateway_copies(chart, output):
 
 def copies_volumes(chart, output):
     """{volume: (kind, defaultMode, item modes)} on the gateway copies' StatefulSet."""
+    import uuid
+    from tests.support.reporting import report_path
+    report_path("debug-" + uuid.uuid4().hex[:6] + ".yaml").write_text(output)
     [copies] = gateway_copies(chart, output)
     found = {}
     for item in chart.items(chart.block(pod_spec(chart, copies), "volumes")):
