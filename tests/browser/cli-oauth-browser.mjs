@@ -16,7 +16,7 @@ try {
     if (request.method() === 'POST') writes.push(new URL(request.url()).pathname)
   })
   await page.goto(process.argv[2])
-  await expect(page.getByRole('heading', { name: 'Sign in to Keeplane', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
   await page.getByLabel('Username', { exact: true }).fill('browser-developer')
   await page.getByLabel('Password', { exact: true }).fill('synthetic-browser-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()

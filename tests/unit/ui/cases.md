@@ -14,8 +14,11 @@ colocated tests.
 | UI-06 | Create user gets a success answer that names no user. | The dialog says Keeplane couldn't confirm the result, offers Check and reports no user. |
 | UI-07 | Keeplane refuses the user, for example a taken name, then the admin edits the username. | The dialog says "[Username] wasn't created" with the username Keeplane refused, keeps what was typed and offers no Check. The title keeps naming the refused username while the field changes. |
 | UI-08 | Keeplane refuses a 64-character username, the longest allowed. | The title names the whole username, not shortened, and may break inside it to wrap within the dialog, as table text wraps in the design system. |
-| UI-SIGN-01 | Open sign-in while no single sign-on provider is connected. | Only username, password and Sign in appear; there is no single sign-on or sign-up control. |
-| UI-SIGN-02 | Open sign-in while the server reports a connected provider. | Sign in with single sign-on also appears. |
+| UI-09 | Keeplane refuses the user, or answers with a server error. | "[Username] wasn't created" and "It isn't clear whether [Username] was created" each show a circle-alert icon and a weight-600 title, as in `Users-create-failed.dc.html` and `Users-create-no-answer.dc.html`. |
+| UI-SIGN-01 | Open sign-in while no single sign-on provider is connected. | Only username, password and Sign in appear, with "No account? Ask your admin."; there is no single sign-on or sign-up control. |
+| UI-SIGN-02 | Open sign-in while the server reports a connected provider. | Sign in with single sign-on also appears, and the note reads "No account? Signing in with single sign-on creates one. For a username and password, ask your admin." |
+| UI-SIGN-03 | Open sign-in. | The Keeplane mark and name come first, then the title "Sign in". |
+| UI-SIGN-04 | Sign in with a wrong password. | "The username or password is wrong." shows as a failure message with a circle-alert icon and a weight-600 line. |
 | UI-USERS-01 | Open Users with the break-glass admin and a local user. | The break-glass row says it is managed at infrastructure level and has no action; other rows have Change role; there is no edit or remove action. |
 | UI-USERS-02 | Choose Next, then search. | Next asks for page 2; search asks the server for matches from page 1, 25 at a time. |
 | UI-CSRF-01 | Submit a browser change. | A fresh masked token is sent with same-origin credentials and the original JSON headers. |
@@ -49,4 +52,4 @@ colocated tests.
 - A refused write keeps the choice. A lost reply or ten-second timeout offers Check without repeating the write.
 - Readback confirms the saved class. If classes were turned off, the dialog keeps the result uncertain rather than clearing an assignment.
 
-The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`.
+The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`; the rest of the card's look and the failure message's look by BR-15 and BR-16.

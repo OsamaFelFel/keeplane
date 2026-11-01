@@ -165,3 +165,20 @@ test('UI-08: a refused 64-character username is named in full and the title can 
   const title = await screen.findByText(`${long} wasn't created`)
   expect(title.className).toContain('wrap-anywhere')
 })
+
+test.each([
+  ['refused', 409, "example-user wasn't created"],
+  ['unclear', 503, "It isn't clear whether example-user was created"],
+])('UI-09: the %s alert has a circle-alert icon and a weight-600 title, as designed', async (_, status, text) => {
+  fixture(async () => response({ error: 'That name already exists' }, status))
+  const user = userEvent.setup()
+  open()
+  await fill(user)
+  await user.click(screen.getByRole('button', { name: 'Create user' }))
+  const title = await screen.findByText(text)
+  expect(title.className).toContain('font-semibold')
+  expect(title.className).not.toContain('font-medium')
+  const icon = screen.getByRole('alert').querySelector('svg')!
+  expect(icon.dataset.icon).toBe('circle-alert')
+  expect(icon.querySelector('circle')).toBeTruthy()
+})
