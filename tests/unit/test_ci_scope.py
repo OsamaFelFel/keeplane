@@ -164,12 +164,16 @@ class WorkflowTests(unittest.TestCase):
         gate = "if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}"
         for job in (
             "frontend",
-            "backend",
+            "backend-tests",
             "component-manifest",
             "local-application",
             "postgres",
         ):
             self.assertIn("  " + job + ":\n    needs: scope\n    " + gate, text)
+        # The backend check reports the shards' result under its own name.
+        self.assertIn(
+            "  backend:\n    needs: [scope, backend-tests]\n    " + gate, text
+        )
         self.assertNotIn("paths-ignore:", text)
         self.assertNotIn("pull_request_target:", text)
 

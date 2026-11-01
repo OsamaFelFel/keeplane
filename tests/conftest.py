@@ -14,6 +14,49 @@ def pytest_addoption(parser):
         default=None,
         help="Packaged PostgreSQL application image for integration checks",
     )
+    from tests.support.shards import NAMES
+
+    parser.addoption(
+        "--shard",
+        choices=NAMES,
+        default=None,
+        help="Run only the unit and integration test files of one backend CI shard",
+    )
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Skip importing other shards' files while walking the test folders."""
+    shard = config.getoption("shard")
+    if not shard or not collection_path.is_file():
+        return None
+    from tests.support.shards import is_test_file, shard_of
+
+    if is_test_file(collection_path) and shard_of(collection_path) not in (None, shard):
+        return True
+    return None
+
+
+def select_shard(config, items):
+    """Keep only the selected backend shard's files, explicit paths included."""
+    shard = config.getoption("shard")
+    if not shard:
+        return
+    from tests.support.shards import shard_of
+
+    owners = {}
+    for item in items:
+        path = Path(str(item.path))
+        if path not in owners:
+            owners[path] = shard_of(path)
+            if owners[path] is None:
+                raise pytest.UsageError(
+                    f"{path} belongs to no backend shard; --shard covers "
+                    "tests/unit and tests/integration only"
+                )
+    other = [item for item in items if owners[Path(str(item.path))] != shard]
+    if other:
+        config.hook.pytest_deselected(items=other)
+        items[:] = [item for item in items if owners[Path(str(item.path))] == shard]
 
 
 def pytest_configure():
@@ -28,7 +71,8 @@ def pytest_configure():
     )
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(config, items):
+    select_shard(config, items)
     for item in items:
         parts = Path(str(item.path)).parts
         for kind in ("unit", "integration", "e2e"):
