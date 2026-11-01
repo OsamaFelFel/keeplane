@@ -16,6 +16,15 @@ gateway:
   mode: managed
   install: true
   keysSecret: keeplane-gateway-keys
+  # The gateway copies read the provider-key files the app writes.
+  extraVolumes:
+    - name: provider-keys
+      persistentVolumeClaim:
+        claimName: keeplane-provider-keys
+  extraVolumeMounts:
+    - name: provider-keys
+      mountPath: /provider-keys
+      readOnly: true
 
 agentgateway-standalone:
   # The chart requires both key-hash entries from gateway.keysSecret.
@@ -38,14 +47,6 @@ agentgateway-standalone:
   podSecurityContext:
     # Keys already belong to the gateway's UID. Do not widen this shared PVC.
     fsGroup: null
-  extraVolumes:
-    - name: provider-keys
-      persistentVolumeClaim:
-        claimName: keeplane-provider-keys
-  extraVolumeMounts:
-    - name: provider-keys
-      mountPath: /provider-keys
-      readOnly: true
   database:
     postgres:
       url: postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@postgres:5432/keeplane

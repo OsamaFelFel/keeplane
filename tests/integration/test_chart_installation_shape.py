@@ -43,15 +43,6 @@ def gateway_values():
                 "GATEWAY_ADMIN_KEY_HASH", "keeplane-gateway-keys", "admin-key-hash"
             ),
         ],
-        "extraVolumes": [
-            {
-                "name": "provider-keys",
-                "persistentVolumeClaim": {"claimName": "keeplane-provider-keys"},
-            }
-        ],
-        "extraVolumeMounts": [
-            {"name": "provider-keys", "mountPath": "/provider-keys", "readOnly": True}
-        ],
         # No key policies here: the chart supplies both (SHAPE-07).
         "config": {
             "llm": {
@@ -67,6 +58,21 @@ def gateway_values():
                 ],
             },
         },
+    }
+
+
+def provider_key_volume():
+    """The gateway copies' read-only mount of the provider-key claim."""
+    return {
+        "extraVolumes": [
+            {
+                "name": "provider-keys",
+                "persistentVolumeClaim": {"claimName": "keeplane-provider-keys"},
+            }
+        ],
+        "extraVolumeMounts": [
+            {"name": "provider-keys", "mountPath": "/provider-keys", "readOnly": True}
+        ],
     }
 
 
@@ -97,7 +103,8 @@ def postgres_values(mode):
             "tlsSecretName": "keeplane-tls",
         },
         "gateway": {"mode": "managed", "install": True,
-                    "keysSecret": "keeplane-gateway-keys", "copies": 2},
+                    "keysSecret": "keeplane-gateway-keys", "copies": 2,
+                    **provider_key_volume()},
         "networkPolicy": {"gatewayIngressEnabled": mode == "managed"},
         # Present in both modes: existing mode must ignore all of it.
         "agentgateway-standalone": gateway_values(),

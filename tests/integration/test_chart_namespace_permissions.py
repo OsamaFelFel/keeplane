@@ -185,7 +185,12 @@ def postgres_values(mode):
         "ingress": {"enabled": True, "className": "nginx",
                     "host": "keeplane.example.test", "tlsSecretName": "keeplane-tls"},
         "gateway": {"mode": "managed", "install": True,
-                    "keysSecret": "keeplane-gateway-keys", "copies": 2},
+                    "keysSecret": "keeplane-gateway-keys", "copies": 2,
+                    "extraVolumes": [{"name": "provider-keys", "persistentVolumeClaim":
+                                      {"claimName": "keeplane-provider-keys"}}],
+                    "extraVolumeMounts": [{"name": "provider-keys",
+                                           "mountPath": "/provider-keys",
+                                           "readOnly": True}]},
         "networkPolicy": {"gatewayIngressEnabled": mode == "managed"},
         "agentgateway-standalone": {
             "database": {"postgres": {
@@ -198,10 +203,6 @@ def postgres_values(mode):
                 secret_env("GATEWAY_ADMIN_KEY_HASH", "keeplane-gateway-keys",
                            "admin-key-hash"),
             ],
-            "extraVolumes": [{"name": "provider-keys", "persistentVolumeClaim":
-                              {"claimName": "keeplane-provider-keys"}}],
-            "extraVolumeMounts": [{"name": "provider-keys", "mountPath": "/provider-keys",
-                                   "readOnly": True}],
             # Optional objects of the bundled chart, so they are covered too.
             "podDisruptionBudget": {"enabled": True},
             "gateway": {"extraServices": [{"name": "extra", "type": "ClusterIP",

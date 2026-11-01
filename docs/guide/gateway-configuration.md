@@ -16,8 +16,9 @@ the current release scope.
 In `managed` mode the chart always requires keys on the gateway's model and
 management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
-A Secret you add to the managed gateway copies through
-`agentgateway-standalone.extraVolumes` is mounted with mode 0440 unless you
+Extra volumes for the managed gateway copies go in `gateway.extraVolumes` and
+`gateway.extraVolumeMounts`, not under `agentgateway-standalone`. A Secret
+you add through `gateway.extraVolumes` is mounted with mode 0440 unless you
 set a stricter one, and needs the pod's `fsGroup`, which PostgreSQL and
 local-trial installs keep unset, so they use `secretKeyRef`; see
 [Secrets](kubernetes-installation-reference.md#secrets).

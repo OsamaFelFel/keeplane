@@ -66,6 +66,14 @@ gateway:
   # http://gateway-0.gateway.ai-gateway.svc:4000 (http or https, no path or
   # credentials, at most 32). Leave empty when the gateway runs as one copy.
   copyUrls: []
+  # Managed mode: extra volumes for the gateway copies and their mounts, in
+  # Kubernetes' pod form. A Secret volume (or a projected one with a Secret
+  # source) gets mode 0440 unless it sets a stricter one; a looser mode is
+  # refused, and so is any Secret volume while the gateway has no fsGroup.
+  # Leave agentgateway-standalone.extraVolumes and extraVolumeMounts empty.
+  # See docs/guide/kubernetes-installation-reference.md#secrets.
+  extraVolumes: []
+  extraVolumeMounts: []
 
 networkPolicy:
   # Every policy here requires a Kubernetes CNI that enforces NetworkPolicy.

@@ -1,8 +1,8 @@
 """Every Secret the chart mounts into a Keeplane pod has a restrictive file mode.
 
-Cases CM-01 to CM-03 in chart-credential-mounts-cases.md. CM-01 and CM-02
-render the chart with Helm and are skipped when Helm is missing; CM-03 reads
-only the installation reference and always runs.
+Cases CM-01 to CM-09 in chart-credential-mounts-cases.md. All but CM-03 and
+CM-07 render the chart with Helm and are skipped when Helm is missing; CM-03
+and CM-07 read only the guides and always run.
 """
 
 import json
@@ -183,7 +183,8 @@ def octal_mode(text):
 
 
 GATEWAY_GROUP = 65532
-# Secret volumes an installer adds to the managed gateway copies, without a mode.
+# Secret volumes an installer adds to the managed gateway copies through
+# gateway.extraVolumes, without a mode.
 UNSET_VOLUMES = [
     {"name": "provider-ca", "secret": {"secretName": "provider-ca"}},
     {"name": "provider-token", "secret": {
@@ -227,20 +228,29 @@ def gateway_secret_values(install, volumes, fs_group=GATEWAY_GROUP):
                   "agentgateway-standalone": shape.gateway_values()}
     else:
         values = shape.postgres_values("existing" if install == "existing" else "managed")
-    gateway = values["agentgateway-standalone"]
-    gateway["podSecurityContext"] = {"fsGroup": fs_group}
-    gateway["extraVolumes"] = [dict(volume) for volume in volumes]
-    gateway["extraVolumeMounts"] = [
-        {"name": volume["name"], "mountPath": "/run/" + volume["name"], "readOnly": True}
-        for volume in volumes]
+    values["agentgateway-standalone"]["podSecurityContext"] = {"fsGroup": fs_group}
+    values["gateway"]["extraVolumes"] = [dict(volume) for volume in volumes]
+    values["gateway"]["extraVolumeMounts"] = mounts_for(volumes)
     return values
 
 
-def render_values(chart, tmp_path, name, values):
+def mounts_for(volumes):
+    return [{"name": volume["name"], "mountPath": "/run/" + volume["name"], "readOnly": True}
+            for volume in volumes]
+
+
+def render_values(chart, tmp_path, name, values, *extra):
     path = tmp_path / (name + ".json")
     path.write_text(json.dumps(values))
     return chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane",
-                     "-f", str(path))
+                     "-f", str(path), *extra)
+
+
+def bundled_deployment(chart, output):
+    """The bundled gateway chart's own Deployment, which runs no pods."""
+    [bundled] = [document for document in chart.of_kind(output, "Deployment")
+                 if chart.name_of(document) == "keeplane"]
+    return bundled
 
 
 def gateway_copies(chart, output):
@@ -275,10 +285,14 @@ def test_cm_04_gateway_secret_volumes_without_a_mode_get_0440(chart, tmp_path):
     assert volumes["config"] == ("configMap", None, [])
     assert volumes["tmp"] == ("emptyDir", None, [])
     observed["managed"] = {name: oct(value[1]) for name, value in volumes.items() if value[1]}
-    # The bundled chart's own Deployment also lists them, but runs no pods.
-    for document in chart.of_kind(result.stdout, "Deployment"):
-        if "provider-ca" in "\n".join(pod_spec(chart, document)):
-            assert chart.scalar(document, "replicas") == "0", chart.name_of(document)
+    # The bundled chart's own Deployment runs no pods and lists none of them:
+    # only its ConfigMap and scratch volumes, with no extra mounts.
+    bundled = bundled_deployment(chart, result.stdout)
+    assert chart.scalar(bundled, "replicas") == "0"
+    assert sorted(chart.volumes(bundled)) == ["config", "tmp"], chart.volumes(bundled)
+    assert sorted(volume for volume, _, _ in chart.mounts(chart.containers(bundled)[0])) \
+        == ["config", "tmp"]
+    observed["bundled-deployment"] = sorted(chart.volumes(bundled))
     # The local trial's gateway mounts the shared provider-key volume without
     # fsGroup and is rendered unchanged.
     local = chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane",
@@ -354,8 +368,7 @@ def test_cm_06_gateway_secret_volumes_with_a_looser_mode_are_refused(chart, tmp_
         assert result.returncode != 0, label
         assert message in result.stderr, (label, result.stderr)
         if label != "postgres-fs-group":
-            assert "agentgateway-standalone.extraVolumes[0]" in result.stderr, (label,
-                                                                             result.stderr)
+            assert "gateway.extraVolumes[0]" in result.stderr, (label, result.stderr)
         observed[label] = result.stderr.strip().splitlines()[-1][-160:]
     # A looser mode is ignored with an existing gateway: no pod mounts it.
     existing = render_values(chart, tmp_path, "existing-loose", gateway_secret_values(
@@ -367,12 +380,108 @@ def test_cm_06_gateway_secret_volumes_with_a_looser_mode_are_refused(chart, tmp_
 
 def test_cm_07_guides_state_the_gateway_secret_volume_rules():
     section = REFERENCE.read_text().split("## Secrets", 1)[1].split("\n## ", 1)[0]
-    for phrase in ("agentgateway-standalone.extraVolumes", "mode 0440", "stricter",
-                   "0644", "podSecurityContext.fsGroup", "provider-key volume",
-                   "gateway.mode=existing", "no extra volumes for the app"):
+    for phrase in ("`gateway.extraVolumes`", "`gateway.extraVolumeMounts`", "mode 0440",
+                   "stricter", "0644", "podSecurityContext.fsGroup", "provider-key volume",
+                   "gateway.mode=existing", "no extra volumes for the app",
+                   "Helm refuses `agentgateway-standalone.extraVolumes`",
+                   "zero copies", "a leading 0"):
         assert phrase in " ".join(section.split()), phrase
     guide = " ".join((ROOT / "docs/guide/gateway-configuration.md").read_text().split())
-    assert "`agentgateway-standalone.extraVolumes` is mounted with mode 0440" in guide
+    assert "`gateway.extraVolumes` is mounted with mode 0440" in guide
+
+
+def test_cm_08_extra_volumes_under_the_bundled_chart_are_refused(chart, tmp_path):
+    """The bundled Deployment would list them unchecked, so Helm refuses them."""
+    secret = [{"name": "provider-ca", "secret": {"secretName": "provider-ca"}}]
+    claim = [{"name": "provider-keys",
+              "persistentVolumeClaim": {"claimName": "keeplane-provider-keys"}}]
+    attempts = {
+        "secret-volume": ("minimal", {"extraVolumes": secret,
+                                      "extraVolumeMounts": mounts_for(secret)}),
+        "claim-volume": ("postgres", {"extraVolumes": claim,
+                                      "extraVolumeMounts": mounts_for(claim)}),
+        "volume-only": ("minimal", {"extraVolumes": secret}),
+        "mount-only": ("minimal", {"extraVolumeMounts": mounts_for(secret)}),
+    }
+    observed = {}
+    for label, (install, bundled) in attempts.items():
+        values = gateway_secret_values(install, [], None if install == "postgres"
+                                       else GATEWAY_GROUP)
+        values["agentgateway-standalone"].update(bundled)
+        result = render_values(chart, tmp_path, label, values)
+        assert result.returncode != 0, label
+        assert ("leave agentgateway-standalone.extraVolumes and extraVolumeMounts empty"
+                in result.stderr), (label, result.stderr)
+        assert "gateway.extraVolumes and gateway.extraVolumeMounts" in result.stderr
+        observed[label] = result.stderr.strip().splitlines()[-1][-160:]
+    # With an existing gateway the bundled chart is not installed: nothing renders it.
+    existing = gateway_secret_values("existing", [], None)
+    existing["agentgateway-standalone"].update(extraVolumes=secret,
+                                               extraVolumeMounts=mounts_for(secret))
+    result = render_values(chart, tmp_path, "existing-bundled", existing)
+    assert result.returncode == 0, result.stderr
+    assert not chart.of_kind(result.stdout, "StatefulSet")
+    print(json.dumps(observed, indent=2))
+
+
+# Values files exactly as a person writes them, with YAML octal literals:
+# Helm reads 0440 as the number 288 and prints it back that way.
+LITERAL_BASE = """gateway:
+  extraVolumes:
+    - name: provider-ca
+      secret:
+        secretName: provider-ca
+        {volume_mode}
+        items:
+          - key: ca.crt
+            path: ca.crt
+            {item_mode}
+  extraVolumeMounts:
+    - name: provider-ca
+      mountPath: /run/provider-ca
+      readOnly: true
+"""
+
+
+def literal_values(volume_mode="", item_mode=""):
+    return LITERAL_BASE.format(volume_mode=volume_mode, item_mode=item_mode)
+
+
+def test_cm_09_octal_modes_in_a_values_file_reach_helm_as_written(chart, tmp_path):
+    accepted = {
+        "literal-0440": (literal_values("defaultMode: 0440"), (0o440, [])),
+        "literal-0400": (literal_values("defaultMode: 0400"), (0o400, [])),
+        "literal-item-0400": (literal_values(item_mode="mode: 0400"), (MODE, [0o400])),
+        "literal-unset": (literal_values(), (MODE, [])),
+    }
+    refused = {
+        "literal-0644": (literal_values("defaultMode: 0644"), "mode 0644"),
+        "literal-0444": (literal_values("defaultMode: 0444"), "mode 0444"),
+        "literal-item-0644": (literal_values(item_mode="mode: 0644"), "mode 0644"),
+        # Without the leading 0 YAML reads a decimal number: 440 is 0670.
+        "decimal-440": (literal_values("defaultMode: 440"), "mode 0670"),
+        "quoted-0440": (literal_values('defaultMode: "0440"'), "is not a number"),
+    }
+    base = gateway_secret_values("minimal", [])
+    observed = {}
+    for label, (text, expected) in accepted.items():
+        literal = tmp_path / (label + ".yaml")
+        literal.write_text(text)
+        result = render_values(chart, tmp_path, label + "-base", base, "-f", str(literal))
+        assert result.returncode == 0, (label, result.stderr)
+        _, volumes = copies_volumes(chart, result.stdout)
+        assert volumes["provider-ca"] == ("secret", *expected), (label, volumes)
+        observed[label] = [oct(volumes["provider-ca"][1]),
+                           [oct(mode) for mode in volumes["provider-ca"][2]]]
+    for label, (text, message) in refused.items():
+        literal = tmp_path / (label + ".yaml")
+        literal.write_text(text)
+        result = render_values(chart, tmp_path, label + "-base", base, "-f", str(literal))
+        assert result.returncode != 0, label
+        assert message in result.stderr, (label, result.stderr)
+        assert "gateway.extraVolumes[0] (provider-ca)" in result.stderr, result.stderr
+        observed[label] = result.stderr.strip().splitlines()[-1][-160:]
+    print(json.dumps(observed, indent=2))
 
 
 def test_catalog_lists_exactly_these_cases():
