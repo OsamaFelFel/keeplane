@@ -30,6 +30,14 @@ SQLITE_COPY = (
     "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); "
     "d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()"
 )
+# The guide's SQL for a PostgreSQL restore target, line for line, with the
+# example names replaced by this run's roles and database.
+RESTORE_TARGET_SQL = (
+    'CREATE DATABASE "{database}" OWNER "{migrate}"',
+    'REVOKE ALL ON DATABASE "{database}" FROM PUBLIC',
+    'GRANT CONNECT ON DATABASE "{database}" TO "{app}"',
+)
+OLDER_SERVER_SQL = 'ALTER SCHEMA public OWNER TO "{migrate}"'
 # Streams a backup into the app's volume as the app's own user.
 COPY_IN = "import shutil,sys; shutil.copyfileobj(sys.stdin.buffer, open(sys.argv[1], 'xb'))"
 
@@ -128,14 +136,25 @@ class PostgresDatabases:
             "KEEPLANE_DATABASE_SSLMODE": self.admin["sslmode"],
         }
 
-    def create(self, name):
-        """A fresh database with the privileges the PostgreSQL guide asks for."""
+    def create(self, name, schema_privileges=True):
+        """A fresh database with the privileges the PostgreSQL guide asks for.
+
+        Without schema_privileges it runs only the restore guide's SQL: the
+        schema grants and default privileges must then come from the dump.
+        """
         database = self.database(name)
         with self.connect() as admin:
-            admin.execute(f'CREATE DATABASE "{database}" OWNER "{self.migrate_role}"')
-            admin.execute(f'REVOKE ALL ON DATABASE "{database}" FROM PUBLIC')
-            admin.execute(f'GRANT CONNECT ON DATABASE "{database}" TO "{self.app_role}"')
+            for statement in RESTORE_TARGET_SQL:
+                admin.execute(statement.format(
+                    database=database, migrate=self.migrate_role, app=self.app_role))
+            older_server = admin.info.server_version < 150000
         self.databases.append(database)
+        if older_server:
+            # The guide's extra line for PostgreSQL 14 and older.
+            with self.connect(database) as admin_database:
+                admin_database.execute(OLDER_SERVER_SQL.format(migrate=self.migrate_role))
+        if not schema_privileges:
+            return
         with self.connect(database) as owner_database:
             owner_database.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
             owner_database.execute(f'GRANT USAGE ON SCHEMA public TO "{self.app_role}"')
@@ -166,8 +185,9 @@ class PostgresDatabases:
                   "--file", str(destination))
 
     def restore(self, source, name, prepare):
-        # pg_restore needs a new, empty database: never migrate it first.
-        self.create(name)
+        # pg_restore needs a new, empty database: never migrate it first. Only
+        # the guide's SQL runs; grants to the app role must come from the dump.
+        self.create(name, schema_privileges=False)
         self.tool("pg_restore", "--exit-on-error", "--single-transaction",
                   "--no-owner", "--dbname", self.database(name), str(source))
 

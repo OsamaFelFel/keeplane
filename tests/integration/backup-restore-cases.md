@@ -21,8 +21,11 @@ optional kind turned on.
 
 On PostgreSQL the database is owned by a migration role and the app connects as
 a separate restricted role, set up as the [PostgreSQL guide](../../docs/guide/postgres-accounts.md#install-the-chart-against-an-operated-database)
-asks. The restored database is created the same way, and the restore runs as
-the migration role with `--no-owner`.
+asks. The restored database is created with only the restore guide's three SQL
+lines (plus its extra line on PostgreSQL 14 and older), and the restore runs as
+the migration role with `--no-owner`. The app role's schema grants and default
+privileges therefore come from the dump itself; every check after the restore
+runs as the app role.
 
 | Case | Given | Expected result |
 | --- | --- | --- |

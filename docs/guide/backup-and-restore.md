@@ -67,17 +67,29 @@ What each part means for a restore:
   Keeplane refuses a backup from a newer version
   ([BR-10](../../tests/integration/backup-restore-cases.md)).
 
-The commands below set these once:
+Set up once in the shell you'll use. For the Docker preview, stay at the
+repository root: the Docker commands below run there and write into
+`keeplane-backup/`.
 
 ```sh
+# Docker preview: from the repository root
 umask 077
-mkdir -p keeplane-backup && cd keeplane-backup
-NS=<namespace>; RELEASE=<release>   # Kubernetes only
+mkdir -p keeplane-backup
 ```
 
-Run Docker preview commands from the repository root, with the configuration
-file the launcher printed, as in [Run locally](local-preview.md); the examples
-write `docker compose` for short.
+Run Docker preview commands with the configuration file the launcher printed,
+as in [Run locally](local-preview.md); the examples write `docker compose` for
+short.
+
+For Kubernetes, work inside the backup folder: the Kubernetes commands read and
+write their files in the current folder.
+
+```sh
+# Kubernetes
+umask 077
+mkdir -p keeplane-backup && cd keeplane-backup
+NS=<namespace>; RELEASE=<release>
+```
 
 ## Take a backup
 
@@ -199,9 +211,13 @@ checked the restore, so you can go back to it.
    docker compose exec -T app rm /state/incoming.sqlite3
    ```
 
-   In Kubernetes, run the same three commands with
-   `kubectl -n "$NS" exec -i "$POD" -c app --` in place of
-   `docker compose exec -T app`.
+   ```sh
+   # Kubernetes SQLite trial, from the backup folder: reads keeplane-app.sqlite3 there
+   POD=$(kubectl -n "$NS" get pod -l app="$RELEASE"-app -o name | head -n 1)
+   kubectl -n "$NS" exec -i "$POD" -c app -- python -c "import shutil,sys; shutil.copyfileobj(sys.stdin.buffer, open(sys.argv[1], 'xb'))" /state/incoming.sqlite3 < keeplane-app.sqlite3
+   kubectl -n "$NS" exec "$POD" -c app -- python -c "import sqlite3,sys; s=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" /state/incoming.sqlite3 /state/keeplane.sqlite3
+   kubectl -n "$NS" exec "$POD" -c app -- rm /state/incoming.sqlite3
+   ```
 3. Restore the key folder over the existing one:
 
    ```sh
@@ -262,6 +278,16 @@ checked the restore, so you can go back to it.
    CREATE DATABASE keeplane_restored OWNER keeplane_migrate;
    REVOKE ALL ON DATABASE keeplane_restored FROM PUBLIC;
    GRANT CONNECT ON DATABASE keeplane_restored TO keeplane_app;
+   ```
+
+   These three lines are all the restore needs on PostgreSQL 15 and newer,
+   where the new database's `public` schema belongs to its owner; the dump
+   brings back the schema's grants and default privileges. On PostgreSQL 14
+   and older, also run this while connected to `keeplane_restored`, or the
+   restore stops when it reaches the schema's grants:
+
+   ```sql
+   ALTER SCHEMA public OWNER TO keeplane_migrate;
    ```
 
 4. Restore as the migration role. The dump brings back the tables, their
@@ -332,9 +358,13 @@ since then is undone, including ones that took access away
   again, and developers can use it again wherever the gateway still has the
   same definition;
 - an account that was removed or demoted is back with its old role;
-- a session or CLI sign-in that ended (sign-out, removal, demotion) works again
-  until it expires (eight hours after sign-in);
-- a developer key that was replaced or removed is back, if its file is.
+- a browser session or CLI sign-in that ended (sign-out, removal, demotion)
+  works again. A CLI sign-in can keep itself going by refreshing, so waiting
+  doesn't end it: only a new signing secret (step 1 below) does;
+- a developer key that was replaced or removed is back, if its file is;
+- Audit records written after the backup are not in the restored database.
+  Keep the old database (or a backup of it taken just before the restore) for
+  as long as you must keep those records.
 
 Unless the restore only moved the same data with nothing changed since the
 backup, do all of these before reopening access:

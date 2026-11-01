@@ -262,7 +262,23 @@ jobs:
         run: |
           runtime_postgres_image="$(docker image inspect keeplane-preview:postgres-local --format '{{.Id}}')"
           KEEPLANE_RUNTIME_POSTGRES_IMAGE="$runtime_postgres_image" .venv/bin/python -m pytest tests/integration/test_postgres_accounts.py 'tests/integration/test_runtime_image.py::test_runtime_image[postgres]' -m live --app-image "$runtime_postgres_image" --junitxml=test-results/postgres/junit.xml
-      - name: Verify settings-change records, level locks and credential rotation on PostgreSQL
+      - name: Install pg_dump and pg_restore matching the PostgreSQL service
+        env:
+          PGPASSWORD: ci-disposable-settings-postgres
+        run: |
+          # pg_dump refuses a newer server, so use the service's own major version.
+          major="$(psql -h 127.0.0.1 -p 55432 -U keeplane -d postgres -Atc 'SHOW server_version_num' | cut -c1-2)"
+          case "$major" in ''|*[!0-9]*) echo "Unexpected PostgreSQL version: $major" >&2; exit 1 ;; esac
+          if [ ! -x "/usr/lib/postgresql/$major/bin/pg_restore" ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-common
+            # Adds the PostgreSQL project's apt repository with the signing key postgresql-common ships.
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+            sudo apt-get install -y "postgresql-client-$major"
+          fi
+          "/usr/lib/postgresql/$major/bin/pg_dump" --version
+          echo "KEEPLANE_TEST_POSTGRES_BIN=/usr/lib/postgresql/$major/bin" >> "$GITHUB_ENV"
+      - name: Verify settings-change records, level locks, credential rotation and backup/restore on PostgreSQL
         env:
           KEEPLANE_TEST_REPORT_DIR: test-results/postgres/settings-cases
           KEEPLANE_TEST_POSTGRES_HOST: 127.0.0.1
@@ -272,7 +288,7 @@ jobs:
           .venv/bin/pip install psycopg==3.3.6
           password_file="$RUNNER_TEMP/settings-postgres-password"
           printf '%s\n' ci-disposable-settings-postgres > "$password_file"
-          KEEPLANE_TEST_POSTGRES_PASSWORD_FILE="$password_file" .venv/bin/python -m pytest tests/integration/test_settings_change_records.py tests/integration/test_model_answer_records.py tests/integration/test_audit_persistence.py tests/integration/test_credential_rotation.py -k postgresql -rs --junitxml=test-results/postgres/settings-junit.xml
+          KEEPLANE_TEST_POSTGRES_PASSWORD_FILE="$password_file" .venv/bin/python -m pytest tests/integration/test_settings_change_records.py tests/integration/test_model_answer_records.py tests/integration/test_audit_persistence.py tests/integration/test_credential_rotation.py tests/integration/test_backup_restore.py -k postgresql -rs --junitxml=test-results/postgres/settings-junit.xml
           if grep -q '<skipped' test-results/postgres/settings-junit.xml; then
             echo "PostgreSQL settings cases were skipped" >&2
             exit 1
