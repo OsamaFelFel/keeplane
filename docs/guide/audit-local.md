@@ -95,7 +95,12 @@ The reusable [plain-English cases](../../tests/e2e/audit-cases.md) run with
 check each change above on SQLite and, when configured, PostgreSQL. The
 [model-answer cases](../../tests/integration/model-answer-record-cases.md)
 check model request records the same way. The [mandatory sign-in cases](../../tests/e2e/audit-cases.md#always-on-break-glass-sign-ins)
-run in both an isolated store and the Docker preview. The dated JSON run under
+run in both an isolated store and the Docker preview, and the
+[break-glass sign-in cases](../../tests/integration/break-glass-sign-in-cases.md)
+check first use, repeated use, restart, rotation, a wrong password and a
+storage outage through the sign-in API on SQLite and PostgreSQL. The
+[Spec 006 scenario table](../../tests/e2e/audit-cases.md#spec-006-scenarios-st21-st22)
+names the cases that prove each Audit scenario. The dated JSON run under
 `test-results/` records the observed statuses. The live test leaves its
 clearly named trial audit records in the local volume because audit records
 are append-only; it removes temporary data classes and restores the switches.

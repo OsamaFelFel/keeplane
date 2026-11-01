@@ -12,7 +12,9 @@ uses, over HTTP in the test process, on SQLite, with a synthetic gateway
 reader. MA-09 and MA-11 to MA-15 do the same for a customer-run (`existing`)
 gateway, which calls only the shared check: `/internal/runtime/authorize` at
 the route and `/internal/runtime/authorize/selected` on each model backend.
-MA-16 checks that each mode has exactly one recorder. MA-10 runs the record
+MA-16 checks that each mode has exactly one recorder. MA-17 runs in both
+modes without an enclosing test transaction, so it sees only what is
+committed. MA-10 runs the record
 producer in separate control-plane processes on a fresh database, on SQLite
 and, when configured, PostgreSQL.
 
@@ -34,6 +36,7 @@ and, when configured, PostgreSQL.
 | MA-14 Customer-run: no request text or keys | A customer-run gateway; the switch is on; the final check's headers carry a prompt | The one record holds no prompt, session token, gateway credential, key file name or password. |
 | MA-15 Customer-run: other developers | A customer-run gateway; two developers each send a request to their own project | Each record names only the developer whose session sent it. |
 | MA-16 One recorder per mode | The switch is on. A managed gateway sends one request through its installed checks, then also calls the shared final check; then the app runs as customer-run and the shared checks are used | Managed: one record; the shared final check is refused with `Managed gateways use the installed runtime checks` and writes nothing. Customer-run: the installed final check is refused and the shared final check writes one record. Two records in all, never two for one request. |
+| MA-17 A request that later fails | The switch is on; in each gateway mode one request passes the final check, then the model fails and the developer's retry is refused because they signed out | The record is already committed when the final check answers, before the model is called. The failure does not remove it, and the refused retry adds none: one record. |
 
 Run:
 

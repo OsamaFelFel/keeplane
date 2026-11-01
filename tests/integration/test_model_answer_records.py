@@ -6,12 +6,13 @@ enough"). The plain-English cases are in model-answer-record-cases.md.
 
 import json
 import logging
+from functools import partial
 import uuid
 from unittest.mock import patch
 
 import pytest
 from audit.models import AuditRecord
-from django.db import OperationalError
+from django.db import OperationalError, transaction
 from django.test import Client
 from model_registry import model_answer_records
 from model_registry.provider_keys import managed_key_digest
@@ -199,6 +200,34 @@ def test_ma_05_a_failed_record_write_still_allows_the_request(
     # The next request records again once storage is back.
     assert send(f, True).status_code == 200
     assert len(model_answers(f)) == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("mode", ["managed", "customer-run"])
+def test_ma_17_a_request_that_later_fails_keeps_its_record(
+    installed, monkeypatch, mode
+):
+    f = installed
+    switch_on(f)
+    if mode == "customer-run":
+        monkeypatch.setenv("GATEWAY_MODE", "existing")
+        final = partial(send_shared, f, True)
+    else:
+        final = partial(send, f, True)
+    assert final().status_code == 200
+    # The final check is Keeplane's last step: its record is already committed
+    # when it answers, before the gateway calls the model. Nothing waits for,
+    # or is told about, the model's reply.
+    assert not transaction.get_connection().in_atomic_block
+    assert [row["what"] for row in model_answers(f)] == [
+        "Request sent to model private; project Callback"
+    ]
+    # The model then fails and the developer's retry is refused because they
+    # signed out: the first request keeps its record and the retry adds none.
+    f.stores.identity.logout(f.token)
+    assert final().status_code == 401
+    rows = model_answers(f)
+    assert len(rows) == 1 and rows[0]["who"] == "callback-developer"
 
 
 def test_ma_06_records_hold_no_request_text_or_credentials(installed):

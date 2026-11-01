@@ -38,6 +38,28 @@ result.
 | BG-08 | Sign in again, then try a wrong password. | The repeat adds one record; the failed attempt adds none. |
 | BG-09 | Open Audit and try to turn off break-glass recording through its API. | The React page loads and the API rejects the off request. Browser case AU-UI-01 checks the disabled control and Show filter. |
 
-The held-back-request and model-answer switches can be set independently. Their
-event producers await the detection and developer-task flows. This run does not
-claim those record scenarios are complete.
+## Spec 006 scenarios (ST21, ST22)
+
+Each scenario in Spec 006 and the cases that prove it. BGS cases are the
+[break-glass sign-in cases](../integration/break-glass-sign-in-cases.md), SC
+the [settings-change cases](../integration/settings-change-record-cases.md),
+CL-INT the [complexity level cases](../integration/complexity-level-cases.md),
+MA the [model answer cases](../integration/model-answer-record-cases.md), AS
+the [persistence cases](../integration/audit-persistence-cases.md) and AU-UI
+the [browser cases](../browser/audit-cases.md). AUD and BG cases are above.
+`tests/unit/test_audit_scenario_map.py` fails if a scenario is missing here or
+a case named here has no catalog row or no test.
+
+| Story | Scenario | Checked by |
+| --- | --- | --- |
+| ST21 | After install | BGS-01, SC-01, MA-01, BG-01, AU-UI-01, AUD-01 |
+| ST21 | Settings changes | SC-02, SC-07, SC-12, CL-INT-03, AUD-02, AUD-03 |
+| ST21 | Held-back requests | Not built yet: detection does not hold requests back until task 005-03. The switch exists and stays independent (SC-03). |
+| ST21 | Model answers | MA-02, MA-06, MA-11, MA-14, MA-17 |
+| ST21 | Break-glass sign-ins | BGS-01, BGS-02, BGS-03, BGS-04, BGS-05, BGS-06, BG-07, BG-08, BG-09 |
+| ST21 | One kind only | SC-03, MA-03, AU-UI-02, AUD-02 |
+| ST22 | Find records | AS-01, AS-02, AS-03, AS-04, AU-UI-03, AUD-04 |
+
+"Model answers" follows the owner's decision on governance issue #36: a record
+is written when Keeplane lets a request through to a model, so "a request that
+later fails" keeps the record written when it was sent (MA-17).

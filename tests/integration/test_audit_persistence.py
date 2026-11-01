@@ -207,3 +207,70 @@ def test_as_03_records_from_the_previous_schema_survive_upgrade(start_process):
     assert legacy[0]["what"] == "Legacy routing change 26"
     assert all(row["when"].endswith("+00:00") for row in legacy)
     assert upgraded.records(kind="settings", search="legacy-admin")["total"] == 27
+
+
+def test_as_04_the_audit_api_finds_records_for_an_admin_only(start_process, tmp_path):
+    app, other = start_process(), start_process()
+    app.ask("migrate")
+    password = (tmp_path / "first-admin-password").read_text().strip()
+
+    def call(process, path, session=None):
+        return process.ask("http", method="GET", path=path, session=session)
+
+    def sign_in(process, username, secret):
+        answer = process.ask(
+            "http",
+            method="POST",
+            path="/api/session",
+            body={"username": username, "password": secret},
+        )
+        assert answer["status"] == 200
+        return answer["session"]
+
+    admin = sign_in(app, "first-admin", password)
+    app.ask("settings", count=30, prefix="Routing rule", who="routing-admin")
+    sign_in(other, "first-admin", password)
+
+    def found(path):
+        answer = call(other, path, admin)
+        assert answer["status"] == 200, answer
+        return answer["body"]
+
+    first, second = found("/api/audit/records"), found("/api/audit/records?page=2")
+    assert first["total"] == 32 and len(first["records"]) == 25 and first["has_more"]
+    assert len(second["records"]) == 7 and not second["has_more"]
+    ids = [row["id"] for row in first["records"] + second["records"]]
+    assert ids == sorted(set(ids), reverse=True)
+    shown = found(f"/api/audit/records?kind={BREAK_GLASS}")
+    assert shown["total"] == 2
+    assert {row["kind"] for row in shown["records"]} == {BREAK_GLASS}
+    settings = found("/api/audit/records?kind=settings&page=2")
+    assert settings["total"] == 30 and len(settings["records"]) == 5
+    assert {row["kind"] for row in settings["records"]} == {"settings"}
+    searched = found("/api/audit/records?search=RULE%202")
+    assert [row["what"] for row in searched["records"]] == [
+        f"Routing rule {n}" for n in range(29, 19, -1)
+    ]
+    assert found("/api/audit/records?kind=settings&search=first-admin")["total"] == 0
+    assert found(f"/api/audit/records?kind={BREAK_GLASS}&search=rule")["total"] == 0
+    assert found("/api/audit/records?kind=model_answers")["total"] == 0
+    assert found("/api/audit/records?page=3")["records"] == []
+
+    for bad in ("kind=everything", "page=two", "page=0", "search=" + "x" * 81):
+        assert call(other, "/api/audit/records?" + bad, admin)["status"] == 400
+    assert call(other, "/api/audit/records")["status"] == 401
+    created = app.ask(
+        "http",
+        method="POST",
+        path="/api/users",
+        session=admin,
+        body={
+            "username": "dev-reader",
+            "password": "dev-reader-password",
+            "role": "developer",
+        },
+    )
+    assert created["status"] == 201
+    developer = sign_in(other, "dev-reader", "dev-reader-password")
+    refused = call(other, "/api/audit/records", developer)
+    assert refused["status"] == 403 and "records" not in (refused["body"] or {})
