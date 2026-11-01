@@ -98,30 +98,35 @@ class DjangoModelChoice:
         except (ModelAccessDenied, ModelPolicyUnavailable):
             return False
 
-    @staticmethod
-    def _confirmed_on_every_copy(model_id):
+    def _confirmed_on_every_copy(self, model_id):
         """In Kubernetes (ADR 027): the saved setup, when every copy confirmed it.
 
         A request can reach any copy, so a model is picked only when every
-        listed copy's confirmed guard lists it with the saved fingerprint. The
-        copy that serves the request still checks it in full.
+        listed copy's confirmed guard lists it alike, with the saved
+        fingerprint. The same live checks as the preview path then apply: the
+        gateway's current definition, its format and provider address, and the
+        shared key file's digest. Each copy's applied state is checked when it
+        serves the request, not here, so a choice never waits on every copy.
         """
         approval = (
             ModelApproval.objects.filter(pk=model_id)
             .values("key_choice", "gateway_fingerprint")
             .first()
         )
-        if approval is None or not confirmed_everywhere(
+        if approval is None:
+            return None
+        entry = confirmed_everywhere(
             model_id,
             approval["gateway_fingerprint"],
             approval["key_choice"],
             MODEL_GATEWAY_COPIES,
-        ):
+        )
+        if entry is None:
             return None
-        return {
-            "key_choice": approval["key_choice"],
-            "fingerprint": approval["gateway_fingerprint"],
-        }
+        DjangoInstalledRuntimeGate(
+            self.gateway, self.manifest_file, self.directory
+        ).require_definition(model_id, entry)
+        return entry
 
     def choose(self, session_token, project_id, model_id):
         decision = self.authorization.authorize(session_token, project_id, model_id)

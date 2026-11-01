@@ -11,11 +11,11 @@ gateway still matches it.
 
 - [`test_guard_status_names.py`](../unit/test_guard_status_names.py) (unit):
   GS-U01 to GS-U05.
-- [`test_guard_status.py`](test_guard_status.py): GS-01 to GS-24, on SQLite,
+- [`test_guard_status.py`](test_guard_status.py): GS-01 to GS-25, on SQLite,
   with the fake gateway of `test_model_enroller.py` and the HTTP checks of
   `test_installed_runtime.py`.
 - [`test_guard_status_postgres.py`](test_guard_status_postgres.py): GS-PG-01
-  to GS-PG-09, on a disposable PostgreSQL server named by
+  to GS-PG-10, on a disposable PostgreSQL server named by
   `KEEPLANE_TEST_POSTGRES_*` (CI's PostgreSQL job); skipped without one:
 
 ```sh
@@ -49,7 +49,7 @@ container, Helm values and a live run are separate work.
 | GS-03 After the operator's enrolment | Delete the row (as after the installer's first enrolment) and run a pass | The unchanged guard is recorded once. |
 | GS-04 Nothing confirmed while the guard moves | Add a model; look at the row during the readback | It says nothing is confirmed; afterwards it lists both models. |
 | GS-05 Never read back | The gateway never loads the new guard | The pass fails; the row says nothing is confirmed, with no declaration or time. |
-| GS-06 Failed pass | The gateway can't be read | The pass fails and the row says nothing is confirmed. |
+| GS-06 Failed pass that changed nothing | After an enrolment, a pass fails because the gateway can't be read | The guard files and the row are unchanged: the last confirmation stands (ADR 027 "Failure"; associate product owner decision on #207). |
 | GS-07 Row can't be written | The status write fails before a change | The pass fails and the guard files are untouched; the next pass, with the database back, enrols. |
 | GS-08 Held change | A served model's destination changes | During the hold the row keeps the old confirmation; after it, the row has the new fingerprint. |
 | GS-09 Everything withdrawn | The only model is removed | After the hold the row says nothing is confirmed. |
@@ -76,6 +76,7 @@ and the app has no declaration file.
 | GS-21 Check off | With the per-copy check off, send a check that names a copy | 400: the fields are exact, as before. Without a name the file is used and no row exists. |
 | GS-22 Personal key exchange | Exchange a Personal key without a copy, from an unconfirmed copy, then from the confirmed copy | 400, 503, then a token. |
 | GS-23 Model choice | A developer's own key is missing; another model is confirmed on one copy only, then on both | No model is offered until every listed copy confirms it; then that model is offered. |
+| GS-25 Model choice checks live state | A shared-key model is confirmed on both copies; then its key file is replaced, or the gateway's definition moves on while the rows still list the old guard | Offered while unchanged; not offered after either change, as in the preview path. |
 
 ## PostgreSQL roles
 
@@ -87,6 +88,7 @@ status roles with `default_transaction_read_only = on`, and one role without it.
 | --- | --- | --- |
 | GS-PG-01 After migrate | Before the command, the app tries to write a row | Refused by row-level security; it can read. |
 | GS-PG-02 Unsafe setup refused | Run the command as the app role; with a status role that isn't read-only by default; with a missing role; with a copy that names no role | Each is refused with its reason, changing nothing. |
+| GS-PG-10 No role belongs to another | Make a status role a member of the other copy's, the app a member of a status role, or the approvals role a member of the app, each without inheriting | Refused, naming the membership; after it is revoked the command succeeds. |
 | GS-PG-03 Idempotent | Run the command twice | Both succeed with the same result. |
 | GS-PG-04 Own row only | A status role writes its row without, then with, `BEGIN READ WRITE`; then inserts, upserts, updates and reads the other copy's row; renames its row; deletes it | Read-only refusal, then success (twice); the other copy's row can't be inserted, changed or seen; renaming and deleting are refused. |
 | GS-PG-05 No other table | The approvals role and a status role read accounts and migration history and insert an approval; the status role reads approvals | Permission denied each time. |

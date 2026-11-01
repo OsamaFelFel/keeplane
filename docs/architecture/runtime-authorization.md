@@ -289,8 +289,11 @@ The enroller, configured with `KEEPLANE_GATEWAY_COPY` and a status connection
    example on the first pass after the operator's enrollment;
 4. while a change is held, leaves the old confirmation in place: the app still
    refuses the changed model, because its fingerprint no longer matches;
-5. after any failed pass, or once no model is left, records that nothing is
-   confirmed.
+5. once no model is left, or when a pass fails after it disabled or changed
+   the guard (for example a readback that never completes), leaves nothing
+   confirmed. A pass that fails before touching the guard, such as an
+   unreadable gateway, keeps the last confirmation (ADR 027 "Failure"); the
+   app still checks the copy's live state on every call.
 
 Approvals are read on the read-only connection. The status write uses a
 second connection, as a role whose only grant is on the status table and

@@ -1,6 +1,6 @@
 """Each gateway copy's confirmed guard, recorded and checked per copy (ADR 027).
 
-Cases GS-01 to GS-22 in guard-status-cases.md. These run on SQLite with the
+Cases GS-01 to GS-25 in guard-status-cases.md. These run on SQLite with the
 fake gateway of test_model_enroller and the HTTP checks of
 test_installed_runtime. The PostgreSQL roles and row-level security are in
 test_guard_status_postgres.py.
@@ -33,6 +33,7 @@ from model_registry.fingerprints import fingerprint
 from model_registry.guard_status import GuardStatusRecorder
 from model_registry.management.commands import run_model_enroller
 from model_registry.models import GatewayGuardStatus, ModelApproval
+from model_registry.provider_keys import managed_key_digest
 
 from tests.integration.test_installed_personal_runtime import handoff
 from tests.integration.test_installed_runtime import send
@@ -158,9 +159,14 @@ def test_gs_05_a_guard_that_never_reads_back_leaves_nothing_confirmed(
     assert row()["confirmed_at"] is None
 
 
-def test_gs_06_a_failed_pass_records_that_nothing_is_confirmed(copy, monkeypatch):
+def test_gs_06_a_failed_pass_that_changed_nothing_keeps_the_confirmation(
+    copy, monkeypatch
+):
     f = copy
     f.enroller.reconcile()
+    before = row()
+    guard = (f.directory / "gateway.json").read_bytes(), declaration(f)
+    f.status.writes.clear()
 
     def unreadable(path):
         raise RuntimeInstallationUnavailable("synthetic")
@@ -168,7 +174,9 @@ def test_gs_06_a_failed_pass_records_that_nothing_is_confirmed(copy, monkeypatch
     monkeypatch.setattr(f.enroller, "_read", unreadable)
     with pytest.raises(RuntimeInstallationUnavailable):
         f.enroller.reconcile()
-    assert row()["confirmed"] is False
+    # ADR 027 "Failure": the guard wasn't touched, so its confirmation stands.
+    assert ((f.directory / "gateway.json").read_bytes(), declaration(f)) == guard
+    assert row() == before and f.status.writes == []
 
 
 def test_gs_07_if_the_row_cannot_be_written_the_guard_is_not_touched(copy):
@@ -488,6 +496,35 @@ def test_gs_23_model_choice_needs_every_listed_copy(choice_copy):
     f.store.remove("private")
     f.confirm()
     assert ask(f).json()["model_id"] is None
+
+
+@pytest.mark.parametrize("fault", ["none", "key-replaced", "definition-moved"])
+def test_gs_25_model_choice_applies_the_live_definition_and_shared_key_checks(
+    choice_copy, fault
+):
+    f = choice_copy
+    path = f.key_directory / ("key-" + "e" * 32)
+    path.write_text("synthetic-shared-provider-key")
+    public = next(r for r in f.resources if r["id"] == "public")
+    public["value"]["auth"] = {"key": {"value": {"file": str(path)}}}
+    fp = fingerprint("public", f.resources)
+    f.stores.catalog.approve("public", ["Confidential"], fp, key_choice="shared")
+    f.declaration["models"]["public"] = {
+        "fingerprint": fp,
+        "key_choice": "shared",
+        "key_name": path.name,
+        "key_digest": managed_key_digest(str(f.key_directory), str(path)),
+    }
+    f.confirm()
+    f.confirm(OTHER)
+    f.store.remove("private")
+    if fault == "key-replaced":
+        path.write_text("another-shared-provider-key")
+    elif fault == "definition-moved":
+        # Every copy still lists the old guard, but the gateway moved on.
+        public["value"]["params"]["model"] = "upstream-moved"
+    expected = "public" if fault == "none" else None
+    assert ask(f).json()["model_id"] == expected
 
 
 def test_gs_24_the_recorder_validates_what_it_records(db):

@@ -36,7 +36,8 @@ In Kubernetes the app cannot read the copy's private declaration, so the
 enroller also records it in the copy's guard-status row (see guard_status):
 before the guard moves the row says nothing is confirmed, and only after the
 new guard reads back does it list the enrolled models again. A pass that fails
-also records that nothing is confirmed. The Docker preview keeps no row.
+after that point leaves nothing confirmed; one that fails before touching the
+guard keeps the last confirmation. The Docker preview keeps no row.
 """
 
 import json
@@ -220,11 +221,17 @@ class DjangoModelEnroller:
             self.sleep(0.1)
 
     def reconcile(self):
+        # Set once this pass starts to disable or change the guard.
+        self._moving = False
         try:
             return self._reconcile()
         except Exception:
-            # A failed pass leaves nothing confirmed for this copy.
-            self._unconfirmed()
+            # ADR 027 "Failure": a pass that failed before touching the guard
+            # keeps the copy's last confirmation; one that disabled or changed
+            # it leaves nothing confirmed (the row was cleared first; this
+            # repeats that in case a later write moved it on).
+            if self._moving:
+                self._unconfirmed()
             raise
 
     def _unconfirmed(self):
@@ -301,6 +308,7 @@ class DjangoModelEnroller:
             # Refuse every protected call before the guard moves. In
             # Kubernetes the app reads the row, so it goes first: if it cannot
             # be written, the guard is not touched.
+            self._moving = True
             if self.status is not None:
                 self.status.clear()
             atomic_private(active, DISABLED)

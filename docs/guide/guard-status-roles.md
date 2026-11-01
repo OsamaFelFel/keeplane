@@ -50,8 +50,10 @@ ALTER ROLE keeplane_status_1 SET default_transaction_read_only = on;
 GRANT CONNECT ON DATABASE keeplane TO keeplane_status_1;
 ```
 
-Don't give these roles any other role, `SUPERUSER`, `BYPASSRLS` or
-`CREATEROLE`, and don't make them members of the migration role. If you revoked
+Don't give these roles `SUPERUSER`, `BYPASSRLS` or `CREATEROLE`, and don't make
+any of them, or the app role, a member of the migration role or of one another,
+even without inheriting its privileges (`NOINHERIT` or `INHERIT FALSE`): a
+member can switch to the other role. If you revoked
 `USAGE` on the schema from `PUBLIC`, also grant `USAGE` on Keeplane's schema to
 each role.
 
@@ -90,8 +92,9 @@ The command:
 
 It refuses, changing nothing, when a role doesn't exist yet, when it isn't run
 with the role that owns Keeplane's tables, when a role is a superuser, can
-bypass row-level security, can create roles or belongs to the migration role,
-or when the enroller or a status role doesn't have
+bypass row-level security or can create roles, when the app, enroller or a
+status role belongs to the migration role or to another of these roles (with or
+without inheriting), or when the enroller or a status role doesn't have
 `default_transaction_read_only = on`.
 
 Run it again, with the full list, whenever the number of gateway copies
@@ -136,9 +139,11 @@ confirmed row is refused.
 
 ## What you'll see
 
-- While an enroller swaps a copy's checks, or after a pass on that copy fails,
+- While an enroller swaps a copy's checks, or after a swap on that copy fails,
   its row says nothing is confirmed and protected calls through that copy are
-  refused until the next pass succeeds (every 2 seconds).
+  refused until the next pass succeeds (every 2 seconds). A pass that fails
+  before changing anything, for example while the gateway can't be read, keeps
+  the copy's last confirmation.
 - An edited or removed model waits about 3 minutes 16 seconds before its new
   check is in place, as in the Docker preview; the row keeps the old
   confirmation meanwhile, and the app refuses the changed model.

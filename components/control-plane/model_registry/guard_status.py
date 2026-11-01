@@ -100,23 +100,25 @@ def installed_gate(body, gateway, manifest_file, key_directory, copies):
 
 
 def confirmed_everywhere(model_id, fingerprint, key_choice, copies):
-    """Whether every listed copy's confirmed row lists this exact model.
+    """The model's declaration row when every listed copy confirmed it alike.
 
-    Used only to pick a model before a request is sent; the copy that serves
-    the request is checked again, in full, at its own checks.
+    Returns None unless every listed copy's confirmed row lists this exact
+    model with the same fingerprint, key choice and shared key. Used only to
+    pick a model before a request is sent; the copy that serves the request is
+    checked again, in full, at its own checks.
     """
     if getattr(copies, "misconfigured", False) or not copies.copies:
-        return False
+        return None
     names = []
     for copy in copies.copies:
         try:
             names.append((urlsplit(copy.base_url).hostname or "").split(".", 1)[0])
         except (AttributeError, ValueError):
-            return False
+            return None
     if not all(valid_copy_name(name) for name in names) or len(set(names)) != len(
         names
     ):
-        return False
+        return None
     try:
         rows = {
             row["copy_name"]: row
@@ -125,20 +127,23 @@ def confirmed_everywhere(model_id, fingerprint, key_choice, copies):
             ).values("copy_name", "declaration")
         }
     except DatabaseError:
-        return False
+        return None
+    entries = []
     for name in names:
         try:
             declaration = valid_declaration(rows[name]["declaration"])
         except (KeyError, ModelPolicyUnavailable):
-            return False
-        listed = declaration["models"].get(model_id)
-        if (
-            listed is None
-            or listed["fingerprint"] != fingerprint
-            or listed["key_choice"] != key_choice
-        ):
-            return False
-    return True
+            return None
+        entries.append(declaration["models"].get(model_id))
+    first = entries[0]
+    if (
+        first is None
+        or any(entry != first for entry in entries)
+        or first["fingerprint"] != fingerprint
+        or first["key_choice"] != key_choice
+    ):
+        return None
+    return dict(first)
 
 
 @storage_service

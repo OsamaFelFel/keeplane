@@ -199,6 +199,23 @@ class Command(BaseCommand):
     @staticmethod
     def _verify(cursor, app, enroller, status_roles):
         """Every privilege each role holds, from any source, is the intended one."""
+        # No listed role may belong to another, even without inheriting its
+        # privileges (NOINHERIT): it could SET ROLE and act as the other, for
+        # example as another copy's status role.
+        listed = [app, enroller, *status_roles]
+        cursor.execute(
+            "SELECT member.name, target.name "
+            "FROM unnest(%s::text[]) AS member(name), unnest(%s::text[]) AS target(name) "
+            "WHERE member.name <> target.name "
+            "AND pg_has_role(member.name, target.name, 'MEMBER')",
+            [listed, listed],
+        )
+        memberships = cursor.fetchall()
+        if memberships:
+            raise CommandError(
+                "These roles belong to another listed role; revoke the membership: "
+                + "; ".join(f"{member} in {target}" for member, target in sorted(memberships))
+            )
         allowed = {
             app: None,  # only the status table is checked for the app
             enroller: {(APPROVAL_TABLE, "SELECT")},

@@ -1,6 +1,6 @@
 """PostgreSQL roles for the guard-status table and the enroller (ADR 027).
 
-Cases GS-PG-01 to GS-PG-09 in guard-status-cases.md. Each run creates its own
+Cases GS-PG-01 to GS-PG-10 in guard-status-cases.md. Each run creates its own
 roles and database on a disposable server named by ``KEEPLANE_TEST_POSTGRES_*``
 (CI's PostgreSQL job sets them; elsewhere these cases are skipped), migrates
 as the migration role, runs ``configure_guard_status_access`` and then connects
@@ -225,6 +225,26 @@ def test_gs_pg_02_postgresql_the_command_refuses_an_unsafe_setup(cluster):
     assert missing.returncode != 0 and "create these roles" in missing.stderr
     bad = cluster.configure(f"{COPY}")
     assert bad.returncode != 0 and "POD=ROLE" in bad.stderr
+
+
+@pytest.mark.parametrize(
+    "member, target", [("status0", "status1"), ("app", "status0"), ("enroller", "app")]
+)
+def test_gs_pg_10_postgresql_a_listed_role_may_not_belong_to_another(
+    cluster, member, target
+):
+    # Even without inheriting privileges, a member could SET ROLE to the other.
+    member_role, target_role = cluster.roles[member], cluster.roles[target]
+    cluster.sql(f"ALTER ROLE {member_role} NOINHERIT")
+    cluster.sql(f"GRANT {target_role} TO {member_role}")
+    try:
+        refused = cluster.configure()
+        assert refused.returncode != 0
+        assert f"{member_role} in {target_role}" in refused.stderr
+    finally:
+        cluster.sql(f"REVOKE {target_role} FROM {member_role}")
+        cluster.sql(f"ALTER ROLE {member_role} INHERIT")
+    assert cluster.configure().returncode == 0
 
 
 def test_gs_pg_03_postgresql_the_command_is_idempotent(cluster):
