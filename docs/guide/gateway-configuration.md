@@ -18,6 +18,9 @@ management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
 In `existing` mode the customer-run gateway keeps its own key setup. To change
 the keys later, see [rotate the gateway keys](#rotate-the-gateway-keys).
+A customer-run gateway may use an `https` address; if its certificate comes
+from a private CA, give that CA in `gateway.caSecret`, as in
+[customer-run gateway over HTTPS](certificate-operations.md#customer-run-gateway-over-https).
 
 When the gateway runs as several copies, the app needs every copy's own
 management address in `GATEWAY_COPY_URLS`. A model change that adds or widens

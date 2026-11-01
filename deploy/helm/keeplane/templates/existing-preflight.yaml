@@ -17,6 +17,9 @@ spec:
       restartPolicy: Never
       automountServiceAccountToken: false
       securityContext:
+        # Secrets are mounted 0440; the group lets the non-root user read them,
+        # as in the migration Job.
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       {{- with .Values.app.imagePullSecrets }}
@@ -35,21 +38,26 @@ spec:
               value: {{ required "gateway.expectedVersion is required in existing mode" .Values.gateway.expectedVersion | quote }}
             - name: GATEWAY_PREFLIGHT_MODEL
               value: {{ .Values.gateway.preflightModel | quote }}
+            {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.env" . | trim | nindent 12 }}{{- end }}
             {{- if .Values.gateway.keysSecret }}
             - name: GATEWAY_RUNTIME_KEY_FILE
               value: /run/gateway-keys/runtime-key
             - name: GATEWAY_ADMIN_KEY_FILE
               value: /run/gateway-keys/admin-key
             {{- end }}
-          {{- if .Values.gateway.keysSecret }}
+          {{- if or .Values.gateway.keysSecret .Values.gateway.caSecret }}
           volumeMounts:
+            {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.mount" . | trim | nindent 12 }}{{- end }}
+            {{- if .Values.gateway.keysSecret }}
             - name: gateway-keys
               mountPath: /run/gateway-keys
               readOnly: true
+            {{- end }}
           {{- end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
+            runAsGroup: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
@@ -58,10 +66,13 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if .Values.gateway.keysSecret }}
+      {{- if or .Values.gateway.keysSecret .Values.gateway.caSecret }}
       volumes:
+        {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.volume" . | trim | nindent 8 }}{{- end }}
+        {{- if .Values.gateway.keysSecret }}
         - name: gateway-keys
           secret:
             secretName: {{ .Values.gateway.keysSecret | quote }}
+        {{- end }}
       {{- end }}
 {{- end }}

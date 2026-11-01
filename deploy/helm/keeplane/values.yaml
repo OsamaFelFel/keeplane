@@ -53,6 +53,12 @@ gateway:
   # (runtime-key-next, admin-key-next, runtime-key-hash-next,
   # admin-key-hash-next); see docs/guide/gateway-configuration.md.
   keysSecret: ""
+  # Existing mode only: a Secret with key ca.crt (one PEM CA certificate or a
+  # bundle) that the app and preflight Job trust, in addition to the image's
+  # system CAs, for an https gateway signed by a private CA. Mounted without
+  # subPath, so a renewed CA reaches the app without a restart; see
+  # docs/guide/certificate-operations.md.
+  caSecret: ""
   # Managed mode: how many gateway copies run (1-32). Each copy gets its own
   # private address and the app reads every one back after a model change.
   copies: 2

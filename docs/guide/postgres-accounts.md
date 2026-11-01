@@ -254,7 +254,10 @@ kubectl -n "$NS" exec deploy/"$RELEASE"-app -c app -- \
 It shows whether the database accepts the app's password and whether every
 gateway copy accepts the admin and runtime keys, and it lists the registered
 gateway models (with their definition fingerprints) and Keeplane's approvals.
-It never prints a password, key or key hash. Start only when `"passed": true`.
+It never prints a password, key or key hash. It also lists the database CA and
+the database server's certificate with their expiry dates, and fails if one has
+expired; see [check and renew certificates](certificate-operations.md).
+Start only when `"passed": true`.
 Its `"database"` line is one of:
 
 | `"database"` | Meaning |
@@ -398,6 +401,10 @@ without a restart. Trust both CAs while the server's certificate changes:
 4. Save `after.json`: `"database": "connected"`. All app pods stay ready.
 5. Put only `new-ca.crt` in the Secret the same way, wait for every pod as in
    step 2, and check again.
+
+`check_credentials` lists every CA in the file under
+`certificates.database_ca`, with its fingerprint and expiry date, so you can
+see which CAs the pods trust at each step.
 
 If the server switched before a pod read the bundle, that pod's new
 connections fail verification and `/health/ready` answers 503, so it takes no

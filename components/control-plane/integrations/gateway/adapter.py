@@ -1,11 +1,40 @@
 """Small agentgateway adapter for the model registry contract."""
 
 import json
+import os
+import ssl
 import time
 from pathlib import Path
 from urllib.parse import quote
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+
+GATEWAY_CA_FILE = "KEEPLANE_GATEWAY_CA_FILE"
+_contexts = {}
+
+
+def gateway_tls_context():
+    """The TLS trust for an https gateway: the system CAs plus the mounted CA.
+
+    KEEPLANE_GATEWAY_CA_FILE names a PEM file (one CA or a bundle) for a
+    customer-run gateway signed by a private CA. The file is checked on every
+    call and reloaded when it changes, so a renewed or rotated CA in a mounted
+    Secret is used without a restart. Raises OSError or ssl.SSLError when the
+    file is set but cannot be read.
+    """
+    path = os.environ.get(GATEWAY_CA_FILE, "")
+    if not path:
+        return ssl.create_default_context()
+    info = os.stat(path)
+    stamp = (path, info.st_mtime_ns, info.st_size, info.st_ino)
+    context = _contexts.get(stamp)
+    if context is None:
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=path)
+        _contexts.clear()
+        _contexts[stamp] = context
+    return context
 
 
 class AgentgatewayModelAdapter:
@@ -34,8 +63,14 @@ class AgentgatewayModelAdapter:
             request.add_header("Content-Type", "application/json")
         if key:
             request.add_header("Authorization", "Bearer " + key)
+        tls = {}
+        if self.base_url.startswith("https:"):
+            try:
+                tls["context"] = gateway_tls_context()
+            except (OSError, ssl.SSLError):
+                return 503, {"error": "Gateway CA unavailable"}
         try:
-            with urlopen(request, timeout=timeout) as response:
+            with urlopen(request, timeout=timeout, **tls) as response:
                 return response.status, json.load(response)
         except HTTPError as error:
             try:
