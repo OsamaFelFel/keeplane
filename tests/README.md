@@ -2,7 +2,7 @@
 
 | Folder | Purpose |
 | --- | --- |
-| `unit/` | Isolated Python rules and React form behavior |
+| `unit/` | Isolated Python rules, React form behavior and built web UI asset checks |
 | `integration/` | Django storage, transactions, gateway contracts and chart configuration |
 | `e2e/` | Journeys through running applications and deployment environments |
 | `browser/` | Playwright interaction, accessibility and reviewed visual baselines |
