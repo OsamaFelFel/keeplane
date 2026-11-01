@@ -3,7 +3,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ExclamationTriangleIcon, UpdateIcon } from '@radix-ui/react-icons'
-import { api, action, type User, type UserOperation } from '@/app/api'
+import { api, action, ApiError, type User, type UserOperation } from '@/app/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -18,11 +18,21 @@ const schema = z.object({
 })
 type Fields = z.infer<typeof schema>
 
+// Only Keeplane's own refusal (4xx), or a request the browser never sent, proves
+// nothing was saved. A server or proxy error after sending may follow a commit.
+function definiteRefusal(cause: unknown): cause is ApiError {
+  if (!(cause instanceof ApiError)) return false
+  if (cause.status >= 400 && cause.status < 500) return true
+  return cause.status === 0 && cause.message !== 'Keeplane did not answer.'
+}
+
 export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef }: {
   open: boolean; onOpenChange: (value: boolean) => void; onCreated: (user: User) => void
   returnFocusRef: RefObject<HTMLButtonElement | null>
 }) {
   const [phase, setPhase] = useState<'form' | 'saving' | 'no-answer'>('form')
+  // true when Keeplane answered but the answer doesn't confirm the result
+  const [unconfirmed, setUnconfirmed] = useState(false)
   const [error, setError] = useState('')
   const [checkError, setCheckError] = useState('')
   const operationId = useRef<string | null>(null)
@@ -47,12 +57,15 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
     const timeout = window.setTimeout(() => controller.abort(), 10_000)
     try {
       const user = await action<User>('/api/users', 'POST', { ...fields, operation_id: operationId.current }, controller.signal)
-      closeAfterSuccess(user)
+      // An answer that names no user (for example a body cut off at the time limit) proves nothing.
+      if (typeof user?.username === 'string') closeAfterSuccess(user)
+      else { setUnconfirmed(!controller.signal.aborted); setPhase('no-answer') }
     } catch (cause) {
-      if (controller.signal.aborted || !(cause instanceof Error) || cause.message === 'Keeplane did not answer.') {
-        setPhase('no-answer')
-      } else {
+      if (!controller.signal.aborted && definiteRefusal(cause)) {
         setPhase('form'); setError(cause.message)
+      } else {
+        setUnconfirmed(!controller.signal.aborted && cause instanceof ApiError && cause.status >= 500)
+        setPhase('no-answer')
       }
     } finally { window.clearTimeout(timeout) }
   }
@@ -96,7 +109,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
             <div className="flex min-h-9 items-center gap-2.5"><RadioGroupItem value="developer" id="create-developer" className="size-[18px]" /><Label htmlFor="create-developer" className="text-[15px]">Developer</Label></div>
           </RadioGroup>} />
         </fieldset>
-        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>It isn't clear whether {username} was created</AlertTitle><AlertDescription>Keeplane didn't answer in time. Check to find out.</AlertDescription></Alert>}
+        {phase === 'no-answer' && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>It isn't clear whether {username} was created</AlertTitle><AlertDescription>{unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</AlertDescription></Alert>}
         {error && <Alert className="border-input bg-background p-4"><ExclamationTriangleIcon className="size-5" /><AlertTitle>User wasn't created</AlertTitle><AlertDescription>{error} Nothing was saved. Check the details and try again.</AlertDescription></Alert>}
         {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
         {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
