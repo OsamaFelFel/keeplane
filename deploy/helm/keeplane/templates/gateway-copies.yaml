@@ -169,8 +169,10 @@ spec:
             name: {{ .Release.Name }}-config
         - name: tmp
           emptyDir: {}
+        {{- /* Secret volumes get mode 0440 unless they set a stricter one;
+        see keeplane.gatewayExtraVolumes. */}}
         {{- with $gw.extraVolumes }}
-        {{- toYaml . | nindent 8 }}
+        {{- include "keeplane.gatewayExtraVolumes" $gw | nindent 8 }}
         {{- end }}
       {{- with $gw.nodeSelector }}
       nodeSelector:
