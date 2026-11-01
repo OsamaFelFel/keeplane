@@ -39,8 +39,8 @@ names shown in brackets.
 | `app.postgres.migration.credentialsSecret` | `password` (migration role) | Migration Job only | Read-only file, mode 0440 |
 | `app.postgres.identitySecret` | `signing-secret`, `first-admin-password` | App copies; the Job receives only `signing-secret` | Read-only files, mode 0440 |
 | `app.postgres.caSecret` | `ca.crt` | App copies and migration Job | Read-only file, mode 0440 |
-| `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key`; with the managed gateway also `runtime-key-hash`, `admin-key-hash` | App copies and preflight Job; the managed gateway reads only the two hashes | Read-only directory `/run/gateway-keys`; the gateway gets the hashes through `secretKeyRef` |
-| `app.localTrial.firstAdminSecret` (`keeplane-first-admin`) | `first-admin-password` | Local trial app | Read-only file |
+| `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key`; with the managed gateway also `runtime-key-hash`, `admin-key-hash` | App copies and preflight Job; the managed gateway reads only the two hashes | Read-only directory `/run/gateway-keys`, files mode 0440; the gateway gets the hashes through `secretKeyRef` |
+| `app.localTrial.firstAdminSecret` (`keeplane-first-admin`) | `first-admin-password` | Local trial app | Read-only file, mode 0440 |
 | `gateway.caSecret` (existing mode, optional) | `ca.crt`: the CA of an `https` customer-run gateway | App copies and preflight Job, in addition to the image's system CAs | Read-only file, mode 0440 |
 | `ingress.tlsSecretName` | Standard TLS certificate and key | Your ingress controller | Referenced by the Ingress; see [renew the public HTTPS certificate](certificate-operations.md#renew-the-public-https-certificate) |
 | `app.imagePullSecrets` | Registry credentials | App and Job pods | Kubernetes pull secret |
@@ -48,7 +48,10 @@ names shown in brackets.
 The PostgreSQL app and migration Job need separate users and Secrets; Helm
 refuses a shared one. The app always connects with database TLS `verify-full`.
 Every Secret is mounted without `subPath`, so a renewed CA or rotated password
-reaches running pods. `manage.py check_credentials` reports the expiry date of
+reaches running pods. Every mounted Secret file has mode 0440: Kubernetes makes
+it owned by root, with the pod's group 65532 (`fsGroup`), so Keeplane's
+non-root user 65532 can read it, other users cannot, and nobody can change it
+([CM-01, CM-02](../../tests/integration/chart-credential-mounts-cases.md)). `manage.py check_credentials` reports the expiry date of
 each certificate Keeplane checks; see
 [check and renew certificates](certificate-operations.md).
 

@@ -2,6 +2,10 @@
 # uninstalls Keeplane with Helm. A cluster admin applies this once, after
 # creating the namespace; see docs/guide/kubernetes-namespace-permissions.md.
 #
+# It does not let anyone run commands inside the pods (pods/exec): the
+# documented checks, backups and restores that do so use the separate,
+# optional operations Role in operations-role.yaml.
+#
 # Replace the namespace "keeplane" and the RoleBinding subject before use.
 # Keep each rule's lists in the [a, b] form shown here: the chart check
 # (tests/integration/test_chart_namespace_permissions.py) reads this file and
@@ -22,6 +26,11 @@ rules:
   - apiGroups: [apps]
     resources: [deployments, statefulsets]
     verbs: [get, list, watch, create, update, patch, delete]
+  # Stop and start the app copies during a PostgreSQL restore (kubectl scale).
+  # Patching the Deployment above can already change its replica count.
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, update, patch]
   # The migration and existing-gateway preflight Jobs run as install hooks.
   - apiGroups: [batch]
     resources: [jobs]

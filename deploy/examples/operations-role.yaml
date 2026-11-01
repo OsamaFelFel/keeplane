@@ -1,0 +1,50 @@
+# Optional namespaced permissions for the person who runs Keeplane's documented
+# checks, backups and restores inside the app container with `kubectl exec` and
+# `kubectl cp` (for example `manage.py check_credentials` and `verify_restore`).
+# The installer Role (installer-role.yaml) deliberately leaves this out. See
+# docs/guide/kubernetes-namespace-permissions.md#operations-role.
+#
+# Running a command in the app container gives that person everything the app
+# can read: its database passwords, signing secret, gateway keys and the
+# developers' provider-key folder. Bind it only to people already trusted with
+# those Secrets, and consider binding it only while they need it.
+#
+# Replace the namespace "keeplane" and the RoleBinding subject before use.
+# Keep each rule's lists in the [a, b] form shown here: the chart check
+# (tests/integration/test_chart_namespace_permissions.py) reads this file and
+# checks the guides' kubectl commands against it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keeplane-operations
+  namespace: keeplane
+rules:
+  # Find the app pods: `kubectl exec deploy/<release>-app` reads the
+  # Deployment and lists its pods; some steps pick a pod by label.
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+  # Run a command in a pod (kubectl exec and kubectl cp). kubectl opens the
+  # stream with a POST (create) or, from kubectl 1.31, a WebSocket GET, which
+  # API servers before Kubernetes 1.35 authorize as get.
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create, get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keeplane-operations
+  namespace: keeplane
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keeplane-operations
+subjects:
+  # Replace with your operators' group, user or ServiceAccount.
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: keeplane-operators

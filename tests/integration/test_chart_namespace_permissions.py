@@ -1,8 +1,9 @@
 """The chart stays in one namespace, and the example installer Role covers it.
 
-Cases are described in chart-namespace-permissions-cases.md. NSP-04 reads only
-the example Role and runs everywhere; the other cases render the chart with
-Helm and are skipped when Helm is missing.
+Cases are described in chart-namespace-permissions-cases.md. NSP-04, NSP-06,
+NSP-07 and NSP-08 read only the example Roles and the guides and run
+everywhere; the other cases render the chart with Helm and are skipped when
+Helm is missing.
 """
 
 import json
@@ -18,6 +19,9 @@ from tests.support.helm import require_helm
 ROOT = Path(__file__).resolve().parents[2]
 CHART = "deploy/helm/keeplane"
 ROLE_FILE = ROOT / "deploy/examples/installer-role.yaml"
+OPERATIONS_ROLE_FILE = ROOT / "deploy/examples/operations-role.yaml"
+GUIDES = ROOT / "docs/guide"
+PERMISSIONS_GUIDE = GUIDES / "kubernetes-namespace-permissions.md"
 CATALOG = Path(__file__).with_name("chart-namespace-permissions-cases.md")
 NAMESPACE = "keeplane-permissions"
 IMAGE = "registry.example.test/keeplane@sha256:" + "a" * 64
@@ -56,6 +60,15 @@ FOLLOW = {("", "pods"): READ, ("", "events"): READ, ("", "pods/log"): {"get"},
           ("apps", "replicasets"): READ}
 # Never acceptable in the installer Role.
 DANGEROUS_VERBS = {"*", "escalate", "bind", "impersonate", "approve", "sign"}
+# Subresources of the chart's own kinds the installer Role may write.
+INSTALLER_SUBRESOURCES = {("apps", "deployments/scale"): {"get", "update", "patch"}}
+# Subresources that run commands in, attach to or tunnel into a pod.
+POD_COMMANDS = {("", "pods/exec"), ("", "pods/attach"), ("", "pods/portforward"),
+                ("", "pods/proxy"), ("", "services/proxy"), ("", "nodes/proxy")}
+# Exactly what the optional operations Role grants: find the app pods and run
+# a command in them, nothing else.
+OPERATIONS = {("", "pods"): {"get", "list"}, ("apps", "deployments"): {"get"},
+              ("", "pods/exec"): {"create", "get"}}
 CLUSTER_SCOPED_RESOURCES = {
     "namespaces", "nodes", "persistentvolumes", "storageclasses", "ingressclasses",
     "priorityclasses", "customresourcedefinitions", "clusterroles",
@@ -105,13 +118,13 @@ def flow_list(text):
     return [item.strip().strip("\"'") for item in inner[1:-1].split(",") if item.strip()]
 
 
-def role_documents():
-    return documents(ROLE_FILE.read_text())
+def role_documents(path=ROLE_FILE):
+    return documents(path.read_text())
 
 
-def role_rules():
+def role_rules(path=ROLE_FILE):
     """The Role's rules as (apiGroups, resources, verbs) triples."""
-    roles = [doc for doc in role_documents() if top(doc, "kind") == "Role"]
+    roles = [doc for doc in role_documents(path) if top(doc, "kind") == "Role"]
     assert len(roles) == 1, "The example must hold exactly one Role"
     lines = roles[0].splitlines()
     start = lines.index("rules:")
@@ -133,10 +146,10 @@ def role_rules():
     return [(rule["apiGroups"], rule["resources"], rule["verbs"]) for rule in rules]
 
 
-def granted():
+def granted(path=ROLE_FILE):
     """(group, resource) -> verbs granted by the Role."""
     found = {}
-    for groups, resources, verbs in role_rules():
+    for groups, resources, verbs in role_rules(path):
         for group in groups:
             for resource in resources:
                 found.setdefault((group, resource), set()).update(verbs)
@@ -313,29 +326,41 @@ def test_nsp_03_pods_get_no_kubernetes_api_token(rendered):
     assert all(key.endswith("/Deployment/nsp") for key in idle), idle
 
 
-def test_nsp_04_installer_role_is_namespaced_and_bounded():
-    kinds = [top(doc, "kind") for doc in role_documents()]
+def assert_namespaced_role_and_binding(path, name):
+    kinds = [top(doc, "kind") for doc in role_documents(path)]
     assert sorted(kinds) == ["Role", "RoleBinding"], kinds
-    for doc in role_documents():
+    for doc in role_documents(path):
         assert top(doc, "apiVersion") == "rbac.authorization.k8s.io/v1"
         assert metadata(doc, "namespace"), "Each object names its namespace"
-    binding = next(doc for doc in role_documents() if top(doc, "kind") == "RoleBinding")
+        assert metadata(doc, "name") == name, (path.name, metadata(doc, "name"))
+    binding = next(doc for doc in role_documents(path) if top(doc, "kind") == "RoleBinding")
     assert re.search(r"^roleRef:\n(?:  .*\n)*?  kind: Role\n", binding, re.M), binding
+    assert re.search(r"^roleRef:\n(?:  .*\n)*?  name: " + name + r"\n", binding, re.M), binding
     assert "ClusterRole" not in binding
-    allowed_writes = {resource for resource in KIND_RESOURCE.values()} | {("", "secrets")}
-    for group_resource, verbs in granted().items():
+    for group_resource, verbs in granted(path).items():
         group, resource = group_resource
         assert "*" not in (group, resource), group_resource
         assert not verbs & DANGEROUS_VERBS, (group_resource, verbs)
-        assert verbs <= LIFECYCLE, (group_resource, verbs)
         assert group != "rbac.authorization.k8s.io", group_resource
         assert resource not in CLUSTER_SCOPED_RESOURCES, group_resource
+
+
+def test_nsp_04_installer_role_is_namespaced_and_bounded():
+    assert_namespaced_role_and_binding(ROLE_FILE, "keeplane-installer")
+    allowed_writes = ({resource for resource in KIND_RESOURCE.values()}
+                      | {("", "secrets")} | set(INSTALLER_SUBRESOURCES))
+    for group_resource, verbs in granted().items():
+        assert verbs <= LIFECYCLE, (group_resource, verbs)
+        # Running commands in pods is left to the optional operations Role.
+        assert group_resource not in POD_COMMANDS, group_resource
         if verbs - READ:
             assert group_resource in allowed_writes, ("writes beyond the chart", group_resource)
         else:
             assert group_resource in FOLLOW or group_resource in allowed_writes, group_resource
     for group_resource, verbs in FOLLOW.items():
         assert verbs <= granted().get(group_resource, set()), group_resource
+    for group_resource, verbs in INSTALLER_SUBRESOURCES.items():
+        assert granted().get(group_resource) == verbs, group_resource
 
 
 def test_nsp_05_role_covers_every_rendered_kind(rendered):
@@ -348,6 +373,158 @@ def test_nsp_05_role_covers_every_rendered_kind(rendered):
     missing = {f"{g or 'core'}/{r}": sorted(LIFECYCLE - grants.get((g, r), set()))
                for g, r in sorted(needed) if not LIFECYCLE <= grants.get((g, r), set())}
     assert not missing, missing
+
+
+def test_nsp_06_operations_role_only_runs_commands_in_pods():
+    assert_namespaced_role_and_binding(OPERATIONS_ROLE_FILE, "keeplane-operations")
+    grants = granted(OPERATIONS_ROLE_FILE)
+    # No Secrets through the API, no writes, nothing beyond finding the pods.
+    assert grants == OPERATIONS, grants
+    assert ("", "pods/exec") not in granted(), "the installer Role must not run commands"
+
+
+# ---------------------------------------------------------------------------
+# The guides' kubectl commands, read as text.
+
+# What each kubectl action in the guides needs: (group, resource) -> verbs.
+EXEC = {("", "pods/exec"): {"create", "get"}, ("", "pods"): {"get", "list"},
+        ("apps", "deployments"): {"get"}}
+ACTIONS = {
+    "exec": EXEC,
+    "cp": {("", "pods/exec"): {"create", "get"}, ("", "pods"): {"get"}},
+    "get pods": {("", "pods"): {"get", "list"}},
+    "logs": {("", "pods/log"): {"get"}, ("", "pods"): {"list"}},
+    "get secret": {("", "secrets"): {"get"}},
+    "create secret": {("", "secrets"): {"create"}},
+    "apply": {("", "secrets"): {"get", "create", "patch"}},
+    "patch secret": {("", "secrets"): {"get", "patch"}},
+    "rollout restart": {("apps", "deployments"): {"get", "patch"},
+                        ("apps", "statefulsets"): {"get", "patch"}},
+    "rollout status": {("apps", "deployments"): {"get", "watch"},
+                       ("apps", "replicasets"): {"list"}},
+    "scale": {("apps", "deployments/scale"): {"get", "patch"}},
+    "delete networkpolicy": {("networking.k8s.io", "networkpolicies"): {"delete"}},
+}
+# How the permissions guide's table names each action.
+TABLE_NAMES = {"get pods": "kubectl get pods", "get secret": "kubectl get secret",
+               "create secret": "kubectl create secret", "patch secret": "kubectl patch secret",
+               "rollout restart": "kubectl rollout restart",
+               "rollout status": "kubectl rollout status",
+               "delete networkpolicy": "kubectl delete networkpolicy"}
+GLOBAL_FLAGS_WITH_VALUE = {"-n", "--namespace", "--context"}
+OPERATIONS_LINK = "kubernetes-namespace-permissions.md#operations-role"
+
+
+def code_text(markdown):
+    """Shell blocks and inline code of a guide, continuations joined."""
+    parts = [re.sub(r"\\\n\s*", " ", block) for language, block in
+             re.findall(r"^ *```(\w*)\n(.*?)^ *```", markdown, re.DOTALL | re.M)
+             if language in ("", "sh", "bash")]
+    prose = re.sub(r"^ *```.*?^ *```", "", markdown, flags=re.DOTALL | re.M)
+    parts += re.findall(r"`([^`\n]*kubectl[^`\n]*)`", prose)
+    return "\n".join(parts)
+
+
+def kubectl_commands(markdown):
+    """(action, command text) for every kubectl call; None for an admin's local one."""
+    found = []
+    for line in code_text(markdown).splitlines():
+        for segment in line.split("kubectl")[1:]:
+            command = re.split(r"[|;)]|&&", segment)[0]
+            words = command.split()
+            if any(word.startswith("--kubeconfig") for word in words):
+                continue  # the local kind trial, run as its cluster admin
+            rest, skip = [], False
+            for word in words:
+                if skip:
+                    skip = False
+                elif word in GLOBAL_FLAGS_WITH_VALUE and not rest:
+                    skip = True
+                elif not word.startswith("-") or rest:
+                    rest.append(word)
+            if not rest:
+                continue
+            verb = rest[0]
+            if verb in ("exec", "cp", "apply", "logs", "scale"):
+                action = verb
+            elif verb == "rollout" and len(rest) > 1:
+                action = "rollout " + rest[1]
+            elif verb in ("get", "create", "patch", "delete") and len(rest) > 1:
+                noun = {"pod": "pods"}.get(rest[1], rest[1])
+                action = verb + " " + noun
+            else:
+                action = " ".join(rest[:2])
+            found.append((action, "kubectl" + command.rstrip()))
+    return found
+
+
+def guide_commands():
+    """{guide name: [(action, command)]} for every guide but the permissions one."""
+    return {path.name: kubectl_commands(path.read_text())
+            for path in sorted(GUIDES.glob("*.md")) if path != PERMISSIONS_GUIDE}
+
+
+def role_for(action):
+    needs = ACTIONS[action]
+    covered = {name: all(verbs <= grants.get(resource, set())
+                         for resource, verbs in needs.items())
+               for name, grants in (("Installer", granted()),
+                                    ("Operations", granted(OPERATIONS_ROLE_FILE)))}
+    if all(covered.values()):
+        return "Either"
+    return next((name for name, ok in covered.items() if ok), None)
+
+
+def test_nsp_07_every_guide_command_is_covered_by_a_role_the_guide_names():
+    by_guide = guide_commands()
+    seen, unknown, uncovered, unnamed = set(), [], [], []
+    for guide, commands in by_guide.items():
+        text = (GUIDES / guide).read_text()
+        for action, command in commands:
+            if action not in ACTIONS:
+                unknown.append((guide, command))
+                continue
+            seen.add(action)
+            role = role_for(action)
+            if role is None:
+                uncovered.append((guide, command))
+            elif role == "Operations" and OPERATIONS_LINK not in text:
+                unnamed.append((guide, command))
+        # The guides apply only a Secret made with `kubectl create secret`.
+        code = code_text(text)
+        applies = re.findall(r"kubectl[^|\n]* apply ", code)
+        secret_applies = re.findall(
+            r"kubectl[^|\n]* create secret [^|\n]*--dry-run=client -o yaml \| "
+            r"kubectl[^|\n]* apply -f -", code)
+        assert len(applies) == len(secret_applies), (guide, applies)
+    print(json.dumps({guide: sorted({a for a, _ in commands})
+                      for guide, commands in by_guide.items() if commands}, indent=2))
+    assert not unknown, ("Add the permissions this command needs to ACTIONS and to "
+                         "the guide's table", unknown)
+    assert not uncovered, ("Neither example Role grants this command", uncovered)
+    assert not unnamed, ("Link the operations Role from this guide", unnamed)
+    # The guides that run checks in pods are found, so the scan is not empty.
+    assert {"exec", "cp", "scale", "patch secret", "rollout restart"} <= seen, seen
+    for guide in ("backup-and-restore.md", "certificate-operations.md",
+                  "postgres-accounts.md", "gateway-configuration.md"):
+        assert any(action == "exec" for action, _ in by_guide[guide]), guide
+
+
+def test_nsp_08_permissions_guide_table_matches_the_roles_and_guides():
+    text = PERMISSIONS_GUIDE.read_text()
+    section = text.split("### Which Role each command needs", 1)[1].split("\n## ", 1)[0]
+    rows = {}
+    for line in section.splitlines():
+        match = re.fullmatch(r"\| `(kubectl [a-z ]+?)`[^|]*\| [^|]+ \| (\w+) \|", line)
+        if match:
+            rows[match.group(1)] = match.group(2)
+    used = {action for commands in guide_commands().values() for action, _ in commands}
+    expected = {TABLE_NAMES.get(action, "kubectl " + action): role_for(action)
+                for action in used}
+    assert rows == expected, (rows, expected)
+    # Both example files are linked from the guide.
+    for path in (ROLE_FILE, OPERATIONS_ROLE_FILE):
+        assert "../../deploy/examples/" + path.name in text, path.name
 
 
 def test_catalog_lists_exactly_these_cases():

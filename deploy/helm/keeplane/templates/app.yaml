@@ -49,7 +49,9 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
-      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled }}
+      {{- /* Secret files are mounted 0440 and owned by root; this group lets
+      the non-root app user read them. */}}
+      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled .Values.gateway.keysSecret .Values.gateway.caSecret }}
         fsGroup: 65532
         fsGroupChangePolicy: OnRootMismatch
       {{- end }}
@@ -265,6 +267,9 @@ spec:
         - name: gateway-keys
           secret:
             secretName: {{ .Values.gateway.keysSecret | quote }}
+            # Owner and group read only; the pod's fsGroup lets the app user
+            # read it. Every key is mounted, so a rotation's next keys appear.
+            defaultMode: 0440
         {{- end }}
         {{- if .Values.app.localTrial.enabled }}
         - name: state
@@ -276,6 +281,7 @@ spec:
         - name: first-admin
           secret:
             secretName: {{ required "app.localTrial.firstAdminSecret is required" .Values.app.localTrial.firstAdminSecret }}
+            defaultMode: 0440
         {{- if eq .Values.gateway.mode "managed" }}
         - name: gateway-config
           configMap:

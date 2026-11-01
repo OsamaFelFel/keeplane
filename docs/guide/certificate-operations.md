@@ -21,10 +21,13 @@ certificate to renew. Keeplane never creates or renews a certificate itself.
 
 ## Before you start
 
-- `kubectl` access to the release namespace that can update Secrets and run
-  `kubectl exec` in the app pods. The example
-  [installer Role](kubernetes-namespace-permissions.md) covers Secrets but not
-  `pods/exec`.
+- `kubectl` access to the release namespace. Reading, creating and updating
+  Secrets needs the example
+  [installer Role](kubernetes-namespace-permissions.md#installer-role).
+  Running `check_credentials` with `kubectl exec` in the app pods needs
+  `pods/exec`, which only the optional
+  [operations Role](kubernetes-namespace-permissions.md#operations-role)
+  grants ([which Role each command needs](kubernetes-namespace-permissions.md#which-role-each-command-needs)).
 - `openssl` on your workstation.
 - The certificate and key you are installing, as PEM files.
 

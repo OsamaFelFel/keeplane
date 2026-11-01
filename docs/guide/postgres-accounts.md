@@ -242,6 +242,13 @@ usually within a minute or two. The chart mounts every credential without
 
 ### Before and after every rotation
 
+The checks below run inside the app pods with `kubectl exec`, which needs
+`pods/exec` from the optional
+[operations Role](kubernetes-namespace-permissions.md#operations-role).
+Changing a Secret, reading the app's logs and restarting the app copies need
+the [installer Role](kubernetes-namespace-permissions.md#installer-role)
+([which Role each command needs](kubernetes-namespace-permissions.md#which-role-each-command-needs)).
+
 Set your namespace and release once, then save what Keeplane can see:
 
 ```sh

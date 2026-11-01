@@ -73,6 +73,15 @@ What each part means for a restore:
   `deploy/<release>-app`. Each check below is shown both ways: in the preview
   it's `python manage.py <command>` (the app's working folder is `/app`), in
   Kubernetes `python /app/manage.py <command>`.
+- In Kubernetes, the permissions for each step: `kubectl exec` and `kubectl cp`
+  (every check, the SQLite copies and the provider-key folder) need
+  `pods/exec`, granted by the optional
+  [operations Role](kubernetes-namespace-permissions.md#operations-role).
+  Keeping and replacing Secrets, `kubectl scale`, `kubectl rollout restart` and
+  `helm upgrade` need the
+  [installer Role](kubernetes-namespace-permissions.md#installer-role). A
+  restore uses both
+  ([which Role each command needs](kubernetes-namespace-permissions.md#which-role-each-command-needs)).
 - For PostgreSQL: `pg_dump` and `pg_restore` at least as new as the server, and
   the migration role's credentials (it owns the tables). The restricted app role
   can't make a complete dump.

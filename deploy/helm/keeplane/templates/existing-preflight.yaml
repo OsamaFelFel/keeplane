@@ -73,6 +73,7 @@ spec:
         - name: gateway-keys
           secret:
             secretName: {{ .Values.gateway.keysSecret | quote }}
+            defaultMode: 0440
         {{- end }}
       {{- end }}
 {{- end }}
