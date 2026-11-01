@@ -11,14 +11,14 @@ const classes = [
   { id: 'confidential', name: 'Confidential', approved_model_ids: [], project_count: 0 },
 ]
 
-function server(detection: { enabled: boolean; class_id: string | null }) {
+function server(detection: { enabled: boolean; class_id: string | null; available?: boolean }) {
   const sent: object[] = []
   const request = vi.fn(async (path: string, init: RequestInit = {}) => {
     if (path === '/api/auth-options') return response({ csrf_token: 'token' })
     if (path === '/api/data-classes/detection') {
       const body = JSON.parse(String(init.body))
       sent.push(body); Object.assign(detection, body)
-      return response(detection)
+      return response({ enabled: detection.enabled, class_id: detection.class_id })
     }
     return response({ enabled: true, classes, detection: { ...detection } })
   })
@@ -28,7 +28,7 @@ function server(detection: { enabled: boolean; class_id: string | null }) {
 
 // DC-UI-05 (ST20): detection is off by default and handles requests as Confidential.
 test('detection starts off with Confidential chosen', async () => {
-  server({ enabled: false, class_id: 'confidential' })
+  server({ enabled: false, class_id: 'confidential', available: true })
   render(<DataClassesPage />)
   const toggle = await screen.findByRole('switch', { name: 'Detect personal data in requests' })
   expect((toggle as HTMLInputElement).checked).toBe(false)
@@ -38,7 +38,7 @@ test('detection starts off with Confidential chosen', async () => {
 
 // DC-UI-06: turning detection on and choosing another class send the setting.
 test('an admin turns detection on and picks another class', async () => {
-  const sent = server({ enabled: false, class_id: 'confidential' })
+  const sent = server({ enabled: false, class_id: 'confidential', available: true })
   const user = userEvent.setup()
   render(<DataClassesPage />)
   await user.click(await screen.findByRole('switch', { name: 'Detect personal data in requests' }))
@@ -55,4 +55,25 @@ test('detection is hidden while data classes are off', async () => {
   render(<DataClassesPage />)
   await screen.findByRole('switch', { name: 'Use data classes' })
   expect(screen.queryByRole('switch', { name: 'Detect personal data in requests' })).toBeNull()
+})
+
+// DC-UI-08: without the detector the switch can't be turned on and the page says why.
+test('detection that is not installed cannot be turned on', async () => {
+  const sent = server({ enabled: false, class_id: 'confidential', available: false })
+  render(<DataClassesPage />)
+  const toggle = await screen.findByRole('switch', { name: 'Detect personal data in requests' }) as HTMLInputElement
+  expect(toggle.disabled).toBe(true)
+  expect(screen.getByText("Personal-data detection isn't installed. Install it, then turn this on.")).toBeTruthy()
+  expect(sent).toEqual([])
+})
+
+// DC-UI-09: if it disappears after being on, the admin can still turn it off.
+test('detection that is on stays switchable off when the detector is gone', async () => {
+  const sent = server({ enabled: true, class_id: 'confidential', available: false })
+  const user = userEvent.setup()
+  render(<DataClassesPage />)
+  const toggle = await screen.findByRole('switch', { name: 'Detect personal data in requests' }) as HTMLInputElement
+  expect(toggle.disabled).toBe(false)
+  await user.click(toggle)
+  await waitFor(() => expect(sent).toEqual([{ enabled: false, class_id: 'confidential' }]))
 })

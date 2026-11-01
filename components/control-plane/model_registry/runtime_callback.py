@@ -11,6 +11,7 @@ from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer
 from accounts.cli_credentials import RuntimeIdentity
 from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
+from common.middleware import CHECK_LIMIT
 from django.conf import settings
 from django.db import DatabaseError
 from django.views.decorators.cache import never_cache
@@ -156,7 +157,7 @@ def callback_metadata(request, *, selected=False, with_project=True):
 
 # The largest request check read: metadata plus the request's messages.
 # A larger one is refused before any decision, never passed on unchecked.
-MAX_CHECKED_BODY = 4 * 1024 * 1024
+MAX_CHECKED_BODY = CHECK_LIMIT
 MISSING = object()
 
 

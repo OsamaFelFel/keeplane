@@ -23,13 +23,25 @@ class StorageFailureMiddleware(MiddlewareMixin):
             return JsonResponse({"error": "Request is too large"}, status=413)
 
 
+# Gateway request checks may carry the request's messages for personal-data
+# detection (Spec 005 ST20); the views bound what they read to the same limit.
+CHECK_PATHS = frozenset({
+    "/internal/runtime/authorize",
+    "/internal/runtime/authorize/selected",
+    "/internal/runtime/installed/entry",
+    "/internal/runtime/installed/selected",
+})
+CHECK_LIMIT = 8 * 1024 * 1024
+
+
 class RequestLimitMiddleware(MiddlewareMixin):
     def process_request(self, request):
         try:
             length = int(request.META.get("CONTENT_LENGTH") or 0)
         except ValueError:
             return JsonResponse({"error": "Invalid request length"}, status=400)
-        if length < 0 or length > 64 * 1024:
+        limit = CHECK_LIMIT if request.path in CHECK_PATHS else 64 * 1024
+        if length < 0 or length > limit:
             return JsonResponse({"error": "Request is too large"}, status=413)
 
 

@@ -264,9 +264,37 @@ def test_pd_07_request_text_reads_every_text_part():
     None, [], "text", [1], [{"content": 5}],
     [{"content": [{"type": "image_url", "image_url": {"url": "data:"}}]}],
     [{"content": "x", "tool_calls": [{"function": "bad"}]}],
+    # Fields Keeplane doesn't read never pass unchecked.
+    [{"role": "user", "content": "x", "audio": {"data": "AAAA"}}],
+    [{"role": "user", "content": "x", "metadata": {"owner": "Amara"}}],
+    [{"role": "user", "content": [{"type": "text", "text": "x", "extra": "Amara"}]}],
+    [{"role": "assistant", "tool_calls": {"id": "1"}}],
+    [{"role": "assistant", "tool_calls": "call"}],
+    [{"role": "assistant", "tool_calls": [{"id": "1", "function": {"name": "f", "x": "y"}}]}],
+    [{"role": "assistant", "function_call": "lookup"}],
+    [{"role": "assistant", "refusal": 5}],
+    [{"role": 5, "content": "x"}],
 ])
 def test_pd_07_unreadable_messages_are_not_checked(messages):
     assert request_text(messages) is None
+
+
+def test_pd_07_legacy_function_calls_and_refusals_are_read():
+    text = request_text([
+        {"role": "assistant", "content": None, "refusal": "I won't email " + NAME,
+         "function_call": {"name": "lookup", "arguments": '{"who": "a@example.com"}'}},
+        {"role": "assistant", "content": [{"type": "refusal", "refusal": "No, 020 7946 0958"}]},
+        {"role": "function", "name": "lookup", "content": "done", "metadata": None},
+    ])
+    for piece in (NAME, "lookup", "a@example.com", "020 7946 0958", "done"):
+        assert piece in text
+
+
+def test_pd_07_a_non_list_tool_calls_field_holds_rather_than_errors():
+    inspector = ready(Fake())
+    for calls in ("call", {"id": "1"}, 7):
+        verdict = inspector.check(request_text([{"role": "assistant", "tool_calls": calls}]))
+        assert verdict.held and verdict.reason == NOT_SENT
 
 
 # PD-08 Request text never reaches logs or verdicts.

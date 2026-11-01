@@ -33,6 +33,22 @@ NER_IGNORE = ["ORGANIZATION", "CARDINAL", "EVENT", "LANGUAGE", "LAW", "MONEY",
               "ORDINAL", "PERCENT", "PRODUCT", "QUANTITY", "WORK_OF_ART"]
 
 
+def installed(model):
+    """Whether the detector and its model are installed, without loading them."""
+    from importlib.util import find_spec
+
+    try:
+        return (
+            find_spec("presidio_analyzer") is not None
+            and find_spec("spacy") is not None
+            and isinstance(model, str)
+            and bool(model)
+            and (Path(model).is_dir() or find_spec(model) is not None)
+        )
+    except (ImportError, ValueError):
+        return False
+
+
 class DetectorUnavailable(Exception):
     """The detector or its model cannot be loaded here."""
 

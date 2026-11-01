@@ -2,8 +2,9 @@
 
 The experimental policy-decision endpoint checks current Keeplane records. It
 forwards no model traffic and returns no provider key. It accepts the request's
-`messages` only for [personal-data detection](#personal-data-detection), never
-stores or logs them, and ignores them while detection is off. Deployment and
+`messages` only from an install set up for
+[personal-data detection](#personal-data-detection), never stores or logs them,
+and ignores them while detection is off. Deployment and
 inference-route wiring are separate work; this does not select a release gateway.
 
 An operator must configure `RUNTIME_AUTHORIZER_KEY_FILE` with an absolute path to
@@ -24,7 +25,7 @@ Content-Type: application/json
 
 The body must contain exactly these two fields, plus optionally the request's
 `messages`. Metadata alone must fit within 4 KiB; with `messages` the body may
-be up to 4 MiB. Success
+be up to 8 MiB (every other route keeps the app's 64 KiB request limit). Success
 returns 200 with only `actor_id`, canonical `project_id` and `model_id`. The actor,
 project access, class and current model setup come from the server. Active
 organization accounts may use registered projects; usage is not an access grant,
@@ -515,9 +516,20 @@ sequenceDiagram
 
 Detection is off by default and applies only while data classes are on. When
 an admin turns it on, both request checks (entry and selected model, in managed
-and customer-run modes) inspect the request's `messages` before deciding. The
-managed installer's CEL bodies always carry them; the server ignores them while
-detection is off.
+and customer-run modes) inspect the request's `messages` before deciding.
+
+The managed installer adds `messages` to its CEL check bodies only when the app
+has `KEEPLANE_PERSONAL_DATA_DETECTION=1`. Without it, the installed gateway
+configuration and every check body are exactly as before detection existed,
+and the admin switch can't be turned on. The switch also needs the detector
+and model to be installed. The expression is
+`size(request.body) <= 1048576 ? json(request.body).messages : null`, so a body
+over 1 MiB sends `null` and is held, never refused for its size. Whether the
+pinned gateway can read `request.body` in the backend-targeted selected check
+has not yet been verified against the native gateway; if it can't, the check
+fails and, with `failureMode: deny`, every request on an install with this
+setting is refused. Run the native runtime cases with the setting on before
+using it.
 
 ```mermaid
 flowchart LR
@@ -533,7 +545,9 @@ flowchart LR
 A held request may use only models approved for the detection class **and**
 for the project's own class, so detection never relaxes a project
 restriction. The final model still passes every other check. A refusal says
-`This request is handled as <class>, and this model isn't approved for it`.
+`This request is handled as <class> and <model> isn't approved for it, so
+nothing was sent. Run it with a model approved for <class>, or ask your admin
+to approve one.`
 The response body is unchanged: actor, project and model IDs only. The CLI's
 model choice, alternatives and task routing never see a request, so they do
 not apply detection; the gateway checks do.
@@ -549,7 +563,10 @@ requests are checked in overlapping pieces of about 2 000 characters, stopping
 at the first piece with personal data; the code-aware filter and the card and
 phone rules see the whole request. Requests longer than about 4 000 characters
 often cannot finish in time and are held; over 100 000 characters they are held
-without a check. Detection runs before the policy transaction, so a slow check
+without a check. Message fields Keeplane doesn't read (anything but role,
+content text and refusal parts, name, refusal, tool calls, tool call IDs and
+legacy function calls), image parts and malformed fields make the request
+unreadable, so it is held. Detection runs before the policy transaction, so a slow check
 does not hold the policy lock. A request that was not inspected because
 detection read as off is held if detection is on by the time the policy is read.
 

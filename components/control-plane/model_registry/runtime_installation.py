@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import ProxyHandler, build_opener
 
 from common.storage import storage_service
+from django.conf import settings
 from integrations.gateway.applied import (
     MAX_APPLIED_BYTES,
     NoRedirect,
@@ -261,6 +262,7 @@ class DjangoRuntimeInstallation:
             targets,
             callback_host=self.callback_host,
             personal_providers=providers,
+            send_messages=settings.PERSONAL_DATA_DETECTION_INSTALLED,
         )
         expected = deepcopy(generated)
         expected["llm"]["models"].extend(deepcopy([row["value"] for row in resources]))

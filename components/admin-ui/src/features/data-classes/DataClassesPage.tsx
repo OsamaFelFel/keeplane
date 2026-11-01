@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 type DataClass = { id: string; name: string; approved_model_ids: string[]; project_count: number }
-type Detection = { enabled: boolean; class_id: string | null }
+type Detection = { enabled: boolean; class_id: string | null; available?: boolean }
 type ClassListing = { enabled: boolean; classes: DataClass[]; detection?: Detection }
 type Model = { id: string; approved: boolean }
 
@@ -43,10 +43,10 @@ export function DataClassesPage() {
 
   async function setDetection(change: Partial<Detection>) {
     if (!listing?.detection) return
-    const next = { ...listing.detection, ...change }
+    const next = { enabled: listing.detection.enabled, class_id: listing.detection.class_id, ...change }
     if (!next.class_id) { setError('Choose a class for detected requests.'); return }
     setBusy(true); setError('')
-    setListing(current => current && { ...current, detection: next })
+    setListing(current => current && { ...current, detection: { ...next, available: listing.detection?.available } })
     try {
       await action('/api/data-classes/detection', 'PUT', next)
       await refresh()
@@ -121,9 +121,11 @@ export function DataClassesPage() {
       <p className="text-[15px] leading-6 text-muted-foreground">Off unless you turn it on. When on, a request that contains personal data is handled as the class below, whatever its project.</p>
       <div className="flex min-h-11 items-center gap-[10px]">
         <input id="detect" type="checkbox" role="switch" className="size-[18px] accent-primary" checked={listing.detection.enabled}
-          disabled={busy} onChange={event => void setDetection({ enabled: event.target.checked })} />
+          aria-describedby={listing.detection.available === false ? 'detect-missing' : undefined}
+          disabled={busy || (!listing.detection.enabled && listing.detection.available === false)} onChange={event => void setDetection({ enabled: event.target.checked })} />
         <Label htmlFor="detect" className="text-[15px] font-normal">Detect personal data in requests</Label>
       </div>
+      {listing.detection.available === false && <p id="detect-missing" className="text-[14px] leading-5 text-muted-foreground">Personal-data detection isn't installed. Install it, then turn this on.</p>}
       <div className="flex max-w-[400px] flex-col gap-[6px]">
         <Label htmlFor="detect-class" className="text-[14px] font-medium">Handle it as</Label>
         <select id="detect-class" className="h-11 w-full rounded-[6px] border border-input bg-background px-3 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

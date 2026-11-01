@@ -21,8 +21,10 @@ redistributing an image built from the `detection` target:
   and `libgcc_s` (GPL-3.0 with the GCC Runtime Library Exception) and
   `libquadmath` (LGPL-2.1). The musl wheels of numpy, spaCy, thinc, preshed and
   pydantic-core also bundle `libstdc++` and `libgcc_s` under the same runtime
-  exception. The libraries are unmodified and dynamically linked, so they can
-  be replaced. Offer their corresponding source (below) and keep the original
+  exception. Review on 1 November 2026 confirmed these are the same GCC
+  Runtime Library Exception terms as numpy's bundled libraries, so the owner's
+  acceptance covers them. The libraries are unmodified and dynamically linked,
+  so they can be replaced. Offer their corresponding source (below) and keep the original
   notices.
 - **MPL-2.0.** certifi, tqdm (MPL-2.0 and MIT) and the public-suffix list
   bundled in tldextract are MPL-2.0. They are unmodified; their source archives

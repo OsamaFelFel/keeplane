@@ -62,28 +62,48 @@ def test_stable_models_keep_raw_configuration_and_existing_operator_auth():
     } == {"llm:model:demo"}
 
 
-def test_pd_11_both_request_checks_carry_the_messages():
-    """Spec 005 ST20: detection needs the request text at entry and final check."""
+def checks(send_messages=None):
     base = {
         "config": {},
         "gateways": {"default": {"port": 4000}},
         "llm": {"policies": {"apiKey": {"mode": "strict", "keys": [{"keyHash": "x"}]}}},
     }
+    options = {} if send_messages is None else {"send_messages": send_messages}
     result = overlay(
         base,
         {"demo": {"fingerprint": "a" * 64, "key_choice": "none"}},
         model_backends(applied(), ["demo"]),
+        **options,
     )
-    messages = '"messages": json(request.body).messages'
     route = result["binds"][-1]["listeners"][0]["routes"][0]
     entry = route["policies"]["extAuthz"]["protocol"]["http"]["body"]
-    assert messages in entry and '"model_id": json(request.body).model' in entry
     selected = next(
         row["policy"]["extAuthz"]["protocol"]["http"]["body"]
         for row in result["policies"]
         if "extAuthz" in row["policy"]
     )
-    protected, operator = selected.split(" : ", 1)
+    return entry, selected
+
+
+def test_pd_11_by_default_checks_carry_metadata_only_as_before():
+    """Spec 005 ST20: an install not set up for detection sends what main sent."""
+    entry, selected = checks()
+    assert checks(False) == (entry, selected)
+    assert entry == (
+        '{"project_id": request.headers["x-keeplane-project-id"], '
+        '"model_id": json(request.body).model}'
+    )
+    assert "messages" not in selected and "size(" not in selected
+
+
+def test_pd_11_an_install_set_up_for_detection_sends_guarded_messages():
+    entry, selected = checks(True)
+    messages = (
+        '"messages": size(request.body) <= 1048576 '
+        "? json(request.body).messages : null"
+    )
+    assert entry.endswith(", " + messages + "}")
+    protected, operator = selected.split(' : request.headers["x-keeplane-installed-runtime"]', 1)
     assert messages in protected
     assert "messages" not in operator
 

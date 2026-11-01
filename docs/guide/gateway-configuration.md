@@ -139,16 +139,18 @@ the Bearer credential and the private gateway credential in
 | The route that carries developer model traffic | `POST /internal/runtime/authorize` | Never |
 | Each model backend, after the gateway picks the model | `POST /internal/runtime/authorize/selected` | One per request sent, when **Model answers** is on |
 
-Both send `project_id`, `model_id` and the request's `messages` (the chat
-request's own `messages` array, unchanged). Keeplane reads the messages only
-to look for personal data while an admin has
-[detection](data-classes-local.md#detect-personal-data-in-requests) on, and
-never stores, logs or forwards them. With detection off they are ignored. A
-check without `messages` still works, but while detection is on the request
-is then held to the detection class, as if personal data had been found.
-On agentgateway, build each check's body with CEL, for example
-`{"project_id": request.headers["x-keeplane-project-id"], "model_id": json(request.body).model, "messages": json(request.body).messages}`.
-The body may be up to 4 MiB; a larger one is refused. A gateway that
+Both send only `project_id` and `model_id`, never the prompt, unless the
+install is set up for
+[personal-data detection](data-classes-local.md#install-detection)
+(`KEEPLANE_PERSONAL_DATA_DETECTION=1`). Then both also send the request's
+`messages` array, unchanged, which Keeplane reads only to look for personal
+data while an admin has detection on, and never stores, logs or forwards. With
+detection on, a check without `messages` is held to the detection class. On
+agentgateway, add this to each check's CEL body:
+`"messages": size(request.body) <= 1048576 ? json(request.body).messages : null`.
+The size guard sends `null` for a body over 1 MiB, which Keeplane holds, so a
+large request is never refused for its size. A check body may be up to 8 MiB.
+A gateway that
 calls only the first check still protects the model, but writes no
 **Model answers** records. The backend check runs again for each retry, so a
 retried request is recorded once per try, as on the managed gateway. A managed

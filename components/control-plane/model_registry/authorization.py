@@ -58,8 +58,10 @@ class DjangoModelAuthorization:
             if held_class is not None:
                 raise ModelAccessDenied(
                     403,
-                    f"This request is handled as {held_class}, and this model "
-                    "isn't approved for it",
+                    f"This request is handled as {held_class} and {model_id} "
+                    "isn't approved for it, so nothing was sent. Run it with a "
+                    f"model approved for {held_class}, or ask your admin to "
+                    "approve one.",
                 )
             raise ModelAccessDenied(403, "This model is not eligible for the project")
         result = {"actor_id": actor_id, "project_id": project_id, "model_id": model_id}

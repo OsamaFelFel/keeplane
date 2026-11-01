@@ -61,5 +61,7 @@ colocated tests.
 | DC-UI-05 | Open Data classes with classes on and detection never changed. | The Personal data in requests section shows the switch off and Confidential under Handle it as. |
 | DC-UI-06 | Turn detection on, then choose Internal. | Each change sends one protected request with the switch and class, and a notice confirms it. |
 | DC-UI-07 | Open Data classes with classes off. | The detection section is hidden. |
+| DC-UI-08 | Open Data classes when the detector isn't installed or the install doesn't send messages. | The switch is disabled and the page says "Personal-data detection isn't installed. Install it, then turn this on." |
+| DC-UI-09 | The detector disappears after detection was turned on. | The switch can still be turned off. |
 
 The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`; the rest of the card's look and the failure message's look by BR-15 and BR-16.

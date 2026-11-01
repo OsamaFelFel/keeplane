@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 import pytest
 from accounts import authentication
-from data_classes.contracts import DataClassError
+from data_classes import services as class_services
+from data_classes.contracts import CLASS_IN_USE, NOT_INSTALLED, DataClassError
 from data_classes.models import ProjectClass, Settings
 from django.test import Client, override_settings
 from model_registry import runtime_callback
@@ -69,6 +70,7 @@ def gate(domain_services, tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_callback, "IDENTITY", stores.identity)
     monkeypatch.setattr(runtime_callback, "model_policy", lambda: DjangoModelPolicy(gateway))
     monkeypatch.setattr(runtime_callback, "inspector", lambda: fake)
+    monkeypatch.setattr(class_services, "detection_available", lambda: True)
     monkeypatch.setattr(runtime_callback, "record_sent_request", lambda result: None)
     held = []
     monkeypatch.setattr(
@@ -108,7 +110,9 @@ def detection(gate, enabled=True, class_id=None):
 
 # PR-01 Off by default: nothing is inspected and no route changes.
 def test_pr_01_off_by_default_changes_no_route(gate):
-    assert gate.stores.classes.detection() == {"enabled": False, "class_id": "confidential"}
+    assert gate.stores.classes.detection() == {
+        "enabled": False, "class_id": "confidential", "available": True
+    }
     response = ask(gate, "open", f"mail {EMAIL}")
     assert response.status_code == 200
     assert gate.fake.texts == []
@@ -121,7 +125,9 @@ def test_pr_02_detected_request_uses_only_the_detection_class(gate):
     denied = ask(gate, "open", f"mail {EMAIL}")
     assert denied.status_code == 403
     assert denied.json() == {
-        "error": "This request is handled as Confidential, and this model isn't approved for it"
+        "error": "This request is handled as Confidential and open isn't approved for it, "
+        "so nothing was sent. Run it with a model approved for Confidential, or ask "
+        "your admin to approve one."
     }
     for model in ("private", "both"):
         allowed = ask(gate, model, f"mail {EMAIL}")
@@ -163,6 +169,13 @@ def test_pr_04_unreadable_parts_are_held(gate):
     detection(gate)
     image = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "x"}}]}]
     assert ask(gate, "open", messages=image).status_code == 403
+    for odd in (
+        [{"role": "assistant", "tool_calls": "call"}],
+        [{"role": "assistant", "function_call": {"name": "f", "arguments": "{}"},
+          "audio": {"id": "a"}}],
+    ):
+        assert ask(gate, "open", messages=odd).status_code == 403
+        assert ask(gate, "private", messages=odd).status_code == 200
 
 
 # PR-05 The admin's chosen class is the one held requests use.
@@ -199,16 +212,27 @@ def test_pr_07_selected_check_inspects_and_reports_held(gate):
     assert gate.held == [("Confidential", FOUND)]
 
 
-# PR-08 Size limits: metadata alone keeps 4 KiB; messages may be larger.
+# PR-08 Size limits: metadata alone keeps 4 KiB; messages may be larger; an
+# install's gateway sends null messages for a body over 1 MiB, which is held.
 def test_pr_08_size_limits(gate):
     detection(gate)
     long_text = "Refactor the parser. " * 2000
     assert ask(gate, "open", long_text).status_code == 200
+    assert gate.fake.texts[-1] == long_text
     padded = ask(gate, "open", text=None, padding="x" * 5000)
     assert padded.status_code == 413
-    huge = ask(gate, "private", "x" * (runtime_callback.MAX_CHECKED_BODY + 1))
-    assert huge.status_code == 413
-    assert gate.fake.texts[-1] == long_text
+    over = gate.client.post(
+        "/internal/runtime/authorize",
+        data=json.dumps({"project_id": gate.project, "model_id": "open", "messages": None}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION="Bearer " + gate.token,
+        HTTP_X_KEEPLANE_GATEWAY_CREDENTIAL=gate.key,
+    )
+    assert over.status_code == 403 and gate.fake.texts[-1] is None
+    assert ask(gate, "private", "x" * (2 * 1024 * 1024)).status_code == 200
+    # Only a gateway that ignores the 1 MiB guard can exceed the check limit.
+    too_big = ask(gate, "private", "x" * (runtime_callback.MAX_CHECKED_BODY + 1))
+    assert too_big.status_code == 413
 
 
 def test_pr_08_extra_fields_are_still_refused(gate):
@@ -239,9 +263,12 @@ def test_pr_10_detection_settings(gate):
     }
     with pytest.raises(DataClassError) as error:
         classes.remove("confidential")
-    assert error.value.status == 409
+    assert (error.value.status, error.value.message) == (409, CLASS_IN_USE)
     classes.set_detection({"enabled": False, "class_id": "internal"})
-    assert classes.detection() == {"enabled": False, "class_id": "internal"}
+    with pytest.raises(DataClassError) as error:
+        classes.remove("internal")
+    assert error.value.message == CLASS_IN_USE
+    assert classes.detection()["class_id"] == "internal"
     classes.remove("confidential")
     classes.set_enabled(False)
     with pytest.raises(DataClassError) as error:
@@ -260,6 +287,7 @@ def test_pr_11_admin_api_and_audit_records(domain_services):
         patch("audit.views.AUDIT", services.audit),
         patch("data_classes.views.DATA_CLASSES", services.classes),
         patch("data_classes.views.effective_model_ids", lambda: (200, {}, set())),
+        patch.object(class_services, "detection_available", lambda: True),
     ):
         client.cookies["keeplane_session"] = services.identity.login(
             "first-admin", "first-test-password-123"
@@ -279,13 +307,13 @@ def test_pr_11_admin_api_and_audit_records(domain_services):
         call("put", "/api/audit/options/settings", {"enabled": True})
         call("put", "/api/data-classes/mode", {"enabled": True})
         assert call("get", "/api/data-classes")["detection"] == {
-            "enabled": False, "class_id": "confidential"
+            "enabled": False, "class_id": "confidential", "available": True
         }
         call("put", "/api/data-classes/detection", {"enabled": True})
         call("put", "/api/data-classes/detection", {"enabled": True, "class_id": "internal"})
         call("put", "/api/data-classes/detection", {"enabled": False})
         assert call("get", "/api/data-classes")["detection"] == {
-            "enabled": False, "class_id": "internal"
+            "enabled": False, "class_id": "internal", "available": True
         }
         shown = client.get("/api/audit/records?kind=settings").json()
         refused = client.put(
@@ -295,6 +323,41 @@ def test_pr_11_admin_api_and_audit_records(domain_services):
         assert refused.status_code == 403
     assert [row["what"] for row in reversed(shown["records"])][1:] == [
         "Turned personal-data detection on; detected requests handled as Confidential",
-        "Detected requests handled as Internal instead of Confidential",
+        "Changed the class for detected requests: Confidential to Internal",
         "Turned personal-data detection off",
     ]
+
+
+# PR-12 Without the detector or an install that sends messages, the switch
+# can't be turned on; if either disappears after it was on, requests are held.
+def test_pr_12_not_installed(gate, monkeypatch):
+    monkeypatch.setattr(class_services, "detection_available", lambda: False)
+    assert gate.stores.classes.detection()["available"] is False
+    with pytest.raises(DataClassError) as error:
+        detection(gate)
+    assert (error.value.status, error.value.message) == (409, NOT_INSTALLED)
+    assert Settings.objects.get(pk=1).detection_enabled is False
+    monkeypatch.setattr(class_services, "detection_available", lambda: True)
+    detection(gate)
+    monkeypatch.setattr(class_services, "detection_available", lambda: False)
+    detection(gate, class_id="internal")  # still on: the class can change
+    assert detection(gate, enabled=False)["enabled"] is False
+    detection_on = Settings.objects.filter(pk=1)
+    detection_on.update(detection_enabled=True)
+    assert ask(gate, "open", text=None).status_code == 403
+
+
+# PR-13 Detection off and a check without messages: the decision and the
+# 4 KiB metadata limit are exactly as before detection existed.
+def test_pr_13_off_without_messages_is_unchanged(gate):
+    for model in ("open", "private", "both"):
+        response = ask(gate, model, text=None)
+        assert response.status_code == 200
+        assert set(response.json()) == {"actor_id", "project_id", "model_id"}
+    assert ask(gate, "open", text=None, padding="x" * 5000).status_code == 413
+    assert gate.fake.texts == []
+    # Every other route keeps the 64 KiB request limit.
+    other = gate.client.post(
+        "/api/data-classes", data="x" * (64 * 1024 + 1), content_type="application/json"
+    )
+    assert other.status_code == 413

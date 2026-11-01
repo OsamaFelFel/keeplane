@@ -156,46 +156,91 @@ class Inspector:
         return Verdict(True, FOUND) if found else Verdict(False, CLEAN)
 
 
+class _Unreadable(Exception):
+    pass
+
+
+# Message fields whose text is read; "role" and "tool_call_id" are checked as
+# plain strings. Any other field that carries a value makes the request
+# unreadable, so a new field can never pass personal data unchecked.
+MESSAGE_FIELDS = {"role", "content", "name", "tool_calls", "tool_call_id",
+                  "function_call", "refusal"}
+PART_TEXT = {"text": "text", "refusal": "refusal"}
+
+
+def _empty(value):
+    return value is None or value in ("", [], {})
+
+
+def _string(value, out=None):
+    if value is None:
+        return
+    if not isinstance(value, str):
+        raise _Unreadable()
+    if out is not None:
+        out.append(value)
+
+
+def _only(mapping, allowed):
+    if not isinstance(mapping, dict):
+        raise _Unreadable()
+    if any(key not in allowed and not _empty(value) for key, value in mapping.items()):
+        raise _Unreadable()
+
+
+def _function(function, out):
+    _only(function, {"name", "arguments"})
+    _string(function.get("name"), out)
+    _string(function.get("arguments"), out)
+
+
+def _message(message, out):
+    _only(message, MESSAGE_FIELDS)
+    _string(message.get("role"))
+    _string(message.get("tool_call_id"))
+    _string(message.get("name"), out)
+    _string(message.get("refusal"), out)
+    content = message.get("content")
+    if isinstance(content, list):
+        for part in content:
+            kind = part.get("type") if isinstance(part, dict) else None
+            if kind not in PART_TEXT:
+                raise _Unreadable()
+            _only(part, {"type", PART_TEXT[kind]})
+            if not isinstance(part.get(PART_TEXT[kind]), str):
+                raise _Unreadable()
+            out.append(part[PART_TEXT[kind]])
+    else:
+        _string(content, out)
+    calls = message.get("tool_calls")
+    if calls is not None:
+        if not isinstance(calls, list):
+            raise _Unreadable()
+        for call in calls:
+            _only(call, {"id", "type", "function"})
+            _string(call.get("id"))
+            _string(call.get("type"))
+            _function(call.get("function"), out)
+    if message.get("function_call") is not None:
+        _function(message["function_call"], out)
+
+
 def request_text(messages):
     """All text a chat request carries, or None when some of it can't be read.
 
-    Reads message content (a string or text parts), tool-call names and
-    arguments. A part that is not text, such as an image, cannot be checked,
-    so the request is treated as not checked and held.
+    Reads message content (a string, or text and refusal parts), names,
+    refusals, tool calls and legacy function calls. Anything else that carries
+    a value, such as an image part or an unknown field, cannot be checked, so
+    the request is treated as not checked and held.
     """
     if not isinstance(messages, list) or not messages:
         return None
     out = []
-    for message in messages:
-        if not isinstance(message, dict):
-            return None
-        content = message.get("content")
-        if isinstance(content, str):
-            out.append(content)
-        elif isinstance(content, list):
-            for part in content:
-                if (
-                    not isinstance(part, dict)
-                    or part.get("type") != "text"
-                    or not isinstance(part.get("text"), str)
-                ):
-                    return None
-                out.append(part["text"])
-        elif content is not None:
-            return None
-        for call in message.get("tool_calls") or []:
-            function = call.get("function") if isinstance(call, dict) else None
-            if not isinstance(function, dict):
-                return None
-            for field in ("name", "arguments"):
-                value = function.get(field)
-                if isinstance(value, str):
-                    out.append(value)
-                elif value is not None:
-                    return None
-        name = message.get("name")
-        if isinstance(name, str):
-            out.append(name)
+    try:
+        for message in messages:
+            _message(message, out)
+    except _Unreadable:
+        return None
     return "\n\n".join(out)
 
 
@@ -215,3 +260,18 @@ def inspector():
             model = settings.PERSONAL_DATA_MODEL
             _INSPECTOR = Inspector(lambda: PresidioDetector(model))
         return _INSPECTOR
+
+
+def detection_available():
+    """The install sends request messages and the detector is installed.
+
+    Only then can an admin turn detection on. If either goes away after it
+    was turned on, requests are held, because they can't be checked.
+    """
+    from django.conf import settings
+
+    from .engine import installed
+
+    return bool(settings.PERSONAL_DATA_DETECTION_INSTALLED) and installed(
+        settings.PERSONAL_DATA_MODEL
+    )

@@ -9,7 +9,14 @@ from .applied import private_applied_route
 MARKER = "x-keeplane-installed-runtime"
 PROTECTED = f'request.headers["{MARKER}"] == "1"'
 OPERATOR = f'request.headers["{MARKER}"] == "operator"'
-MESSAGES = '"messages": json(request.body).messages'
+# Spec 005 ST20, only for an install set up for personal-data detection: the
+# request's messages go to Keeplane's own check. A body over 1 MiB sends null,
+# which the check holds as not inspected, so no size limit can refuse traffic.
+MESSAGES_LIMIT = 1024 * 1024
+MESSAGES = (
+    f'"messages": size(request.body) <= {MESSAGES_LIMIT} '
+    "? json(request.body).messages : null"
+)
 
 
 # Spec 004 ST16, owner decision of 31 October 2026: a model that is down gets
@@ -82,16 +89,15 @@ def model_backends(dump, model_ids):
     return result
 
 
-def callback(host, path, model_expression, fingerprint=None):
+def callback(host, path, model_expression, fingerprint=None, *, messages=False):
     fields = (
         '{"project_id": request.headers["x-keeplane-project-id"], "model_id": '
         + model_expression
     )
     if fingerprint is not None:
         fields += ', "definition_fingerprint": ' + json.dumps(fingerprint)
-    # Spec 005 ST20: the request's messages go only to Keeplane's own check,
-    # which inspects them for personal data while detection is on.
-    fields += ", " + MESSAGES
+    if messages:
+        fields += ", " + MESSAGES
     return {
         "host": host,
         "failureMode": "deny",
@@ -122,9 +128,13 @@ def callback(host, path, model_expression, fingerprint=None):
     }
 
 
-def selected_callback(host, model_id, fingerprint):
+def selected_callback(host, model_id, fingerprint, *, messages=False):
     result = callback(
-        host, "/internal/runtime/installed/selected", json.dumps(model_id), fingerprint
+        host,
+        "/internal/runtime/installed/selected",
+        json.dumps(model_id),
+        fingerprint,
+        messages=messages,
     )
     protocol = result["protocol"]["http"]
     protected_body = protocol["body"]
@@ -192,6 +202,7 @@ def overlay(
     callback_host="app:3000",
     port=5000,
     personal_providers=None,
+    send_messages=False,
 ):
     if not isinstance(base, dict) or set(models) != set(targets) or not models:
         raise RuntimeInstallationUnavailable(
@@ -265,6 +276,7 @@ def overlay(
                                     callback_host,
                                     "/internal/runtime/installed/entry",
                                     "json(request.body).model",
+                                    messages=send_messages,
                                 ),
                                 **outage_retry(),
                             },
@@ -279,7 +291,7 @@ def overlay(
         target = {"backend": {"backend": {"name": targets[model_id], "namespace": ""}}}
         suffix = hashlib.sha256(model_id.encode()).hexdigest()[:32]
         selected = selected_callback(
-            callback_host, model_id, declaration["fingerprint"]
+            callback_host, model_id, declaration["fingerprint"], messages=send_messages
         )
         policies.append(
             {
