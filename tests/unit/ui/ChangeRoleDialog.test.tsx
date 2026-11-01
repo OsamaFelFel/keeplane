@@ -51,7 +51,7 @@ test("UI-ROLE-01: a refused change says \"[Username]'s role wasn't changed\" wit
 
 test.each([
   ['a server error', async () => response({ error: 'Internal error' }, 503), "Keeplane couldn't confirm the result."],
-  ['no answer', async () => { throw new TypeError('Failed to fetch') }, "Keeplane didn't answer."],
+  ['no answer', async () => { throw new TypeError('Failed to fetch') }, "Keeplane didn't answer in time."],
 ])('UI-ROLE-02: after %s the dialog says it isn\'t clear whether the role was changed, not that nothing was saved', async (_, write, reason) => {
   fixture(write)
   await saveAdmin()

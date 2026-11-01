@@ -26,7 +26,7 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
     } catch (cause) {
       if (definiteRefusal(cause)) setFailure({ refused: true, reason: sentence(cause.message) })
       else setFailure({ refused: false, reason: cause instanceof ApiError && cause.status >= 500
-        ? "Keeplane couldn't confirm the result." : "Keeplane didn't answer." })
+        ? "Keeplane couldn't confirm the result." : "Keeplane didn't answer in time." })
     }
     finally { setBusy(false) }
   }
