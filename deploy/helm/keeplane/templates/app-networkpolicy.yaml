@@ -1,0 +1,59 @@
+{{- /*
+Opt-in policies for the app pods (label app: <release>-app). Ingress admits
+only the installer's public entry on TCP 3000: no other Keeplane pod calls the
+app in this chart (the gateway copies make no callback to it, and the Jobs call
+only PostgreSQL or the supplied gateway). Egress allows DNS, the gateway, the
+app's PostgreSQL, model endpoints (provider-key checks call the provider
+directly) and any listed runners.
+*/ -}}
+{{- include "keeplane.networkPolicy.validate" . }}
+{{- $np := .Values.networkPolicy }}
+{{- if $np.appIngressEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-app-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-app
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- include "keeplane.networkPolicy.peer" (list "networkPolicy.publicEntry" $np.publicEntry) | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 3000
+{{- end }}
+{{- if $np.egressEnabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-app-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-app
+  policyTypes: [Egress]
+  egress:
+    {{- include "keeplane.networkPolicy.dnsRule" . | nindent 4 }}
+    {{- if eq .Values.gateway.mode "managed" }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "keeplane.networkPolicy.gatewayPods" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 4000
+    {{- else }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.suppliedGateway" $np.egress.suppliedGateway) | trim | nindent 4 }}
+    {{- end }}
+    {{- if .Values.app.postgres.enabled }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.postgres" $np.egress.postgres) | trim | nindent 4 }}
+    {{- end }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.modelEndpoints" $np.egress.modelEndpoints) | trim | nindent 4 }}
+    {{- with $np.egress.runners }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.runners" .) | trim | nindent 4 }}
+    {{- end }}
+{{- end }}

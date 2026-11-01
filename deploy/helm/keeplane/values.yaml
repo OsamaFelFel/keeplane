@@ -59,9 +59,40 @@ gateway:
   copyUrls: []
 
 networkPolicy:
-  # Requires a Kubernetes CNI that enforces NetworkPolicy. The local kindnet
-  # preview does not; keep disabled in that preview.
+  # Every policy here requires a Kubernetes CNI that enforces NetworkPolicy.
+  # The local kindnet preview does not; keep them disabled in that preview.
+  # Managed mode: admit only the app pods to the gateway copies on TCP 4000.
   gatewayIngressEnabled: false
+  # Admit only the public entry (publicEntry below) to the app pods on TCP 3000.
+  appIngressEnabled: false
+  # Your ingress controller's pods, as label maps (matchLabels). Set at least
+  # one; a namespace map alone admits every pod in that namespace.
+  publicEntry:
+    namespaceSelector: {}
+    podSelector: {}
+  # Limit outbound connections from the app, the install Jobs and (managed
+  # mode) the gateway copies to DNS and the destinations listed in egress.
+  egressEnabled: false
+  # Cluster DNS, reached on UDP and TCP 53: label maps, or a cidr instead.
+  dns:
+    namespaceSelector:
+      kubernetes.io/metadata.name: kube-system
+    podSelector:
+      k8s-app: kube-dns
+  # Each destination is {cidr: "203.0.113.0/24", ports: [443]} or
+  # {namespaceSelector: {...}, podSelector: {...}, ports: [8080]} (TCP).
+  egress:
+    # Model provider and runner endpoints. Required with egressEnabled: the
+    # gateway copies call them, and the app checks provider keys against them.
+    modelEndpoints: []
+    # The app's PostgreSQL (app.postgres.host); required with app.postgres.
+    postgres: []
+    # Managed gateway database; required with agentgateway-standalone.mode=database.
+    gatewayDatabase: []
+    # Existing mode: the supplied gateway (gateway.url and every copyUrls host).
+    suppliedGateway: []
+    # Optional: the runner addresses in app.runnerUrls that the app checks.
+    runners: []
 
 ingress:
   # Publishes only the Keeplane app Service; the gateway stays internal.
