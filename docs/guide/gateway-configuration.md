@@ -16,7 +16,8 @@ the current release scope.
 In `managed` mode the chart always requires keys on the gateway's model and
 management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
-In `existing` mode the customer-run gateway keeps its own key setup.
+In `existing` mode the customer-run gateway keeps its own key setup. To change
+the keys later, see [rotate the gateway keys](#rotate-the-gateway-keys).
 
 When the gateway runs as several copies, the app needs every copy's own
 management address in `GATEWAY_COPY_URLS`. A model change that adds or widens
@@ -167,6 +168,124 @@ model for an outage: that would switch the model. List every code from 500 to 59
 policy takes exact codes, not a range. A provider that refuses the connection is
 retried natively. Leave 4xx codes other than 429 out of `codes`; a context-length refusal must reach the developer at once.
 Another gateway product needs the same behaviour with its own settings.
+
+## Rotate the gateway keys
+
+Keeplane holds two gateway keys in `gateway.keysSecret`: `admin-key` for
+model management and `runtime-key` for model calls. The app reads both key
+files again for every gateway call, so it picks up new keys without a restart
+once Kubernetes refreshes the mounted Secret (usually within a minute or two).
+Changing keys never touches the gateway's model store: Keeplane's models, your
+own models and Keeplane's approvals, which are tied to each model's
+definition, stay exactly as they were
+([CR-01](../../tests/integration/credential-rotation-cases.md)).
+
+Use `check_credentials` before and after, and compare the model and approval
+lists, as described in
+[before and after every rotation](postgres-accounts.md#before-and-after-every-rotation),
+which also sets the `NS`, `RELEASE` and `mounted_sha` used below. It shows each gateway copy's answer to each key: `accepted`, `refused`,
+`unreachable`, or `unreadable` for a missing key file. While a copy refuses
+Keeplane's admin key, the admin status API answers 503 "The gateway refused
+Keeplane's admin key…" and the app logs the same line
+([CR-02](../../tests/integration/credential-rotation-cases.md)).
+
+Pick a quiet time and don't add, change or remove models until the rotation is
+finished: a model change is confirmed only when every copy reads it back, and
+a copy that refuses the key leaves it unconfirmed.
+
+### Managed gateway
+
+The gateway copies load `runtime-key-hash` and `admin-key-hash` when they
+start, and the chart allows exactly one hash per key policy. So the old and new
+keys can't both be accepted: between the Secret change and the end of the
+restart, some gateway calls are refused with 401. Keep that window short by
+running steps 2 and 3 back to back.
+
+1. Make new keys and hashes, as at installation:
+
+   ```sh
+   umask 077
+   openssl rand -base64 32 | tr -d '\n' > runtime-key
+   openssl rand -base64 32 | tr -d '\n' > admin-key
+   for name in runtime admin; do
+     printf 'sha256:%s' "$(shasum -a 256 < $name-key | cut -d ' ' -f 1)" > $name-key-hash
+   done
+   ```
+
+2. Replace the Secret's four keys, keeping its name:
+
+   ```sh
+   kubectl -n "$NS" create secret generic <keys-secret> \
+     --from-file=runtime-key --from-file=admin-key \
+     --from-file=runtime-key-hash --from-file=admin-key-hash \
+     --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+   ```
+
+3. Restart the gateway copies so they load the new hashes. They restart one at
+   a time, highest number first:
+
+   ```sh
+   kubectl -n "$NS" rollout restart statefulset/"$RELEASE"-gateway
+   kubectl -n "$NS" rollout status statefulset/"$RELEASE"-gateway
+   ```
+
+4. Run `check_credentials` until every copy shows `"admin_key": "accepted"` and
+   `"runtime_key": "accepted"`, usually within two minutes, then save
+   `after.json` and compare the lists: same models, same fingerprints, same
+   approvals.
+
+During steps 2 to 4, developers' model calls and admin model pages may fail
+and `/health` answers 503. A call a copy has already accepted carries on until
+that copy stops; the copy's 30-second shutdown cuts anything longer, and the
+developer sends it again.
+
+If something goes wrong:
+
+- **A copy still refuses after its restart.** Its hash doesn't match the key,
+  often because a hash was made from a file with a trailing newline. Make the
+  hashes again from step 1's files and repeat steps 2 and 3.
+- **The copies accept but an app pod is still refused after a few minutes.**
+  That pod hasn't received the new files yet; restart the app with
+  `kubectl -n "$NS" rollout restart deployment/"$RELEASE"-app`.
+- **To go back**, apply the previous four files the same way and restart the
+  copies again.
+
+### Customer-run gateway
+
+Your gateway decides which keys it accepts, and Keeplane only holds
+`runtime-key` and `admin-key` (no hashes). If your gateway accepts several
+keys per policy, as agentgateway's `apiKey` key list does, rotate with no
+refused calls:
+
+1. Add the new keys to your gateway next to the old ones, keeping the same
+   separation: the admin key manages Keeplane's models, the runtime key lists
+   and calls models.
+2. Replace Keeplane's two keys in the Secret:
+
+   ```sh
+   kubectl -n "$NS" create secret generic <keys-secret> \
+     --from-file=runtime-key --from-file=admin-key \
+     --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+   ```
+
+3. Wait until every app pod reads the new files. Both keys still work, so
+   compare file hashes rather than relying on the check:
+
+   ```sh
+   for pod in $(kubectl -n "$NS" get pods -l app="$RELEASE"-app -o name); do
+     echo "$pod $(mounted_sha "$pod" /run/gateway-keys/admin-key) $(mounted_sha "$pod" /run/gateway-keys/runtime-key)"
+   done
+   tr -d '\n' < admin-key | shasum -a 256; tr -d '\n' < runtime-key | shasum -a 256
+   ```
+
+4. Remove the old keys from your gateway, run `check_credentials` until it
+   passes, and compare the lists with `before.json`.
+
+If your gateway accepts only one key per policy, change it and the Secret back
+to back, as for the managed gateway, and expect refused calls until both are
+done. The next `helm upgrade` runs the compatibility preflight with the keys
+then in the Secret. The private credential your gateway sends to Keeplane's
+checks (`X-Keeplane-Gateway-Credential`) is configured outside this chart.
 
 ## Release configuration plan
 
