@@ -31,11 +31,16 @@ select them unchanged. The bundled Deployment stays at zero replicas.
 {{- if .Values.gateway.copyUrls }}
 {{- fail "gateway.copyUrls is for an existing gateway; in managed mode the chart lists its own copies from gateway.copies" }}
 {{- end }}
-{{- $image := $gw.image }}
-{{- if kindIs "map" $gw.image }}
-{{- $tag := $gw.image.tag | default (printf "v%s" .Values.gateway.expectedVersion) }}
-{{- $image = printf "%s/%s:%s" $gw.image.registry $gw.image.repository $tag }}
+{{- if and $gw.monitoring $gw.monitoring.enabled }}
+{{- fail "agentgateway-standalone.monitoring is not supported on the managed gateway copies: their metrics port (15020) stays private, and the gateway NetworkPolicy admits only the app on port 4000" }}
 {{- end }}
+{{- /*
+The bundled chart's own scope, so the copies use its helpers unchanged: the
+same image reference (including writing a bare version tag such as 1.6.0 as
+v1.6.0, and using its app version when no tag is set), the same pull policy
+and the same restart hash.
+*/}}
+{{- $bundled := index .Subcharts "agentgateway-standalone" }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -79,7 +84,10 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ list $gw.mode $gw.config $gw.database | toJson | sha256sum }}
+        {{- /* As in the bundled chart, only settings agentgateway reads at
+        startup restart the copies; other changes, including
+        config.modelCatalog, are reloaded in place. */}}
+        checksum/config: {{ include "agentgateway-standalone.startupConfig" $bundled | sha256sum }}
         {{- with $gw.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -109,8 +117,8 @@ spec:
       {{- end }}
       containers:
         - name: agentgateway
-          image: {{ required "agentgateway-standalone.image must not be empty" $image | quote }}
-          imagePullPolicy: {{ if kindIs "map" $gw.image }}{{ $gw.image.pullPolicy | default "IfNotPresent" }}{{ else }}IfNotPresent{{ end }}
+          image: {{ include "agentgateway-standalone.mainImage" $bundled | quote }}
+          imagePullPolicy: {{ include "agentgateway-standalone.mainImagePullPolicy" $bundled }}
           {{- with $gw.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -175,4 +183,36 @@ spec:
       dnsConfig:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- /*
+The bundled chart's disruption budget covers only its own Deployment, which
+runs no pods here, so this one covers the copies. As in the bundled chart, it
+renders only when more than one copy runs, so one copy never blocks a node
+drain.
+*/}}
+{{- $budget := $gw.podDisruptionBudget | default dict }}
+{{- if and $budget.enabled (gt $copies 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  {{- if $budget.maxUnavailable }}
+  maxUnavailable: {{ $budget.maxUnavailable }}
+  {{- else if $budget.minAvailable }}
+  minAvailable: {{ $budget.minAvailable }}
+  {{- end }}
+  {{- with $budget.unhealthyPodEvictionPolicy }}
+  unhealthyPodEvictionPolicy: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: standalone
+{{- end }}
 {{- end }}
