@@ -63,14 +63,22 @@ jobs:
           path: test-results/frontend/
           retention-days: 30
 
-  backend:
+  backend-tests:
     needs: scope
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
+    # Each shard takes a few minutes; the limit is only a safety margin.
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Shards are defined in tests/support/shards.py; every test file
+        # belongs to exactly one, and a unit test keeps this list in step.
+        shard: [unit, integration-a-to-l, integration-m-to-z]
     env:
       PYTHONPATH: components/control-plane
       KEEPLANE_CLI_BUILD_PYTHON: ${{ github.workspace }}/.venv/bin/python
+      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -86,16 +94,38 @@ jobs:
           echo "a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496  /tmp/helm.tar.gz" | sha256sum --check
           tar -xzf /tmp/helm.tar.gz -C /tmp
           echo "KEEPLANE_HELM_BIN=/tmp/linux-amd64/helm" >> "$GITHUB_ENV"
-      - name: Discover and run unit and integration checks
-        run: .venv/bin/python -m pytest tests/unit tests/integration --junitxml=test-results/backend/junit.xml
-      - name: Check Python source
-        run: .venv/bin/ruff check components/control-plane --select F,E9
+      - name: Discover and run this shard's unit and integration checks
+        run: .venv/bin/python -m pytest tests/unit tests/integration --shard "$SHARD" --junitxml="test-results/backend/$SHARD/junit.xml"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: backend-${{ github.sha }}
+          name: backend-${{ matrix.shard }}-${{ github.sha }}
           path: test-results/
           retention-days: 30
+
+  backend:
+    needs: [scope, backend-tests]
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install the Python source checker pinned in the test requirements
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install "$(grep '^ruff==' tests/requirements.txt)"
+      - name: Check Python source
+        run: .venv/bin/ruff check components/control-plane --select F,E9
+      - name: Require every backend shard to pass
+        env:
+          SHARDS_RESULT: ${{ needs.backend-tests.result }}
+        run: |
+          if [ "$SHARDS_RESULT" != success ]; then
+            echo "Backend test shards finished with: $SHARDS_RESULT" >&2
+            exit 1
+          fi
 
   component-manifest:
     needs: scope

@@ -10,6 +10,7 @@
 | Main push, initial push or manual run | Run all five. |
 | Quoted/newline filenames | Read NUL-separated paths; never execute filename text. |
 | Classifier job fails or has no affirmative output | Run all five unless the workflow is cancelled. |
+| Backend checks split into shards | The shard jobs and the `backend` job that reports their result carry the same selection rule, so both skip or both run. |
 
 The existing build, test, cleanup and reporting steps are unchanged. Selection
 uses the committed PR base/head diff and imports no third-party path action.
