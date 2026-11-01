@@ -3,7 +3,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ExclamationTriangleIcon, UpdateIcon } from '@radix-ui/react-icons'
-import { api, action, type User, type UserOperation } from '@/app/api'
+import { api, action, ApiError, type User, type UserOperation } from '@/app/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,6 +17,14 @@ const schema = z.object({
   role: z.enum(['admin', 'developer']),
 })
 type Fields = z.infer<typeof schema>
+
+// Only Keeplane's own refusal (4xx), or a request the browser never sent, proves
+// nothing was saved. A server or proxy error after sending may follow a commit.
+function definiteRefusal(cause: unknown): cause is ApiError {
+  if (!(cause instanceof ApiError)) return false
+  if (cause.status >= 400 && cause.status < 500) return true
+  return cause.status === 0 && cause.message !== 'Keeplane did not answer.'
+}
 
 export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef }: {
   open: boolean; onOpenChange: (value: boolean) => void; onCreated: (user: User) => void
@@ -47,12 +55,14 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
     const timeout = window.setTimeout(() => controller.abort(), 10_000)
     try {
       const user = await action<User>('/api/users', 'POST', { ...fields, operation_id: operationId.current }, controller.signal)
-      closeAfterSuccess(user)
+      // An answer that names no user (for example a body cut off at the time limit) proves nothing.
+      if (typeof user?.username === 'string') closeAfterSuccess(user)
+      else setPhase('no-answer')
     } catch (cause) {
-      if (controller.signal.aborted || !(cause instanceof Error) || cause.message === 'Keeplane did not answer.') {
-        setPhase('no-answer')
-      } else {
+      if (!controller.signal.aborted && definiteRefusal(cause)) {
         setPhase('form'); setError(cause.message)
+      } else {
+        setPhase('no-answer')
       }
     } finally { window.clearTimeout(timeout) }
   }
