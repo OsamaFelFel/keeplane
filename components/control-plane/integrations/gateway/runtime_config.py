@@ -9,6 +9,7 @@ from .applied import private_applied_route
 MARKER = "x-keeplane-installed-runtime"
 PROTECTED = f'request.headers["{MARKER}"] == "1"'
 OPERATOR = f'request.headers["{MARKER}"] == "operator"'
+MESSAGES = '"messages": json(request.body).messages'
 
 
 # Spec 004 ST16, owner decision of 31 October 2026: a model that is down gets
@@ -88,6 +89,9 @@ def callback(host, path, model_expression, fingerprint=None):
     )
     if fingerprint is not None:
         fields += ', "definition_fingerprint": ' + json.dumps(fingerprint)
+    # Spec 005 ST20: the request's messages go only to Keeplane's own check,
+    # which inspects them for personal data while detection is on.
+    fields += ", " + MESSAGES
     return {
         "host": host,
         "failureMode": "deny",

@@ -3,7 +3,7 @@
 import uuid
 from django.db.models import Count, Max
 
-from .contracts import DataClassError, STARTERS
+from .contracts import DETECTION_DEFAULT, DataClassError, STARTERS
 from .models import DataClass, ProjectClass, Settings
 from model_registry.models import ModelApproval
 from common.storage import settings_change, storage_service
@@ -62,6 +62,52 @@ class DjangoDataClassStore:
                         ),
                     )
         return {"enabled": enabled}
+
+    def detection(self):
+        """Personal-data detection settings (Spec 005 ST20); off by default."""
+        settings = Settings.objects.filter(pk=1).values(
+            "detection_enabled", "detection_class_id"
+        ).first() or {"detection_enabled": False, "detection_class_id": None}
+        class_id = settings["detection_class_id"]
+        if class_id is None and DataClass.objects.filter(pk=DETECTION_DEFAULT).exists():
+            class_id = DETECTION_DEFAULT
+        return {"enabled": settings["detection_enabled"], "class_id": class_id}
+
+    def set_detection(self, body, actor=None):
+        if not isinstance(body, dict) or type(body.get("enabled")) is not bool:
+            raise DataClassError(400, "Choose whether to detect personal data")
+        if set(body) - {"enabled", "class_id"}:
+            raise DataClassError(400, "Send only detection settings")
+        with settings_change() as settings:
+            self._require_enabled()
+            class_id = body.get("class_id", settings.detection_class_id)
+            if class_id is None:
+                class_id = DETECTION_DEFAULT
+            if not isinstance(class_id, str):
+                raise DataClassError(400, "Choose a class for detected requests")
+            row = DataClass.objects.filter(pk=class_id).first()
+            if row is None:
+                raise DataClassError(400, "Choose a class for detected requests")
+            changes = []
+            if settings.detection_enabled != body["enabled"]:
+                changes.append(
+                    "Turned personal-data detection " + ("on" if body["enabled"] else "off")
+                )
+            if settings.detection_class_id != row.pk:
+                previous = settings.detection_class
+                changes.append(
+                    "detected requests handled as "
+                    + (f"{row.name} instead of {previous.name}" if previous else row.name)
+                )
+            settings.detection_enabled = body["enabled"]
+            settings.detection_class = row
+            settings.save(update_fields=["detection_enabled", "detection_class"])
+            if actor and changes:
+                text = "; ".join(changes)
+                self.audit.record_in_transaction(
+                    "settings", *actor, text[0].upper() + text[1:]
+                )
+        return {"enabled": body["enabled"], "class_id": row.pk}
 
     def list(self, effective_model_ids=None):
         approvals = self._approvals()
@@ -172,6 +218,10 @@ class DjangoDataClassStore:
                 raise DataClassError(404, "Class not found")
             if ProjectClass.objects.filter(data_class=row).exists():
                 raise DataClassError(409, "Projects still use this class")
+            if Settings.objects.filter(pk=1, detection_class=row).exists():
+                raise DataClassError(
+                    409, "Personal-data detection uses this class; choose another first"
+                )
             if DataClass.objects.count() == 1:
                 raise DataClassError(409, "Keep at least one data class")
             approved_for = [

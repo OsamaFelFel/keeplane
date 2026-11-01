@@ -20,7 +20,11 @@ def data_classes(request):
                 return Response({"enabled": False, "classes": []})
             status, body, effective = effective_model_ids()
             return Response(
-                {"enabled": True, "classes": DATA_CLASSES.list(effective)}
+                {
+                    "enabled": True,
+                    "classes": DATA_CLASSES.list(effective),
+                    "detection": DATA_CLASSES.detection(),
+                }
                 if status == 200
                 else body,
                 status=status,
@@ -93,3 +97,21 @@ def data_class_detail(request, class_id):
         )
 
     return settings_result(edit)
+
+
+@api_view(["PUT"])
+def data_class_detection(request):
+    """Turn personal-data detection on or off and choose its class (ST20)."""
+    user, denied = admin(request)
+    if denied:
+        return denied
+    denied = action_error(request)
+    if denied:
+        return denied
+    if not isinstance(request.data, dict):
+        return failure(400, "Enter a detection setting")
+    return settings_result(
+        lambda: Response(
+            DATA_CLASSES.set_detection(request.data, (user["id"], user["username"]))
+        )
+    )

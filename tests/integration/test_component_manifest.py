@@ -218,6 +218,12 @@ def test_control_plane_packages_match_requirements():
     sign_in = requirement_pins(CONTROL_PLANE / "requirements-cli-auth.txt")
     for name, version in optional["cli_sign_in"].items():
         assert sign_in[name] == version, UPDATE
+    detection = (CONTROL_PLANE / "requirements-detection.txt").read_text()
+    detection_pins = requirement_pins(CONTROL_PLANE / "requirements-detection.txt")
+    for name, version in optional["personal_data_detection"].items():
+        assert detection_pins.get(name) == version or (
+            f"/{name}-{version}/" in detection
+        ), UPDATE
 
 
 def test_admin_ui_and_cli_versions_match_their_packages():
@@ -305,6 +311,9 @@ def test_default_features_match_chart_values_and_stored_defaults():
         feature: VALUES[key] == "true" for key, feature in CHART_SWITCHES.items()
     }
     defaults["data_classes"] = Settings._meta.get_field("classes_enabled").default
+    defaults["personal_data_detection"] = Settings._meta.get_field(
+        "detection_enabled"
+    ).default
     defaults["optional_audit_kinds"] = AuditOption._meta.get_field("enabled").default
 
     features = MANIFEST["features"]

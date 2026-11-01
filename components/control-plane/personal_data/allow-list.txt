@@ -1,0 +1,108 @@
+# Allow list for the code-aware post-filter (code_aware.py), task 005-03.
+#
+# Common software names and eponymous algorithms that a language model reads
+# as a person or a place. A name or address finding is dropped only when every
+# capitalised word in it is on this list or inside code, so "Cassandra" alone
+# is dropped but "Cassandra Okafor" is still held.
+#
+# Keep it short. Add a name only when it is a widely used library, framework,
+# tool or algorithm. Some entries are also given names or surnames (Jackson,
+# Jenkins, Hugo, Polly, Jasmine, Cassandra): a request that names a person by
+# that one word alone is not held. One lower-case word per line; "Dijkstra's"
+# matches "dijkstra".
+
+# Data stores and messaging
+cassandra
+kafka
+hadoop
+redis
+neo4j
+elasticsearch
+mongo
+celery
+sidekiq
+rabbitmq
+
+# Web frameworks and servers
+django
+flask
+rails
+sinatra
+phoenix
+tornado
+gunicorn
+laravel
+symfony
+express
+nginx
+
+# Build, deploy and infrastructure
+jenkins
+ansible
+terraform
+consul
+nomad
+vagrant
+kubernetes
+helm
+docker
+gradle
+maven
+
+# Observability
+grafana
+prometheus
+jaeger
+sentry
+kibana
+serilog
+
+# Testing
+jest
+mocha
+chai
+sinon
+karma
+jasmine
+selenium
+cypress
+mockito
+pytest
+
+# Libraries
+jackson
+gson
+guava
+lombok
+hibernate
+dagger
+dapper
+polly
+alembic
+pandas
+numpy
+hugo
+pydantic
+
+# Eponymous algorithms and data structures. Surnames that are only known
+# together are listed as the hyphenated compound, so "Floyd" or "Ford" alone
+# is still held.
+dijkstra
+kruskal
+huffman
+levenshtein
+bloom
+fenwick
+bresenham
+kalman
+hamming
+fourier
+markov
+bayes
+euler
+gauss
+bellman-ford
+fisher-yates
+knuth-morris-pratt
+floyd-warshall
+boyer-moore

@@ -54,4 +54,12 @@ colocated tests.
 - A refused write keeps the choice. A lost reply or ten-second timeout offers Check without repeating the write.
 - Readback confirms the saved class. If classes were turned off, the dialog keeps the result uncertain rather than clearing an assignment.
 
+## Personal data in requests (`DataClassesDetection.test.tsx`)
+
+| Case | Plain-English action | Expected result |
+| --- | --- | --- |
+| DC-UI-05 | Open Data classes with classes on and detection never changed. | The Personal data in requests section shows the switch off and Confidential under Handle it as. |
+| DC-UI-06 | Turn detection on, then choose Internal. | Each change sends one protected request with the switch and class, and a notice confirms it. |
+| DC-UI-07 | Open Data classes with classes off. | The detection section is hidden. |
+
 The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`; the rest of the card's look and the failure message's look by BR-15 and BR-16.

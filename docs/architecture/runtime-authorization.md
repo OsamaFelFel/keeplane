@@ -1,7 +1,9 @@
 # Check a gateway policy decision
 
-The experimental policy-decision endpoint checks current Keeplane records. It accepts
-no prompt, forwards no model traffic and returns no provider key. Deployment and
+The experimental policy-decision endpoint checks current Keeplane records. It
+forwards no model traffic and returns no provider key. It accepts the request's
+`messages` only for [personal-data detection](#personal-data-detection), never
+stores or logs them, and ignores them while detection is off. Deployment and
 inference-route wiring are separate work; this does not select a release gateway.
 
 An operator must configure `RUNTIME_AUTHORIZER_KEY_FILE` with an absolute path to
@@ -20,7 +22,9 @@ Content-Type: application/json
 {"project_id":"00000000-0000-0000-0000-000000000001","model_id":"coder"}
 ```
 
-The body must contain exactly these two fields and fit within 4 KiB. Success
+The body must contain exactly these two fields, plus optionally the request's
+`messages`. Metadata alone must fit within 4 KiB; with `messages` the body may
+be up to 4 MiB. Success
 returns 200 with only `actor_id`, canonical `project_id` and `model_id`. The actor,
 project access, class and current model setup come from the server. Active
 organization accounts may use registered projects; usage is not an access grant,
@@ -506,3 +510,52 @@ sequenceDiagram
   K->>S: Resolve current owner's definition-bound key
   K-->>G: Provider key, no-store
 ```
+
+## Personal-data detection
+
+Detection is off by default and applies only while data classes are on. When
+an admin turns it on, both request checks (entry and selected model, in managed
+and customer-run modes) inspect the request's `messages` before deciding. The
+managed installer's CEL bodies always carry them; the server ignores them while
+detection is off.
+
+```mermaid
+flowchart LR
+  Check[Request check with messages] --> On{Detection on?}
+  On -- no --> Policy[Project class and model policy]
+  On -- yes --> Detect[Detector, 200 ms limit]
+  Detect -- personal data, slow, failed, down or not sent --> Held[Also require the detection class]
+  Detect -- clean --> Policy
+  Held --> Policy
+  Policy --> Decision[Allow the model or refuse]
+```
+
+A held request may use only models approved for the detection class **and**
+for the project's own class, so detection never relaxes a project
+restriction. The final model still passes every other check. A refusal says
+`This request is handled as <class>, and this model isn't approved for it`.
+The response body is unchanged: actor, project and model IDs only. The CLI's
+model choice, alternatives and task routing never see a request, so they do
+not apply detection; the gateway checks do.
+
+The detector is Presidio Analyzer with the spaCy `en_core_web_lg` model,
+followed by Keeplane's code-aware filter and card and phone rules
+(`components/control-plane/personal_data/`). It runs in the app process on two
+worker threads, loads in the background the first time a check needs it and
+never downloads anything; `KEEPLANE_PERSONAL_DATA_MODEL` names an installed
+model package or a model directory. Until it has loaded, if it cannot load,
+raises an error, or cannot finish within 200 ms, the request is held. Long
+requests are checked in overlapping pieces of about 2 000 characters, stopping
+at the first piece with personal data; the code-aware filter and the card and
+phone rules see the whole request. Requests longer than about 4 000 characters
+often cannot finish in time and are held; over 100 000 characters they are held
+without a check. Detection runs before the policy transaction, so a slow check
+does not hold the policy lock. A request that was not inspected because
+detection read as off is held if detection is on by the time the policy is read.
+
+Request text is never stored, logged, returned or sent anywhere else. A held
+request reaches a no-op hook (`held_request` in `runtime_callback.py`) where
+held-request Audit records will be written; nothing is recorded yet. Cases:
+[detection rules](../../tests/unit/personal-data-detection-cases.md),
+[routing](../../tests/integration/personal-data-routing-cases.md) and
+[the model bar](../../tests/integration/personal-data-model-cases.md).

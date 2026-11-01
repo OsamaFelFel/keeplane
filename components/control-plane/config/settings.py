@@ -11,6 +11,9 @@ PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "http://127.0.0.1:3000")
 PUBLIC_ORIGIN_ALIASES = os.environ.get("PUBLIC_ORIGIN_ALIASES", "")
 RUNTIME_AUTHORIZER_KEY_FILE = os.environ.get("RUNTIME_AUTHORIZER_KEY_FILE", "")
 RUNTIME_GUARD_MANIFEST_FILE = os.environ.get("RUNTIME_GUARD_MANIFEST_FILE", "")
+# Personal-data detection model: an installed package name or a directory.
+# Never downloaded; when it is missing, detected-on requests are all held.
+PERSONAL_DATA_MODEL = os.environ.get("KEEPLANE_PERSONAL_DATA_MODEL", "en_core_web_lg")
 CSRF_TRUSTED_ORIGINS = [
     value.strip()
     for value in (PUBLIC_ORIGIN + "," + PUBLIC_ORIGIN_ALIASES).split(",")

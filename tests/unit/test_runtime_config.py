@@ -62,6 +62,32 @@ def test_stable_models_keep_raw_configuration_and_existing_operator_auth():
     } == {"llm:model:demo"}
 
 
+def test_pd_11_both_request_checks_carry_the_messages():
+    """Spec 005 ST20: detection needs the request text at entry and final check."""
+    base = {
+        "config": {},
+        "gateways": {"default": {"port": 4000}},
+        "llm": {"policies": {"apiKey": {"mode": "strict", "keys": [{"keyHash": "x"}]}}},
+    }
+    result = overlay(
+        base,
+        {"demo": {"fingerprint": "a" * 64, "key_choice": "none"}},
+        model_backends(applied(), ["demo"]),
+    )
+    messages = '"messages": json(request.body).messages'
+    route = result["binds"][-1]["listeners"][0]["routes"][0]
+    entry = route["policies"]["extAuthz"]["protocol"]["http"]["body"]
+    assert messages in entry and '"model_id": json(request.body).model' in entry
+    selected = next(
+        row["policy"]["extAuthz"]["protocol"]["http"]["body"]
+        for row in result["policies"]
+        if "extAuthz" in row["policy"]
+    )
+    protected, operator = selected.split(" : ", 1)
+    assert messages in protected
+    assert "messages" not in operator
+
+
 @pytest.mark.parametrize(
     "fault",
     ["missing", "virtual", "duplicate", "conditional", "different-id", "indexed"],

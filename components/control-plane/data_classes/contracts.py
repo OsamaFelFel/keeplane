@@ -6,6 +6,9 @@ STARTERS = (
     ("confidential", "Confidential"),
 )
 
+# D108: detected requests are handled as Confidential unless the admin changes it.
+DETECTION_DEFAULT = "confidential"
+
 
 class DataClassError(Exception):
     def __init__(self, status, message):

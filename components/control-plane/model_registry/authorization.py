@@ -26,8 +26,13 @@ class DjangoModelAuthorization:
         self.identity, self.model_policy = identity, model_policy
         self.project_access = project_access
 
-    def authorize(self, session_token, project_id, model_id):
-        """Resolve fresh server state; return no credential or client policy claim."""
+    def authorize(self, session_token, project_id, model_id, *, personal_data=None):
+        """Resolve fresh server state; return no credential or client policy claim.
+
+        ``personal_data`` is the detector's verdict for a gateway request
+        check (Spec 005 ST20); advice paths leave it None. When the request is
+        held, the result also names the detection class as ``held_class``.
+        """
         actor = self.identity.session(session_token)
         if actor is None:
             raise ModelAccessDenied(401, "Sign in to Keeplane")
@@ -43,6 +48,21 @@ class DjangoModelAuthorization:
         actor_id, project_id = str(actor["id"]), str(project.pk)
         if self.project_access(actor_id, project_id) is not True:
             raise ModelAccessDenied(403, "This project is unavailable")
-        if model_id not in self.model_policy.eligible_model_ids(project_id):
+        if personal_data is None:
+            eligible, held_class = self.model_policy.eligible_model_ids(project_id), None
+        else:
+            eligible, held_class = self.model_policy.eligibility(
+                project_id, personal_data
+            )
+        if model_id not in eligible:
+            if held_class is not None:
+                raise ModelAccessDenied(
+                    403,
+                    f"This request is handled as {held_class}, and this model "
+                    "isn't approved for it",
+                )
             raise ModelAccessDenied(403, "This model is not eligible for the project")
-        return {"actor_id": actor_id, "project_id": project_id, "model_id": model_id}
+        result = {"actor_id": actor_id, "project_id": project_id, "model_id": model_id}
+        if held_class is not None:
+            result["held_class"] = held_class
+        return result

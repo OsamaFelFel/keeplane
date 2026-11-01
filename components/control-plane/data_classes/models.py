@@ -6,6 +6,16 @@ from django.db import models
 class Settings(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     classes_enabled = models.BooleanField(default=False)
+    # Spec 005 ST20: off by default; the class is kept while detection is off.
+    # The database default keeps writers from before this column working.
+    detection_enabled = models.BooleanField(default=False, db_default=False)
+    detection_class = models.ForeignKey(
+        "DataClass",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
 
     class Meta:
         db_table = "accounts_settings"
