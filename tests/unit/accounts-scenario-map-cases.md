@@ -7,7 +7,8 @@ reads the "Spec 003 scenarios" table in the [account and edition cases](../e2e/a
 | --- | --- | --- |
 | ACSM-01 | Read the table. | Every Spec 003 ST6, ST7, ST8 and ST28 scenario is listed exactly once, and nothing else. |
 | ACSM-02 | Read each scenario's "Checked by" cell. | A built scenario names at least one case. A scenario that can't be proved yet starts "Not built yet:" followed by the reason; today that is only "Single sign-on connected", because no provider can be connected until Spec 011 is handed off. |
-| ACSM-03 | Look up each case the table names, including any named beside a "Not built yet" reason. | Each has a row in its own catalog, the one the table's intro links for its prefix (LA in the account API cases, BSEC in the browser security cases, and so on), and a test named after it, or its ID in a test's report or title. A row with the same ID in another catalog doesn't count, and a prefix with no known catalog fails. |
+| ACSM-03 | Look up each case the table names, including any named beside a "Not built yet" reason and every case inside a range such as "UI-ROLE-04 to UI-ROLE-09". | Each has a row in its own catalog, the one the table's intro links for its prefix (LA in the account API cases, BSEC in the browser security cases, and so on), and a test named after it, or its ID in a test's report or title. A row with the same ID in another catalog doesn't count, and a prefix with no known catalog fails. |
+| ACSM-04 | Read a cell that names "UI-ROLE-04 to UI-ROLE-06, BR-17". | The check counts UI-ROLE-04, UI-ROLE-05, UI-ROLE-06 and BR-17, so no case inside a range is skipped. |
 
 When Spec 003 adds or renames a scenario, update the list in the test and the
 table together. When a scenario becomes provable, remove it from the test's

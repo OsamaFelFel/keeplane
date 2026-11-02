@@ -46,7 +46,8 @@ UI-USERS and UI-ROLE cases the [React unit cases](../unit/ui/cases.md), BR
 cases the [Users browser cases](../browser/users-cases.md) and BSEC cases the
 [browser security cases](../browser/security-cases.md). ACCT cases are the live
 cases above. `tests/unit/test_accounts_scenario_map.py` fails if a scenario is
-missing here or a case named here has no catalog row or no test.
+missing here or a case named here, including each case inside a range such
+as "UI-ROLE-04 to UI-ROLE-09", has no catalog row or no test.
 
 | Story | Scenario | Checked by |
 | --- | --- | --- |
@@ -60,7 +61,7 @@ missing here or a case named here has no catalog row or no test.
 | ST8 | Create a user with a role | LA-06, UI-02, ACCT-04, BR-12 |
 | ST8 | Developer by default | UI-01, BR-02; the API needs an explicit role: LA-07 |
 | ST8 | No answer | UI-03 (10 seconds, Check and Cancel), UI-05 (server errors), UI-06, UI-10 (Check gets no answer), BR-04 |
-| ST8 | Check finds the user | UI-03, LA-09, ACCT-18 |
+| ST8 | Check finds the user | UI-03, UI-USERS-04 (Users shows the user), LA-09, ACCT-18 |
 | ST8 | Check doesn't find the user | UI-04, LA-09, LA-10, BR-04 |
 | ST8 | Sent twice | LA-08, UI-04, ACCT-18, ACCT-19, BR-04 |
 | ST8 | Find a user | LA-11, UI-USERS-02, ACCT-07, BR-07 |

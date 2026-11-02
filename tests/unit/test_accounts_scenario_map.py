@@ -38,6 +38,8 @@ NOT_BUILT = {
     ("ST6", "Single sign-on connected"),
 }
 CASE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-\d+\b")
+# A range of cases with one prefix, such as "UI-ROLE-04 to UI-ROLE-09".
+RANGE = re.compile(r"\b([A-Z]+(?:-[A-Z]+)*)-(\d+) to \1-(\d+)\b")
 # The catalog each case prefix belongs to, as the map's intro links them. A
 # case counts only if its row is in its own catalog, so a row with the same ID
 # in another catalog can't satisfy it.
@@ -63,6 +65,19 @@ def scenario_rows():
         if len(cells) == 3 and re.fullmatch(r"ST\d+", cells[0]):
             rows.append(((cells[0], cells[1]), cells[2]))
     return rows
+
+
+def named_cases(cell):
+    """Every case a cell names, with each range expanded to all its cases."""
+    cases = set(CASE.findall(cell))
+    for prefix, first, last in RANGE.findall(cell):
+        assert int(first) < int(last), f"{prefix}-{first} to {prefix}-{last}"
+        width = len(first)
+        cases.update(
+            f"{prefix}-{number:0{width}d}"
+            for number in range(int(first), int(last) + 1)
+        )
+    return cases
 
 
 def source_text():
@@ -103,12 +118,12 @@ def test_acsm_02_built_scenarios_name_cases_and_unbuilt_ones_say_why():
             assert re.match(r"Not built yet: \S", checked_by), scenario
         else:
             assert not checked_by.startswith("Not built yet"), scenario
-            assert CASE.findall(checked_by), scenario
+            assert named_cases(checked_by), scenario
 
 
 def test_acsm_03_every_named_case_has_a_row_in_its_own_catalog_and_a_test():
     code = source_text()
-    named = {case for _, cell in scenario_rows() for case in CASE.findall(cell)}
+    named = {case for _, cell in scenario_rows() for case in named_cases(cell)}
     assert named
     for case in sorted(named):
         prefix = case.rsplit("-", 1)[0]
@@ -116,3 +131,8 @@ def test_acsm_03_every_named_case_has_a_row_in_its_own_catalog_and_a_test():
         catalog = (TESTS / CATALOGS[prefix]).read_text()
         assert has_row(case, catalog), f"{case} has no row in {CATALOGS[prefix]}"
         assert is_tested(case, code), f"{case} has no test"
+
+
+def test_acsm_04_a_range_names_every_case_inside_it():
+    cell = "UI-ROLE-04 to UI-ROLE-06, BR-17"
+    assert named_cases(cell) == {"UI-ROLE-04", "UI-ROLE-05", "UI-ROLE-06", "BR-17"}
