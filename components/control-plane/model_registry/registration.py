@@ -28,16 +28,18 @@ from model_registry.fingerprints import fingerprint
 from model_registry.provider_probe import provider_answers
 
 
+# Spec 004 ST10 "[Model] wasn't added" and D170: every Add failure whose
+# gateway entry couldn't be undone ends with this, for cloud and local models.
+MAY_REMAIN_IN_GATEWAY = (
+    "The model may remain in the gateway without Keeplane approval. Check Models."
+)
+
+
 def approval_not_saved(undone):
     # Spec 004 ST10 "[Model] wasn't added" and D170: cloud and local models
     # read the same, and "Nothing was saved." only when the gateway entry
     # was undone.
-    tail = (
-        "Nothing was saved."
-        if undone
-        else "The model may remain in the gateway without Keeplane approval. "
-        "Check Models."
-    )
+    tail = "Nothing was saved." if undone else MAY_REMAIN_IN_GATEWAY
     return {"error": f"Keeplane couldn't save the model approval. {tail}"}
 
 
@@ -337,7 +339,7 @@ class ModelManagement:
                     + (
                         "The previous key is still active."
                         if check_removed
-                        else "A verification model may need cleanup; check Models."
+                        else "A verification model may need cleanup. Check Models."
                     )
                 },
             )
@@ -397,7 +399,7 @@ class ModelManagement:
                     + (
                         "The previous key is still active."
                         if restored
-                        else "The model may need admin attention; check Models."
+                        else "The model may need admin attention. Check Models."
                     )
                 },
             )
@@ -424,7 +426,7 @@ class ModelManagement:
                     + (
                         "The previous key is still active."
                         if restored
-                        else "The model may need admin attention; check Models."
+                        else "The model may need admin attention. Check Models."
                     )
                 },
             )
@@ -509,9 +511,7 @@ class ModelManagement:
                 {
                     "error": "The gateway didn't register it. "
                     + (
-                        "Nothing was saved."
-                        if removed
-                        else "Its entry may remain without approval; check Models."
+                        "Nothing was saved." if removed else MAY_REMAIN_IN_GATEWAY
                     )
                 },
             )
@@ -522,11 +522,7 @@ class ModelManagement:
             removed = self.undo_cloud_model(name, resource)
             if key_path and removed:
                 remove_provider_key(self.provider_key_dir, key_path)
-            suffix = (
-                " Nothing was saved."
-                if removed
-                else " Its gateway entry may remain without a working key; check Models."
-            )
+            suffix = " " + ("Nothing was saved." if removed else MAY_REMAIN_IN_GATEWAY)
             if reason == "The provider refused the key.":
                 reason = f"{'OpenAI' if source == 'openai' else 'Anthropic'} refused the key."
             elif reason == "The provider didn't answer.":
@@ -874,7 +870,8 @@ class ModelManagement:
                     return self.reply(
                         503,
                         {
-                            "error": "The gateway didn't register it. The model may remain in the gateway without Keeplane approval; check Models."
+                            "error": "The gateway didn't register it. "
+                            + MAY_REMAIN_IN_GATEWAY
                         },
                     )
             return self.reply(status, result)
@@ -891,9 +888,7 @@ class ModelManagement:
                     # when the gateway entry this request wrote is gone.
                     "error": "The model didn't answer through the gateway. "
                     + (
-                        "Nothing was saved."
-                        if removed
-                        else "It may remain in the gateway without Keeplane approval; check Models."
+                        "Nothing was saved." if removed else MAY_REMAIN_IN_GATEWAY
                     )
                 },
             )

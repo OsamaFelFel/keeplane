@@ -1,6 +1,6 @@
 """Spec 004 ST10, ST23, ST24 and ST26: adding and setting up models (fakes only).
 
-The plain-English cases are MRS-01 to MRS-12 in models-routing-cases.md. The
+The plain-English cases are MRS-01 to MRS-14 in models-routing-cases.md. The
 gateway is an in-memory store and the local runner a loopback HTTP server, so
 no Docker, gateway or provider is used.
 """
@@ -387,7 +387,7 @@ def test_mrs_11_when_its_entry_cannot_be_removed_keeplane_does_not_say_nothing_w
     assert status == 503
     assert result == {
         "error": "The model didn't answer through the gateway. "
-        "It may remain in the gateway without Keeplane approval; check Models."
+        "The model may remain in the gateway without Keeplane approval. Check Models."
     }
     assert "Nothing was saved" not in result["error"]
     assert "local" in gateway.records and catalog.rows == {}
@@ -424,3 +424,132 @@ def test_mrs_12_when_the_model_cannot_be_removed_either_keeplane_does_not_say_no
         "in the gateway without Keeplane approval. Check Models."
     }
     assert "Nothing was saved" not in result["error"]
+
+
+MAY_REMAIN = "The model may remain in the gateway without Keeplane approval. Check Models."
+
+
+class FlakyWrites(Gateway):
+    """A gateway whose numbered model writes fail, applied or not."""
+
+    def __init__(self, applied_but_failed=(), failing_from=None):
+        super().__init__()
+        self.applied_but_failed = set(applied_but_failed)
+        self.failing_from = failing_from
+        self.model_writes = 0
+
+    def request(self, path, body=None, method=None, **options):
+        if body is None or method == "DELETE" or path == "/v1/chat/completions":
+            return super().request(path, body, method, **options)
+        self.model_writes += 1
+        if self.failing_from and self.model_writes >= self.failing_from:
+            return 500, {"error": "write refused"}
+        if "value" in body:
+            # One model written in place, as a key replacement does.
+            body = {"resources": [{"value": body["value"]}]}
+        status, result = super().request(path, body, method, **options)
+        if self.model_writes in self.applied_but_failed:
+            return 500, {"error": "write timed out"}
+        return status, result
+
+
+@pytest.mark.parametrize("body", [cloud(approved_classes=["Public"]), LOCAL])
+def test_mrs_13_when_an_unregistered_model_cannot_be_removed_keeplane_says_to_check_models(
+    tmp_path, monkeypatch, body
+):
+    gateway, catalog = FlakyWrites(applied_but_failed={1}), Catalog()
+    gateway.delete_status = 500
+    status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(body)
+    assert status == 503
+    assert result == {"error": "The gateway didn't register it. " + MAY_REMAIN}
+    assert "Nothing was saved" not in result["error"]
+    assert body["name"] in gateway.records and catalog.rows == {}
+
+
+@pytest.mark.parametrize(
+    "source,answer,reason",
+    [
+        ("openai", (401, {}), "OpenAI refused the key."),
+        ("anthropic", (503, {}), "Anthropic didn't answer."),
+    ],
+)
+def test_mrs_13_when_a_cloud_model_that_does_not_answer_cannot_be_removed_keeplane_says_to_check_models(
+    tmp_path, monkeypatch, source, answer, reason
+):
+    gateway, catalog = Gateway(), Catalog()
+    gateway.answer, gateway.delete_status = answer, 500
+    status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(
+        cloud(source, approved_classes=["Public"])
+    )
+    assert status == 503
+    assert result == {"error": f"{reason} {MAY_REMAIN}"}
+    assert "Nothing was saved" not in result["error"]
+    assert "coder" in gateway.records and catalog.rows == {}
+
+
+class RefusingReplacement(Catalog):
+    def approve(self, model_id, classes, revision, actor, **options):
+        if options.get("shared_key_replaced"):
+            raise StorageUnavailable("approval storage is down")
+        return super().approve(model_id, classes, revision, actor, **options)
+
+
+def replace_key(gateway, catalog, tmp_path, monkeypatch):
+    manager = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True)
+    assert manager.add(cloud(approved_classes=["Public"]))[0] == 200
+    return manager.setup(
+        "coder",
+        {
+            "key_choice": "shared",
+            "approved_classes": ["Public"],
+            "replace_shared_key": "synthetic-replacement-provider-key",
+        },
+    )
+
+
+def test_mrs_14_when_the_key_check_model_cannot_be_removed_keeplane_says_to_check_models(
+    tmp_path, monkeypatch
+):
+    class RefusesTheCheck(Gateway):
+        def request(self, path, body=None, method=None, **options):
+            if path == "/v1/chat/completions" and body["model"].startswith("keeplane-keycheck-"):
+                self.asked.append(body["model"])
+                return 401, {}
+            return super().request(path, body, method, **options)
+
+    gateway = RefusesTheCheck()
+    gateway.delete_status = 500
+    status, result = replace_key(gateway, Catalog(), tmp_path, monkeypatch)
+    assert (status, result) == (
+        503,
+        {
+            "error": "The replacement key didn't answer through the gateway. "
+            "A verification model may need cleanup. Check Models."
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "case,gateway,catalog,error",
+    [
+        (
+            "the model doesn't confirm the new key",
+            # 1 adds, 2 is the key check, 3 the replacement (applied, refused), 4 the restore.
+            lambda: FlakyWrites(applied_but_failed={3}, failing_from=4),
+            Catalog,
+            "The replacement key didn't work. The model may need admin attention. Check Models.",
+        ),
+        (
+            "Keeplane can't save the change",
+            lambda: FlakyWrites(failing_from=4),
+            RefusingReplacement,
+            "Keeplane couldn't save the change. The model may need admin attention. Check Models.",
+        ),
+    ],
+)
+def test_mrs_14_when_the_previous_key_cannot_be_restored_keeplane_says_to_check_models(
+    tmp_path, monkeypatch, case, gateway, catalog, error
+):
+    status, result = replace_key(gateway(), catalog(), tmp_path, monkeypatch)
+    assert (status, result) == (503, {"error": error})
+    assert "previous key is still active" not in error
