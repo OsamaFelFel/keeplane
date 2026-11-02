@@ -1,7 +1,11 @@
 # Local Kubernetes integration cases
 
-Run `test_local.py` against port 13000 first. It registers `second-local`, which
-the replica tests use. Then run `test_kind.py`. The latter deletes one gateway
+Run `test_local.py` against port 13000 first, then `test_kind.py`. The replica
+tests use `second-local`; `test_kind.py` registers it through Keeplane when it is
+absent (`test_local.py` removes the setups it added). The **Kubernetes live
+checks** CI workflow runs both, then `test_gateway_secret_rotation.py`, on a kind
+cluster for every pull request (see [Tests](../README.md)); the other cases here
+still run only locally. `test_kind.py` deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
 The managed kind preview and the customer-run gateway app require first-admin
 sign-in; the test helpers use the local password file and never print its value.
