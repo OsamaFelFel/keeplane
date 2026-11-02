@@ -9,6 +9,7 @@ as each role, the way the app and each copy's enroller would.
 
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -444,4 +445,276 @@ def test_gs_pg_09_postgresql_the_enroller_records_its_copy_and_the_app_reads_it(
         "models": ["demo"],
         "other": "ModelPolicyUnavailable",
         "write": "ProgrammingError",  # permission denied
+    }
+
+
+# --- check_credentials reports the guard-status roles (002-02, 004-01) ---
+
+COPY_URLS = f"http://{COPY}.gateway.test:15000,http://{OTHER}.gateway.test:15000"
+RERUN = "; run configure_guard_status_access again"
+REPORT_PROBE = """
+import json, django
+django.setup()
+from common.api import MODEL_GATEWAY_COPIES
+from common.credential_check import guard_status_report
+report, problems, warnings = guard_status_report(MODEL_GATEWAY_COPIES.copies)
+print(json.dumps({"report": report, "problems": problems, "warnings": warnings}))
+"""
+
+
+def guard_report(cluster, check="1"):
+    env = cluster.env("app", KEEPLANE_GUARD_STATUS_CHECK=check, GATEWAY_COPY_URLS=COPY_URLS)
+    return run_probe(cluster, REPORT_PROBE, env)
+
+
+def copy_entry(report, name):
+    return next(entry for entry in report["copies"] if entry["copy"] == name)
+
+
+def not_paired(name):
+    return f"Gateway copy {name}: no status role is paired with it{RERUN} with --copy {name}=<role>"
+
+
+@pytest.fixture
+def reported(cluster):
+    """Both copies paired as the guide sets them; copy 0 confirmed, copy 1 not."""
+    assert cluster.configure().returncode == 0
+    cluster.sql(f"DELETE FROM {TABLE}", cluster.database)
+    cluster.sql(
+        f"INSERT INTO {TABLE} (copy_name, confirmed, declaration, confirmed_at, "
+        f"updated_at) VALUES ('{COPY}', true, '{json.dumps(DECLARATION)}', "
+        "now() - interval '90 minutes', now() - interval '90 minutes'), "
+        f"('{OTHER}', false, NULL, NULL, now())",
+        cluster.database,
+    )
+    yield cluster
+    assert cluster.configure().returncode == 0
+
+
+def test_gs_pg_11_postgresql_check_credentials_reports_each_copy_role_and_guard(reported):
+    found = guard_report(reported)
+    assert found["problems"] == []
+    assert found["warnings"] == [
+        f"Gateway copy {OTHER}: no guard is confirmed; protected models are refused "
+        "through it until its enroller confirms one"
+    ]
+    report = found["report"]
+    assert {key: report[key] for key in ("row_security", "policies", "app_role")} == {
+        "row_security": "on",
+        "policies": "as set",
+        "app_role": "reads only",
+    }
+    first = copy_entry(report, COPY)
+    assert first["status_role"] == reported.roles["status0"]
+    assert first["role_status"] == "limited"
+    assert first["guard"] == "confirmed"
+    assert 89 <= first["age_minutes"] <= 95
+    assert first["models"] == [{"id": "demo", "fingerprint": "d" * 64}]
+    second = copy_entry(report, OTHER)
+    assert (second["status_role"], second["role_status"], second["guard"]) == (
+        reported.roles["status1"],
+        "limited",
+        "not confirmed",
+    )
+    assert "models" not in second and "confirmed_at" not in second
+    # No password and none of the declaration's digests is printed.
+    text = json.dumps(found)
+    assert reported.password not in text
+    assert not any(letter * 64 in text for letter in "abc")
+
+
+# fault: (change, undo, role status, the problem after "its status role <role>")
+UNSAFE = {
+    "bypasses row security": (
+        "ALTER ROLE {status0} BYPASSRLS",
+        "ALTER ROLE {status0} NOBYPASSRLS",
+        "unsafe",
+        " is a superuser, can bypass row-level security or can create roles",
+    ),
+    "creates roles": (
+        "ALTER ROLE {status0} CREATEROLE",
+        "ALTER ROLE {status0} NOCREATEROLE",
+        "unsafe",
+        " is a superuser, can bypass row-level security or can create roles",
+    ),
+    "member of the migration role": (
+        "GRANT {owner} TO {status0}",
+        "REVOKE {owner} FROM {status0}",
+        "unsafe",
+        " is a member of the migration role {owner}",
+    ),
+    "member of the other copy's role": (
+        "GRANT {status1} TO {status0}",
+        "REVOKE {status1} FROM {status0}",
+        "unsafe",
+        " belongs to {status1}; revoke the membership",
+    ),
+    "not read-only by default": (
+        "ALTER ROLE {status0} RESET default_transaction_read_only",
+        "ALTER ROLE {status0} SET default_transaction_read_only = on",
+        "unsafe",
+        " doesn't have default_transaction_read_only = on",
+    ),
+    "reads another table": (
+        "GRANT SELECT ON accounts_user TO {status0}",
+        "REVOKE SELECT ON accounts_user FROM {status0}",
+        "unsafe",
+        " has more access than allowed: SELECT on accounts_user",
+    ),
+    "deletes rows": (
+        f"GRANT DELETE ON {TABLE} TO {{status0}}",
+        f"REVOKE DELETE ON {TABLE} FROM {{status0}}",
+        "unsafe",
+        f" has more access than allowed: DELETE on {TABLE}",
+    ),
+    "no login": (
+        "ALTER ROLE {status0} NOLOGIN",
+        "ALTER ROLE {status0} LOGIN",
+        "cannot log in",
+        " can't log in (NOLOGIN)",
+    ),
+    "password expired": (
+        "ALTER ROLE {status0} VALID UNTIL '2001-01-01'",
+        "ALTER ROLE {status0} VALID UNTIL 'infinity'",
+        "cannot log in",
+        "'s password has expired (VALID UNTIL)",
+    ),
+    "no connect": (
+        "REVOKE CONNECT ON DATABASE {database} FROM {status0}",
+        "GRANT CONNECT ON DATABASE {database} TO {status0}",
+        "cannot log in",
+        " has no CONNECT on the database",
+    ),
+    "can't add its row": (
+        f"REVOKE INSERT ON {TABLE} FROM {{status0}}",
+        f"GRANT INSERT ON {TABLE} TO {{status0}}",
+        "cannot write",
+        f" can't record its row: it lacks INSERT on {TABLE}{RERUN}",
+    ),
+}
+
+
+@pytest.mark.parametrize("fault", sorted(UNSAFE))
+def test_gs_pg_12_postgresql_check_credentials_fails_on_an_unsafe_status_role(
+    reported, fault
+):
+    change, undo, state, sentence = UNSAFE[fault]
+    names = {
+        **{name: reported.roles[name] for name in ("owner", "status0", "status1")},
+        "database": reported.database,
+    }
+    reported.sql(change.format(**names), reported.database)
+    try:
+        found = guard_report(reported)
+    finally:
+        reported.sql(undo.format(**names), reported.database)
+    assert copy_entry(found["report"], COPY)["role_status"] == state
+    assert copy_entry(found["report"], OTHER)["role_status"] == "limited"
+    prefix = f"Gateway copy {COPY}: its status role {names['status0']}"
+    problems = found["problems"]
+    assert problems[0] == prefix + sentence.format(**names)
+    if fault == "member of the migration role":
+        # It inherits the owner's privileges, which are summarised, not listed.
+        assert problems[1].startswith(prefix + " has more access than allowed: ")
+        assert re.search(r" and \d+ more$", problems[1])
+        assert len(problems) == 2
+    else:
+        assert len(problems) == 1
+    assert guard_report(reported)["problems"] == []
+
+
+def test_gs_pg_12_postgresql_check_credentials_fails_when_the_app_can_write(reported):
+    app = reported.roles["app"]
+    reported.sql(f"GRANT INSERT, DELETE ON {TABLE} TO {app}", reported.database)
+    found = guard_report(reported)
+    assert found["report"]["app_role"] == "unsafe"
+    assert found["problems"] == [
+        f"Guard status: The app role {app} has more access than allowed: "
+        f"DELETE on {TABLE}, INSERT on {TABLE}",
+    ]
+
+
+@pytest.mark.parametrize(
+    "fault", ["row security off", "extra policy", "copy left out", "stale pairing", "no row"]
+)
+def test_gs_pg_13_postgresql_check_credentials_fails_on_a_changed_setup(reported, fault):
+    status0, status1 = reported.roles["status0"], reported.roles["status1"]
+    if fault == "row security off":
+        reported.sql(f"ALTER TABLE {TABLE} DISABLE ROW LEVEL SECURITY", reported.database)
+    elif fault == "extra policy":
+        reported.sql(
+            f"CREATE POLICY anyone ON {TABLE} FOR ALL TO {status1} USING (true)",
+            reported.database,
+        )
+    elif fault == "copy left out":
+        assert reported.configure(f"{COPY}={status0}").returncode == 0
+    elif fault == "stale pairing":
+        assert reported.configure(
+            f"{COPY}={status0}", f"keeplane-gateway-7={status1}"
+        ).returncode == 0
+    else:
+        reported.sql(f"DELETE FROM {TABLE} WHERE copy_name = '{OTHER}'", reported.database)
+    try:
+        found = guard_report(reported)
+    finally:
+        reported.sql(f"DROP POLICY IF EXISTS anyone ON {TABLE}", reported.database)
+    assert found["problems"] == {
+        "row security off": [
+            "Guard status: row-level security is off for the guard-status table" + RERUN
+        ],
+        "extra policy": [
+            "Guard status: the guard-status table's policies aren't the ones "
+            "configure_guard_status_access sets" + RERUN,
+            not_paired(COPY),
+            not_paired(OTHER),
+        ],
+        "copy left out": [not_paired(OTHER)],
+        "stale pairing": [
+            not_paired(OTHER),
+            f"Gateway copy keeplane-gateway-7 is no longer listed but status role "
+            f"{status1} is still paired with it; remove the role or its pairing",
+        ],
+        "no row": [f"Gateway copy {OTHER}: its enroller has recorded no guard status yet"],
+    }[fault]
+    report = found["report"]
+    if fault == "no row":
+        assert copy_entry(report, OTHER)["guard"] == "not recorded"
+    if fault == "row security off":
+        assert report["row_security"] == "off"
+    if fault == "extra policy":
+        assert report["policies"] == "changed"
+        assert copy_entry(report, COPY)["role_status"] == "not paired"
+
+
+def test_gs_pg_14_postgresql_the_command_exits_1_and_prints_no_secret(reported):
+    status0 = reported.roles["status0"]
+    reported.sql(f"ALTER ROLE {status0} BYPASSRLS", reported.database)
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "components/control-plane/manage.py"),
+             "check_credentials"],
+            env=reported.env(
+                "app",
+                KEEPLANE_GUARD_STATUS_CHECK="1",
+                GATEWAY_COPY_URLS=COPY_URLS,
+                GATEWAY_URL="http://127.0.0.1:9",
+            ),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+    finally:
+        reported.sql(f"ALTER ROLE {status0} NOBYPASSRLS", reported.database)
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report["passed"] is False
+    assert copy_entry(report["guard_status"], COPY)["role_status"] == "unsafe"
+    assert len(report["guard_status_problems"]) == 1
+    assert reported.password not in result.stdout + result.stderr
+    # With the per-copy check off the same database reports "not in use".
+    assert guard_report(reported, check="0") == {
+        "report": "not in use",
+        "problems": [],
+        "warnings": [],
     }

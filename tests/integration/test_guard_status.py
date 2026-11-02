@@ -1,6 +1,6 @@
 """Each gateway copy's confirmed guard, recorded and checked per copy (ADR 027).
 
-Cases GS-01 to GS-25 in guard-status-cases.md. These run on SQLite with the
+Cases GS-01 to GS-26 in guard-status-cases.md. These run on SQLite with the
 fake gateway of test_model_enroller and the HTTP checks of
 test_installed_runtime. The PostgreSQL roles and row-level security are in
 test_guard_status_postgres.py.
@@ -9,8 +9,10 @@ test_guard_status_postgres.py.
 import json
 from copy import deepcopy
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
+from common import credential_check
 from common.errors import StorageUnavailable
 from django.core.management.base import CommandError
 from django.db import DatabaseError
@@ -535,3 +537,33 @@ def test_gs_24_the_recorder_validates_what_it_records(db):
     with pytest.raises(ValueError):
         GuardStatusRecorder("Not A Pod")
     assert guard_status.valid_copy_name(COPY)
+
+
+# --- check_credentials (002-02) ------------------------------------------
+
+
+@pytest.mark.parametrize("check", [True, False])
+def test_gs_26_check_credentials_reports_guard_status_not_in_use(db, check):
+    # SQLite, or the per-copy check off: nothing to check, and nothing fails.
+    copies = [SimpleNamespace(base_url=f"http://{COPY}.gateway:15000")]
+    with override_settings(GUARD_STATUS_CHECK=check):
+        assert credential_check.guard_status_report(copies) == ("not in use", [], [])
+
+
+@pytest.mark.parametrize(
+    ("problems", "warnings", "passed"),
+    [([], [], True), ([], ["a warning"], True), (["a problem"], [], False)],
+)
+def test_gs_26_only_a_guard_status_problem_fails_check_credentials(
+    problems, warnings, passed
+):
+    with patch.object(credential_check, "database_status", return_value="connected"), \
+            patch.object(credential_check, "gateway_models", return_value=[]), \
+            patch.object(credential_check, "approvals", return_value=[]), \
+            patch.object(credential_check, "gateway_status", return_value=[]), \
+            patch.object(credential_check, "guard_status_report",
+                         return_value=({"copies": []}, problems, warnings)):
+        report, result = credential_check.check(SimpleNamespace(base_url="x"), [])
+    assert result is passed
+    assert report["guard_status_problems"] == problems
+    assert report["guard_status_warnings"] == warnings

@@ -267,6 +267,11 @@ gateway models (with their definition fingerprints) and Keeplane's approvals.
 It never prints a password, key or key hash. It also lists the database CA and
 the database server's certificate with their expiry dates, and fails if one has
 expired; see [check and renew certificates](certificate-operations.md).
+With the per-copy guard check on (`KEEPLANE_GUARD_STATUS_CHECK=1`), it also
+reports each gateway copy's status role and confirmed guard under
+`"guard_status"`, and fails on a role that can't log in or could do more than
+it should; otherwise that line reads `"not in use"`. See
+[check the roles](guard-status-roles.md#4-check-the-roles).
 Start only when `"passed": true`.
 Its `"database"` line is one of:
 
@@ -388,6 +393,20 @@ The next `helm upgrade` runs the Job with the new password. If the Job can't
 connect, Helm stops before changing the app; correct the Secret or the role and
 run the upgrade again. If `app.postgres.migration.enabled=false`, give the new
 password to your own migration process instead.
+
+### Rotate the model enroller's role passwords
+
+The model enroller's approvals role and each gateway copy's status role (see
+[the enroller's database roles](guard-status-roles.md)) rotate in the same
+order: the Secret first, then the role, then a restart of the gateway copy
+Pods whose enroller uses it (the chart gives the enroller its password when
+the Pod starts). App copies never read these passwords, so the app keeps
+serving throughout. Helm refuses the enroller for now
+([model enroller](kubernetes-installation-reference.md#model-enroller)), so
+these steps apply once it runs. Follow
+[rotate a status or enroller role's password](guard-status-roles.md#rotate-a-status-or-enroller-roles-password);
+`check_credentials` shows each copy's `"role_status"` and `"guard"` before and
+after.
 
 ### Rotate the database CA
 

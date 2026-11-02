@@ -16,24 +16,29 @@ Afterwards:
 - the app role can only read the guard-status table.
 
 The command checks the result and refuses, changing nothing, if any role
-still has more.
+still has more. ``manage.py check_credentials`` reports the same checks
+(model_registry.guard_status_access) without changing anything.
 """
-
-import re
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError, connections, transaction
 from integrations.gateway.runtime_config import COPY_NAME
 
-from model_registry.models import GatewayGuardStatus, ModelApproval
-
-ROLE = re.compile(r"[a-z_][a-z0-9_]{0,62}")
-STATUS_TABLE = GatewayGuardStatus._meta.db_table
-APPROVAL_TABLE = ModelApproval._meta.db_table
-TABLE_PRIVILEGES = (
-    "SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"
+from model_registry import guard_status_access as access
+from model_registry.guard_status_access import (
+    APP_READ_POLICY,
+    APPROVAL_TABLE,
+    OWN_COPY_POLICY,
+    ROLE,
+    STATUS_TABLE,
+    STATUS_WRITES,
 )
-STATUS_WRITES = {(STATUS_TABLE, privilege) for privilege in ("SELECT", "INSERT", "UPDATE")}
+
+UNSAFE_ROLES = (
+    "The app, enroller and status roles must be separate ordinary roles: "
+    "not the owner, superusers, row-security bypassers, role creators "
+    "or members of the migration role"
+)
 
 
 def copy_role(value):
@@ -97,47 +102,24 @@ class Command(BaseCommand):
     def _configure(self, cursor, connection, app, enroller, copies):
         quote = connection.ops.quote_name
         status_roles = [role for _, role in copies]
-        cursor.execute(
-            "SELECT current_user, current_schema(), "
-            "(SELECT tableowner FROM pg_tables "
-            " WHERE schemaname = current_schema() AND tablename = %s)",
-            [STATUS_TABLE],
-        )
-        owner, schema, table_owner = cursor.fetchone()
+        owner, schema, table_owner = access.table_owner(cursor)
         if table_owner is None:
             raise CommandError("Run migrate before setting guard status access")
         if table_owner != owner:
             raise CommandError("Run this with the migration credential that owns the tables")
         roles = [app, enroller, *status_roles]
-        cursor.execute(
-            "SELECT rolname, rolsuper OR rolbypassrls OR rolcreaterole, "
-            "pg_has_role(rolname, %s, 'MEMBER') "
-            "FROM pg_roles WHERE rolname = ANY(%s)",
-            [owner, roles],
-        )
-        found = {name: (powerful, member) for name, powerful, member in cursor.fetchall()}
+        found = access.role_attributes(cursor, roles, owner)
         missing = [role for role in roles if role not in found]
         if missing:
             raise CommandError(
                 "Ask your database operator to create these roles first: "
                 + ", ".join(missing)
             )
-        if owner in roles or any(powerful or member for powerful, member in found.values()):
-            raise CommandError(
-                "The app, enroller and status roles must be separate ordinary roles: "
-                "not the owner, superusers, row-security bypassers, role creators "
-                "or members of the migration role"
-            )
-        cursor.execute(
-            "SELECT r.rolname FROM pg_roles r WHERE r.rolname = ANY(%s) AND EXISTS ("
-            " SELECT 1 FROM pg_db_role_setting s"
-            " WHERE s.setrole = r.oid"
-            " AND s.setdatabase IN (0, (SELECT oid FROM pg_database"
-            "   WHERE datname = current_database()))"
-            " AND 'default_transaction_read_only=on' = ANY(s.setconfig))",
-            [[enroller, *status_roles]],
-        )
-        read_only = {row[0] for row in cursor.fetchall()}
+        if owner in roles or any(
+            role["powerful"] or role["in_owner"] for role in found.values()
+        ):
+            raise CommandError(UNSAFE_ROLES)
+        read_only = access.read_only_roles(cursor, [enroller, *status_roles])
         unset = [role for role in (enroller, *status_roles) if role not in read_only]
         if unset:
             raise CommandError(
@@ -176,21 +158,15 @@ class Command(BaseCommand):
         # and writes only its own copy's row. The pairs are written into the
         # policy itself, so no role needs any other table to be checked.
         cursor.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-        cursor.execute(
-            "SELECT policyname FROM pg_policies "
-            "WHERE schemaname = current_schema() AND tablename = %s",
-            [STATUS_TABLE],
-        )
-        for (policy,) in cursor.fetchall():
+        for policy in access.policies(cursor):
             cursor.execute(f"DROP POLICY {quote(policy)} ON {table}")
         cursor.execute(
-            f"CREATE POLICY guard_status_app_read ON {table} "
+            f"CREATE POLICY {APP_READ_POLICY} ON {table} "
             f"FOR SELECT TO {quote(app)} USING (true)"
         )
-        pairs = ", ".join(f"('{copy_name}', '{role}')" for copy_name, role in copies)
-        own_row = f"(copy_name, current_user::text) IN (VALUES {pairs})"
+        own_row = access.own_row_condition(copies)
         cursor.execute(
-            f"CREATE POLICY guard_status_own_copy ON {table} FOR ALL TO "
+            f"CREATE POLICY {OWN_COPY_POLICY} ON {table} FOR ALL TO "
             + ", ".join(quote(role) for role in status_roles)
             + f" USING ({own_row}) WITH CHECK ({own_row})"
         )
@@ -202,50 +178,25 @@ class Command(BaseCommand):
         # No listed role may belong to another, even without inheriting its
         # privileges (NOINHERIT): it could SET ROLE and act as the other, for
         # example as another copy's status role.
-        listed = [app, enroller, *status_roles]
-        cursor.execute(
-            "SELECT member.name, target.name "
-            "FROM unnest(%s::text[]) AS member(name), unnest(%s::text[]) AS target(name) "
-            "WHERE member.name <> target.name "
-            "AND pg_has_role(member.name, target.name, 'MEMBER')",
-            [listed, listed],
-        )
-        memberships = cursor.fetchall()
-        if memberships:
+        found = access.memberships(cursor, [app, enroller, *status_roles])
+        if found:
             raise CommandError(
                 "These roles belong to another listed role; revoke the membership: "
-                + "; ".join(f"{member} in {target}" for member, target in sorted(memberships))
+                + "; ".join(f"{member} in {target}" for member, target in found)
             )
-        allowed = {
-            app: None,  # only the status table is checked for the app
-            enroller: {(APPROVAL_TABLE, "SELECT")},
-            **{role: STATUS_WRITES for role in status_roles},
-        }
-        extra = []
-        for role, permitted in allowed.items():
-            cursor.execute(
-                "SELECT c.relname, p.privilege FROM pg_class c "
-                "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                "CROSS JOIN unnest(%s::text[]) AS p(privilege) "
-                "WHERE n.nspname = current_schema() "
-                "AND c.relkind IN ('r', 'p', 'v', 'm', 'f') "
-                "AND has_table_privilege(%s, c.oid, p.privilege) "
-                "UNION ALL "
-                "SELECT c.relname, p.privilege FROM pg_class c "
-                "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                "CROSS JOIN unnest(ARRAY['SELECT', 'UPDATE', 'USAGE']) AS p(privilege) "
-                "WHERE n.nspname = current_schema() AND c.relkind = 'S' "
-                "AND has_sequence_privilege(%s, c.oid, p.privilege)",
-                [list(TABLE_PRIVILEGES), role, role],
-            )
-            for name, privilege in cursor.fetchall():
-                if permitted is None:
-                    if name == STATUS_TABLE and privilege != "SELECT":
-                        extra.append(f"{role} {privilege} on {name}")
-                elif (name, privilege) not in permitted:
-                    extra.append(f"{role} {privilege} on {name}")
+        extra = access.extra_privileges(
+            cursor,
+            {
+                app: None,  # only the status table is checked for the app
+                enroller: {(APPROVAL_TABLE, "SELECT")},
+                **{role: STATUS_WRITES for role in status_roles},
+            },
+        )
         if extra:
             raise CommandError(
                 "These roles still have more access than allowed (check grants "
-                "to PUBLIC and role memberships): " + "; ".join(sorted(extra)[:20])
+                "to PUBLIC and role memberships): "
+                + "; ".join(
+                    f"{role} {privilege} on {name}" for role, privilege, name in extra[:20]
+                )
             )
