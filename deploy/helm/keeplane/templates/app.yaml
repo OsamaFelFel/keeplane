@@ -1,4 +1,5 @@
 {{- include "keeplane.gatewayCa.check" . }}
+{{- include "keeplane.detection.check" . }}
 {{- if and .Values.app.localTrial.enabled (not .Values.gateway.keysSecret) }}
 {{- fail "app.localTrial requires gateway.keysSecret" }}
 {{- end }}
@@ -129,6 +130,10 @@ spec:
             {{- end }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
+            {{- if .Values.app.personalDataDetection.enabled }}
+            - name: KEEPLANE_PERSONAL_DATA_DETECTION
+              value: "1"
+            {{- end }}
             {{- if .Values.app.postgres.enabled }}
             {{- include "keeplane.postgres.env" . | nindent 12 }}
             {{- if .Values.app.cliSignIn.enabled }}
@@ -213,7 +218,10 @@ spec:
           {{- end }}
           readinessProbe:
             httpGet:
-              path: {{ if .Values.app.postgres.enabled }}/health/ready{{ else }}/health/app{{ end }}
+              {{- /* With detection installed, /health/ready also waits for the
+              language model's first load, so a new copy takes no requests
+              it would have to hold. */}}
+              path: {{ if or .Values.app.postgres.enabled .Values.app.personalDataDetection.enabled }}/health/ready{{ else }}/health/app{{ end }}
               port: 3000
             periodSeconds: 5
           livenessProbe:

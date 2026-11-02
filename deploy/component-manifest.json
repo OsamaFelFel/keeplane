@@ -60,7 +60,12 @@
           "presidio-analyzer": "2.2.364",
           "spacy": "3.8.18",
           "en_core_web_lg": "3.8.0"
-        }
+        },
+        "personal_data_detection_image_targets": [
+          "detection",
+          "postgres-detection",
+          "postgres-cli-auth-detection"
+        ]
       }
     },
     "admin_ui": {
@@ -124,6 +129,7 @@
       "local_trial",
       "optional_audit_kinds",
       "personal_data_detection",
+      "personal_data_detection_install",
       "postgres"
     ]
   },

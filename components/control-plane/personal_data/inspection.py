@@ -16,6 +16,7 @@ Request text stays in memory for the check only: it is never stored, logged,
 included in an error or sent to another service.
 """
 
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,10 @@ WORKERS = 2
 # Far longer than any request the limit allows checking; held without a check.
 MAX_CHECK_CHARS = 100_000
 RELOAD_AFTER_SECONDS = 60
+# How long readiness waits for the first load of an installed detector. After
+# that, or once the first load has finished or failed, the app reports ready
+# and any request it can't check is held, as above.
+START_WAIT_SECONDS = 300
 
 # Why a request was or was not held. Never includes any request text.
 FOUND, CLEAN, NOT_SENT, UNAVAILABLE, SLOW, FAILED = (
@@ -106,6 +111,8 @@ class Inspector:
         self._detector = None
         self._loading = False
         self._failed_at = None
+        self._first_load_started = None
+        self._first_load_done = False
         self._pool = ThreadPoolExecutor(max_workers=workers,
                                         thread_name_prefix="keeplane-detection")
 
@@ -115,9 +122,11 @@ class Inspector:
         except Exception:  # noqa: BLE001 - any load failure holds requests
             with self._lock:
                 self._loading, self._failed_at = False, self._clock()
+                self._first_load_done = True
             return
         with self._lock:
             self._detector, self._loading = detector, False
+            self._first_load_done = True
 
     def detector(self):
         """The loaded detector, or None while it loads or after it failed to."""
@@ -129,9 +138,26 @@ class Inspector:
             )
             if not self._loading and retry:
                 self._loading, self._failed_at = True, None
+                if self._first_load_started is None:
+                    self._first_load_started = self._clock()
                 threading.Thread(target=self._load, name="keeplane-detection-load",
                                  daemon=True).start()
             return None
+
+    def starting(self, within=START_WAIT_SECONDS):
+        """Whether the first load is still running, for at most ``within`` seconds.
+
+        Starts the load if nothing has asked for the detector yet. A failed
+        first load, or a later reload after a failure, never counts: the app
+        then serves and holds what it can't check, rather than going unready.
+        """
+        self.detector()
+        with self._lock:
+            return (
+                not self._first_load_done
+                and self._first_load_started is not None
+                and self._clock() - self._first_load_started < within
+            )
 
     def check(self, text):
         if not isinstance(text, str):
@@ -260,6 +286,38 @@ def inspector():
             model = settings.PERSONAL_DATA_MODEL
             _INSPECTOR = Inspector(lambda: PresidioDetector(model))
         return _INSPECTOR
+
+
+def warm_up():
+    """Start loading an installed detector as the app starts.
+
+    Called once per app process, so requests are not held while the first
+    request waits for the model. When the install setting is on but this
+    image has no detector, say so in the log: the admin switch stays off and
+    the page says detection isn't installed.
+    """
+    from django.conf import settings
+
+    if not settings.PERSONAL_DATA_DETECTION_INSTALLED:
+        return False
+    if not detection_available():
+        logging.getLogger(__name__).warning(
+            "KEEPLANE_PERSONAL_DATA_DETECTION=1 is set, but this app image has no "
+            "personal-data detector or model. Build the app from the detection "
+            "image target (postgres-detection for PostgreSQL installs)."
+        )
+        return False
+    inspector().detector()
+    return True
+
+
+def detection_starting():
+    """Whether the installed detector's first load is still running."""
+    from django.conf import settings
+
+    if not settings.PERSONAL_DATA_DETECTION_INSTALLED or not detection_available():
+        return False
+    return inspector().starting()
 
 
 def detection_available():

@@ -305,3 +305,60 @@ def test_pd_08_no_request_text_in_logs_or_verdicts(caplog):
         verdict = ready(detector).check("mail " + secret)
         assert secret not in repr(verdict)
     assert secret not in caplog.text
+
+
+# PD-12 The app reports not ready only while an installed detector's first load
+# runs, for at most the start wait; a failed load or a later reload never
+# takes the app out of service.
+class Clock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_pd_12_starting_lasts_only_while_the_first_load_runs():
+    gate = threading.Event()
+
+    def slow_load():
+        gate.wait(2)
+        return Fake()
+
+    inspector = Inspector(slow_load)
+    assert inspector.starting()  # asking also starts the load
+    gate.set()
+    for _ in range(200):
+        if not inspector.starting():
+            break
+        time.sleep(0.005)
+    assert not inspector.starting() and inspector.detector() is not None
+
+
+def test_pd_12_a_failed_first_load_and_its_retries_never_count_as_starting():
+    clock = Clock()
+
+    def missing():
+        raise ImportError("not installed")
+
+    broken = Inspector(missing, clock=clock)
+    broken.detector()
+    for _ in range(200):
+        if not broken.starting():
+            break
+        time.sleep(0.005)
+    assert not broken.starting()
+    clock.now += 61  # a reload is due; it must not make the app unready again
+    assert not broken.starting()
+    assert broken.check("Refactor the parser please").reason == UNAVAILABLE
+
+
+def test_pd_12_starting_ends_after_the_start_wait_even_if_loading_hangs():
+    clock, gate = Clock(), threading.Event()
+    inspector = Inspector(lambda: gate.wait(2) and Fake(), clock=clock)
+    assert inspector.starting(within=300)
+    clock.now += 299
+    assert inspector.starting(within=300)
+    clock.now += 1
+    assert not inspector.starting(within=300)
+    gate.set()

@@ -90,6 +90,13 @@ def readiness(request):
                 return JsonResponse({"app": "unavailable"}, status=503)
     except DatabaseError:
         return JsonResponse({"app": "unavailable"}, status=503)
+    # An installed detector is still loading its language model: keep this
+    # copy out of service until it can check requests (bounded; see
+    # personal_data.inspection.START_WAIT_SECONDS).
+    from personal_data.inspection import detection_starting
+
+    if detection_starting():
+        return JsonResponse({"app": "starting"}, status=503)
     return JsonResponse({"app": "ready"})
 
 
