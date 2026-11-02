@@ -22,6 +22,13 @@ else:
 
 
 VERSION = "2.0.27"
+# Built-in runtime plugins turned off by a "-" directive: the web fetch tool,
+# the web search tool and every hosted web search provider.
+DISABLED_BUILTINS = (
+    "-opencode.tool.webfetch",
+    "-opencode.tool.websearch",
+    "-opencode.websearch.*",
+)
 
 
 class Cancelled(KeyboardInterrupt):
@@ -154,16 +161,20 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             }},
             "model": "keeplane/" + model,
             "share": "disabled", "snapshots": False,
+            # ADR 009: no built-in web search or web fetch, so a turn never sends
+            # its content to a service no admin set up.
+            "websearch": False,
+            "plugins": list(DISABLED_BUILTINS),
         }
         if account_context is not None:
             config["providers"]["keeplane"]["headers"] = {
                 "X-Keeplane-Project-ID": account_context["project_id"],
             }
         if instruction_snapshot:
-            config["plugins"] = [{
+            config["plugins"].insert(0, {
                 "package": str(Path(__file__).with_name("instruction_plugin").resolve()),
                 "options": instruction_snapshot,
-            }]
+            })
         configuration = json.dumps(config, ensure_ascii=False)
         if len(configuration.encode("utf-8")) > 120 * 1024:
             raise ValueError("Serialized runtime configuration exceeds 120 KiB; choose smaller instruction files.")

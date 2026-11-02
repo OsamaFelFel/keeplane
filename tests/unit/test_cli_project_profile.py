@@ -501,4 +501,8 @@ def test_code_02_keeplane_sets_no_request_settings_of_its_own(
     assert set(provider) == {"package", "env", "settings", "models", "headers"}
     assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
     assert provider["models"] == {"coder": {"name": "coder"}}
-    assert set(config) == {"providers", "model", "share", "snapshots"}
+    # "websearch" and "plugins" only turn the runtime's web tools off (EGR-17).
+    assert set(config) == {"providers", "model", "share", "snapshots", "websearch",
+                           "plugins"}
+    assert config["websearch"] is False
+    assert all(isinstance(row, str) and row.startswith("-") for row in config["plugins"])

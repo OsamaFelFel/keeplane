@@ -32,7 +32,10 @@ def test_adapter_uses_immutable_reviewed_text_without_importing_project_settings
         assert config["providers"]["keeplane"]["settings"] == {
             "baseURL": "https://gateway.test/v1"
         }
-        assert "repo-key" not in json.dumps(config) and len(config["plugins"]) == 1
+        # One plugin package (the instruction plugin); the rest turn built-ins off.
+        packages = [row for row in config["plugins"] if isinstance(row, dict)]
+        assert "repo-key" not in json.dumps(config) and len(packages) == 1
+        assert "hostile" not in config["plugins"]
         manifest = config["plugins"][0]["options"]
         assert manifest == {
             "directory": str(tmp_path),

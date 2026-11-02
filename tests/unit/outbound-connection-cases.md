@@ -33,8 +33,8 @@ Both run in the backend checks:
 | EGR-13 | Set `HTTP_PROXY` to a loopback test proxy, then read a copy's applied configuration, probe a Personal provider, run the provider-key check (the validator starts its worker with the approved provider address; only the read of the approved definition is stubbed), and in a new process call the gateway adapter and runner discovery. | The applied read, the probe and the key check go directly to their address (the key check sends the developer's key there) and the proxy sees nothing; the gateway and runner calls started with a proxy set go through it. |
 | EGR-14 | Optional (`-m optional`, needs the detector and `en_core_web_lg`): under the guard, load the real detector and check a request with an email. | The email is found; there is no connection attempt and no name lookup. The image check DI-01 also loads it with no network. |
 | EGR-15 | Read every Python file under `components/cli` with the EGR-01 scan and collect every full address written there; read the CLI's package dependencies. | Each module that can connect, start a process or open a browser is declared with where it goes (the Keeplane server, the loopback sign-in listener, the browser, the coding runtime); the only address is the start of the loopback sign-in redirect; the CLI depends on no other package. Anything new fails. |
-| EGR-16 | Read the guide's developer-computer section. | It names the server and gateway options, the loopback listener, the sign-in page, each switch the coding runtime gets, `models.opencode.ai`, proxies and the runtime's web search. |
-| EGR-17 | Start a coding turn, with and without a reviewed instruction file, with a stand-in runtime and a developer's shell that sets a proxy, a provider key, a model catalogue address, a runtime settings file and `OPENCODE_DISABLE_AUTOUPDATE=0`. | The runtime gets the model catalogue, update and repository-settings switches on and an update policy of `disable`; it inherits only `PATH`, language and TLS certificate settings (no proxy, key or other runtime setting); its settings name only the gateway, as the one provider, through the built-in provider, with sharing off and no other key; the instruction plugin is the local folder, with no dependencies, importing only Node built-ins and making no request. |
+| EGR-16 | Read the guide's developer-computer section. | It names the server and gateway options, the loopback listener, the sign-in page, each switch the coding runtime gets, `models.opencode.ai`, proxies, and that there is no web search or web fetch. |
+| EGR-17 | Start a coding turn, with and without a reviewed instruction file, with a stand-in runtime and a developer's shell that sets a proxy, a provider key, a model catalogue address, a runtime settings file and `OPENCODE_DISABLE_AUTOUPDATE=0`. | The runtime gets the model catalogue, update and repository-settings switches on and an update policy of `disable`; it inherits only `PATH`, language and TLS certificate settings (no proxy, key or other runtime setting); its settings name only the gateway, as the one provider, through the built-in provider, with sharing off and no other key; web search is off (`"websearch": false`) and the web fetch tool, the web search tool and every hosted search provider are turned off, even with search provider keys (`EXA_API_KEY` and others) in the shell, none of which reaches the runtime; the instruction plugin is the local folder, with no dependencies, importing only Node built-ins and making no request. |
 | EGR-18 | Under the guard, with a loopback test server and a developer's shell that sets a proxy, run `keeplane whoami`, `keeplane models`, `keeplane code` (stand-in runtime) and `keeplane logout`. | Every connection goes to the test server; nothing else is contacted and no name is looked up; the runtime is started once without the proxy or the provider key. |
 
 Not covered here:
@@ -69,9 +69,9 @@ Not covered here:
   starts it with; the switches were read from the pinned runtime's own
   settings code, but the real runtime is not run here, so a connection it
   makes past those switches is not caught. The native runtime cases
-  (`KEEPLANE_OPENCODE_V2_BIN`) start it with the same switches. Its web
-  search and web fetch tools, used only when the model asks, are not turned
-  off (see the guide).
+  (`KEEPLANE_OPENCODE_V2_BIN`) start it with the same environment switches;
+  that the settings keys and plugin directives turning off web search and
+  web fetch take effect in the real runtime is not run here either.
 - Browser and device sign-in are not run under the guard here; EGR-15
   declares their modules and the CLI sign-in cases cover their requests.
 - An isolated-network install and a fresh node restart from internal images

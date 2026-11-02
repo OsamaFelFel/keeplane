@@ -148,10 +148,13 @@ off everything the runtime would otherwise reach on its own:
   runtime, so no package is downloaded. Sharing is off. Keeplane's instruction
   plugin is a local folder with no dependencies.
 
-The runtime's own web search and web fetch tools are not changed by Keeplane.
-They run only when the model asks for them during a turn, and they reach the
-page or the hosted search service that the tool names. On an isolated network
-those calls fail and the turn carries on without them.
+- No web search and no web fetch. The runtime has built-in tools that search
+  the web through hosted services (some work without any key) and fetch any
+  page the model names. `keeplane code` turns off both tools and every hosted
+  search provider, so a turn never sends its content to a service no admin
+  set up, even when the developer's shell holds a search provider key. Unlike
+  the vendors' own coding CLIs, a Keeplane coding turn cannot look things up
+  on the web.
 
 ## How this is checked
 

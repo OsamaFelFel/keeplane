@@ -26,8 +26,10 @@ from tests.support.outbound import (
     REPO,
     RUNTIME_GLOBAL_SETTINGS,
     RUNTIME_INHERITED,
+    RUNTIME_SEARCH_KEYS,
     RUNTIME_SETTINGS,
     RUNTIME_SWITCHES,
+    RUNTIME_WEB_OFF,
     SERVER,
     address_literals,
     call_site_users,
@@ -481,7 +483,8 @@ def test_egr_16_the_guide_covers_developer_computers():
     section = guide.split("## Developers' computers", 1)[1].split("\n## ", 1)[0]
     for destination in CLI_DESTINATIONS.values():
         assert destination["guide"] in section, destination["guide"]
-    for phrase in (*RUNTIME_SWITCHES, "models.opencode.ai", "proxy", "web search"):
+    for phrase in (*RUNTIME_SWITCHES, "models.opencode.ai", "proxy",
+                   "No web search and no web fetch"):
         assert phrase in section, phrase
 
 
@@ -509,7 +512,7 @@ def adapter_launch(tmp_path, monkeypatch, instructions=()):
     directory.mkdir()
     (directory / "AGENTS.md").write_text("Use tabs.\n")
     for name in ("HTTP_PROXY", "https_proxy", "OPENCODE_MODELS_URL", "OPENAI_API_KEY",
-                 "OPENCODE_CONFIG", "EXA_API_KEY", "NO_PROXY"):
+                 "OPENCODE_CONFIG", "NO_PROXY", *RUNTIME_SEARCH_KEYS):
         monkeypatch.setenv(name, "https://outside.example.invalid")
     monkeypatch.setenv("OPENCODE_DISABLE_AUTOUPDATE", "0")
     monkeypatch.setattr(opencode_adapter.subprocess, "run", version)
@@ -525,7 +528,8 @@ def adapter_launch(tmp_path, monkeypatch, instructions=()):
 # features off: no model catalogue download, no update check, no repository
 # settings, no proxy or provider setting from the developer's shell, only the
 # gateway as a provider, no MCP server or package to install, sharing off,
-# and the instruction plugin is a local folder with no dependency.
+# web search and web fetch off, and the instruction plugin is a local folder
+# with no dependency.
 @pytest.mark.parametrize("instructions", [(), ("AGENTS.md",)])
 def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
     tmp_path, monkeypatch, instructions
@@ -553,7 +557,12 @@ def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
     addresses = set(re.findall(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", json.dumps(config)))
     assert addresses == {"https://gateway.test/v1"}
     assert seen["command"][1:4] == ["run", "--standalone", "--format"]
-    plugins = config.get("plugins", [])
+    # No web search or web fetch, even with search provider keys in the shell.
+    assert config["websearch"] is False
+    directives = [row for row in config["plugins"] if isinstance(row, str)]
+    assert directives == list(RUNTIME_WEB_OFF)
+    assert not set(RUNTIME_SEARCH_KEYS) & set(environment)
+    plugins = [row for row in config["plugins"] if not isinstance(row, str)]
     assert len(plugins) == len(instructions)
     for plugin in plugins:
         folder = CLI / "instruction_plugin"

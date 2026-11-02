@@ -395,7 +395,26 @@ RUNTIME_INHERITED = frozenset(
 # The only settings keys `keeplane code` gives the runtime. Any other key (MCP
 # servers, more providers, remote instructions, a catalogue address, packages
 # to install) fails EGR-17 until it is reviewed.
-RUNTIME_SETTINGS = frozenset({"providers", "model", "share", "snapshots", "plugins"})
+RUNTIME_SETTINGS = frozenset(
+    {"providers", "model", "share", "snapshots", "websearch", "plugins"}
+)
+# Product decision (associate product owner, 2 November 2026): `keeplane code`
+# has no web search or web fetch. In the runtime, `"websearch": false` turns
+# search off, and a "-" plugin directive turns off a built-in plugin: the web
+# fetch tool, the web search tool and each hosted search provider (Exa,
+# Firecrawl, Parallel, Tavily, TinyFish), which work without a key.
+RUNTIME_WEB_OFF = (
+    "-opencode.tool.webfetch",
+    "-opencode.tool.websearch",
+    "-opencode.websearch.*",
+)
+# Keys for hosted search providers that the runtime reads from its environment.
+RUNTIME_SEARCH_KEYS = (
+    "EXA_API_KEY",
+    "FIRECRAWL_API_KEY",
+    "PARALLEL_API_KEY",
+    "TAVILY_API_KEY",
+)
 
 ADDRESS = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", re.IGNORECASE)
 
