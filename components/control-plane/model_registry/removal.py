@@ -16,7 +16,7 @@ RESTORE_OUTCOMES = {
     "restored_personal": "The model is back in the gateway. Developers using "
     "their own provider keys for it must check them again.",
     "unpinned": "The model is back in the gateway; check its setup in Models.",
-    "missing": "The model may be missing from the gateway; check Models.",
+    "missing": "The model may be missing from the gateway. Check Models.",
 }
 
 
