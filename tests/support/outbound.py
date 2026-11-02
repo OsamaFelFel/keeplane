@@ -23,17 +23,25 @@ GUIDE = REPO / "docs" / "guide" / "outbound-connections.md"
 # Standard-library and third-party modules that can open a network connection,
 # download something, or start a process that could. Importing any part of
 # one, or reaching it through a bare parent import (`import urllib` then
-# `urllib.request.urlopen`), is a call site. `ctypes` is listed because it can
-# call the C library's socket and process functions directly, past every
-# Python-level guard.
+# `urllib.request.urlopen`), is a call site. `ctypes`, `_ctypes` and `cffi`
+# are listed because they can call the C library's socket and process
+# functions directly, past every Python-level guard. `xml.sax` and
+# `xml.dom.pulldom` fetch a document's external system IDs through urllib.
+# `click.launch` and `typer.launch` open a URL in a browser. `runpy.run_path`
+# runs a file the scan cannot follow, so it is reviewed as a call site.
 NETWORK_MODULES = (
     "aiohttp",
     "anyio",
     "asyncio",
     "boto3",
     "botocore",
+    "cffi",
+    "click._termui_impl",
+    "click.launch",
+    "click.termui.launch",
     "cloudpathlib",
     "ctypes",
+    "_ctypes",
     "django.core.mail",
     "django.db.backends.mysql",
     "django.db.backends.oracle",
@@ -48,6 +56,7 @@ NETWORK_MODULES = (
     "imaplib",
     "logging.handlers",
     "multiprocessing.connection",
+    "multiprocessing.managers",
     "paramiko",
     "pip",
     "poplib",
@@ -57,6 +66,7 @@ NETWORK_MODULES = (
     "psycopg2",
     "pty",
     "requests",
+    "runpy.run_path",
     "smart_open",
     "smtplib",
     "_socket",
@@ -68,6 +78,8 @@ NETWORK_MODULES = (
     "subprocess",
     "telnetlib",
     "tldextract",
+    "typer.launch",
+    "typer.main.launch",
     "urllib.request",
     "urllib.robotparser",
     "urllib3",
@@ -76,15 +88,27 @@ NETWORK_MODULES = (
     "websocket",
     "websockets",
     "_winapi",
+    "xml.dom.pulldom",
+    "xml.sax",
     "xmlrpc.client",
 )
 
-# Functions that import a module named by a string: `__import__`,
-# `importlib.import_module`, `importlib.__import__`, `builtins.__import__`.
-# Calls through these, or through a name bound to one (`from importlib import
-# import_module as im`, `im = importlib.import_module`), count as imports.
-IMPORTERS = frozenset({"__import__", "import_module"})
-IMPORTER_MODULES = frozenset({"importlib", "builtins"})
+# Functions that import or run a module named by a string: `__import__`,
+# `importlib.import_module`, `importlib.__import__`, `builtins.__import__`,
+# Django's `import_string`, `pkgutil.resolve_name` (`module:attribute`) and
+# `runpy.run_module`. Calls through these, or through a name bound to one
+# (`from importlib import import_module as im`, `im = importlib.import_module`),
+# count as imports. The value is the keyword that can carry the name.
+IMPORTERS = {
+    "__import__": "name",
+    "import_module": "name",
+    "import_string": "dotted_path",
+    "resolve_name": "name",
+    "run_module": "mod_name",
+}
+IMPORTER_MODULES = frozenset(
+    {"builtins", "django.utils.module_loading", "importlib", "pkgutil", "runpy"}
+)
 
 # os (or posix/nt) functions that start another program; reported as
 # "os.process".
@@ -311,42 +335,56 @@ def dotted(node):
     return ".".join([node.id, *reversed(parts)])
 
 
+def importer_of(node, bound):
+    """The importer a call target or assigned value refers to, or None."""
+    if isinstance(node, ast.Name):
+        return bound.get(node.id)
+    if isinstance(node, ast.Attribute) and node.attr in IMPORTERS:
+        return node.attr
+    return None
+
+
 def importer_names(tree):
-    """Names in a parsed file bound to a function that imports by string."""
-    found = set(IMPORTERS)
-
-    def is_importer(node):
-        return (isinstance(node, ast.Name) and node.id in found) or (
-            isinstance(node, ast.Attribute) and node.attr in IMPORTERS
-        )
-
+    """Names in a parsed file bound to an importer, mapped to which one."""
+    bound = {name: name for name in IMPORTERS}
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module in IMPORTER_MODULES:
-            found |= {a.asname or a.name for a in node.names if a.name in IMPORTERS}
+            bound |= {
+                a.asname or a.name: a.name for a in node.names if a.name in IMPORTERS
+            }
     # `im = importlib.import_module`, then possibly `load = im`: repeat until
     # no new name is bound.
     while True:
-        bound = {
-            target.id
+        new = {
+            target.id: importer
             for node in ast.walk(tree)
             if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
             and node.value is not None
-            and is_importer(node.value)
+            and (importer := importer_of(node.value, bound))
             for target in (
                 node.targets if isinstance(node, ast.Assign) else [node.target]
             )
-            if isinstance(target, ast.Name)
-        } - found
-        if not bound:
-            return found
-        found |= bound
+            if isinstance(target, ast.Name) and target.id not in bound
+        }
+        if not new:
+            return bound
+        bound |= new
 
 
-def imported_by(call):
-    """The module-name argument of an importer call, positional or `name=`."""
+def imported_by(call, importer):
+    """The module name an importer call names with a string literal, or None.
+
+    The name is the first positional argument or the importer's keyword;
+    `module:attribute` (pkgutil.resolve_name) is read as `module.attribute`.
+    """
     if call.args:
-        return call.args[0]
-    return next((k.value for k in call.keywords if k.arg == "name"), None)
+        node = call.args[0]
+    else:
+        keyword = IMPORTERS[importer]
+        node = next((k.value for k in call.keywords if k.arg == keyword), None)
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value.replace(":", ".")
+    return None
 
 
 def imported_names(tree, package=""):
@@ -375,16 +413,10 @@ def imported_names(tree, package=""):
             names += [base] + [f"{base}.{a.name}" for a in node.names]
         elif (
             isinstance(node, ast.Call)
-            and (
-                (isinstance(node.func, ast.Name) and node.func.id in importers)
-                or (
-                    isinstance(node.func, ast.Attribute) and node.func.attr in IMPORTERS
-                )
-            )
-            and isinstance(target := imported_by(node), ast.Constant)
-            and isinstance(target.value, str)
+            and (importer := importer_of(node.func, importers))
+            and (target := imported_by(node, importer))
         ):
-            names.append(target.value)
+            names.append(target)
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and (chain := dotted(node)):
             root, _, rest = chain.partition(".")

@@ -44,7 +44,7 @@ REVIEWED_PACKAGES = {
     "psycopg": "The configured database only (declared)",
     # requirements-cli-auth.txt (optional sign-in trial)
     "certifi": "none (CA data)",
-    "cffi": "none",
+    "cffi": "Calls C functions, sockets included, only when imported; EGR-01 fails if a server module imports it",
     "charset-normalizer": "none",
     "cryptography": "none",
     "django-oauth-toolkit": "Token introspection is the only outbound feature; RESOURCE_SERVER_INTROSPECTION_URL stays unset (EGR-05)",
@@ -61,7 +61,7 @@ REVIEWED_PACKAGES = {
     "anyio": "Opens connections only when called; EGR-01 fails if a server module imports it",
     "blis": "none",
     "catalogue": "none",
-    "click": "none",
+    "click": "click.launch opens a URL in a browser, only when called; EGR-01 fails if a server module reaches it",
     "cloudpathlib": "Cloud paths only when given one; the model is a local package. EGR-01 fails if a server module imports it",
     "confection": "none",
     "cymem": "none",
@@ -96,7 +96,7 @@ REVIEWED_PACKAGES = {
     "thinc": "none",
     "tldextract": "Fetches the public-suffix list by default; Keeplane uses the bundled copy (EGR-06), and personal_data/engine.py is its only declared importer (EGR-01)",
     "tqdm": "none",
-    "typer": "none",
+    "typer": "typer.launch opens a URL in a browser, only when called; EGR-01 fails if a server module reaches it",
     "typing-inspection": "none",
     "wasabi": "none",
     "weasel": "Remote project storage only through its own CLI. EGR-01 fails if a server module imports it",
@@ -206,6 +206,55 @@ def test_egr_01_every_server_call_site_is_declared():
         ("from _winapi import CreateProcess", {"_winapi"}),
         ("import ctypes\nctypes.CDLL(None).connect", {"ctypes"}),
         ("from ctypes.util import find_library", {"ctypes"}),
+        (
+            (
+                "from django.utils.module_loading import import_string\n"
+                "import_string('socket.create_connection')"
+            ),
+            {"socket"},
+        ),
+        (
+            (
+                "from django.utils.module_loading import import_string as load\n"
+                "load(dotted_path='smtplib.SMTP')"
+            ),
+            {"smtplib"},
+        ),
+        (
+            (
+                "from django.utils import module_loading\n"
+                "module_loading.import_string('http.client.HTTPConnection')"
+            ),
+            {"http.client"},
+        ),
+        (
+            "import pkgutil\npkgutil.resolve_name('socket:create_connection')",
+            {"socket"},
+        ),
+        ("from pkgutil import resolve_name as rn\nrn('ssl:wrap_socket')", {"ssl"}),
+        ("import pkgutil\nfind = pkgutil.resolve_name\nfind('ftplib')", {"ftplib"}),
+        ("import runpy\nrunpy.run_module('pip')", {"pip"}),
+        ("from runpy import run_module as rm\nrm(mod_name='ensurepip')", {"ensurepip"}),
+        ("import runpy\nrunpy.run_path('tool.py')", {"runpy.run_path"}),
+        ("from runpy import run_path", {"runpy.run_path"}),
+        ("import xml.sax\nxml.sax.parse('doc.xml', None)", {"xml.sax"}),
+        ("from xml.sax import make_parser", {"xml.sax"}),
+        ("from xml.dom import pulldom", {"xml.dom.pulldom"}),
+        ("import xml.dom.pulldom", {"xml.dom.pulldom"}),
+        (
+            "from multiprocessing.managers import BaseManager",
+            {"multiprocessing.managers"},
+        ),
+        ("import _ctypes", {"_ctypes"}),
+        ("from cffi import FFI", {"cffi"}),
+        ("import click\nclick.launch('https://x')", {"click.launch"}),
+        ("from click import launch", {"click.launch"}),
+        ("from click.termui import launch", {"click.termui.launch"}),
+        ("import typer\ntyper.launch('https://x')", {"typer.launch"}),
+        ("from typer.main import launch", {"typer.main.launch"}),
+        ("import click\nclick.echo('x')", set()),
+        ("import runpy\nrunpy.run_module('json')", set()),
+        ("from xml.dom import minidom", set()),
         ("from importlib import import_module as im\nim('json')", set()),
         ("from urllib.parse import urlsplit", set()),
         ("import os\nos.path.join('a', 'b')", set()),
