@@ -170,6 +170,13 @@ and Linux refuses to start a process with a single value over 128 KiB
 {{- if gt $baseSize $baseLimit -}}
 {{- fail (printf "gateway.enroller passes the gateway configuration to each copy's init step as one environment value, KEEPLANE_ENROLLER_RUNTIME_BASE, and Linux will not start a container with a value over 128 KiB. The rendered configuration is %d bytes, over the chart's limit of %d bytes (120 KiB). Shorten agentgateway-standalone.config, for example by listing fewer models there." $baseSize $baseLimit) -}}
 {{- end -}}
+{{- /* Developers reach the protected port 5000 through the public entry
+(gateway-runtime-service.yaml); the gateway ingress policy admits it there
+only from networkPolicy.publicEntry. */ -}}
+{{- $np := .Values.networkPolicy -}}
+{{- if and $np.gatewayIngressEnabled (not (or $np.publicEntry.namespaceSelector $np.publicEntry.podSelector)) -}}
+{{- fail "gateway.enroller with networkPolicy.gatewayIngressEnabled needs networkPolicy.publicEntry.namespaceSelector or podSelector: the labels of your ingress controller's namespace or pods. The gateway ingress policy admits only them to the protected model port 5000; without them developers could not reach protected models." -}}
+{{- end -}}
 {{- end -}}
 {{- if .Values.app.guardStatusCheck -}}
 {{- if not $managed -}}
