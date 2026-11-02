@@ -312,7 +312,7 @@ def run_cases():
             and protected_existing.returncode == 0
             and bool(protected_app)
             and "python /app/manage.py migrate --noinput" in protected_app
-            and "python /app/manage.py import_preview" in protected_app
+            and "import_preview" not in protected_app
             and 'value: "http://127.0.0.1:13001"' in protected_app
             and "secretName: keeplane-first-admin" in protected_app
             and "type: ClusterIP" in protected_service

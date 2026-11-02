@@ -135,7 +135,6 @@ REST_FRAMEWORK = {
 }
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-    "accounts.hashers.PreviewScryptHasher",
 ]
 
 secret_file = os.environ.get("DJANGO_SECRET_KEY_FILE")

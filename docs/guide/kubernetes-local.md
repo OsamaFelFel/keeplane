@@ -211,7 +211,9 @@ values override if you want to reapply your addresses after setup.
 ## Keep data and understand the limits
 
 Rerunning setup preserves the app's PVC-backed records and existing credential
-files. Keep the files under `/private/tmp/keeplane-accounts-trial/`; recovering
+files. Earlier preview files on the state claim (`accounts.sqlite3` and
+`model-approvals.sqlite3`) aren't imported: before the first release Keeplane
+doesn't carry an earlier preview's data forward. Keep the files under `/private/tmp/keeplane-accounts-trial/`; recovering
 a missing gateway database password needs the
 [database credential guide](gateway-database-secret.md). Deleting the kind
 cluster deletes its local volumes. The gateway databases use temporary storage:

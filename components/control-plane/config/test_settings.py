@@ -18,7 +18,7 @@ DATABASES = {
     }
 }
 # Same stored algorithm as the application, at a test round count; see
-# tests/support/password_hashing.py. The preview import hasher stays second.
+# tests/support/password_hashing.py.
 PASSWORD_HASHERS = [
     "tests.support.password_hashing.LowRoundPBKDF2PasswordHasher",
     *PASSWORD_HASHERS[1:],  # noqa: F405

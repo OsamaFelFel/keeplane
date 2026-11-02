@@ -46,8 +46,8 @@ sessions and transaction boundaries across application copies. SQLite mode
 supports one application process; shared deployments require PostgreSQL.
 
 The local launcher builds React, prepares private credentials, runs database
-migrations in a separate startup service, imports existing local preview data
-once, and starts Gunicorn. Kind uses an init container for the local database.
+migrations in a separate startup service on a fresh database (earlier preview
+data isn't imported, ADR 014), and starts Gunicorn. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
 Serving workers do not migrate schemas. PostgreSQL chart installs require one
 immutable app image reference for the serving copies, migration Job and

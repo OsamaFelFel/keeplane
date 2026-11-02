@@ -1,6 +1,6 @@
 """Render the chart with and without the personal-data detection install setting.
 
-Cases CD-01 to CD-07 in chart-detection-cases.md. CD-01 to CD-05 render the
+Cases CD-01 to CD-08 in chart-detection-cases.md. CD-01 to CD-05 and CD-08 render the
 chart with Helm and are skipped when Helm is missing; CD-06 and CD-07 read the
 values file and the guides and always run.
 """
@@ -165,6 +165,25 @@ def test_cd_05_the_managed_gateway_is_refused(chart, tmp_path):
     assert render(chart, tmp_path, values).returncode != 0
     values["app"]["personalDataDetection"] = {"enabled": True, "model": "other"}
     assert render(chart, tmp_path, values).returncode != 0
+
+
+def test_cd_08_detection_needs_a_database(chart, tmp_path):
+    # The existing gateway with neither app.postgres nor app.localTrial: the
+    # app has no database, so /health/ready would never pass.
+    values = existing(chart)
+    values["app"]["postgres"] = {"enabled": False}
+    result = render(chart, tmp_path, values)
+    assert result.returncode != 0
+    assert "app.personalDataDetection needs app.postgres or app.localTrial" in result.stderr
+    # The refusal belongs to detection: with it off, this check stays quiet.
+    values["app"]["personalDataDetection"] = {"enabled": False}
+    assert "app.personalDataDetection" not in render(chart, tmp_path, values).stderr
+    # PostgreSQL and the local trial both still render with detection on.
+    rendered(render(chart, tmp_path, existing(chart)))
+    local = tmp_path / "local.json"
+    local.write_text(json.dumps({"app": {"personalDataDetection": {"enabled": True}}}))
+    rendered(chart.run("template", "keeplane", chart.CHART, "--namespace", "keeplane",
+                       *LOCAL_EXISTING, "-f", str(local)))
 
 
 def test_cd_06_values_file_keeps_detection_off_and_explains_it():

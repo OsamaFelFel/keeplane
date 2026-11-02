@@ -26,8 +26,8 @@ For manual container builds, prepare the web UI assets first using the commands
 in the PostgreSQL guide. The local launcher handles this step automatically.
 
 Python tests live in the repository's `tests/` tree and run through pytest.
-The one-time `import_preview` command copies records from earlier preview files
-without changing them. The Docker preview no longer runs it (ADR 014: a fresh
-database); the Kubernetes trial still does. Serving workers never run schema migrations.
+Before the first release Keeplane doesn't carry earlier preview data forward
+(ADR 014): the Docker preview and the Kubernetes trial both start a fresh
+database and leave earlier preview files unused. Serving workers never run schema migrations.
 The original Django migration is retained. Moving models between apps changes
 their migration state only, preserving existing PostgreSQL tables and records.
