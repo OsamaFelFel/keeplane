@@ -22,6 +22,8 @@ Docker, gateway or provider is used.
 | MRS-08 | Edit a shared-key model and leave Replace shared key empty. | Keeplane asks the model again, writes nothing to the gateway and keeps the same key file and key. |
 | MRS-09 | With data classes off, set up a model added outside Keeplane with no key. | It is set up with no class and no key, still not owned by Keeplane; nothing is written to the gateway. |
 | MRS-10 | Find models on a local runner and add one. | Keeplane only reads the runner's model list and its properties and asks one short question; it sends no settings, load, unload or restart request. |
+| MRS-11 | Add a local model that the gateway registers but that doesn't answer through it; then again when Keeplane can't remove its gateway entry. | 503 with “The model didn't answer through the gateway. Nothing was saved.”; the gateway entry is removed and nothing is approved. When the entry can't be removed, the message doesn't say “Nothing was saved” but “It may remain in the gateway without Keeplane approval; check Models.” |
+| MRS-12 | Add a local model and a cloud model while Keeplane can't save the approval; then again when it can't remove the gateway entry either. | 503 with “Keeplane could not save the model approval.” or “Keeplane couldn't save model approval.”, then “Nothing was saved.”; the gateway entry and the key file are removed. When the entry can't be removed, the message doesn't say “Nothing was saved” but that the model may remain in the gateway without Keeplane approval. |
 
 The same add and set-up rules on every gateway copy are the
 [gateway copy cases](gateway-copy-cases.md); the live versions are the
@@ -75,7 +77,7 @@ or a case named here has no row in its own catalog or no test.
 | ST10 | Data classes are off | MO-UI-02 (no class asked), MRS-02, MP-01 (every project) |
 | ST10 | The customer runs its own gateway | MRS-03, EXIST-03 |
 | ST10 | Add a model from a local runner | MRS-04, ML-05 (listed as Local), MO-UI-02 |
-| ST10 | The model doesn't answer | MRS-05, MOD-UI-02, MO-UI-03, MO-UI-06, CADD-05 |
+| ST10 | The model doesn't answer | MRS-05, MRS-11, MRS-12, MOD-UI-02, MOD-UI-08, MO-UI-03, MO-UI-06, CADD-05 |
 | ST10 | The gateway doesn't register the model | MRS-06, MOD-UI-07 |
 | ST10 | Each developer adds their own key | PMR-01, PMR-02, MO-UI-06, PK-02 (the developer's key, in the CLI) |
 | ST10 | Already added | MRS-07, MOD-UI-03, CADD-04 |
