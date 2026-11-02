@@ -416,7 +416,7 @@ class ModelRemovalTests(unittest.TestCase):
                 self.assertEqual(status, 503)
                 self.assert_not_recorded(
                     result,
-                    "The model is back in the gateway; check its setup in Models.",
+                    "The model is back in the gateway. Check its setup in Models.",
                 )
                 self.assertEqual(len(gateway.restores), 1)
                 self.assertEqual(catalog.repinned, [])
@@ -434,7 +434,7 @@ class ModelRemovalTests(unittest.TestCase):
         status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
         self.assertEqual(status, 503)
         self.assert_not_recorded(
-            result, "The model is back in the gateway; check its setup in Models."
+            result, "The model is back in the gateway. Check its setup in Models."
         )
         self.assertEqual(gateway.restores, [RESOURCE["value"]])
         self.assertEqual(
