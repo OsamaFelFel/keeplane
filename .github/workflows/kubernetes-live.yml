@@ -1,0 +1,144 @@
+name: Kubernetes live checks
+
+# Installs the chart on a disposable kind cluster on the runner and runs the
+# live Kubernetes cases against it. See tests/README.md, "Kubernetes live checks".
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubernetes-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind:
+    name: Chart on a kind cluster
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      HELM_VERSION: v3.19.0
+      HELM_SHA256: a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496
+      # The live test files this job runs, in order: test_local registers the
+      # model test_kind uses. tests/unit/test_self_hosting_scenario_map.py reads
+      # this line to know which cases CI runs on the current revision.
+      LIVE_TESTS: tests/e2e/test_local.py tests/e2e/test_kind.py tests/e2e/test_gateway_secret_rotation.py
+      KEEPLANE_KIND_QWEN: "off"
+      KEEPLANE_BASE_URL: http://127.0.0.1:13000
+      RESULTS: test-results/kubernetes-live
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/package-lock.json
+      - name: Keep the trial's kubeconfig and credentials in the runner's temporary folder
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin" "$RESULTS"
+          {
+            echo "KEEPLANE_KUBECONFIG=$RUNNER_TEMP/keeplane-kind-kubeconfig"
+            echo "KEEPLANE_RUNTIME_DIR=$RUNNER_TEMP/keeplane-kind-runtime"
+            echo "KEEPLANE_HELM_BIN=$RUNNER_TEMP/bin/helm"
+            echo "KEEPLANE_TEST_REPORT_DIR=$GITHUB_WORKSPACE/$RESULTS/reports"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Find the kind and kubectl releases (temporary, before pinning)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          curl --fail -sS -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/kubernetes-sigs/kind/releases?per_page=15" > /tmp/kind-releases.json
+          python3 - <<'PY'
+          import json
+          for release in json.load(open("/tmp/kind-releases.json")):
+              body = release.get("body") or ""
+              print(release["tag_name"], release["published_at"], "a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5" in body)
+              for line in body.splitlines():
+                  if "v1.37" in line or "v1.36" in line:
+                      print("   ", line.strip())
+          PY
+          curl --fail -sS https://dl.k8s.io/release/stable.txt; echo
+      - name: Install pinned kind, kubectl and Helm and check their checksums
+        run: |
+          cd "$RUNNER_TEMP"
+          KIND_VERSION=$(python3 -c 'import json; print(next(r["tag_name"] for r in json.load(open("/tmp/kind-releases.json")) if "a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5" in (r.get("body") or "")))')
+          curl --fail --location -sS --output bin/kind "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64"
+          curl --fail --location -sS --output kind.sha256sum "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64.sha256sum"
+          echo "KIND $KIND_VERSION $(cut -d ' ' -f 1 kind.sha256sum)"
+          echo "$(cut -d ' ' -f 1 kind.sha256sum)  bin/kind" | sha256sum --check
+          KUBECTL_VERSION=v1.37.0
+          curl --fail --location -sS --output bin/kubectl "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+          curl --fail --location -sS --output kubectl.sha256 "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl.sha256"
+          echo "KUBECTL $KUBECTL_VERSION $(cat kubectl.sha256)"
+          echo "$(cat kubectl.sha256)  bin/kubectl" | sha256sum --check
+          curl --fail --location -sS --output helm.tar.gz "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
+          echo "$HELM_SHA256  helm.tar.gz" | sha256sum --check
+          tar -xzf helm.tar.gz linux-amd64/helm
+          mv linux-amd64/helm bin/helm
+          chmod 755 bin/kind bin/kubectl bin/helm
+          kind version
+          kubectl version --client
+          helm version --short
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+      - name: Build the app and install the chart on kind (managed and customer-run gateway)
+        run: deploy/local/kind-up.sh
+      - name: Run the live Kubernetes cases
+        run: |
+          # pytest.ini deselects live checks by default; -m live selects them here.
+          .venv/bin/python -m pytest -m live -rA $LIVE_TESTS \
+            --junitxml="$RESULTS/junit.xml"
+      - name: Require every selected case to have run, none skipped
+        if: ${{ !cancelled() }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          path = os.path.join(os.environ["RESULTS"], "junit.xml")
+          if not os.path.exists(path):
+              sys.exit("No test results were written")
+          root = ET.parse(path).getroot()
+          cases = list(root.iter("testcase"))
+          expected = {name.rsplit("/", 1)[1][:-3] for name in os.environ["LIVE_TESTS"].split()}
+          ran = {case.get("name") for case in cases}
+          skipped = [case.get("name") for case in cases if case.find("skipped") is not None]
+          failed = [case.get("name") for case in cases
+                    if case.find("failure") is not None or case.find("error") is not None]
+          print("Selected:", sorted(expected))
+          print("Ran:", sorted(ran))
+          if skipped:
+              sys.exit("Skipped live checks: " + ", ".join(skipped))
+          if ran != expected:
+              sys.exit("Live checks missing or unexpected: " + ", ".join(sorted(ran ^ expected)))
+          if failed:
+              sys.exit("Failed live checks: " + ", ".join(failed))
+          PY
+      - name: Record the cluster state
+        if: ${{ !cancelled() }}
+        run: |
+          out="$RESULTS/cluster"
+          mkdir -p "$out"
+          kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" get pods,deployments,statefulsets,services,endpointslices,pvc -A -o wide > "$out/resources.txt" 2>&1 || true
+          kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" get events -A --sort-by=.lastTimestamp > "$out/events.txt" 2>&1 || true
+          for ns in keeplane keeplane-existing supplied-gateway; do
+            kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n "$ns" describe pods > "$out/$ns-pods.txt" 2>&1 || true
+            kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n "$ns" logs --all-containers --prefix --tail=300 \
+              -l 'app.kubernetes.io/name' > "$out/$ns-logs.txt" 2>&1 || true
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: kubernetes-live-${{ github.sha }}
+          path: test-results/kubernetes-live/
+          retention-days: 30

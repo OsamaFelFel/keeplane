@@ -2,7 +2,6 @@
 
 import http.cookiejar
 import json
-from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import (
     BaseHandler,
@@ -12,8 +11,11 @@ from urllib.request import (
     install_opener,
 )
 
+from tests.support.client import RUNTIME
 
-PASSWORD = Path("/private/tmp/keeplane-accounts-trial/first-admin-password")
+
+# The previews' first-admin password file; KEEPLANE_RUNTIME_DIR sets the folder.
+PASSWORD = RUNTIME / "first-admin-password"
 
 
 def curl_csrf_headers(run, base, url, cookie):

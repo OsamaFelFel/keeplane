@@ -16,11 +16,10 @@ from urllib.request import Request, urlopen
 from tests.support.kind_port_forward import existing_app
 from tests.support.protected_preview import login_if_protected
 from tests.support.client import Browser, RUNTIME
+from tests.support.kind_trial import kind_kubeconfig
 
 
-KUBECONFIG = os.environ.get(
-    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
-)
+KUBECONFIG = kind_kubeconfig()
 BASE = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:13000")
 
 

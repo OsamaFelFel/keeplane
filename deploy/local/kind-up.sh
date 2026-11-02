@@ -1,21 +1,36 @@
 #!/bin/sh
 # Start the disposable Kubernetes integration trial. Every Kubernetes command
 # uses this project's isolated kubeconfig, never the workstation default.
+#
+# KEEPLANE_KUBECONFIG: kubeconfig file (default /private/tmp/... on macOS,
+#   /tmp/keeplane-kind-kubeconfig elsewhere).
+# KEEPLANE_RUNTIME_DIR: private credential folder (default
+#   /private/tmp/keeplane-accounts-trial on macOS, .keeplane/local elsewhere,
+#   the folder the Docker preview and the tests use there).
+# KEEPLANE_KIND_QWEN=off: skip the optional Qwen runner and its model file.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-KUBECONFIG_PATH=${KEEPLANE_KUBECONFIG:-/private/tmp/keeplane-kind-kubeconfig}
+if [ -d /private/tmp ]; then
+  DEFAULT_KUBECONFIG=/private/tmp/keeplane-kind-kubeconfig
+  DEFAULT_RUNTIME_DIR=/private/tmp/keeplane-accounts-trial
+else
+  DEFAULT_KUBECONFIG=/tmp/keeplane-kind-kubeconfig
+  DEFAULT_RUNTIME_DIR="$ROOT/.keeplane/local"
+fi
+KUBECONFIG_PATH=${KEEPLANE_KUBECONFIG:-$DEFAULT_KUBECONFIG}
+QWEN=${KEEPLANE_KIND_QWEN:-on}
 HELM_BIN=${KEEPLANE_HELM_BIN:-helm}
 PYTHON_IMAGE=python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
 POSTGRES_IMAGE=postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
 GATEWAY_IMAGE=cr.agentgateway.dev/agentgateway@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
 QWEN_MODEL=models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf
 QWEN_SHA256=1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32
-RUNTIME_DIR=/private/tmp/keeplane-accounts-trial
+RUNTIME_DIR=${KEEPLANE_RUNTIME_DIR:-$DEFAULT_RUNTIME_DIR}
 FIRST_ADMIN_PASSWORD="$RUNTIME_DIR/first-admin-password"
 
 cd "$ROOT"
-for kind_tool in python3 node npm docker kind kubectl "$HELM_BIN" rg shasum; do
+for kind_tool in python3 node npm docker kind kubectl "$HELM_BIN" shasum; do
   if ! command -v "$kind_tool" >/dev/null 2>&1; then
     printf 'Missing tool: %s. See docs/guide/kubernetes-local.md for prerequisites.\n' "$kind_tool" >&2
     exit 1
@@ -45,14 +60,20 @@ if not match or tuple(int(part) for part in match.groups()[:2]) < (22, 12):
 checked(["docker", "info", "--format", "{{.ServerVersion}}"],
         "Docker is unavailable. Start Docker, check access and retry.")
 PY
-if [ ! -f "$QWEN_MODEL" ]; then
-  printf 'Missing %s; download it using docs/guide/local-preview.md first.\n' "$QWEN_MODEL" >&2
+if [ "$QWEN" != on ] && [ "$QWEN" != off ]; then
+  printf 'KEEPLANE_KIND_QWEN must be on or off.\n' >&2
   exit 1
 fi
-ACTUAL_QWEN_SHA256=$(shasum -a 256 "$QWEN_MODEL" | cut -d ' ' -f 1)
-if [ "$ACTUAL_QWEN_SHA256" != "$QWEN_SHA256" ]; then
-  printf 'Qwen model checksum does not match the pinned file.\n' >&2
-  exit 1
+if [ "$QWEN" = on ]; then
+  if [ ! -f "$QWEN_MODEL" ]; then
+    printf 'Missing %s; download it using docs/guide/local-preview.md first.\n' "$QWEN_MODEL" >&2
+    exit 1
+  fi
+  ACTUAL_QWEN_SHA256=$(shasum -a 256 "$QWEN_MODEL" | cut -d ' ' -f 1)
+  if [ "$ACTUAL_QWEN_SHA256" != "$QWEN_SHA256" ]; then
+    printf 'Qwen model checksum does not match the pinned file.\n' >&2
+    exit 1
+  fi
 fi
 mkdir -p "$RUNTIME_DIR"
 chmod 700 "$RUNTIME_DIR"
@@ -96,13 +117,13 @@ docker pull "$POSTGRES_IMAGE"
 docker pull "$GATEWAY_IMAGE"
 docker build -f components/control-plane/Dockerfile -t keeplane-preview:kind-local .
 
-if kind get clusters | rg -xq keeplane; then
+if kind get clusters | grep -qx keeplane; then
   kind export kubeconfig --name keeplane --kubeconfig "$KUBECONFIG_PATH"
 else
   kind create cluster --name keeplane --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 \
     --config deploy/local/kind.yaml --kubeconfig "$KUBECONFIG_PATH" --wait 120s
 fi
-python3 - "$KUBECONFIG_PATH" <<'PY'
+python3 - "$KUBECONFIG_PATH" "$RUNTIME_DIR" <<'PY'
 import base64
 import json
 from pathlib import Path
@@ -129,15 +150,17 @@ for namespace in ("keeplane", "supplied-gateway"):
              "get", "secret", "keeplane-gateway-db", "-o", "json"),
             capture_output=True, text=True, timeout=30)
         name = "gateway-db-password" if namespace == "keeplane" else "supplied-gateway-db-password"
-        path = Path("/private/tmp/keeplane-accounts-trial") / name
+        path = Path(sys.argv[2]) / name
         if secret.returncode or path.read_bytes() != base64.b64decode(json.loads(secret.stdout)["data"]["password"]):
             raise SystemExit("Database password file does not match the existing Secret in " + namespace +
                 "; recover the file before setup. See docs/guide/gateway-database-secret.md.")
 PY
 kind load docker-image "$PYTHON_IMAGE" "$POSTGRES_IMAGE" "$GATEWAY_IMAGE" \
   keeplane-preview:kind-local --name keeplane
-docker exec keeplane-control-plane mkdir -p /models
-docker cp "$QWEN_MODEL" "keeplane-control-plane:/models/$(basename "$QWEN_MODEL")"
+if [ "$QWEN" = on ]; then
+  docker exec keeplane-control-plane mkdir -p /models
+  docker cp "$QWEN_MODEL" "keeplane-control-plane:/models/$(basename "$QWEN_MODEL")"
+fi
 
 kubectl --kubeconfig "$KUBECONFIG_PATH" create namespace keeplane --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" apply -f -
@@ -180,7 +203,9 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create secret generic cloud-
   kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/model-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/cloud-provider-fixture.yaml
-kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/qwen-runner.yaml
+if [ "$QWEN" = on ]; then
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/qwen-runner.yaml
+fi
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/postgres-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway create configmap model-fixture \
   --from-file=mock_model.py=tests/fixtures/mock_model.py --dry-run=client -o yaml |
@@ -192,7 +217,9 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart deployment/c
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout restart deployment/model
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/model --timeout=120s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/cloud-provider --timeout=120s
-kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/qwen --timeout=300s
+if [ "$QWEN" = on ]; then
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/qwen --timeout=300s
+fi
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/postgres --timeout=120s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout status deployment/model --timeout=120s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout status deployment/postgres --timeout=120s

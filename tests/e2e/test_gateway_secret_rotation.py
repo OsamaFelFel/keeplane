@@ -6,7 +6,6 @@ import argparse
 import base64
 import hashlib
 import json
-import os
 from pathlib import Path
 import secrets
 import subprocess
@@ -17,12 +16,11 @@ import uuid
 
 from tests.support.gateway_database_fixture import database_secret
 from tests.support.helm import require_helm
+from tests.support.kind_trial import kind_kubeconfig
 
 
 ROOT = Path(__file__).resolve().parents[2]
-KUBECONFIG = os.environ.get(
-    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
-)
+KUBECONFIG = kind_kubeconfig()
 HELM = require_helm()
 NAMESPACE = "keeplane-db-" + uuid.uuid4().hex[:8]
 RELEASE = "db-trial"
