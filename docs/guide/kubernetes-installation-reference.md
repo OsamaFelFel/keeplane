@@ -236,6 +236,9 @@ run time.
 
 Helm refuses an install that:
 
+- turns detection on without `app.postgres` or `app.localTrial`. The app is
+  ready only once its database and the language model are, and without either
+  setting the chart gives it no database, so it would never become ready;
 - turns detection on with the managed gateway. Requests reach Keeplane's
   checks only on a customer-run gateway for now (`gateway.mode=existing`); the
   managed gateway in this chart doesn't run them yet, so no request would be

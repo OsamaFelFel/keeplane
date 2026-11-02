@@ -33,6 +33,9 @@ suffixes Ki Mi Gi Ti Pi Ei k M G T P E. Argument: list <setting> <value>. */ -}}
 
 {{- define "keeplane.detection.check" -}}
 {{- if .Values.app.personalDataDetection.enabled }}
+{{- if not (or .Values.app.postgres.enabled .Values.app.localTrial.enabled) }}
+{{- fail "app.personalDataDetection needs app.postgres or app.localTrial: with detection on, the app is ready only once its database and the language model are, and without either setting the chart gives the app no database, so it would never become ready" }}
+{{- end }}
 {{- if ne .Values.gateway.mode "existing" }}
 {{- fail "app.personalDataDetection requires gateway.mode=existing with Keeplane's checks set up on that gateway, sending messages: the managed gateway in this chart doesn't run Keeplane's checks yet, so no request would be checked. See docs/guide/gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway" }}
 {{- end }}

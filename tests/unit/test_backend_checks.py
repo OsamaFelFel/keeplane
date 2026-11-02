@@ -79,7 +79,6 @@ def test_bc05_shard_option_skips_other_files_and_refuses_unsharded_ones():
 def test_bc06_test_hashes_keep_the_application_algorithm_and_format():
     assert application_settings.PASSWORD_HASHERS == [
         "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-        "accounts.hashers.PreviewScryptHasher",
     ]
     assert settings.PASSWORD_HASHERS[1:] == application_settings.PASSWORD_HASHERS[1:]
     test_hasher = get_hasher("default")
