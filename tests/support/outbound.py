@@ -1,9 +1,10 @@
-"""Declared outbound connections of the Keeplane server, and a socket guard.
+"""Declared outbound connections of Keeplane, and a socket guard.
 
-ADR 009: at runtime Keeplane has no undeclared outbound destination. This
-module is the reviewed list that the outbound checks compare the code with
-(cases in tests/unit/outbound-connection-cases.md). Adding a connection means
-adding it here, to docs/guide/outbound-connections.md and, for a runtime
+ADR 009: at runtime Keeplane has no undeclared outbound destination, on the
+server or on a developer's computer. This module is the reviewed list that the
+outbound checks compare the code with (cases in
+tests/unit/outbound-connection-cases.md). Adding a connection means adding it
+here, to docs/guide/outbound-connections.md and, for a server runtime
 destination, to the chart's egress settings.
 """
 
@@ -18,6 +19,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SERVER = REPO / "components" / "control-plane"
+CLI = REPO / "components" / "cli"
 GUIDE = REPO / "docs" / "guide" / "outbound-connections.md"
 
 # Standard-library and third-party modules that can open a network connection,
@@ -317,11 +319,89 @@ ADDRESS_LITERALS = {
     "https://provider.invalid": None,
 }
 
+# The Keeplane CLI on a developer's computer (components/cli). It connects
+# only to addresses the developer gives it; it has no address of its own.
+CLI_DESTINATIONS = {
+    "keeplane-server": {
+        "what": "The Keeplane server the developer signs in to: sign-in, refresh, account, projects, models, keys, sign-out",
+        "guide": "`keeplane login --server`",
+    },
+    "sign-in-callback": {
+        "what": "The CLI's own one-time listener on 127.0.0.1 for the browser sign-in redirect",
+        "guide": "`127.0.0.1`",
+    },
+    "browser": {
+        "what": "The developer's browser, opened on the server's sign-in page",
+        "guide": "sign-in page",
+    },
+    "coding-runtime": {
+        "what": "The coding runtime the developer installed, started by `keeplane code`; it reaches only the gateway URL given",
+        "guide": "`keeplane code --gateway`",
+    },
+}
+
+# Every CLI module that imports a network-capable module: what it imports,
+# which destinations it reaches, and why.
+CLI_CALL_SITES = {
+    "browser_login.py": (
+        {"socket", "urllib.request", "webbrowser"},
+        {"keeplane-server", "sign-in-callback", "browser"},
+        "Browser sign-in: loopback callback listener, opens the server's sign-in page, exchanges the code; no proxy, no redirects",
+    ),
+    "device_login.py": (
+        {"urllib.request"},
+        {"keeplane-server"},
+        "Device-code sign-in against the server; no proxy, no redirects",
+    ),
+    "server_connection.py": (
+        {"urllib.request"},
+        {"keeplane-server"},
+        "Every signed-in request to the server; no proxy, no redirects",
+    ),
+    "opencode_adapter.py": (
+        {"subprocess"},
+        {"coding-runtime"},
+        "Starts the coding runtime with its own outbound features off and only the gateway as a provider",
+    ),
+    "keeplane.py": (
+        {"subprocess"},
+        set(),
+        "Only catches the coding runtime's time-out; starts nothing itself",
+    ),
+}
+
+# Every full address written in CLI code. None: never contacted as written.
+CLI_ADDRESS_LITERALS = {
+    "http://127.0.0.1:": None,  # start of the loopback sign-in redirect
+}
+
+# What `keeplane code` sets so the coding runtime (OpenCode V2 2.0.27) makes
+# no connection of its own. Read from the runtime's settings code: the model
+# catalogue download (models.opencode.ai), the update check and self-upgrade,
+# and settings from the repository (which could add servers or plugins).
+RUNTIME_SWITCHES = {
+    "OPENCODE_DISABLE_MODELS_FETCH": "1",
+    "OPENCODE_DISABLE_AUTOUPDATE": "1",
+    "OPENCODE_CONFIG_PROJECT_DISABLE": "1",
+}
+# The update policy file the runtime reads from its (disposable) settings
+# folder; it is also the policy the runtime checks when the switch is unset.
+RUNTIME_GLOBAL_SETTINGS = {"update": "disable"}
+# The only environment the runtime inherits from the developer's shell. Proxy
+# settings, provider keys and every other OPENCODE_* setting are dropped.
+RUNTIME_INHERITED = frozenset(
+    {"PATH", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR"}
+)
+# The only settings keys `keeplane code` gives the runtime. Any other key (MCP
+# servers, more providers, remote instructions, a catalogue address, packages
+# to install) fails EGR-17 until it is reviewed.
+RUNTIME_SETTINGS = frozenset({"providers", "model", "share", "snapshots", "plugins"})
+
 ADDRESS = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", re.IGNORECASE)
 
 
-def server_files():
-    return sorted(SERVER.rglob("*.py"))
+def server_files(root=SERVER):
+    return sorted(root.rglob("*.py"))
 
 
 def dotted(node):
@@ -461,12 +541,16 @@ def package_of(name):
     return name[:-3].replace("/", ".").rpartition(".")[0]
 
 
-def scan():
-    """Module -> network imports, -> address literals, -> call sites it imports."""
+def scan(root=SERVER):
+    """Module -> network imports, -> address literals, -> call sites it imports.
+
+    `root` is the server (components/control-plane) by default, or the CLI
+    (components/cli); call-site users are always the server's call sites.
+    """
     imports, addresses, users = {}, {}, {}
-    for path in server_files():
+    for path in server_files(root):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        name = path.relative_to(SERVER).as_posix()
+        name = path.relative_to(root).as_posix()
         package = package_of(name)
         if found := network_imports(tree, package):
             imports[name] = found

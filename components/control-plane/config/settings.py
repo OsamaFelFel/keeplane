@@ -109,6 +109,9 @@ LOGGING = {
         for name in ("oauthlib", "oauth2_provider")
     },
 }
+# Keeplane sends no mail. Django's default backend is SMTP to EMAIL_HOST; the
+# dummy backend makes sure nothing can open that connection (ADR 009, EGR-05).
+EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
 MIDDLEWARE = [
     "common.middleware.StorageFailureMiddleware",
     "common.middleware.RequestLimitMiddleware",

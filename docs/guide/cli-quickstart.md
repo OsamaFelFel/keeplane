@@ -27,6 +27,9 @@ plaintext credentials protected by OS file permissions. Use the server address
 for account commands and the protected gateway's `/v1` address for coding;
 an ordinary unprotected model listener is insufficient.
 `KP_REPO` must be the Git repository root, owned by your OS user.
+These two addresses are the only ones the CLI and the coding runtime it starts
+need to reach, so the sequence also works on an isolated network; see
+[Developers' computers](outbound-connections.md#developers-computers).
 
 ## Sign in and choose a model
 

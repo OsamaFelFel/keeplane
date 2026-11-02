@@ -45,9 +45,11 @@ class Endpoint:
                 status, value = (
                     (404, {"error": "not found"})
                     if value is None
+                    else value
+                    if isinstance(value, tuple)  # (status, body or None)
                     else (endpoint.status, value)
                 )
-                raw = json.dumps(value).encode()
+                raw = b"" if value is None else json.dumps(value).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(raw)))
@@ -380,6 +382,73 @@ def test_egr_13_which_calls_use_an_environment_proxy(tmp_path, monkeypatch):
         assert sorted(proxy.paths()) == sorted(
             [gateway.url + "/v1/models", runner.url + "/v1/models"]
         )
+
+
+# EGR-18 On a developer's computer, the CLI's signed-in journey (account,
+# project models, a coding turn with a stand-in runtime, sign-out) connects
+# only to the Keeplane server it was given, even with a proxy and provider
+# settings in the developer's shell.
+def test_egr_18_the_cli_reaches_only_its_server(tmp_path, monkeypatch, capsys):
+    import subprocess
+    import sys
+    import uuid
+
+    from components.cli import keeplane, opencode_adapter
+    from components.cli.credential_profile import Credential, opened
+
+    actor, project = str(uuid.uuid4()), str(uuid.uuid4())
+    started = []
+
+    def session(method, body):
+        return (204, None) if method == "DELETE" else {
+            "id": actor, "username": "developer", "role": "developer"}
+
+    def project_route(method, body):
+        return {"project_id": project, "name": "Payments"}
+
+    def turn(command, **options):
+        started.append(options["env"])
+        return subprocess.CompletedProcess(command, 0, "done\n", "")
+
+    routes = {
+        "/api/runtime/session": session,
+        "/api/runtime/projects": project_route,
+        f"/api/runtime/projects/{project}/models": {
+            "project_id": project, "models": [{"id": "coder"}]},
+        f"/api/runtime/projects/{project}/model-choice": {
+            "project_id": project, "requested_model_id": "coder",
+            "model_id": "coder", "reason": None},
+    }
+    for name in ("HTTPS_PROXY", "OPENAI_API_KEY", "OPENCODE_MODELS_URL"):
+        monkeypatch.setenv(name, "https://outside.example.invalid")
+    monkeypatch.setattr(opencode_adapter.subprocess, "run", lambda command, **_: (
+        subprocess.CompletedProcess(command, 0, "2.0.27", "")))
+    monkeypatch.setattr(opencode_adapter, "coding_turn", turn)
+    binary, directory = tmp_path / "runtime", tmp_path / "repository"
+    binary.touch()
+    directory.mkdir()
+    with Endpoint(routes) as server:
+        profile = tmp_path / "profile"
+        with opened(profile, create=True) as saved:
+            saved.save(Credential(server.url, actor, "kpc_" + "a" * 43, "r" * 32))
+        guard = OutboundGuard({server.port})
+
+        def run(*arguments):
+            monkeypatch.setattr(sys, "argv", ["keeplane", *arguments])
+            with guard.active():
+                assert keeplane.main() in (0, None), capsys.readouterr()
+
+        run("whoami", "--profile", str(profile))
+        run("models", "--profile", str(profile), "--project", project)
+        run("code", "--profile", str(profile), "--project", project, "--name",
+            "Payments", "--model", "coder", "--runtime", str(binary), "--gateway",
+            "https://gateway.test/v1", "--directory", str(directory), "Fix it.")
+        run("logout", "--profile", str(profile))
+    assert guard.refused == []
+    assert {address for address in guard.attempts} == {("127.0.0.1", server.port)}
+    assert "DELETE" in [method for method, *_ in server.calls]
+    assert len(started) == 1 and "HTTPS_PROXY" not in started[0]
+    assert "OPENAI_API_KEY" not in started[0]
 
 
 # EGR-14 With the optional detector installed, loading spaCy and Presidio and
