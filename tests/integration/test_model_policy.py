@@ -37,7 +37,7 @@ def policy(domain_services):
     return DjangoModelPolicy(gateway), state, domain_services
 
 
-def test_effective_class_comes_from_project_assignment(policy):
+def test_mp_01_effective_class_comes_from_project_assignment(policy):
     service, _, stores = policy
     assert service.eligible_model_ids("project-a") == {"private-model"}
     assert service.eligible_model_ids("unclassified") == {
@@ -50,7 +50,7 @@ def test_effective_class_comes_from_project_assignment(policy):
     assert service.eligible_model_ids("project-a") == {"private-model"}
 
 
-def test_only_current_set_up_gateway_models_are_eligible(policy):
+def test_mp_02_only_current_set_up_gateway_models_are_eligible(policy):
     service, state, stores = policy
     state.registry["resources"][1]["revision"] = 2
     assert service.eligible_model_ids("project-a") == set()

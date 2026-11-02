@@ -24,7 +24,7 @@ def listed(f, alternatives, model="private"):
     return {"project_id": f.project, "model_id": model, "alternatives": alternatives}
 
 
-def test_every_other_allowed_model_is_listed_in_model_id_order(choice):  # noqa: F811
+def test_alt_01_every_other_allowed_model_is_listed_in_model_id_order(choice):  # noqa: F811
     choice.install("public")
     choice.install("outside")
     response = ask(choice)
@@ -34,7 +34,7 @@ def test_every_other_allowed_model_is_listed_in_model_id_order(choice):  # noqa:
     assert not choice.reads
 
 
-def test_listing_moves_nothing_and_the_requested_model_still_works(choice):  # noqa: F811
+def test_alt_02_listing_moves_nothing_and_the_requested_model_still_works(choice):  # noqa: F811
     choice.install("public")
     assert ask(choice).json() == listed(choice, ["public"])
     assert entry(choice).status_code == 200
@@ -47,7 +47,7 @@ def test_listing_moves_nothing_and_the_requested_model_still_works(choice):  # n
     assert response.json()["model_id"] == "private"
 
 
-def test_no_alternative_gives_an_empty_list(choice):  # noqa: F811
+def test_alt_03_no_alternative_gives_an_empty_list(choice):  # noqa: F811
     assert ask(choice).json() == listed(choice, [])
 
 

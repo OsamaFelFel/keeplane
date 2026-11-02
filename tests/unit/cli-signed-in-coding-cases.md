@@ -22,31 +22,32 @@
   the class ([MC-20](../integration/model-choice-cases.md)).
 - Changed account, withdrawn session, server outage or an unavailable model
   prevents runtime launch. Invalid gateway destinations stop before any request.
-- No models yet (Spec 004 ST12): when the project's allowed model list is empty,
+- CODE-01 No models yet (Spec 004 ST12): when the project's allowed model list is empty,
   the CLI says “No models are available for this project yet, so nothing was
   sent” and asks the developer to have an admin add or approve one. It asks for
   no model choice and starts no runtime. A model missing from a non-empty list
   keeps “This model is not currently allowed for the project.”
-- Request settings (ST26): Keeplane's generated runtime configuration holds only
+- CODE-02 Request settings (ST26): Keeplane's generated runtime configuration holds only
   the provider package, gateway URL, project header and model name, so it adds or
   replaces no request setting such as temperature. The gateway side is covered by
   the [native protocol cases](../integration/native-runtime-protocol-cases.md).
-- Model down after the gateway's retries (Spec 004 ST16): when the runtime's
+- CODE-03 Model down after the gateway's retries (Spec 004 ST16): when the runtime's
   error event carries a 429 or 5xx, `code` keeps its failing exit status, still
   prints the runtime's error, and adds “coder is unavailable right now, so this
   task stopped. Wait and try again, or run it with another model allowed for
   this project using --model: …” with the server's list. The runtime is started
   once, with the requested model only. Run
   `python -m pytest tests/unit/test_cli_model_outage.py`.
-- No other allowed model (owner decision, governance issue #52): after a 429 or
+- CODE-04 No other allowed model (owner decision, governance issue #52): after a 429 or
   5xx, `code` prints “coder is unavailable right now and no other model is
   allowed for this project. Wait and try again, or ask your admin to set up
   another model.” with the requested model's name. The ST12 no-models message,
   which says “so nothing was sent”, is not shown, because the task was sent; that
   message itself is unchanged.
-- Task too big for the model's context: “This task is too big for coder's
+- CODE-05 Task too big for the model's context: “This task is too big for coder's
   context, so it stopped. Run it with another model allowed for this project
-  using --model: …”. When no other model is allowed: “This task is too big for
+  using --model: …”.
+- CODE-06 Too big with no other model allowed: “This task is too big for
   coder's context and no other model is allowed for this project. Make the task
   smaller, or ask your admin to set up a model with a larger context.” (governance
   issue #57).

@@ -14,7 +14,7 @@ pass through the gateway. No tool is executed.
 | Approval withdrawn before the next request | The same valid stream or tool-result request is refused with no provider contact. |
 | Provider credentials | Only the synthetic server-selected provider key arrives; developer, project and workload headers stay private. |
 | Existing gateway | Its unrelated model and native configuration stay intact. |
-| Request settings (Spec 004 ST26) | Temperature, top_p, max_tokens, stop, seed, presence and frequency penalties and user, plus stream or tool_choice and parallel_tool_calls, reach the provider with the same values in plain, streamed and tool requests. The report lists any changed setting and any field the gateway added. |
+| PROTO-01 Request settings (Spec 004 ST26) | Temperature, top_p, max_tokens, stop, seed, presence and frequency penalties and user, plus stream or tool_choice and parallel_tool_calls, reach the provider with the same values in plain, streamed and tool requests. The report lists any changed setting and any field the gateway added. |
 | Provider fails before streaming | The client gets a 5xx status, not an answer. Only the chosen model is contacted. |
 | Provider drops the stream after its first event | The client never sees a finished stream (no `[DONE]`). Only the chosen model is contacted. |
 | Provider recovers | The next request is checked again and answered by the same model. |

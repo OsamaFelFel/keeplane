@@ -35,7 +35,7 @@ def saved(request, provider, tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("status", [401, 403])
-def test_explicit_refusal_persists_and_success_restores_saved_key(saved, status):
+def test_kr_02_explicit_refusal_persists_and_success_restores_saved_key(saved, status):
     original = saved.row.key_name
     saved.provider["mode"] = status
     result = saved.store.check("model")

@@ -89,7 +89,7 @@ def safe(response, status="added"):
     assert KEY.encode() not in response.content
 
 
-def test_two_owners_add_replace_status_and_remove_are_isolated(api):
+def test_pk_01_two_owners_add_replace_status_and_remove_are_isolated(api):
     safe(send(api, "get"), "missing")
     safe(put(api))
     safe(send(api, "get", actor=1), "missing")
@@ -253,7 +253,7 @@ def test_get_requires_one_bounded_model_identifier(api, query):
 
 
 @pytest.mark.parametrize("fault", ["refused", "provider", "file", "database"])
-def test_refused_or_failed_replace_preserves_old_key_and_hides_details(
+def test_pk_02_refused_or_failed_replace_preserves_old_key_and_hides_details(
     api, monkeypatch, fault
 ):
     safe(put(api))

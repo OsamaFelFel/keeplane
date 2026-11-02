@@ -31,7 +31,7 @@ def row(name="coder", required=True, status="added"):
     return {"id": name, "own_key_required": required, "status": status}
 
 
-def test_lists_current_account_metadata_without_writing_profile(
+def test_kl_02_lists_current_account_metadata_without_writing_profile(
     api, monkeypatch, capsys
 ):
     original = {p.name: p.read_bytes() for p in api.profile.iterdir()}

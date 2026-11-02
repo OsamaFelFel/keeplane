@@ -39,7 +39,7 @@ TOO_BIG = api_error(
 
 
 @pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
-def test_a_model_still_down_after_the_retries_names_the_alternatives(
+def test_code_03_a_model_still_down_after_the_retries_names_the_alternatives(
     connected, runtime, monkeypatch, tmp_path, capsys, status  # noqa: F811
 ):
     connected.model_ids = ["coder", "general", "local"]
@@ -64,7 +64,7 @@ def test_a_model_still_down_after_the_retries_names_the_alternatives(
 
 
 @pytest.mark.parametrize("status", [429, 503])
-def test_no_other_allowed_model_says_so_without_the_no_model_message(
+def test_code_04_no_other_allowed_model_says_so_without_the_no_model_message(
     connected, runtime, monkeypatch, tmp_path, capsys, status  # noqa: F811
 ):
     # Owner decision on governance issue #52: the task was sent and failed.
@@ -102,7 +102,7 @@ def test_the_no_model_message_itself_is_unchanged():
     )
 
 
-def test_a_task_too_big_for_the_model_names_the_problem_and_alternatives(
+def test_code_05_a_task_too_big_for_the_model_names_the_problem_and_alternatives(
     connected, runtime, monkeypatch, tmp_path, capsys  # noqa: F811
 ):
     connected.model_ids = ["coder", "large"]
@@ -116,7 +116,7 @@ def test_a_task_too_big_for_the_model_names_the_problem_and_alternatives(
     )
 
 
-def test_too_big_without_an_alternative_says_no_other_model_is_allowed(
+def test_code_06_too_big_without_an_alternative_says_no_other_model_is_allowed(
     connected, runtime, monkeypatch, tmp_path, capsys  # noqa: F811
 ):
     failed_turn(monkeypatch, runtime, TOO_BIG)

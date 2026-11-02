@@ -48,7 +48,7 @@ def row(name, required, status=None):
     return {"id": name, "own_key_required": required, "status": status}
 
 
-def test_current_project_classes_choices_and_owner_registrations(listing):
+def test_kl_01_current_project_classes_choices_and_owner_registrations(listing):
     other = User.objects.get(username="first-admin")
     DeveloperProviderKey.objects.create(
         owner=other, model_id="private", key_name="other-private"

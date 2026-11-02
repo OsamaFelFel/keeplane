@@ -184,7 +184,7 @@ SETTINGS = {
 @pytest.mark.infrastructure
 @pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
 @pytest.mark.parametrize("kind", ["json", "stream", "tool"])
-def test_request_settings_reach_the_model_unchanged(
+def test_proto_01_request_settings_reach_the_model_unchanged(
     tmp_path, report_file, existing, kind
 ):
     """Spec 004 ST26: settings the client sends arrive with the same values."""
