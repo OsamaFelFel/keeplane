@@ -1,22 +1,25 @@
 """Render how developers reach the managed gateway's protected runtime (ADR 016, 018, 027).
 
-Cases PA-01 to PA-08 in chart-protected-access-cases.md. All but PA-06 render
-the chart with Helm and are skipped when Helm is missing; PA-06 reads only the
-values file and the guides and always runs.
+Cases PA-01 to PA-09 in chart-protected-access-cases.md. All but PA-06 and
+PA-09 render the chart with Helm and are skipped when Helm is missing; PA-06 and
+PA-09 read only the values file, the guides and the CLI code and always run.
 """
 
 import copy
+import inspect
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 
+from components.cli import coding, credential_profile, keeplane
 from tests.integration.test_chart_model_enroller import RELEASE, with_enroller
 
 ROOT = Path(__file__).resolve().parents[2]
 VALUES = ROOT / "deploy/helm/keeplane/values.yaml"
 REFERENCE = ROOT / "docs/guide/kubernetes-installation-reference.md"
+QUICKSTART = ROOT / "docs/guide/cli-quickstart.md"
 RUNTIME_SERVICE = f"{RELEASE}-gateway-runtime"
 RUNTIME_INGRESS = f"{RELEASE}-gateway-runtime"
 PROTECTED_PATH = "/v1/chat/completions"
@@ -330,3 +333,29 @@ def test_pa_06_values_and_guides_describe_how_developers_reach_protected_models(
                   "The gateway is\nnever an Ingress backend",
                   "routes\nonly to the app Service"):
         assert stale not in reference, stale
+
+
+def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
+    reference = REFERENCE.read_text()
+    section = reference.split("\n**What to give developers.**", 1)[1].split("\nEach request reaches one copy.", 1)[0]
+    for phrase in ("| `https://<host>` | `keeplane login --server` |",
+                   "| `https://<host>/v1` | `keeplane code --gateway` |",
+                   "doesn't save it in the profile", "/chat/completions",
+                   "`gateway.mode=existing`", "port 4000"):
+        assert phrase in section, phrase
+    quickstart = QUICKSTART.read_text()
+    for phrase in ("KP_SERVER=https://<host>", "KP_GATEWAY=https://<host>/v1",
+                   "doesn't learn\nthe gateway address"):
+        assert phrase in quickstart, phrase
+    # The CLI saves no gateway and needs one on every coding turn.
+    assert "gateway" not in inspect.getsource(credential_profile).lower()
+    assert '"runtime", "gateway"):\n        code.add_argument("--" + flag, required=True)' in inspect.getsource(keeplane.main)
+    for given, used in (("https://keeplane.example/v1", "https://keeplane.example/v1"),
+                        ("https://keeplane.example/v1/", "https://keeplane.example/v1"),
+                        ("http://127.0.0.1:5000/v1", "http://127.0.0.1:5000/v1")):
+        assert coding.gateway_endpoint(given) == used
+    for refused in ("https://keeplane.example", "https://keeplane.example/",
+                    "https://keeplane.example/v1/chat/completions",
+                    "https://keeplane.example/v1?team=a", "http://keeplane.example/v1"):
+        with pytest.raises(coding.ConnectionError):
+            coding.gateway_endpoint(refused)
