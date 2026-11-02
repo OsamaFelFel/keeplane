@@ -1,19 +1,18 @@
-"""Render the model enroller beside each managed gateway copy (ADR 027).
+"""Render the model enroller and protected runtime on each managed gateway copy (ADR 027).
 
-Cases ME-01 to ME-11 in chart-model-enroller-cases.md. All but ME-10 render
+Cases ME-01 to ME-13 in chart-model-enroller-cases.md. All but ME-10 render
 the chart with Helm and are skipped when Helm is missing; ME-10 reads only the
-values file and the guides and always runs. Helm refuses the enroller in the
-shipped chart for now (ME-11); ME-02 to ME-09 render a test copy of the chart
-without that one refusal (see ready_chart).
+values file and the guides and always runs.
 """
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 
 import pytest
+from prepare_enroller_files import Unprepared, install_runtime, runtime_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 VALUES = ROOT / "deploy/helm/keeplane/values.yaml"
@@ -28,10 +27,12 @@ FILES = "/run/keeplane-enroller/files"
 APP_DATABASE = [{"cidr": "10.20.0.5/32", "ports": [5432]}]
 GATEWAY_DATABASE = [{"cidr": "10.20.0.6/32", "ports": [5432]}]
 MODELS = [{"cidr": "203.0.113.0/24", "ports": [443]}]
+# The refusal this chart carried until it installed the protected runtime.
 NOT_YET = "templates/checks/first/protected-runtime.yaml"
-NOT_YET_MESSAGE = (
-    "gateway.enroller can't be turned on yet: this chart doesn't install "
-    "Keeplane's protected runtime on the managed gateway")
+KEYS_SECRET = "keeplane-gateway-keys"
+BASE = "KEEPLANE_ENROLLER_RUNTIME_BASE"
+GATEWAY_DATABASE_URL = ("postgresql://keeplane:${KEEPLANE_DB_PASSWORD}"
+                        "@gateway-db.database.svc.cluster.local:5432/keeplane")
 
 
 def with_enroller(values, copies=None, **settings):
@@ -65,38 +66,15 @@ def policy():
     return policies
 
 
-@pytest.fixture(scope="module")
-def ready_chart(chart, tmp_path_factory):
-    """A test copy of the chart without its one "not yet" refusal.
-
-    Helm refuses gateway.enroller until the chart installs the protected
-    runtime (templates/checks/first/protected-runtime.yaml). To render the
-    enroller's real templates without a supported or hidden values key, the
-    cases render a copy of the chart that lacks only that file. ME-11 checks
-    the shipped chart refuses, and that the copy differs by that file alone.
-    """
-    shipped = ROOT / chart.CHART
-    copy_dir = tmp_path_factory.mktemp("enroller-chart") / "keeplane"
-    shutil.copytree(shipped, copy_dir)
-    (copy_dir / NOT_YET).unlink()
-    return copy_dir
-
-
-def chart_files(directory):
-    return {str(path.relative_to(directory)) for path in directory.rglob("*")
-            if path.is_file()}
-
-
 @pytest.fixture
-def make(chart, ready_chart, tmp_path):
-    def build(values=None, *args, release=RELEASE, shipped=False):
+def make(chart, tmp_path):
+    def build(values=None, *args, release=RELEASE):
         files = []
         if values is not None:
             path = tmp_path / f"values-{len(list(tmp_path.iterdir()))}.json"
             path.write_text(json.dumps(values))
             files = ["-f", str(path)]
-        target = chart.CHART if shipped else str(ready_chart)
-        return chart.run("template", release, target, "--namespace", "keeplane",
+        return chart.run("template", release, chart.CHART, "--namespace", "keeplane",
                          *files, *args)
     return build
 
@@ -164,12 +142,14 @@ def test_me_01_off_by_default_nothing_changes(chart, make):
         "local-existing": (None, "-f", "deploy/local/existing-values.yaml"),
     }
     for label, args in installs.items():
-        output = rendered(make(*args, shipped=True))
+        output = rendered(make(*args))
         for absent in (CHECK, "model-enroller", "keeplane-guard", "KEEPLANE_ENROLLER_",
-                       "configure_guard_status_access", "/installed"):
+                       "configure_guard_status_access", "/installed",
+                       "RUNTIME_AUTHORIZER_KEY_FILE", "callback-key"):
             assert absent not in output, (label, absent)
-        # The test copy renders exactly the same with the enroller off.
-        assert rendered(make(*args)) == output, label
+        # Without the enroller, a managed copy starts from the ConfigMap as before.
+        if label.endswith("-managed"):
+            assert "- /config/config.yaml" in output, label
 
 
 def test_me_02_each_copy_runs_a_private_enroller_beside_its_gateway(chart, policy, make):
@@ -242,9 +222,13 @@ def test_me_03_the_gateway_reads_the_guard_and_gets_nothing_else(chart, policy, 
              if mount not in gateway_before["volumeMounts"]]
     assert added == [{"name": "keeplane-guard", "mountPath": "/installed",
                       "subPath": "installed", "readOnly": True}]
+    # It starts from the protected runtime in the guard, not the ConfigMap.
+    assert gateway_before["args"] == ["-f", "/config/config.yaml"]
+    assert gateway_after["args"] == ["-f", "/installed/gateway.json"]
     # Same settings, image and security: no database credential or key file.
-    assert {key: value for key, value in gateway_after.items() if key != "volumeMounts"} \
-        == {key: value for key, value in gateway_before.items() if key != "volumeMounts"}
+    changed = ("volumeMounts", "args")
+    assert {key: value for key, value in gateway_after.items() if key not in changed} \
+        == {key: value for key, value in gateway_before.items() if key not in changed}
     # No fsGroup appears and no Secret volume is added; the enroller's files
     # are in memory and only its own containers mount them.
     assert after.get("securityContext") == before.get("securityContext")
@@ -283,8 +267,12 @@ def test_me_04_only_the_init_step_reads_the_installer_made_secrets(chart, policy
                                                          f"copy-{index}-password")
            for index in range(copies)},
         "KEEPLANE_ENROLLER_DATABASE_CA": ("keeplane-database-ca", "ca.crt"),
-        "KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY": ("keeplane-gateway-keys", "admin-key"),
-        "KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY": ("keeplane-gateway-keys", "runtime-key"),
+        "KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY": (KEYS_SECRET, "admin-key"),
+        "KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY": (KEYS_SECRET, "runtime-key"),
+        # The protected runtime: its callback key and the gateway's key hashes.
+        "KEEPLANE_ENROLLER_CALLBACK_KEY": (KEYS_SECRET, "callback-key"),
+        "KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH": (KEYS_SECRET, "admin-key-hash"),
+        "KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY_HASH": (KEYS_SECRET, "runtime-key-hash"),
     }
     # Never optional: a missing Secret key stops the Pod instead of starting
     # an enroller without its credential.
@@ -294,10 +282,13 @@ def test_me_04_only_the_init_step_reads_the_installer_made_secrets(chart, policy
     assert plain["KEEPLANE_ENROLLER_STATUS_ROLES"] == ",".join(
         f"keeplane_status_{index}" for index in range(copies))
     assert plain["KEEPLANE_GATEWAY_COPY"] == {"fieldRef": {"fieldPath": "metadata.name"}}
+    # The trusted base is a plain setting with no credential in it (ME-12).
+    assert isinstance(plain[BASE], str)
     # The app's own password, identity Secret and the migration Secret never
-    # reach the gateway Pod.
+    # reach the gateway Pod, and neither does the gateway database password.
     for secret in ("keeplane-app-db", "keeplane-identity", "keeplane-migration-db"):
         assert secret not in json.dumps(spec), secret
+    assert "keeplane-gateway-db" not in json.dumps(init)
 
 
 def test_me_05_the_app_checks_each_copy_whenever_the_enroller_runs(chart, make):
@@ -345,10 +336,28 @@ def test_me_07_copy_egress_reaches_postgres_only_with_the_enroller(chart, policy
             "gatewayDatabase": GATEWAY_DATABASE}}
         return policy.policies(rendered(make(values)))[f"{RELEASE}-gateway-egress"]["spec"]
 
+    to_app = {"to": [{"podSelector": {"matchLabels": {"app": f"{RELEASE}-app"}}}],
+              "ports": [{"protocol": "TCP", "port": 3000}]}
     without = egress(managed(chart))["egress"]
     with_it = egress(with_enroller(managed(chart)))["egress"]
-    assert with_it == without + policy.destination_rules(APP_DATABASE)
+    # The enroller's database, then the app: the protected runtime's checks.
+    assert with_it == without + policy.destination_rules(APP_DATABASE) + [to_app]
     assert policy.destination_rules(APP_DATABASE)[0] not in without
+    assert to_app not in without
+
+    def ingress(values):
+        values["networkPolicy"] = {"appIngressEnabled": True, "publicEntry": {
+            "namespaceSelector": {"kubernetes.io/metadata.name": "ingress-nginx"}}}
+        return policy.policies(rendered(make(values)))[f"{RELEASE}-app-ingress"]["spec"]
+
+    from_copies = {"from": [{"podSelector": {"matchLabels": {
+        "app.kubernetes.io/name": "agentgateway-standalone",
+        "app.kubernetes.io/instance": RELEASE}}}],
+        "ports": [{"protocol": "TCP", "port": 3000}]}
+    before = ingress(managed(chart))["ingress"]
+    after = ingress(with_enroller(managed(chart)))["ingress"]
+    assert after == before + [from_copies]
+    assert len(before) == 1
 
 
 def test_me_08_the_enroller_adds_no_kind_and_brings_the_apps_pull_secret(chart, make):
@@ -430,6 +439,14 @@ def refusal_cases(chart):
             "agentgateway-standalone.podSecurityContext.runAsUser is 0"),
         "check-alone": (changed(base, lambda v: v["app"].update(guardStatusCheck=True)),
                         "app.guardStatusCheck can be on only together with the model enroller"),
+        # The protected runtime needs the shared gateway database and keeps
+        # the admin address on loopback.
+        "readonly-gateway": (changed(enroller, lambda v: v["agentgateway-standalone"].update(
+            mode="readonly", database={"postgres": {"url": ""}})),
+            "gateway.enroller needs agentgateway-standalone.mode=database"),
+        "admin-address": (changed(enroller, lambda v: v["agentgateway-standalone"]["config"]
+                                  .update(config={"adminAddr": "0.0.0.0:15000"})),
+                          "agentgateway-standalone.config.config.adminAddr is 0.0.0.0:15000"),
     }
 
 
@@ -449,6 +466,10 @@ def test_me_09_unsafe_or_incomplete_settings_are_refused(chart, make):
     same_user = with_enroller(managed(chart))
     same_user["agentgateway-standalone"]["securityContext"] = {"runAsUser": 65532}
     rendered(make(same_user))
+    # ...and may name the loopback admin address the protected runtime uses.
+    loopback = with_enroller(managed(chart))
+    loopback["agentgateway-standalone"]["config"]["config"] = {"adminAddr": "127.0.0.1:15000"}
+    rendered(make(loopback))
     # Pod names longer than 63 characters can't name a copy: the longest
     # release name Helm takes (53) fits up to copy 9, not copy 31.
     refused(make(with_enroller(managed(chart), copies=32), release="r" * 53),
@@ -480,27 +501,114 @@ def test_me_10_values_and_guides_describe_the_settings():
                    "KEEPLANE_GUARD_STATUS_CHECK", "configure_guard_status_access",
                    "gateway.mode=existing", "secretKeyRef", "no port",
                    "networkPolicy.egress.postgres", "restart", "Helm refuses",
-                   "protected runtime", "65532"):
+                   "protected runtime", "65532", "callback-key", "/installed/gateway.json",
+                   "agentgateway-standalone.mode=database", "5000"):
         assert phrase in section, phrase
+    assert "can't be turned on yet" not in reference
+    assert "Helm refuses the enroller for now" not in reference
     assert "kubernetes-installation-reference.md#model-enroller" in ROLES_GUIDE.read_text()
     assert "gateway.enroller" in ARCHITECTURE.read_text()
 
 
-def test_me_11_the_shipped_chart_refuses_the_enroller_for_now(chart, ready_chart, make):
-    # The test copy lacks exactly one file of the shipped chart.
-    assert chart_files(ROOT / chart.CHART) - chart_files(ready_chart) == {NOT_YET}
-    assert chart_files(ready_chart) <= chart_files(ROOT / chart.CHART)
-    for label, args in {
-        "postgres-managed": (with_enroller(managed(chart)),),
-        "postgres-existing": (with_enroller(chart.postgres_values("existing")),),
-        "local-managed": (None, "-f", "deploy/local/values.yaml",
-                          "--set", "gateway.enroller.enabled=true"),
-    }.items():
-        result = make(*args, shipped=True)
-        assert result.returncode != 0, label
-        assert NOT_YET_MESSAGE in result.stderr, (label, result.stderr)
-    # With the enroller refused, the check can't be on either.
+def test_me_11_the_enroller_and_its_check_can_be_turned_on(chart, make):
+    # The temporary refusal is gone: the shipped chart installs the protected
+    # runtime, so the enroller and the per-copy check turn on together.
+    assert not (ROOT / chart.CHART / NOT_YET).exists()
+    output = rendered(make(with_enroller(managed(chart))))
+    assert "can't be turned on yet" not in output
+    assert (CHECK, "1", False) in app_env(chart, output)
+    # Every refusal that still applies stays (ME-09): a customer-run gateway,
+    # the check on its own, and no PostgreSQL.
+    refused(make(with_enroller(chart.postgres_values("existing"))),
+            "gateway.enroller.enabled applies only to the managed gateway")
     alone = managed(chart)
     alone["app"]["guardStatusCheck"] = True
-    refused(make(alone, shipped=True),
+    refused(make(alone),
             "app.guardStatusCheck can be on only together with the model enroller")
+    refused(make(None, "-f", "deploy/local/values.yaml",
+                 "--set", "gateway.enroller.enabled=true"),
+            "gateway.enroller needs app.postgres")
+
+
+def runtime_base(chart, policy, output):
+    init = named(pod(copies_of(chart, policy, output))["initContainers"],
+                 "prepare-model-enroller")
+    return env_map(init)[BASE], init
+
+
+def test_me_12_each_copy_starts_from_the_charts_own_gateway_configuration(
+        chart, policy, make, tmp_path):
+    values = with_enroller(managed(chart))
+    text, init = runtime_base(chart, policy, rendered(make(values)))
+    base = json.loads(text)
+    # The bundled chart's rendered configuration: the database storage and
+    # address it adds, the chart's two strict key policies, the installer's
+    # models, and the admin address pinned to loopback.
+    assert base["config"] == {"adminAddr": "127.0.0.1:15000", "storage": {"mode": "hybrid"},
+                              "database": {"url": GATEWAY_DATABASE_URL}}
+    assert base["gateways"] == {"default": {"port": 4000}}
+    assert base["ui"]["policies"]["apiKey"] == {
+        "mode": "strict", "keys": [{"keyHash": "${GATEWAY_ADMIN_KEY_HASH}"}]}
+    assert base["llm"]["policies"]["apiKey"] == {
+        "mode": "strict", "keys": [{"keyHash": "${GATEWAY_RUNTIME_KEY_HASH}"}]}
+    assert [model["name"] for model in base["llm"]["models"]] == [chart.UNRELATED_MODEL]
+    # The init step writes out only the key hashes: the gateway database
+    # password stays a variable the gateway reads from its own environment.
+    hashes = {name: "sha256:" + hashlib.sha256(name.encode()).hexdigest()
+              for name in ("GATEWAY_ADMIN_KEY_HASH", "GATEWAY_RUNTIME_KEY_HASH")}
+    environ = {"KEEPLANE_ENROLLER_CALLBACK_KEY": "c" * 64, BASE: text,
+               **{f"KEEPLANE_ENROLLER_{name}": value for name, value in hashes.items()}}
+    files = runtime_plan(environ)
+    assert list(files) == ["manifest.json", "callback-key", "trusted.json", "gateway.json"]
+    assert files["trusted.json"] == files["gateway.json"]
+    trusted = json.loads(files["trusted.json"])
+    assert trusted["ui"]["policies"]["apiKey"]["keys"] == [
+        {"keyHash": hashes["GATEWAY_ADMIN_KEY_HASH"]}]
+    assert trusted["llm"]["policies"]["apiKey"]["keys"] == [
+        {"keyHash": hashes["GATEWAY_RUNTIME_KEY_HASH"]}]
+    assert trusted["config"]["database"]["url"] == GATEWAY_DATABASE_URL
+    assert json.loads(files["manifest.json"]) == {"version": 2, "enabled": False}
+    guard = tmp_path / "installed"
+    install_runtime(files, guard)
+    assert sorted(path.name for path in guard.iterdir()) == sorted(files)
+    # A key rotation's next hashes reach the init step only while the gateway
+    # reads them too, from the same Secret keys.
+    rotation = with_enroller(managed(chart))
+    gateway = rotation["agentgateway-standalone"]
+    gateway["extraEnv"] += [
+        chart.secret_env("GATEWAY_RUNTIME_KEY_HASH_NEXT", KEYS_SECRET, "runtime-key-hash-next"),
+        chart.secret_env("GATEWAY_ADMIN_KEY_HASH_NEXT", KEYS_SECRET, "admin-key-hash-next")]
+    gateway["config"]["ui"] = {"policies": {"apiKey": {"mode": "strict", "keys": [
+        {"keyHash": "${GATEWAY_ADMIN_KEY_HASH}"}, {"keyHash": "${GATEWAY_ADMIN_KEY_HASH_NEXT}"}]}}}
+    gateway["config"]["llm"]["policies"] = {"apiKey": {"mode": "strict", "keys": [
+        {"keyHash": "${GATEWAY_RUNTIME_KEY_HASH}"},
+        {"keyHash": "${GATEWAY_RUNTIME_KEY_HASH_NEXT}"}]}}
+    text, rotating = runtime_base(chart, policy, rendered(make(rotation)))
+    references = {entry["name"]: entry["valueFrom"]["secretKeyRef"]["key"]
+                  for entry in rotating["env"] if "secretKeyRef" in entry.get("valueFrom", {})}
+    assert references["KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH_NEXT"] == "admin-key-hash-next"
+    assert references["KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY_HASH_NEXT"] == \
+        "runtime-key-hash-next"
+    assert "KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH_NEXT" not in json.dumps(init)
+    # Without the next hashes the init step stops rather than start a copy
+    # whose policy names a hash it doesn't have.
+    with pytest.raises(Unprepared, match="names a key hash this copy was not given"):
+        runtime_plan({**environ, BASE: text})
+    # The base is part of the Pod template: a change the bundled chart would
+    # reload in place (a model) now restarts the copies from the new base.
+    moved = with_enroller(managed(chart))
+    moved["agentgateway-standalone"]["config"]["llm"]["models"][0]["params"]["model"] = "other"
+    assert runtime_base(chart, policy, rendered(make(moved)))[0] != runtime_base(
+        chart, policy, rendered(make(values)))[0]
+
+
+def test_me_13_the_app_reads_the_callback_key_from_the_gateway_keys(chart, make):
+    output = rendered(make(with_enroller(managed(chart))))
+    variables = app_env(chart, output)
+    assert ("RUNTIME_AUTHORIZER_KEY_FILE", "/run/gateway-keys/callback-key", False) \
+        in variables
+    # The app reads no guard file: the per-copy check reads the guard-status rows.
+    names = {name for name, _, _ in variables}
+    assert "RUNTIME_GUARD_MANIFEST_FILE" not in names
+    # Off without the enroller.
+    assert "RUNTIME_AUTHORIZER_KEY_FILE" not in rendered(make(managed(chart)))

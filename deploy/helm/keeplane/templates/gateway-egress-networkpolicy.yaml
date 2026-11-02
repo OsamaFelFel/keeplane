@@ -2,7 +2,9 @@
 Opt-in egress for the managed gateway copies: DNS, the gateway database and the
 listed model endpoints only, plus Keeplane's PostgreSQL with the model enroller
 (gateway.enroller). Rendered only for a gateway this chart installs.
-The copies make no call to the app, so the app is not a destination.
+Without the enroller the copies make no call to the app, so the app is not a
+destination; with it, their protected runtime sends its checks to the app on
+TCP 3000.
 */ -}}
 {{- $np := .Values.networkPolicy }}
 {{- if and $np.egressEnabled (eq .Values.gateway.mode "managed") .Values.gateway.install }}
@@ -27,5 +29,12 @@ spec:
     those reach only the enroller (ADR 027). */}}
     {{- if include "keeplane.enroller.on" . }}
     {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.postgres" $np.egress.postgres) | trim | nindent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-app
+      ports:
+        - protocol: TCP
+          port: 3000
     {{- end }}
 {{- end }}

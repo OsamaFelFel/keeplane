@@ -14,10 +14,26 @@ needs into a private in-memory folder that only the enroller container mounts:
 - a random signing secret of its own: the enroller signs nothing, and never
   gets the app's shared signing secret.
 
-It also makes the Pod-local guard folder private to the app user, as the
-Docker preview's runtime preparation does. It writes nothing else there.
+It also installs Keeplane's protected runtime in the Pod-local guard folder,
+private to the app user, as the Docker preview's runtime preparation
+(deploy/local/prepare_runtime.py) does, before the gateway container starts
+from it:
+
+- a disabled declaration (manifest.json), written first, so no protected call
+  is admitted until the enroller has read its guard back;
+- the callback key the copy's protected checks send to the app, from the
+  installer's gateway keys Secret, the same for every copy and the app;
+- the trusted base (trusted.json) and the gateway's starting configuration
+  (gateway.json): the chart's rendered gateway configuration with its key-hash
+  variables written out, byte for byte the same in both files.
+
+What an earlier start of this Pod left there (the record of served models and
+any candidate declaration) is removed: the gateway starts afresh with the Pod,
+so no request can still hold an older guard. The enroller's first pass then
+enrols the saved models from that fresh base (ADR 027).
 """
 
+import json
 import os
 import re
 import secrets
@@ -35,6 +51,20 @@ CERTIFICATE = "-----BEGIN CERTIFICATE-----"
 MAX_SECRET = 4096
 MAX_CA = 262144
 PREFIX = "KEEPLANE_ENROLLER_"
+MAX_BASE = 1048576
+HASH = re.compile(r"sha256:[0-9a-f]{64}")
+# The key-hash variables the managed gateway's key policies may name; the
+# chart refuses any other key policy. The first two are always there.
+HASH_VARIABLES = (
+    "GATEWAY_ADMIN_KEY_HASH",
+    "GATEWAY_RUNTIME_KEY_HASH",
+    "GATEWAY_ADMIN_KEY_HASH_NEXT",
+    "GATEWAY_RUNTIME_KEY_HASH_NEXT",
+)
+REQUIRED_HASHES = HASH_VARIABLES[:2]
+ADMIN_ADDRESS = "127.0.0.1:15000"
+DISABLED = b'{"enabled":false,"version":2}'
+STALE = ("served.json", "candidate.json")
 
 
 class Unprepared(ValueError):
@@ -119,6 +149,81 @@ def write_private(path, value):
         Path(temporary).unlink(missing_ok=True)
 
 
+def runtime_plan(environ):
+    """The protected runtime's starting files, by name, in writing order.
+
+    The base is the chart's rendered gateway configuration. Only its key-hash
+    variables are written out, from the gateway keys Secret, as in the Docker
+    preview. Any other variable, such as the gateway database password, stays
+    for the gateway to read from its own environment, so no other credential
+    reaches the guard folder.
+    """
+    callback = text(environ, PREFIX + "CALLBACK_KEY")
+    if not KEY.fullmatch(callback):
+        raise Unprepared(f"{PREFIX}CALLBACK_KEY is not a valid callback key")
+    template = text(environ, PREFIX + "RUNTIME_BASE", MAX_BASE)
+    for name in HASH_VARIABLES:
+        setting = PREFIX + name
+        if setting not in environ and name not in REQUIRED_HASHES:
+            continue
+        value = text(environ, setting)
+        if not HASH.fullmatch(value):
+            raise Unprepared(f"{setting} is not a sha256 key hash")
+        template = template.replace("${" + name + "}", value)
+    if "${GATEWAY_" in template:
+        raise Unprepared(
+            "The gateway configuration names a key hash this copy was not given"
+        )
+    try:
+        base = json.loads(template)
+    except (ValueError, RecursionError):
+        raise Unprepared(f"{PREFIX}RUNTIME_BASE is not JSON") from None
+    if not isinstance(base, dict) or not isinstance(base.get("config"), dict):
+        raise Unprepared(f"{PREFIX}RUNTIME_BASE is not a gateway configuration")
+    if base["config"].get("adminAddr") != ADMIN_ADDRESS:
+        raise Unprepared("The gateway's admin address must stay on loopback")
+    trusted = json.dumps(
+        base, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+    # The disabled declaration goes first: nothing is admitted until the
+    # enroller reads its guard back.
+    return {
+        "manifest.json": DISABLED,
+        "callback-key": callback.encode("ascii"),
+        "trusted.json": trusted,
+        "gateway.json": trusted,
+    }
+
+
+def write_runtime(path, value):
+    """Replace one runtime file, mode 0600 as the enroller writes them."""
+    descriptor, temporary = tempfile.mkstemp(prefix=".runtime-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(value)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def install_runtime(runtime, guard):
+    """Write the protected runtime's starting files into the guard folder."""
+    private_directory(guard)
+    for name, value in runtime.items():
+        write_runtime(guard / name, value)
+        if name == "manifest.json":
+            # A fresh gateway serves no model yet: forget an earlier start's.
+            for stale in STALE:
+                (guard / stale).unlink(missing_ok=True)
+
+
 def prepare(environ, files=FILES, guard=GUARD):
     contents = plan(environ)
     private_directory(files)
@@ -128,13 +233,28 @@ def prepare(environ, files=FILES, guard=GUARD):
     return contents["status-user"]
 
 
+def prepare_copy(environ, files=FILES, guard=GUARD):
+    """The enroller's files and the protected runtime, all checked before any write."""
+    runtime = runtime_plan(environ)
+    role = prepare(environ, files, guard)
+    install_runtime(runtime, guard)
+    return role
+
+
 if __name__ == "__main__":
     try:
-        role = prepare(os.environ)
+        role = prepare_copy(os.environ)
     except Unprepared as error:
-        sys.exit(f"The model enroller's files were not prepared: {error}.")
+        sys.exit(
+            "The model enroller's files and protected runtime were not prepared: "
+            f"{error}."
+        )
     except OSError:
         sys.exit(
-            "The model enroller's files were not prepared: a folder is not writable."
+            "The model enroller's files and protected runtime were not prepared: "
+            "a folder is not writable."
         )
-    print(f"The model enroller's files are ready; its status role is {role}.")
+    print(
+        "The model enroller's files and the protected runtime are ready; "
+        f"its status role is {role}."
+    )

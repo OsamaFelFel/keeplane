@@ -41,7 +41,7 @@ names shown in brackets.
 | `app.postgres.migration.credentialsSecret` | `password` (migration role) | Migration Job only | Read-only file, mode 0440 |
 | `app.postgres.identitySecret` | `signing-secret`, `first-admin-password` | App copies; the Job receives only `signing-secret` | Read-only files, mode 0440 |
 | `app.postgres.caSecret` | `ca.crt` | App copies and migration Job | Read-only file, mode 0440 |
-| `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key`; with the managed gateway also `runtime-key-hash`, `admin-key-hash` | App copies and preflight Job; the managed gateway reads only the two hashes | Read-only directory `/run/gateway-keys`, files mode 0440; the gateway gets the hashes through `secretKeyRef` |
+| `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key`; with the managed gateway also `runtime-key-hash`, `admin-key-hash`; with the [model enroller](#model-enroller) also `callback-key` | App copies and preflight Job; the managed gateway reads only the two hashes; with the enroller, its init step also reads the keys, the hashes and `callback-key` | Read-only directory `/run/gateway-keys`, files mode 0440; the gateway gets the hashes through `secretKeyRef`; the enroller's init step gets its values through `secretKeyRef` |
 | `app.localTrial.firstAdminSecret` (`keeplane-first-admin`) | `first-admin-password` | Local trial app | Read-only file, mode 0440 |
 | `gateway.caSecret` (existing mode, optional) | `ca.crt`: the CA of an `https` customer-run gateway | App copies and preflight Job, in addition to the image's system CAs | Read-only file, mode 0440 |
 | `ingress.tlsSecretName` | Standard TLS certificate and key | Your ingress controller | Referenced by the Ingress; see [renew the public HTTPS certificate](certificate-operations.md#renew-the-public-https-certificate) |
@@ -307,6 +307,7 @@ retention for a production installation are **not decided**.
 | --- | --- | --- |
 | 3000 | App | Service `<release>-app` (`ClusterIP` by default) and the optional Ingress |
 | 4000 | Managed gateway: model calls and management | Service `<release>` (`ClusterIP`), and each copy's own address through the headless Service `<release>-gateway-copies` |
+| 5000 | Managed gateway's protected model access, with the [model enroller](#model-enroller) only | No Service, port declaration or Ingress; with `gatewayIngressEnabled` the gateway ingress policy admits port 4000 only |
 | 15000 | Gateway admin | No Service; the chart keeps the gateway's loopback default |
 | 15020 | Gateway stats | No Service or declared container port; pod annotations only suggest scraping |
 | 15021 | Gateway readiness | No Service; used by the kubelet probe |
@@ -332,9 +333,9 @@ list what the render checks cover.
 | Setting | Policy | Pods selected | Allows only |
 | --- | --- | --- | --- |
 | `gatewayIngressEnabled` (managed mode) | `<release>-gateway-ingress` | Gateway copies | In: this release's app pods, TCP 4000 |
-| `appIngressEnabled` | `<release>-app-ingress` | App pods | In: the pods matching `publicEntry`, TCP 3000 |
+| `appIngressEnabled` | `<release>-app-ingress` | App pods | In: the pods matching `publicEntry`, TCP 3000; with the [model enroller](#model-enroller) also the gateway copies, TCP 3000 |
 | `egressEnabled` | `<release>-app-egress` | App pods | Out: DNS; the gateway copies on TCP 4000 (managed) or `egress.suppliedGateway` (existing); `egress.postgres`; `egress.modelEndpoints`; `egress.runners` |
-| `egressEnabled` (managed mode) | `<release>-gateway-egress` | Gateway copies | Out: DNS; `egress.gatewayDatabase` (database mode); `egress.modelEndpoints`; `egress.postgres` with the [model enroller](#model-enroller) |
+| `egressEnabled` (managed mode) | `<release>-gateway-egress` | Gateway copies | Out: DNS; `egress.gatewayDatabase` (database mode); `egress.modelEndpoints`; with the [model enroller](#model-enroller), `egress.postgres` and this release's app pods on TCP 3000 |
 | `egressEnabled` (PostgreSQL with the chart's migration Job) | `<release>-accounts-migrate-egress` | Migration Job | Out: DNS; `egress.postgres` |
 | `egressEnabled` (existing mode) | `<release>-gateway-preflight-egress` | Preflight Job | Out: DNS; `egress.suppliedGateway` |
 
@@ -347,9 +348,11 @@ are label maps for your ingress controller, for example
 `app.kubernetes.io/name: ingress-nginx`. Give at least one; a namespace map
 alone admits every pod in that namespace, and a pod map alone means pods in the
 release namespace. Helm refuses `appIngressEnabled` without either, and with an
-app Service other than `ClusterIP`. No other Keeplane pod calls the app: the
-gateway copies make no call to it and the Jobs call only PostgreSQL or the
-supplied gateway. The kubelet's readiness and liveness checks come from the
+app Service other than `ClusterIP`. With the [model enroller](#model-enroller)
+the policy also admits the gateway copies on TCP 3000, whose protected runtime
+sends its checks to the app. No other Keeplane pod calls the app: without the
+enroller the gateway copies make no call to it, and the Jobs call only
+PostgreSQL or the supplied gateway. The kubelet's readiness and liveness checks come from the
 node, which most network plugins admit regardless of policy; check yours.
 
 **Destinations.** Each entry in an `egress` list is either an address range or
@@ -491,8 +494,7 @@ copy that is not ready has no address yet; until it is ready, changes that add
 or widen access are not confirmed.
 
 Each copy's Pod name is also its name in the gateway guard-status table, which
-the private model enroller for that copy will write (Helm refuses it until the
-chart installs the protected runtime); see
+the private model enroller for that copy writes; see
 [model enroller](#model-enroller).
 
 **Existing mode.** If the customer-run gateway serves through several copies,
@@ -522,23 +524,21 @@ model enroller ([ADR 027](../architecture/runtime-authorization.md#model-enrolle
 which runs beside every gateway copy. It is off by default
 (`gateway.enroller.enabled: false`).
 
-> **Helm refuses the enroller for now.** The enroller keeps a copy's
-> protected checks in step with the saved models, but this chart doesn't yet
-> install Keeplane's protected runtime on the managed gateway (its guard,
-> callback key and first enrolment). An enroller would have no guard to keep
-> and every protected model would stay refused, so Helm refuses
-> `gateway.enroller.enabled: true` with a message saying so, as it refuses
-> personal-data detection with the managed gateway. The rest of this section
-> describes what the chart will run once that runtime is installed; you can
-> already create the roles and Secrets.
+Turning it on also installs Keeplane's protected runtime on every gateway
+copy, the same way in substance as the Docker preview's
+[guarded model access](guarded-runtime.md): each copy's guard holds a disabled
+declaration, the callback key and a trusted base, the gateway starts from that
+base, and the enroller enrols the saved models on it (see **Protected
+runtime** below).
 
 `app.guardStatusCheck` (`KEEPLANE_GUARD_STATUS_CHECK=1`) can be on only
-together with the enroller, so it can't be on yet either.
+together with the enroller, and is always on with it.
 
 **What runs.** Each gateway copy Pod of StatefulSet `<release>-gateway` gets:
 
 - an init container, `prepare-model-enroller`, that writes this copy's
-  credentials into an in-memory folder and exits (see Secrets below);
+  credentials into an in-memory folder and the protected runtime into the
+  copy's guard, then exits (see Secrets and Protected runtime below);
 - a `model-enroller` container running `manage.py run_model_enroller` from
   `app.image`. It shares the copy's network namespace, so it reads the copy's
   loopback-only applied state at `127.0.0.1`, and it opens no port: no Service,
@@ -559,6 +559,59 @@ gateway copies run. Its resources come from `gateway.enroller.resources`; Helm
 refuses an install without both a CPU and a memory limit (defaults: requests
 25m and 128Mi, limits 500m and 384Mi). With `app.imagePullSecrets`, the
 gateway copy Pods get them too, since the enroller uses the app image.
+
+**Protected runtime.** Before the gateway container starts, the init container
+writes into the copy's guard at `/installed`, in this order:
+
+1. `manifest.json`, a disabled declaration, so the app admits no protected
+   call from this copy until its enroller has read the guard back;
+2. `callback-key`, from key `callback-key` of `gateway.keysSecret`: the key
+   this copy's protected checks send to the app. Every copy and the app use
+   the same one; the app reads it from its own mount of the Secret
+   (`/run/gateway-keys/callback-key`) and never mounts a guard;
+3. `trusted.json` and `gateway.json`, byte for byte the same: the gateway
+   configuration this chart renders into ConfigMap `<release>-config` (your
+   `agentgateway-standalone.config`, the database storage and address), with
+   the admin address on loopback (`127.0.0.1:15000`) and the key-hash
+   variables written out from `gateway.keysSecret`. Every other variable, such
+   as the gateway database password, stays for the gateway to read from its
+   own environment, so no other credential reaches the guard.
+
+It also removes what an earlier start of the Pod left there (the record of
+served models and any candidate declaration). The gateway container then
+starts from `/installed/gateway.json` instead of the ConfigMap, and the
+enroller's first pass enrols every saved model whose approval matches the
+gateway's definition, reads the guard back from the copy's applied state,
+enables the declaration and records it in the copy's guard-status row. Each
+copy starts afresh this way whenever its Pod starts; nothing about the guard
+survives a Pod replacement.
+
+Add the callback key to the keys Secret before turning the enroller on. Make
+it as you made the runtime and admin keys in
+[gateway access keys](#gateway-access-keys) (32 to 256 letters, digits, `-` or
+`_`), into a file `callback-key`, then add it beside them:
+
+```sh
+printf '{"stringData":{"callback-key":"%s"}}' "$(cat callback-key)" > callback.json
+kubectl -n "$NS" patch secret keeplane-gateway-keys --type merge --patch-file callback.json
+rm callback.json
+```
+
+The copies don't read the ConfigMap, so any change to the gateway
+configuration (a model in `agentgateway-standalone.config`, a key policy
+during a rotation) changes the init container's settings and restarts the
+copies one at a time, each from the new base. While a copy restarts, its
+protected models are refused until its enroller confirms them again. A
+rotated `callback-key` reaches the app within about two minutes and a copy
+only when it restarts, so protected calls through copies not yet restarted
+are refused until you restart them
+(`kubectl rollout restart statefulset <release>-gateway`).
+
+The protected listener is the guarded runtime's port 5000 inside each copy
+Pod. The chart publishes it through no Service, port declaration or Ingress,
+and with `networkPolicy.gatewayIngressEnabled` the gateway ingress policy
+admits only port 4000. How developers reach it in Kubernetes is not decided
+yet.
 
 **Database roles.** Create the roles first, as in
 [the enroller's database roles](guard-status-roles.md): one read-only
@@ -624,16 +677,22 @@ model, so every protected check would be refused.
 **Network policies.** With `networkPolicy.egressEnabled`, the gateway copies'
 egress policy also allows `networkPolicy.egress.postgres` while the enroller
 runs. A policy covers the whole Pod, so the gateway container gets that path
-too, but no database credential. Nothing new is reachable from outside.
+too, but no database credential. The copies' protected runtime sends its
+checks to the app, so the gateway egress policy also allows this release's app
+pods on TCP 3000, and with `networkPolicy.appIngressEnabled` the app ingress
+policy also admits the gateway copies on TCP 3000. Nothing new is reachable
+from outside.
 
 Helm refuses, before creating anything:
 
-- `gateway.enroller.enabled` in every install for now, until the chart
-  installs the protected runtime (see the note above);
 - `gateway.enroller.enabled` with `gateway.mode=existing`: Keeplane writes no
   guard on a customer-run gateway, whose checks read the saved approvals on
   every request;
-- `gateway.enroller.enabled` without `app.postgres`;
+- `gateway.enroller.enabled` without `app.postgres`, or with
+  `agentgateway-standalone.mode` other than `database` (`agentgateway-standalone.mode=database`
+  gives every copy the same saved models);
+- an `agentgateway-standalone.config.config.adminAddr` other than
+  `127.0.0.1:15000`;
 - `app.guardStatusCheck` without the enroller, or with `gateway.mode=existing`;
 - a gateway `runAsUser` other than 65532;
 - a missing or malformed `approvalsUser`, a `statusRoles` list that doesn't
@@ -646,7 +705,8 @@ Helm refuses, before creating anything:
   `gateway.extraVolumeMounts` entry at or under `/installed`.
 
 The [model enroller chart cases](../../tests/integration/chart-model-enroller-cases.md)
-check this section against rendered manifests. While the enroller is refused,
-they render a test copy of the chart without that one refusal. They prove what
-the chart asks Kubernetes to run, not a live run on a cluster or on the real
-gateway image.
+check this section against rendered manifests, and the
+[model enroller files cases](../../tests/unit/model-enroller-files-cases.md)
+check the init step. They prove what the chart asks Kubernetes to run and what
+the init step writes, not a live run on a cluster or on the real gateway
+image.

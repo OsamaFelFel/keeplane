@@ -133,6 +133,12 @@ spec:
             - name: KEEPLANE_GUARD_STATUS_CHECK
               value: "1"
             {{- end }}
+            {{- /* The callback key every copy's protected checks send, from the
+            mounted gateway keys; the app never mounts a copy's guard. */}}
+            {{- if include "keeplane.enroller.on" . }}
+            - name: RUNTIME_AUTHORIZER_KEY_FILE
+              value: /run/gateway-keys/callback-key
+            {{- end }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
             {{- if .Values.app.personalDataDetection.enabled }}
