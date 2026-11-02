@@ -127,7 +127,7 @@ def test_admin_cannot_bypass_class_and_withdrawn_models_disappear(catalog):
 
 
 @pytest.mark.parametrize("classes_enabled", [True, False])
-def test_no_registered_models_is_an_empty_catalog_not_an_error(catalog, classes_enabled):
+def test_cat_01_no_registered_models_is_an_empty_catalog_not_an_error(catalog, classes_enabled):
     # Spec 004 ST12: models listed only by the gateway are not registered.
     catalog.stores.classes.set_enabled(classes_enabled)
     for name in ("private", "public"):

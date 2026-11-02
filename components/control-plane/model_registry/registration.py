@@ -159,6 +159,9 @@ class ModelManagement:
             ),
             {},
         )
+        if not entry:
+            # Nothing was written, so nothing remains to remove.
+            return True
         if entry.get("params") != expected_params:
             return False
         status, _ = self.gateway.request(
@@ -492,7 +495,7 @@ class ModelManagement:
             return self.reply(
                 503,
                 {
-                    "error": "The gateway didn't confirm registration. "
+                    "error": "The gateway didn't register it. "
                     + (
                         "Nothing was saved."
                         if removed
@@ -779,7 +782,11 @@ class ModelManagement:
             address = body.get("address", "")
             checked_status, checked = self.local_runner(address, model)
             if checked_status != 200:
-                return self.reply(checked_status, checked)
+                # Nothing reaches the gateway before the runner answers.
+                return self.reply(
+                    checked_status,
+                    {"error": checked["error"] + " Nothing was saved."},
+                )
             sources["runner"] = address.rstrip("/") + "/v1"
             context_tokens = self.runner_context(address, model)
         else:
@@ -858,14 +865,14 @@ class ModelManagement:
                     return self.reply(
                         503,
                         {
-                            "error": "The gateway did not confirm registration. A matching definition was removed."
+                            "error": "The gateway didn't register it. Nothing was saved."
                         },
                     )
                 if status >= 500:
                     return self.reply(
                         503,
                         {
-                            "error": "The gateway did not confirm registration. The model may remain in the gateway without Keeplane approval; check Models."
+                            "error": "The gateway didn't register it. The model may remain in the gateway without Keeplane approval; check Models."
                         },
                     )
             return self.reply(status, result)

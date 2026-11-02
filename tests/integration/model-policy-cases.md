@@ -3,9 +3,10 @@
 Run `python -m pytest tests/integration/test_model_policy.py` against the isolated Django database.
 
 - A classed project gets only models approved for its stored class.
-- Classes off, or an unclassified project, permits all currently set-up models.
-- Turning classes back on restores the restriction.
-- Models added outside Keeplane, removed models and changed gateway definitions are excluded.
+- MP-01 Classes off, or an unclassified project, permits all currently set-up models.
+  Turning classes back on restores the restriction.
+- MP-02 Models added outside Keeplane, removed models and changed gateway definitions are excluded,
+  even for an unclassified project.
 - Reapproval restores a changed model; withdrawing class approval takes effect on the next query from either service instance.
 - A rolled-back edit does not withdraw an existing approval.
 - Internal personal-key setup keeps the same class and current-definition gates;

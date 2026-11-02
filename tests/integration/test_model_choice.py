@@ -60,7 +60,7 @@ def chosen(f, model_id, reason, requested="private"):
     }
 
 
-def test_usable_own_key_keeps_the_requested_model(choice):
+def test_mc_01_usable_own_key_keeps_the_requested_model(choice):
     choice.install("public")
     response = ask(choice)
     assert response.status_code == 200
@@ -69,7 +69,7 @@ def test_usable_own_key_keeps_the_requested_model(choice):
     assert not choice.reads
 
 
-def test_missing_key_moves_to_another_allowed_model_that_the_gateway_admits(choice):
+def test_mc_02_missing_key_moves_to_another_allowed_model_that_the_gateway_admits(choice):
     choice.install("public")
     choice.store.remove("private")
     assert ask(choice).json() == chosen(choice, "public", "missing")
@@ -80,7 +80,7 @@ def test_missing_key_moves_to_another_allowed_model_that_the_gateway_admits(choi
     assert not choice.reads
 
 
-def test_removed_key_moves_the_next_task_and_a_new_key_moves_it_back(choice):
+def test_mc_03_removed_key_moves_the_next_task_and_a_new_key_moves_it_back(choice):
     choice.install("public")
     assert ask(choice).json()["model_id"] == "private"
     choice.store.remove("private")
@@ -115,7 +115,7 @@ def test_another_owners_key_does_not_count(choice):
     assert ask(choice).json() == chosen(choice, "public", "missing")
 
 
-def test_no_other_allowed_model_fails_clearly(choice):
+def test_mc_06_no_other_allowed_model_fails_clearly(choice):
     choice.store.remove("private")
     response = ask(choice)
     assert response.status_code == 200
@@ -174,7 +174,7 @@ def test_candidates_are_tried_in_model_id_order(choice):
     assert ask(choice).json() == chosen(choice, "public", "missing")
 
 
-def test_a_removed_model_is_never_chosen_and_gets_no_work(choice):
+def test_mc_16_a_removed_model_is_never_chosen_and_gets_no_work(choice):
     # Spec 004 ST23: after removal, a model added outside Keeplane stays in the
     # gateway, but it is gateway-only again and must get no work.
     choice.install("public")

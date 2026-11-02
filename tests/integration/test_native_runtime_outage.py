@@ -62,6 +62,17 @@ CASES = {
     "timeout": (["slow"] * 3, False, {504}, 3),
     "too-big": (["context"], False, {400}, 1),
 }
+# The case each scenario reports, from native-runtime-outage-cases.md.
+CASE_IDS = {
+    "down-503": "OUT-01",
+    **{f"down-{code}": "OUT-02" for code in (500, 501, 502, 504, 520, 529, 599)},
+    "rate-limited": "OUT-03",
+    "recovers-on-second-retry": "OUT-04",
+    "recovers-after-429": "OUT-05",
+    "stream-recovers": "OUT-06",
+    "timeout": "OUT-07",
+    "too-big": "OUT-08",
+}
 
 
 @pytest.mark.live
@@ -72,7 +83,12 @@ def test_a_down_model_is_retried_twice_and_never_switched(
     tmp_path, report_file, existing, case
 ):
     script, stream, statuses, contacts = CASES[case]
-    report = {"existing": existing, "case": case, "passed": False}
+    report = {
+        "existing": existing,
+        "id": CASE_IDS[case],
+        "case": case,
+        "passed": False,
+    }
 
     def save_report():
         report_file.write_text(json.dumps(report, indent=2) + "\n")
@@ -120,7 +136,7 @@ def test_a_down_model_is_retried_twice_and_never_switched(
 @pytest.mark.live
 @pytest.mark.infrastructure
 @pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
-def test_a_started_stream_is_never_retried(tmp_path, report_file, existing):
+def test_out_09_a_started_stream_is_never_retried(tmp_path, report_file, existing):
     report = {"existing": existing, "passed": False}
     body = {
         "model": "private",
@@ -153,7 +169,7 @@ def test_a_started_stream_is_never_retried(tmp_path, report_file, existing):
 @pytest.mark.live
 @pytest.mark.infrastructure
 @pytest.mark.parametrize("existing", [False, True], ids=["managed", "existing"])
-def test_an_unreachable_provider_is_retried_twice(tmp_path, report_file, existing):
+def test_out_10_an_unreachable_provider_is_retried_twice(tmp_path, report_file, existing):
     """Connection refused counts as down: three checked attempts, then an error."""
     report = {"existing": existing, "passed": False}
     with native_runtime_trial(tmp_path, existing, fixture_config) as trial:

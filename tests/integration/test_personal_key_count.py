@@ -78,7 +78,7 @@ def counts(domain_services):
     )
 
 
-def test_count_is_one_current_bound_query_and_get_contract_stays_unchanged(
+def test_dk_count_01_count_is_one_current_bound_query_and_get_contract_stays_unchanged(
     counts, django_assert_num_queries
 ):
     previous = counts.catalog.get("personal-model")
@@ -100,7 +100,7 @@ def test_count_is_one_current_bound_query_and_get_contract_stays_unchanged(
     assert counts.catalog.personal_key_count("personal-model", counts.digest) == 0
 
 
-def test_listing_count_contains_no_owner_key_or_stale_model_data(counts):
+def test_dk_count_02_listing_count_contains_no_owner_key_or_stale_model_data(counts):
     status, body = list_models(
         counts.gateway.models, counts.gateway.resources, counts.catalog, None, set()
     )
@@ -116,7 +116,7 @@ def test_listing_count_contains_no_owner_key_or_stale_model_data(counts):
     assert "developer_key_count" not in body["models"][0]
 
 
-def test_admin_http_count_is_read_only_and_unavailable_storage_never_invents_zero(
+def test_dk_count_03_admin_http_count_is_read_only_and_unavailable_storage_never_invents_zero(
     counts, monkeypatch
 ):
     monkeypatch.setattr("common.api.IDENTITY", counts.stores.identity)

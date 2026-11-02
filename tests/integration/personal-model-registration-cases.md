@@ -4,8 +4,8 @@ Admins can register fixed OpenAI and Anthropic models with `key_choice: personal
 The admin checks whether the provider answers; each developer checks their own
 key through the [provider-key API](../../docs/guide/cli-provider-keys.md).
 
-- A provider response of 200, 401 or 403 permits setup without an organization key.
-- The check sends only the configured model and a small fixed test message.
+- PMR-01 A provider response of 200, 401 or 403 permits setup without an organization key.
+  The check sends only the configured model and a small fixed test message.
   It sends no developer credential, provider key, cookie or operator secret.
 - Production uses verified HTTPS. An untrusted certificate fails before HTTP contact.
 - The actual admin API requires an admin, CSRF and the mutation header; it keeps
@@ -13,7 +13,7 @@ key through the [provider-key API](../../docs/guide/cli-provider-keys.md).
 - Redirects, wrong paths, throttling, server errors, oversized/malformed success
   responses and timeouts do not approve the model. Environment proxies are ignored.
 - A timed-out check kills and reaps its owned worker.
-- Successful add saves a Personal approval bound to the complete gateway definition
+- PMR-02 Successful add saves a Personal approval bound to the complete gateway definition
   and its revision. It creates no shared or developer key.
 - If probing or approval storage fails, remove only the unchanged new definition.
   Keep unrelated models and any definition changed by another operator.

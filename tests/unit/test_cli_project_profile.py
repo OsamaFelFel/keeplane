@@ -345,7 +345,7 @@ def native_model(runtime):
         ("outdated", "saved for an earlier model setup; using general instead. Replace it"),
     ],
 )
-def test_unusable_own_key_moves_the_task_to_another_allowed_model_and_says_why(
+def test_mc_13_unusable_own_key_moves_the_task_to_another_allowed_model_and_says_why(
     connected, runtime, monkeypatch, tmp_path, capsys, reason, text
 ):
     connected.model_ids = ["coder", "general"]
@@ -459,7 +459,7 @@ def test_server_without_a_choice_route_keeps_the_gateway_check(
         assert native_model(runtime) == "keeplane/coder"
 
 
-def test_no_models_yet_says_so_and_sends_nothing(
+def test_code_01_no_models_yet_says_so_and_sends_nothing(
     connected, runtime, monkeypatch, tmp_path, capsys
 ):
     # Spec 004 ST12: the organization has registered no models yet.
@@ -490,7 +490,7 @@ def test_a_model_outside_a_non_empty_catalog_keeps_the_not_allowed_message(
     )
 
 
-def test_keeplane_sets_no_request_settings_of_its_own(
+def test_code_02_keeplane_sets_no_request_settings_of_its_own(
     connected, runtime, monkeypatch, tmp_path
 ):
     # Spec 004 ST26: the runtime's own settings, such as temperature, are not

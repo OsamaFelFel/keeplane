@@ -134,7 +134,7 @@ def command(api, monkeypatch, action, *extra):
     return keeplane.main()
 
 
-def test_hidden_key_set_status_remove_and_cleanup_metadata(api, monkeypatch, capsys):
+def test_kc_01_hidden_key_set_status_remove_and_cleanup_metadata(api, monkeypatch, capsys):
     secret = "synthetic-provider-key-12"
     monkeypatch.setattr(provider_keys.getpass, "getpass", lambda _: secret)
     assert command(api, monkeypatch, "set") == 0
@@ -208,7 +208,7 @@ def test_ambiguous_write_is_not_retried_and_status_reconciles(
     assert sum(row[0] in {"PUT", "DELETE"} for row in api.calls) == 1
 
 
-def test_hidden_input_cannot_fall_back_to_echo(api, monkeypatch, capsys):
+def test_kc_02_hidden_input_cannot_fall_back_to_echo(api, monkeypatch, capsys):
     def unavailable(_):
         warnings.warn(
             "hidden input unavailable",
@@ -243,7 +243,7 @@ def test_explicit_pipe_is_bounded_and_private(api, monkeypatch, capsys):
     assert all(secret not in p.read_bytes() for p in api.profile.iterdir())
 
 
-def test_check_sends_no_key_and_status_displays_refusal(api, monkeypatch, capsys):
+def test_kr_01_check_sends_no_key_and_status_displays_refusal(api, monkeypatch, capsys):
     monkeypatch.setattr(provider_keys.getpass, "getpass", lambda _: pytest.fail("Never prompt for saved key"))
     original = {p.name: p.read_bytes() for p in api.profile.iterdir()}
     api.stored, api.key_status = True, "refused"

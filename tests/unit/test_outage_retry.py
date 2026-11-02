@@ -38,7 +38,7 @@ def protected_route(config):
     return config["binds"][-1]["listeners"][0]["routes"][0]
 
 
-def test_the_protected_route_retries_the_same_model_twice():
+def test_retry_01_the_protected_route_retries_the_same_model_twice():
     policies = protected_route(installed())["policies"]
     assert policies["retry"] == {
         "attempts": 2,
@@ -66,7 +66,7 @@ def test_each_attempt_has_its_own_time_limit_before_the_answer_starts():
     assert timeout["backendRequestTimeout"].endswith("s")
 
 
-def test_a_context_length_refusal_is_not_retried():
+def test_retry_02_a_context_length_refusal_is_not_retried():
     # Providers refuse a task that is too big with a 4xx other than 429.
     assert 400 not in RETRY_CODES and 413 not in RETRY_CODES
     assert all(code == 429 or code >= 500 for code in RETRY_CODES)
@@ -138,7 +138,7 @@ def test_applied_route_with_the_generated_retry_is_accepted(codes, backoff, time
         "extra-timeout", "extra-retry-field", "extra", "duplicate", "entry", "shape",
     ],
 )
-def test_applied_route_without_the_exact_retry_is_refused(fault):
+def test_retry_03_applied_route_without_the_exact_retry_is_refused(fault):
     entry, generated, inline = served(installed())
     inline = deepcopy(inline)
     retry, timeout = inline[1]["retry"], inline[2]["timeout"]

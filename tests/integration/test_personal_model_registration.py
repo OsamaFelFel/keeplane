@@ -114,7 +114,7 @@ def definition(provider, kind="openAI"):
     ],
 )
 @pytest.mark.parametrize("status", [200, 401, 403])
-def test_real_probe_sends_only_fixed_metadata_and_no_credentials(
+def test_pmr_01_real_probe_sends_only_fixed_metadata_and_no_credentials(
     provider, kind, path, limit, status, monkeypatch
 ):
     provider["status"] = status
@@ -282,7 +282,7 @@ def add(registrar, source="openai", **kwargs):
 
 
 @pytest.mark.parametrize("source", ["openai", "anthropic"])
-def test_personal_add_creates_real_definition_bound_approval_without_a_key(
+def test_pmr_02_personal_add_creates_real_definition_bound_approval_without_a_key(
     registrar, provider, source
 ):
     assert add(registrar, source)[0] == 200

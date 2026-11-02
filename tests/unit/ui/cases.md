@@ -36,7 +36,13 @@ colocated tests.
 | UI-CSRF-02 | Fail token bootstrap. | No mutation request is sent. |
 | UI-CSRF-03 | Refuse or disconnect a mutation. | The write is not repeated automatically. |
 | UI-CSRF-04 | Supply a different-origin URL. | No token or request is sent to that origin. |
-| MO-UI-COUNT | Open Models with zero, one and two personal-key registrations. | Each personal row shows its server count below “Each developer's own”; shared models show no count. |
+| MOD-UI-01 | Open Models with zero, one and two personal-key registrations. | Each personal row shows its server count below “Each developer's own”; shared models show no count. |
+| MOD-UI-02 | Add a cloud model that Keeplane refuses, for example “OpenAI refused the key. Nothing was saved.” | The dialog stays open with the model and key entered and shows the design system's failure message “[Model] wasn't added” with the reason and “Check the details and try again.”, as in `Model-add-failed.dc.html`. |
+| MOD-UI-03 | Add a model the provider already has (409 “coder from OpenAI is already added.”). | The Model field is marked invalid and shows that line under it, as in `Model-add-duplicate.dc.html`; there is no “wasn't added” message and the add is sent once. |
+| MOD-UI-04 | Open Models while the models are still loading. | The Models table shows “Loading models…” in place of its rows, with no Edit or Set up. |
+| MOD-UI-05 | Open Models while the gateway isn't answering, then choose Try again once it answers; and lose the gateway after the models were listed. | The notice reads “The model gateway isn't answering.” and “Developers' tasks can't reach any model, and models can't be added or changed, until it answers again.”; Add model and every Edit are off; Try again reads the models once more and the notice goes when they load. |
+| MOD-UI-06 | Open Models with the gateway up, then down. | The page names no gateway product (such as agentgateway or LiteLLM) and no version. |
+| MOD-UI-07 | Add a model when the gateway refuses it (503 “The gateway didn't register it. Nothing was saved.”). | The dialog stays open and shows “[Model] wasn't added” with “The gateway didn't register it. Nothing was saved. Check the details and try again.” |
 | CL-UI-01 | Open Models with two levels on Keeplane's pick and one changed by an admin. | The Complexity table marks each model “Keeplane's pick” or “changed by an admin”. |
 | CL-UI-02 | Change Simple to another model. | The dialog offers only set-up models, names Keeplane's pick, disables Use Keeplane's pick for a level on Keeplane's pick, sends one protected request and shows the change. |
 | CL-UI-03 | Choose Use Keeplane's pick on an admin-changed level. | The request sends no model and the page says the level uses Keeplane's pick again. |

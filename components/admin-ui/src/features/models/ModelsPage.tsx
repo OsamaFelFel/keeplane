@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, action, ApiError } from '@/app/api'
 import { Button } from '@/components/ui/button'
+import { FailureAlert } from '@/components/FailureAlert'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,6 +56,8 @@ export function ModelsPage() {
   const [removing, setRemoving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState('')
+  const [addFailure, setAddFailure] = useState<{ title: string; reason: string } | null>(null)
+  const [duplicate, setDuplicate] = useState('')
   const [source, setSource] = useState<'runner' | 'openai' | 'anthropic'>('runner')
   const [runnerAddress, setRunnerAddress] = useState('')
   const [runnerModels, setRunnerModels] = useState<RunnerModels | null>(null)
@@ -95,7 +98,7 @@ export function ModelsPage() {
   useEffect(() => { void refresh() }, [refresh])
 
   function openAdd() {
-    setDialogError(''); setAdding(true); setSource('runner'); setModelName('')
+    setDialogError(''); setAddFailure(null); setDuplicate(''); setAdding(true); setSource('runner'); setModelName('')
     setRunnerAddress(''); setRunnerModels(null); setSharedKey(''); setKeyChoice('shared')
     setApprovedClasses([])
   }
@@ -112,7 +115,7 @@ export function ModelsPage() {
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const name = modelName.trim()
-    setBusy(true); setDialogError('')
+    setBusy(true); setDialogError(''); setAddFailure(null); setDuplicate('')
     try {
       const result = await action<{ existing?: boolean }>('/api/models', 'POST', {
         name, model: name, source,
@@ -121,14 +124,23 @@ export function ModelsPage() {
         }),
         ...(classes?.enabled ? { approved_classes: approvedClasses } : {}),
       })
-      if (result.existing) throw new ApiError(409, `${name} is already added.`)
+      if (result.existing) throw new ApiError(409, `${name} from Local runner is already added.`)
       setAdding(false); setSharedKey('')
       setNotice(`Added ${name}.`)
       for (const delay of [0, 300, 900, 2000]) {
         if (delay) await new Promise(resolve => setTimeout(resolve, delay))
         if ((await refresh()).some(model => model.id === name)) break
       }
-    } catch (cause) { setDialogError(`${name || 'Model'} wasn't added. ${(cause as Error).message}`) }
+    } catch (cause) {
+      const message = (cause as Error).message
+      // Spec 004 ST10: a duplicate is shown on the Model field; any other
+      // refusal as "[Model] wasn't added" with the reason, as in Model-add-failed.
+      if (cause instanceof ApiError && cause.status === 409 && message.endsWith(' is already added.')) setDuplicate(message)
+      else setAddFailure({
+        title: `${name || 'Model'} wasn't added`,
+        reason: message.endsWith('Nothing was saved.') ? `${message} Check the details and try again.` : message,
+      })
+    }
     finally { setBusy(false) }
   }
 
@@ -258,7 +270,7 @@ export function ModelsPage() {
                 </span>}
               </> : 'None'}</TableCell>
               {classes?.enabled && <TableCell>{model.approved === false ? 'Not set · gets no work' : model.approved_classes?.join(', ') || 'None'}</TableCell>}
-              <TableCell>{model.approved !== undefined && <Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" onClick={() => openEdit(model)}>{model.approved ? 'Edit' : 'Set up'}</Button>}</TableCell>
+              <TableCell>{model.approved !== undefined && <Button variant="link" className="h-6 min-h-6 px-0 text-[15px]" disabled={!!error} onClick={() => openEdit(model)}>{model.approved ? 'Edit' : 'Set up'}</Button>}</TableCell>
             </TableRow>)}
           </TableBody></Table>
       </div>
@@ -307,7 +319,7 @@ export function ModelsPage() {
         <form className="grid gap-5" onSubmit={event => void add(event)}>
           <div><Label htmlFor="model-source" className="keeplane-field-label">Provider</Label>
             <select id="model-source" className={selectStyle} value={source} disabled={busy} onChange={event => {
-              setSource(event.target.value as typeof source); setModelName(''); setRunnerModels(null); setDialogError('')
+              setSource(event.target.value as typeof source); setModelName(''); setRunnerModels(null); setDialogError(''); setDuplicate('')
             }}><option value="runner">Local runner</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option></select>
             <p className="mt-1 text-[14px] text-muted-foreground">A cloud provider, or a local runner on your network.</p></div>
           {source === 'runner' ? <>
@@ -316,11 +328,11 @@ export function ModelsPage() {
                 setRunnerAddress(event.target.value); setRunnerModels(null); setModelName('')
               }} placeholder="http://qwen:8080" /><Button type="button" variant="outline" disabled={finding || busy || !runnerAddress.trim()} onClick={() => void findRunner()}>{finding ? 'Finding…' : 'Find models'}</Button></div></div>
             <div><Label htmlFor="runner-model" className="keeplane-field-label">Model</Label>
-              <select id="runner-model" className={selectStyle} value={modelName} required disabled={busy || !runnerModels?.models.length} onChange={event => setModelName(event.target.value)}>
+              <select id="runner-model" className={selectStyle} value={modelName} required aria-invalid={!!duplicate} disabled={busy || !runnerModels?.models.length} onChange={event => { setModelName(event.target.value); setDuplicate('') }}>
                 <option value="">{runnerModels ? 'Choose a model' : 'Find models first'}</option>{runnerModels?.models.map(name => <option key={name} value={name}>{name}</option>)}
-              </select>{runtime?.active_context_tokens && <p className="mt-1 text-[14px] text-muted-foreground">Active context: {runtime.active_context_tokens.toLocaleString()} tokens.</p>}</div>
+              </select>{duplicate && <p className="mt-1 text-[14px]" role="alert">{duplicate}</p>}{runtime?.active_context_tokens && <p className="mt-1 text-[14px] text-muted-foreground">Active context: {runtime.active_context_tokens.toLocaleString()} tokens.</p>}</div>
           </> : <>
-            <div><Label htmlFor="cloud-model" className="keeplane-field-label">Model</Label><Input id="cloud-model" required maxLength={100} value={modelName} disabled={busy} onChange={event => setModelName(event.target.value)} /></div>
+            <div><Label htmlFor="cloud-model" className="keeplane-field-label">Model</Label><Input id="cloud-model" required maxLength={100} value={modelName} aria-invalid={!!duplicate} disabled={busy} onChange={event => { setModelName(event.target.value); setDuplicate('') }} />{duplicate && <p className="mt-1 text-[14px]" role="alert">{duplicate}</p>}</div>
             <fieldset><legend className="keeplane-field-label">Provider key</legend>
               <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" name="provider-key" checked={keyChoice === 'shared'} disabled={busy} onChange={() => setKeyChoice('shared')} />One shared key for the organization</label>
               <label className="flex min-h-9 items-center gap-2 text-[15px]"><input type="radio" name="provider-key" checked={keyChoice === 'personal'} disabled={busy} onChange={() => setKeyChoice('personal')} />Each developer adds their own key</label>
@@ -331,6 +343,7 @@ export function ModelsPage() {
           </>}
           {classes?.enabled && <ClassChoices choices={classes.classes.map(item => item.name)} selected={approvedClasses} onChange={setApprovedClasses} />}
           {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}
+          {addFailure && <FailureAlert title={addFailure.title}>{addFailure.reason}</FailureAlert>}
           <div className="flex justify-end gap-3"><Button type="button" variant="outline" disabled={busy} onClick={() => setAdding(false)}>Cancel</Button><Button type="submit" disabled={busy || !modelName.trim()}>{busy ? 'Adding…' : 'Add model'}</Button></div>
         </form>
       </DialogContent>

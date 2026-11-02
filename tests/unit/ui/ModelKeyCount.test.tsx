@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('MO-UI-COUNT: personal models show the server count without a shared-model count', async () => {
+test('MOD-UI-01: personal models show the server count without a shared-model count', async () => {
   const models = [0, 1, 2].map(count => ({
     id: `personal-${count}`, provider: 'OpenAI', kind: 'cloud', approved: true,
     key_choice: 'personal', developer_key_count: count,
