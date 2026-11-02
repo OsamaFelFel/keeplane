@@ -11,7 +11,6 @@ import re
 
 import pytest
 
-from tests.integration.test_chart_model_enroller import with_enroller
 
 ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = ROOT / "docs/guide/kubernetes-installation-reference.md"
@@ -55,10 +54,6 @@ def installations(chart, directory):
         "existing-local": ("-f", "deploy/local/existing-values.yaml"),
         "managed-postgres": values_file("managed", managed),
         "managed-postgres-cli-sign-in": values_file("sign-in", sign_in),
-        # The model enroller's credentials reach its init step through
-        # secretKeyRef only; the gateway copies still mount no Secret.
-        "managed-postgres-model-enroller": values_file(
-            "enroller", with_enroller(chart.postgres_values("managed"))),
         "existing-postgres": values_file("existing", existing),
         "existing-postgres-gateway-ca": values_file("existing-ca", existing_ca),
         # Neither PostgreSQL nor the local trial: the pod still needs the group

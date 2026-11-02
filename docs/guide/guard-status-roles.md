@@ -10,8 +10,10 @@ the model.
 
 This page is for whoever sets up Keeplane's PostgreSQL database. You create
 two kinds of extra login roles, then run one Keeplane command that limits what
-each role can do. The Helm chart runs the enroller containers and gives them
-these credentials when you turn on `gateway.enroller`; see
+each role can do. The Helm chart holds the enroller containers and the
+settings that give them these credentials (`gateway.enroller`), but refuses to
+turn them on until it installs Keeplane's protected runtime on the managed
+gateway; see
 [the chart's model enroller settings](kubernetes-installation-reference.md#model-enroller).
 It applies to PostgreSQL only: the Docker preview keeps no guard-status table.
 
@@ -164,6 +166,5 @@ How the app checks a copy is described in
 [runtime authorization](../architecture/runtime-authorization.md#per-copy-guard-status).
 These checks have been tested against PostgreSQL and simulated gateways, and
 the chart's enroller container is checked by rendering only. The chart doesn't
-yet install Keeplane's checks on the managed gateway, so in Kubernetes the
-enroller has no guard to keep until it does; a live Kubernetes run is still to
-come.
+yet install Keeplane's protected runtime on the managed gateway, so Helm
+refuses the enroller until it does; a live Kubernetes run is still to come.

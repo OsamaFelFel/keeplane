@@ -1,0 +1,19 @@
+{{- /*
+Renders no object. The model enroller (gateway.enroller, ADR 027) keeps each
+managed gateway copy's protected checks in step with the saved models, but
+this chart doesn't yet install Keeplane's protected runtime on the managed
+gateway (the trusted base, the guard, the callback key and the first
+enrolment). An enroller would have no guard to keep, so Helm refuses it for
+now, as it refuses personal-data detection with the managed gateway.
+
+The enroller's templates stay in the chart (_enroller.tpl) and are render
+checked against a test copy of the chart without this one file
+(tests/integration/test_chart_model_enroller.py). Remove this file in the
+change that installs the protected runtime. Helm runs templates at the same
+depth in reverse name order, so this runs before model-enroller.yaml and its
+message is the one shown.
+*/ -}}
+{{- $enroller := .Values.gateway.enroller | default dict }}
+{{- if $enroller.enabled }}
+{{- fail "gateway.enroller can't be turned on yet: this chart doesn't install Keeplane's protected runtime on the managed gateway (its guard and first enrolment), so the enroller would have no guard to keep and every protected model would stay refused. Leave gateway.enroller.enabled false; see docs/guide/kubernetes-installation-reference.md#model-enroller." }}
+{{- end }}

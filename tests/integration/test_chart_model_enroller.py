@@ -1,14 +1,17 @@
 """Render the model enroller beside each managed gateway copy (ADR 027).
 
-Cases ME-01 to ME-10 in chart-model-enroller-cases.md. ME-01 to ME-08 render
-the chart with Helm and are skipped when Helm is missing; ME-09 and ME-10 read
-the values file and the guides and always run.
+Cases ME-01 to ME-11 in chart-model-enroller-cases.md. All but ME-10 render
+the chart with Helm and are skipped when Helm is missing; ME-10 reads only the
+values file and the guides and always runs. Helm refuses the enroller in the
+shipped chart for now (ME-11); ME-02 to ME-09 render a test copy of the chart
+without that one refusal (see ready_chart).
 """
 
 import copy
 import json
 from pathlib import Path
 import re
+import shutil
 
 import pytest
 
@@ -25,6 +28,10 @@ FILES = "/run/keeplane-enroller/files"
 APP_DATABASE = [{"cidr": "10.20.0.5/32", "ports": [5432]}]
 GATEWAY_DATABASE = [{"cidr": "10.20.0.6/32", "ports": [5432]}]
 MODELS = [{"cidr": "203.0.113.0/24", "ports": [443]}]
+NOT_YET = "templates/checks/first/protected-runtime.yaml"
+NOT_YET_MESSAGE = (
+    "gateway.enroller can't be turned on yet: this chart doesn't install "
+    "Keeplane's protected runtime on the managed gateway")
 
 
 def with_enroller(values, copies=None, **settings):
@@ -58,15 +65,38 @@ def policy():
     return policies
 
 
+@pytest.fixture(scope="module")
+def ready_chart(chart, tmp_path_factory):
+    """A test copy of the chart without its one "not yet" refusal.
+
+    Helm refuses gateway.enroller until the chart installs the protected
+    runtime (templates/checks/first/protected-runtime.yaml). To render the
+    enroller's real templates without a supported or hidden values key, the
+    cases render a copy of the chart that lacks only that file. ME-11 checks
+    the shipped chart refuses, and that the copy differs by that file alone.
+    """
+    shipped = ROOT / chart.CHART
+    copy_dir = tmp_path_factory.mktemp("enroller-chart") / "keeplane"
+    shutil.copytree(shipped, copy_dir)
+    (copy_dir / NOT_YET).unlink()
+    return copy_dir
+
+
+def chart_files(directory):
+    return {str(path.relative_to(directory)) for path in directory.rglob("*")
+            if path.is_file()}
+
+
 @pytest.fixture
-def make(chart, tmp_path):
-    def build(values=None, *args, release=RELEASE):
+def make(chart, ready_chart, tmp_path):
+    def build(values=None, *args, release=RELEASE, shipped=False):
         files = []
         if values is not None:
             path = tmp_path / f"values-{len(list(tmp_path.iterdir()))}.json"
             path.write_text(json.dumps(values))
             files = ["-f", str(path)]
-        return chart.run("template", release, chart.CHART, "--namespace", "keeplane",
+        target = chart.CHART if shipped else str(ready_chart)
+        return chart.run("template", release, target, "--namespace", "keeplane",
                          *files, *args)
     return build
 
@@ -127,16 +157,19 @@ def kinds(chart, output):
 
 
 def test_me_01_off_by_default_nothing_changes(chart, make):
-    outputs = {
-        "postgres-managed": rendered(make(managed(chart))),
-        "postgres-existing": rendered(make(chart.postgres_values("existing"))),
-        "local-managed": rendered(make(None, "-f", "deploy/local/values.yaml")),
-        "local-existing": rendered(make(None, "-f", "deploy/local/existing-values.yaml")),
+    installs = {
+        "postgres-managed": (managed(chart),),
+        "postgres-existing": (chart.postgres_values("existing"),),
+        "local-managed": (None, "-f", "deploy/local/values.yaml"),
+        "local-existing": (None, "-f", "deploy/local/existing-values.yaml"),
     }
-    for label, output in outputs.items():
+    for label, args in installs.items():
+        output = rendered(make(*args, shipped=True))
         for absent in (CHECK, "model-enroller", "keeplane-guard", "KEEPLANE_ENROLLER_",
                        "configure_guard_status_access", "/installed"):
             assert absent not in output, (label, absent)
+        # The test copy renders exactly the same with the enroller off.
+        assert rendered(make(*args)) == output, label
 
 
 def test_me_02_each_copy_runs_a_private_enroller_beside_its_gateway(chart, policy, make):
@@ -196,7 +229,13 @@ def test_me_02_each_copy_runs_a_private_enroller_beside_its_gateway(chart, polic
 
 def test_me_03_the_gateway_reads_the_guard_and_gets_nothing_else(chart, policy, make):
     before = pod(copies_of(chart, policy, rendered(make(managed(chart)))))
-    after = pod(copies_of(chart, policy, rendered(make(with_enroller(managed(chart))))))
+    output = rendered(make(with_enroller(managed(chart))))
+    after = pod(copies_of(chart, policy, output))
+    # The app never mounts the guard, or anything at /installed.
+    app = next(doc for doc in chart.of_kind(output, "Deployment")
+               if chart.name_of(doc) == f"{RELEASE}-app")
+    assert "keeplane-guard" not in app and "/installed" not in app
+    assert "keeplane-enroller" not in app
     gateway_before = named(before["containers"], "agentgateway")
     gateway_after = named(after["containers"], "agentgateway")
     added = [mount for mount in gateway_after["volumeMounts"]
@@ -264,9 +303,9 @@ def test_me_04_only_the_init_step_reads_the_installer_made_secrets(chart, policy
 def test_me_05_the_app_checks_each_copy_whenever_the_enroller_runs(chart, make):
     on = app_env(chart, rendered(make(with_enroller(managed(chart)))))
     assert (CHECK, "1", False) in on
-    # Asking for the check without the enroller turns it on too; turning it
-    # off while the enroller runs is not possible.
-    asked = managed(chart)
+    # Asked for with the enroller, it is on; it can't be turned off while the
+    # enroller runs. On its own it is refused (ME-09).
+    asked = with_enroller(managed(chart))
     asked["app"]["guardStatusCheck"] = True
     assert (CHECK, "1", False) in app_env(chart, rendered(make(asked)))
     kept = with_enroller(managed(chart))
@@ -378,7 +417,19 @@ def refusal_cases(chart):
             {"name": "keeplane-guard", "emptyDir": {}})), "uses the name keeplane-guard"),
         "guard-path": (changed(enroller, lambda v: v["gateway"]["extraVolumeMounts"].append(
             {"name": "provider-keys", "mountPath": "/installed/"})),
-            "mounts something at /installed"),
+            "mounts something at or under /installed"),
+        "under-guard-path": (changed(enroller, lambda v: v["gateway"]["extraVolumeMounts"]
+                                     .append({"name": "provider-keys",
+                                              "mountPath": "/installed/keys"})),
+                             "mounts something at or under /installed"),
+        "gateway-user": (changed(enroller, lambda v: v["agentgateway-standalone"].update(
+            securityContext={"runAsUser": 1000})),
+            "agentgateway-standalone.securityContext.runAsUser is 1000"),
+        "gateway-pod-user": (changed(enroller, lambda v: v["agentgateway-standalone"].update(
+            podSecurityContext={"runAsUser": 0})),
+            "agentgateway-standalone.podSecurityContext.runAsUser is 0"),
+        "check-alone": (changed(base, lambda v: v["app"].update(guardStatusCheck=True)),
+                        "app.guardStatusCheck can be on only together with the model enroller"),
     }
 
 
@@ -390,9 +441,14 @@ def test_me_09_unsafe_or_incomplete_settings_are_refused(chart, make):
     # Without PostgreSQL there is no guard-status table: the local trial is refused.
     for args, message in (
         (("--set", "gateway.enroller.enabled=true"), "gateway.enroller needs app.postgres"),
-        (("--set", "app.guardStatusCheck=true"), "app.guardStatusCheck needs app.postgres"),
+        (("--set", "app.guardStatusCheck=true"),
+         "app.guardStatusCheck can be on only together with the model enroller"),
     ):
         refused(make(None, "-f", "deploy/local/values.yaml", *args), message)
+    # The gateway may say it runs as 65532, the guard folder's owner.
+    same_user = with_enroller(managed(chart))
+    same_user["agentgateway-standalone"]["securityContext"] = {"runAsUser": 65532}
+    rendered(make(same_user))
     # Pod names longer than 63 characters can't name a copy: the longest
     # release name Helm takes (53) fits up to copy 9, not copy 31.
     refused(make(with_enroller(managed(chart), copies=32), release="r" * 53),
@@ -423,7 +479,28 @@ def test_me_10_values_and_guides_describe_the_settings():
                    "statusRoles", "statusSecret", "copy-0-password", "app.guardStatusCheck",
                    "KEEPLANE_GUARD_STATUS_CHECK", "configure_guard_status_access",
                    "gateway.mode=existing", "secretKeyRef", "no port",
-                   "networkPolicy.egress.postgres", "restart"):
+                   "networkPolicy.egress.postgres", "restart", "Helm refuses",
+                   "protected runtime", "65532"):
         assert phrase in section, phrase
     assert "kubernetes-installation-reference.md#model-enroller" in ROLES_GUIDE.read_text()
     assert "gateway.enroller" in ARCHITECTURE.read_text()
+
+
+def test_me_11_the_shipped_chart_refuses_the_enroller_for_now(chart, ready_chart, make):
+    # The test copy lacks exactly one file of the shipped chart.
+    assert chart_files(ROOT / chart.CHART) - chart_files(ready_chart) == {NOT_YET}
+    assert chart_files(ready_chart) <= chart_files(ROOT / chart.CHART)
+    for label, args in {
+        "postgres-managed": (with_enroller(managed(chart)),),
+        "postgres-existing": (with_enroller(chart.postgres_values("existing")),),
+        "local-managed": (None, "-f", "deploy/local/values.yaml",
+                          "--set", "gateway.enroller.enabled=true"),
+    }.items():
+        result = make(*args, shipped=True)
+        assert result.returncode != 0, label
+        assert NOT_YET_MESSAGE in result.stderr, (label, result.stderr)
+    # With the enroller refused, the check can't be on either.
+    alone = managed(chart)
+    alone["app"]["guardStatusCheck"] = True
+    refused(make(alone, shipped=True),
+            "app.guardStatusCheck can be on only together with the model enroller")

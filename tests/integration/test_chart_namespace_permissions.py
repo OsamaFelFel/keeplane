@@ -218,13 +218,6 @@ def postgres_values(mode):
 
 SIGN_IN = ("--set", "app.cliSignIn.enabled=true",
            "--set", "app.postgres.publicOrigin=https://unused.example.test")
-# The model enroller beside each gateway copy (ADR 027) adds no kind.
-ENROLLER = ("--set", "gateway.enroller.enabled=true",
-            "--set", "gateway.enroller.approvalsUser=keeplane_enroller",
-            "--set", "gateway.enroller.approvalsSecret=keeplane-enroller-db",
-            "--set", "gateway.enroller.statusSecret=keeplane-guard-status-db",
-            "--set-json",
-            'gateway.enroller.statusRoles=["keeplane_status_0","keeplane_status_1"]')
 
 
 def modes(files):
@@ -235,7 +228,6 @@ def modes(files):
         "managed-local": ("-f", "deploy/local/values.yaml"),
         "managed-postgres": managed,
         "managed-postgres-cli-sign-in": (*managed, *SIGN_IN),
-        "managed-postgres-model-enroller": (*managed, *ENROLLER),
         "existing-local": ("-f", "deploy/local/existing-values.yaml"),
         "existing-postgres": existing,
         "existing-postgres-cli-sign-in": (*existing, *SIGN_IN),

@@ -26,10 +26,9 @@ app:
   # The app's per-copy guard-status check (KEEPLANE_GUARD_STATUS_CHECK=1,
   # ADR 027): a protected check from a managed gateway copy counts only when
   # that copy's model enroller has confirmed the model in its guard-status row.
-  # Always on while gateway.enroller.enabled is true, whatever this says; set
-  # true to turn it on without the enroller, which refuses every protected
-  # check because no copy confirms a model. Needs app.postgres and the managed
-  # gateway. See docs/guide/guard-status-roles.md.
+  # On whenever gateway.enroller.enabled is true, whatever this says. Helm
+  # refuses true without the enroller, and with gateway.mode=existing. See
+  # docs/guide/guard-status-roles.md.
   guardStatusCheck: false
   runnerUrls: "http://qwen:8080"
   postgres:
@@ -104,9 +103,9 @@ gateway:
   # (app.image) with a read-only root file system and no API token, and also
   # turns on app.guardStatusCheck. Create its database roles first, as in
   # docs/guide/guard-status-roles.md; the migration Job then sets their grants.
-  # This chart doesn't yet install Keeplane's checks on the managed gateway,
-  # so until it does the enroller finds no guard to keep and every pass fails
-  # closed. See docs/guide/kubernetes-installation-reference.md#model-enroller.
+  # Helm refuses it for now: this chart doesn't yet install Keeplane's
+  # protected runtime on the managed gateway, so the enroller would have no
+  # guard to keep. See docs/guide/kubernetes-installation-reference.md#model-enroller.
   enroller:
     enabled: false
     # The read-only approvals role, shared by every copy's enroller.

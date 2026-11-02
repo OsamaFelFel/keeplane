@@ -1,6 +1,9 @@
 {{- /*
 The private model enroller (ADR 027) in each managed gateway copy Pod, and the
-app's per-copy guard-status check. Both are off by default.
+app's per-copy guard-status check. Both are off by default, and for now Helm
+refuses the enroller (checks/first/protected-runtime.yaml) until the chart
+installs Keeplane's protected runtime on the managed gateway; the check can be
+on only with the enroller.
 
 The enroller is a second container in every gateway copy Pod of the
 StatefulSet, so it shares that copy's network namespace and reads its
@@ -97,8 +100,18 @@ app never mounts it.
 {{- end -}}
 {{- end -}}
 {{- range .Values.gateway.extraVolumeMounts -}}
-{{- if and (kindIs "map" .) (eq (trimSuffix "/" (toString .mountPath)) "/installed") -}}
-{{- fail "gateway.extraVolumeMounts mounts something at /installed, where the gateway reads the enroller's guard; choose another path" -}}
+{{- $path := trimSuffix "/" (toString (.mountPath | default "")) -}}
+{{- if and (kindIs "map" .) (or (eq $path "/installed") (hasPrefix "/installed/" $path)) -}}
+{{- fail "gateway.extraVolumeMounts mounts something at or under /installed, where the gateway reads the enroller's guard; choose another path" -}}
+{{- end -}}
+{{- end -}}
+{{- /* The guard folder belongs to user 65532 with mode 0700, as in the
+Docker preview, so the gateway reads it only as that user. */ -}}
+{{- $gw := index .Values "agentgateway-standalone" -}}
+{{- range $where, $context := dict "securityContext" ($gw.securityContext | default dict) "podSecurityContext" ($gw.podSecurityContext | default dict) -}}
+{{- $user := index $context "runAsUser" -}}
+{{- if and (not (kindIs "invalid" $user)) (ne (int $user) 65532) -}}
+{{- fail (printf "gateway.enroller needs the gateway to run as user 65532, which owns the guard folder (mode 0700); agentgateway-standalone.%s.runAsUser is %v. Leave it unset or set it to 65532." $where $user) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -106,8 +119,8 @@ app never mounts it.
 {{- if not $managed -}}
 {{- fail "app.guardStatusCheck applies only to the managed gateway: a customer-run gateway (gateway.mode=existing) has no enroller and no guard-status rows, so leave it false" -}}
 {{- end -}}
-{{- if not .Values.app.postgres.enabled -}}
-{{- fail "app.guardStatusCheck needs app.postgres: the guard-status table exists only in PostgreSQL" -}}
+{{- if not $enroller.enabled -}}
+{{- fail "app.guardStatusCheck can be on only together with the model enroller: turning on gateway.enroller turns it on. On its own no gateway copy would confirm a model, so every protected check would be refused. Leave it false." -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

@@ -282,7 +282,7 @@ At run time:
 | State | Where it lives |
 | --- | --- |
 | Accounts, sessions, settings, approvals, data classes and Audit (PostgreSQL mode) | Your PostgreSQL database |
-| Provider-key files (PostgreSQL mode) | Your existing claim in `app.postgres.providerKeysClaim`; the app writes it. A managed gateway mounts it read-only only if you add it to `gateway.extraVolumes` and `gateway.extraVolumeMounts` |
+| Provider-key files (PostgreSQL mode) | Your existing claim in `app.postgres.providerKeysClaim`; the app writes it. A managed gateway mounts it read-only only if you add it to `gateway.extraVolumes` and `gateway.extraVolumeMounts`. With the [model enroller](#model-enroller) the gateway copy Pods always mount it read-only, so it must be mountable wherever they run |
 | Accounts, settings and signing key (local trial) | Claim `<release>-state`, `ReadWriteOnce`, `app.localTrial.storageSize` (1Gi) |
 | Provider-key files (local trial) | Claim `<release>-provider-keys`, same size and access mode |
 | Managed gateway model catalog | PostgreSQL at `agentgateway-standalone.database.postgres.url`; the starting configuration is in ConfigMap `<release>-config` |
@@ -488,7 +488,8 @@ copy that is not ready has no address yet; until it is ready, changes that add
 or widen access are not confirmed.
 
 Each copy's Pod name is also its name in the gateway guard-status table, which
-the private model enroller for that copy writes when you turn it on; see
+the private model enroller for that copy will write (Helm refuses it until the
+chart installs the protected runtime); see
 [model enroller](#model-enroller).
 
 **Existing mode.** If the customer-run gateway serves through several copies,
@@ -513,17 +514,23 @@ copy: the gateway address is then the only copy checked.
 
 ## Model enroller
 
-With the managed gateway and PostgreSQL, the chart can run Keeplane's private
-model enroller ([ADR 027](../architecture/runtime-authorization.md#model-enroller))
-beside every gateway copy. It is off by default (`gateway.enroller.enabled:
-false`).
+With the managed gateway and PostgreSQL, the chart holds Keeplane's private
+model enroller ([ADR 027](../architecture/runtime-authorization.md#model-enroller)),
+which runs beside every gateway copy. It is off by default
+(`gateway.enroller.enabled: false`).
 
-> **Not usable on its own yet.** The enroller keeps a copy's protected checks
-> in step with the saved models, but this chart doesn't yet install Keeplane's
-> checks on the managed gateway or run the first enrolment. Until it does, an
-> enroller finds no guard to keep: every pass fails closed, logs "Model
-> enrolment did not complete", and the copy's guard-status row confirms
-> nothing. Turn it on now only to prepare its roles and Secrets.
+> **Helm refuses the enroller for now.** The enroller keeps a copy's
+> protected checks in step with the saved models, but this chart doesn't yet
+> install Keeplane's protected runtime on the managed gateway (its guard,
+> callback key and first enrolment). An enroller would have no guard to keep
+> and every protected model would stay refused, so Helm refuses
+> `gateway.enroller.enabled: true` with a message saying so, as it refuses
+> personal-data detection with the managed gateway. The rest of this section
+> describes what the chart will run once that runtime is installed; you can
+> already create the roles and Secrets.
+
+`app.guardStatusCheck` (`KEEPLANE_GUARD_STATUS_CHECK=1`) can be on only
+together with the enroller, so it can't be on yet either.
 
 **What runs.** Each gateway copy Pod of StatefulSet `<release>-gateway` gets:
 
@@ -539,9 +546,13 @@ false`).
 
 The copy's guard lives in a Pod-local `emptyDir` (`keeplane-guard`) at
 `/installed`: the enroller mounts it read-write, the gateway container
-read-only, and the app never mounts it. The enroller also mounts
+read-only, and the app never mounts it. The folder belongs to user 65532 with
+mode 0700, as in the Docker preview, so the gateway reads it only as that
+user: Helm refuses an `agentgateway-standalone` `securityContext` or
+`podSecurityContext` that sets another `runAsUser`. The enroller also mounts
 `app.postgres.providerKeysClaim` read-only at `/provider-keys` to check
-shared-key files. Its resources come from `gateway.enroller.resources`; Helm
+shared-key files, so that claim must be mountable on every node where the
+gateway copies run. Its resources come from `gateway.enroller.resources`; Helm
 refuses an install without both a CPU and a memory limit (defaults: requests
 25m and 128Mi, limits 500m and 384Mi). With `app.imagePullSecrets`, the
 gateway copy Pods get them too, since the enroller uses the app image.
@@ -603,9 +614,9 @@ after updating a Secret and before retiring the old credential.
 `KEEPLANE_GUARD_STATUS_CHECK=1`: a protected check from a gateway copy counts
 only when that copy's guard-status row lists the model (see
 [per-copy guard status](../architecture/runtime-authorization.md#per-copy-guard-status)).
-It can't be turned off while the enroller runs. `app.guardStatusCheck: true`
-turns the check on without the enroller; every protected check is then
-refused, since no copy confirms a model.
+It can't be turned off while the enroller runs, and Helm refuses
+`app.guardStatusCheck: true` without the enroller: no copy would confirm a
+model, so every protected check would be refused.
 
 **Network policies.** With `networkPolicy.egressEnabled`, the gateway copies'
 egress policy also allows `networkPolicy.egress.postgres` while the enroller
@@ -614,11 +625,14 @@ too, but no database credential. Nothing new is reachable from outside.
 
 Helm refuses, before creating anything:
 
+- `gateway.enroller.enabled` in every install for now, until the chart
+  installs the protected runtime (see the note above);
 - `gateway.enroller.enabled` with `gateway.mode=existing`: Keeplane writes no
   guard on a customer-run gateway, whose checks read the saved approvals on
   every request;
-- `gateway.enroller.enabled` or `app.guardStatusCheck` without `app.postgres`,
-  and `app.guardStatusCheck` with `gateway.mode=existing`;
+- `gateway.enroller.enabled` without `app.postgres`;
+- `app.guardStatusCheck` without the enroller, or with `gateway.mode=existing`;
+- a gateway `runAsUser` other than 65532;
 - a missing or malformed `approvalsUser`, a `statusRoles` list that doesn't
   match `gateway.copies`, a shared role, a missing `approvalsSecret` or
   `statusSecret`, or a missing CPU or memory limit;
@@ -626,8 +640,10 @@ Helm refuses, before creating anything:
   copy;
 - a `gateway.extraVolumes` entry named `keeplane-guard`,
   `keeplane-enroller-files` or `keeplane-enroller-provider-keys`, or a
-  `gateway.extraVolumeMounts` entry at `/installed`.
+  `gateway.extraVolumeMounts` entry at or under `/installed`.
 
 The [model enroller chart cases](../../tests/integration/chart-model-enroller-cases.md)
-check this section against rendered manifests. They prove what the chart asks
-Kubernetes to run, not a live run on a cluster or on the real gateway image.
+check this section against rendered manifests. While the enroller is refused,
+they render a test copy of the chart without that one refusal. They prove what
+the chart asks Kubernetes to run, not a live run on a cluster or on the real
+gateway image.
