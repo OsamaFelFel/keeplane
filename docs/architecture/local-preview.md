@@ -66,10 +66,13 @@ The packaged app and public UI remain
 root-owned and readable by the app user, even when the build inputs have private
 file permissions. The app user cannot change those files.
 
-Existing preview account, approval, class and Audit files remain unchanged.
-Their data is imported into the Django database; old sessions require a fresh
-sign-in. Imported password hashes are upgraded by Django when a user signs in.
-New accounts use Django's normal password hasher. The signing secret persists
+The app database lives in its own `/state/database` folder of the account
+volume, so the guarded runtime's model enroller can mount only that folder,
+read-only. Before the first release nothing is migrated from earlier previews
+(ADR 014): the preview starts a fresh database with only the first admin, and
+earlier account, approval, class and Audit files stay unused and unchanged.
+Each start prints a notice naming the earlier files it found and the full reset.
+Accounts use Django's normal password hasher. The signing secret persists
 across restarts and must be shared by PostgreSQL application copies.
 
 ## Browser and component boundaries
