@@ -94,13 +94,18 @@ host:5432/db?application_name=team@site, is refused, since the first-"@"
 reading takes 5432/db?application_name=team as a password; the "@" can be
 written %40 there.
 
-After that first "@", a second "@" is allowed only in a query value or
-fragment, such as ?application_name=team@site, and only when the part before
-the first "/" is a well-formed authority: the user name and optional ${...}
-password, "@", a host name or bracketed IPv6 address and an optional numeric
-port. The database path may hold no "@". Any other URL may hold only the one
-"@". A query parameter name with "%" is refused, as libraries decode it
-(pass%77ord is password). */ -}}
+After that first "@", a second "@" is allowed only in a query value, such as
+?application_name=team@site, and only when the part before the first "/" is a
+well-formed authority: the user name and optional ${...} password, "@", a
+host name or bracketed IPv6 address and an optional numeric port. The
+database path may hold no "@". Any other URL may hold only the one "@".
+
+libpq and tokio-postgres have no fragment: a "#" after the host is ordinary
+text, part of the database name or of a query value. So nothing after a "#"
+is set aside: an "@" after "#" in the path counts as in the path, and every
+"&" parameter after the first "?" is checked, including one after a "#"
+(?x=1#&password=secret). A query parameter name with "%" is refused, as
+libraries decode it (pass%77ord is password). */ -}}
 {{- $url := toString (dig "database" "postgres" "url" "" $gateway) -}}
 {{- $address := regexReplaceAll `(?i)^postgres(ql)?://` $url "" -}}
 {{- $variable := `\$\{[A-Za-z_][A-Za-z0-9_]*\}` -}}
@@ -112,13 +117,13 @@ port. The database path may hold no "@". Any other URL may hold only the one
 {{- if not (regexMatch $userinfo $address) -}}
 {{- $literal = true -}}
 {{- else if $wellFormed -}}
-{{- $path := regexReplaceAll `(?s)[?#].*$` (trimPrefix $authority $address) "" -}}
+{{- $path := regexReplaceAll `(?s)\?.*$` (trimPrefix $authority $address) "" -}}
 {{- $literal = contains "@" $path -}}
 {{- else -}}
 {{- $literal = not (regexMatch (printf `%s[^@]*$` $userinfo) $address) -}}
 {{- end -}}
 {{- end -}}
-{{- $query := regexReplaceAll `#.*$` (join "?" (rest (splitList "?" $address))) "" -}}
+{{- $query := join "?" (rest (splitList "?" $address)) -}}
 {{- range splitList "&" $query -}}
 {{- if and (regexMatch `(?i)^(ssl)?password=` .) (not (regexMatch (printf `(?i)^(ssl)?password=%s$` $variable) .)) -}}
 {{- $literal = true -}}

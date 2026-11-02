@@ -677,12 +677,20 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
         f"postgresql://u:{NUMERIC_PASSWORD}?y@h/db",
         f"postgresql://u:{NUMERIC_PASSWORD}#y@h/db",
         f"postgresql://u:{NUMERIC_PASSWORD}/x?application_name={QUERY_AT}",
-        # With no user name, an "@" in a query value or fragment makes the
+        # With no user name, an "@" in a query value or after a "#" makes the
         # first-"@" reading take the port and path as a password.
         f"postgresql://{DATABASE_HOST[1:]}?sslmode=verify-full"
         f"&application_name={QUERY_AT}",
         f"postgresql://[fd00::1]:{NUMERIC_PASSWORD}/keeplane?application_name={QUERY_AT}",
         f"postgresql://gateway-db:{NUMERIC_PASSWORD}/keeplane#{QUERY_AT}",
+        # libpq and tokio-postgres have no fragment: a "#" is ordinary text, so
+        # a parameter after it is still a parameter, and an "@" after it in
+        # the path is in the database name.
+        f"postgresql://u@h/db?x=1#&password={LITERAL_PASSWORD}",
+        f"postgresql://u@h/db?sslmode=require#&sslpassword={LITERAL_PASSWORD}",
+        f"postgresql://u@h/db?application_name=x#y&password={LITERAL_PASSWORD}",
+        f"postgresql://u@h/db?x=1#&pass%77ord={LITERAL_PASSWORD}",
+        f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}#{QUERY_AT}",
     )
     for url in literal:
         result = make(with_gateway_url(with_enroller(managed(chart)), url))
@@ -700,15 +708,17 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
                 f"postgresql://keeplane{DATABASE_HOST}?sslmode=verify-full",
                 f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
                 "?sslmode=verify-full&sslpassword=${KEEPLANE_DB_KEY_PASSWORD}",
-                # An "@" in a query value or fragment after the user name is
-                # not userinfo: with the variable password, with the user name
+                # An "@" in a query value after the user name is not
+                # userinfo: with the variable password, with the user name
                 # alone, and with a bracketed IPv6 host.
                 f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
                 f"?application_name={QUERY_AT}",
                 f"postgresql://keeplane{DATABASE_HOST}?application_name={QUERY_AT}",
                 f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}@[fd00::1]:5432/keeplane"
                 f"?application_name={QUERY_AT}",
-                f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}#{QUERY_AT}",
+                # A "#" in a query value that sets no password.
+                f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
+                "?application_name=team#1&sslmode=verify-full",
                 # With no user name, the "@" is written %40.
                 f"postgresql://{DATABASE_HOST[1:]}?sslmode=verify-full"
                 "&application_name=keeplane%40gateway-db"):
