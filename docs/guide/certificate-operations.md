@@ -105,7 +105,9 @@ Sessions, CLI sign-ins and model calls continue; nobody is signed out.
 can fill it. Create a cert-manager `Certificate` in the release namespace with
 `secretName` set to `ingress.tlsSecretName` and `dnsNames` holding
 `ingress.host`; cert-manager then renews it before it expires. Alternatively,
-add your issuer annotation through `ingress.annotations`. Keeplane does not
+add your issuer annotation through `ingress.annotations`; with the model
+enroller, keep it out of `gateway.protectedIngress.annotations`, as the
+protected path's Ingress uses the same Secret. Keeplane does not
 install or require cert-manager, and this has not been tested with it.
 
 **If it expires.** Browsers show a certificate warning and refuse to sign in;

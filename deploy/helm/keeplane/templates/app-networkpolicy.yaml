@@ -22,7 +22,7 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
-        {{- include "keeplane.networkPolicy.peer" (list "networkPolicy.publicEntry" $np.publicEntry) | nindent 8 }}
+        {{- include "keeplane.networkPolicy.peer" (list "networkPolicy.publicEntry" ($np.publicEntry | default dict)) | nindent 8 }}
       ports:
         - protocol: TCP
           port: 3000

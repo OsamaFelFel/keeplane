@@ -1,6 +1,6 @@
 """Render how developers reach the managed gateway's protected runtime (ADR 016, 018, 027).
 
-Cases PA-01 to PA-06 in chart-protected-access-cases.md. All but PA-06 render
+Cases PA-01 to PA-08 in chart-protected-access-cases.md. All but PA-06 render
 the chart with Helm and are skipped when Helm is missing; PA-06 reads only the
 values file and the guides and always runs.
 """
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 VALUES = ROOT / "deploy/helm/keeplane/values.yaml"
 REFERENCE = ROOT / "docs/guide/kubernetes-installation-reference.md"
 RUNTIME_SERVICE = f"{RELEASE}-gateway-runtime"
+RUNTIME_INGRESS = f"{RELEASE}-gateway-runtime"
 PROTECTED_PATH = "/v1/chat/completions"
 PRIVATE_PORTS = {4000, 15000, 15020, 15021}
 COPY_SELECTOR = {"app.kubernetes.io/name": "agentgateway-standalone",
@@ -156,14 +157,28 @@ def test_pa_03_the_one_public_host_routes_only_the_protected_path_to_the_gateway
     values["ingress"]["annotations"] = {"example.test/one": "yes"}
     output = rendered(make(values))
     ingresses = parsed_of_kind(chart, policy, output, "Ingress")
-    assert list(ingresses) == [f"{RELEASE}-app"]
-    spec = ingresses[f"{RELEASE}-app"]["spec"]
-    assert spec["tls"] == [{"hosts": ["keeplane.example.test"], "secretName": "keeplane-tls"}]
-    assert len(spec["rules"]) == 1
-    assert ingress_paths(chart, policy, output) == [
+    assert sorted(ingresses) == [f"{RELEASE}-app", RUNTIME_INGRESS]
+    # Both on the one host, with the same class and TLS Secret, one rule each.
+    for ingress in ingresses.values():
+        spec = ingress["spec"]
+        assert spec["ingressClassName"] == "nginx"
+        assert spec["tls"] == [{"hosts": ["keeplane.example.test"],
+                                "secretName": "keeplane-tls"}]
+        assert len(spec["rules"]) == 1
+    # The app's Ingress carries only "/"; the protected path is only on its own.
+    assert sorted(ingress_paths(chart, policy, output)) == sorted([
         ("keeplane.example.test", PROTECTED_PATH, "Exact", RUNTIME_SERVICE, 5000),
         ("keeplane.example.test", "/", "Prefix", f"{RELEASE}-app", 3000),
-    ]
+    ])
+    assert ingresses[f"{RELEASE}-app"]["spec"]["rules"][0]["http"]["paths"] == [
+        {"path": "/", "pathType": "Prefix",
+         "backend": {"service": {"name": f"{RELEASE}-app", "port": {"number": 3000}}}}]
+    assert ingresses[RUNTIME_INGRESS]["spec"]["rules"][0]["http"]["paths"] == [
+        {"path": PROTECTED_PATH, "pathType": "Exact",
+         "backend": {"service": {"name": RUNTIME_SERVICE, "port": {"number": 5000}}}}]
+    # ingress.annotations stay on the app's Ingress.
+    assert ingresses[f"{RELEASE}-app"]["metadata"]["annotations"] == {"example.test/one": "yes"}
+    assert "annotations" not in ingresses[RUNTIME_INGRESS]["metadata"]
     # No backend is a gateway port other than the protected one.
     assert all(path[4] not in PRIVATE_PORTS for path in ingress_paths(chart, policy, output))
     # Without the chart's Ingress the Service still renders for your own edge.
@@ -220,17 +235,94 @@ def test_pa_05_the_enroller_with_the_gateway_policy_needs_a_public_entry(chart, 
     rendered(make(plain))
 
 
+def test_pa_07_the_protected_path_takes_its_own_annotations(chart, policy, make):
+    app_annotations = {"nginx.ingress.kubernetes.io/proxy-body-size": "1m"}
+    model_annotations = {"nginx.ingress.kubernetes.io/proxy-read-timeout": "190",
+                         "nginx.ingress.kubernetes.io/proxy-body-size": "16m"}
+
+    def annotations(values):
+        found = parsed_of_kind(chart, policy, rendered(make(values)), "Ingress")
+        return {name: ingress["metadata"].get("annotations") for name, ingress in found.items()}
+
+    values = with_enroller(managed(chart))
+    # Empty by default: neither Ingress carries an annotation.
+    assert annotations(values) == {f"{RELEASE}-app": None, RUNTIME_INGRESS: None}
+    # Each value reaches only its own Ingress.
+    values["ingress"]["annotations"] = app_annotations
+    values["gateway"]["protectedIngress"] = {"annotations": model_annotations}
+    assert annotations(values) == {f"{RELEASE}-app": app_annotations,
+                                   RUNTIME_INGRESS: model_annotations}
+    only_model = copy.deepcopy(values)
+    del only_model["ingress"]["annotations"]
+    assert annotations(only_model) == {f"{RELEASE}-app": None,
+                                       RUNTIME_INGRESS: model_annotations}
+    # Without the enroller there is no protected Ingress, and its annotations
+    # reach nothing.
+    without = managed(chart)
+    without["gateway"]["protectedIngress"] = {"annotations": model_annotations}
+    assert annotations(without) == {f"{RELEASE}-app": None}
+    # Without the chart's Ingress neither renders.
+    off = copy.deepcopy(values)
+    off["ingress"]["enabled"] = False
+    off["app"]["postgres"]["publicOrigin"] = "https://keeplane.example.test"
+    assert not chart.of_kind(rendered(make(off)), "Ingress")
+    # Annotation values are strings, as Kubernetes requires; the schema
+    # refuses a number and any other key under protectedIngress.
+    for bad in ({"annotations": {"nginx.ingress.kubernetes.io/proxy-read-timeout": 190}},
+                {"annotations": {}, "paths": ["/"]}):
+        wrong = copy.deepcopy(values)
+        wrong["gateway"]["protectedIngress"] = bad
+        refused(make(wrong), "protectedIngress")
+
+
+def test_pa_08_a_null_public_entry_gets_the_charts_refusal(chart, make):
+    # publicEntry: null in a values file, and --set publicEntry=null, reach
+    # the chart's own refusals, never a template nil-field error.
+    gateway = with_enroller(managed(chart))
+    gateway["networkPolicy"]["publicEntry"] = None
+    app = managed(chart)
+    app["networkPolicy"].update(gatewayIngressEnabled=False, appIngressEnabled=True,
+                                publicEntry=None)
+    app_message = ("networkPolicy.appIngressEnabled needs networkPolicy.publicEntry"
+                   ".namespaceSelector or podSelector")
+    gateway_message = ("gateway.enroller with networkPolicy.gatewayIngressEnabled needs "
+                       "networkPolicy.publicEntry")
+    with_set = with_enroller(managed(chart))
+    del with_set["networkPolicy"]["publicEntry"]
+    app_set = copy.deepcopy(app)
+    del app_set["networkPolicy"]["publicEntry"]
+    for result, message in (
+            (make(gateway), gateway_message),
+            (make(with_set, "--set", "networkPolicy.publicEntry=null"), gateway_message),
+            (make(app), app_message),
+            (make(app_set, "--set", "networkPolicy.publicEntry=null"), app_message)):
+        refused(result, message)
+        assert "nil pointer" not in result.stderr, result.stderr
+    # Where nothing needs a public entry, null renders: the gateway policy
+    # without the enroller, and the enroller without the gateway policy.
+    plain = managed(chart)
+    plain["networkPolicy"]["publicEntry"] = None
+    rendered(make(plain))
+    quiet = copy.deepcopy(gateway)
+    quiet["networkPolicy"]["gatewayIngressEnabled"] = False
+    rendered(make(quiet))
+
+
 def test_pa_06_values_and_guides_describe_how_developers_reach_protected_models():
     values = VALUES.read_text()
     for phrase in ("<release>-gateway-runtime", "/v1/chat/completions",
-                   "https://<ingress.host>/v1", "TCP 5000"):
+                   "https://<ingress.host>/v1", "TCP 5000", "protectedIngress:",
+                   "ingress.annotations stay on the app's"):
         assert phrase in values, phrase
     assert "Publishes only the Keeplane app Service" not in values
     reference = REFERENCE.read_text()
     section = reference.split("\n## Model enroller\n", 1)[1].split("\n## ", 1)[0]
     for phrase in ("<release>-gateway-runtime", "/v1/chat/completions", "https://<host>/v1",
-                   "--gateway", "networkPolicy.publicEntry", "Exact", "ADR 016"):
+                   "--gateway", "networkPolicy.publicEntry", "Exact", "ADR 016",
+                   "gateway.protectedIngress.annotations", "proxy-read-timeout",
+                   "Ingress, `<release>-gateway-runtime`"):
         assert phrase in section, phrase
+    assert "app and protected path alike" not in reference
     ports = reference.split("\n## Ports\n", 1)[1].split("\n## ", 1)[0]
     assert "<release>-gateway-runtime" in ports and "/v1/chat/completions" in ports
     for stale in ("How developers reach it in Kubernetes is not decided",

@@ -236,8 +236,8 @@ gateway copy and installs the protected runtime on each copy
 [the chart's model enroller](../guide/kubernetes-installation-reference.md#model-enroller)).
 Developers reach the protected listener through Keeplane's one public address:
 the chart's ClusterIP Service `<release>-gateway-runtime` carries port 5000
-only, and its optional Ingress routes the exact path `/v1/chat/completions` to
-it (see
+only, and an optional Ingress of its own, on the app's host, routes the exact
+path `/v1/chat/completions` to it (see
 [how developers reach protected models](../guide/kubernetes-installation-reference.md#how-developers-reach-protected-models)).
 Still to come: a live run on a cluster, through an ingress controller and on
 the real gateway image, and customer-run gateways that don't share one model

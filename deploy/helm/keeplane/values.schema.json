@@ -79,6 +79,13 @@
         },
         "extraVolumes": {"type": "array", "items": {"type": "object"}},
         "extraVolumeMounts": {"type": "array", "items": {"type": "object"}},
+        "protectedIngress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+          }
+        },
         "enroller": {
           "type": "object",
           "additionalProperties": false,

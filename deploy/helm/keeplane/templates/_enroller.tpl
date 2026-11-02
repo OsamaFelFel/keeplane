@@ -80,11 +80,21 @@ Its password must therefore stay a ${...} variable the gateway reads from its
 own environment (from a Secret, as every credential is). A URL with no
 password is allowed; any other userinfo, and a password or sslpassword query
 parameter that is not a single variable, is refused. The message never
-repeats the URL. */ -}}
+repeats the URL.
+
+Only the userinfo (before the host) is held to this, so an "@" in a query
+value or fragment, such as ?application_name=team@site, is allowed. The query
+and fragment are set aside only after the first "/" (the database path):
+every "/", "?" or "#" before it could still be part of a password that a
+connection library reads, so up to the first "/" exactly one "@" may appear,
+with a user name and at most a single ${...} password before it, and none in
+the database path. A URL with no database path and an "@" in its query is
+refused, as some libraries would read the query as userinfo. */ -}}
 {{- $url := toString (dig "database" "postgres" "url" "" $gateway) -}}
 {{- $address := regexReplaceAll `^postgres(ql)?://` $url "" -}}
 {{- $variable := `\$\{[A-Za-z_][A-Za-z0-9_]*\}` -}}
-{{- $literal := and (contains "@" $address) (not (regexMatch (printf `^[^:@/?#]*(:%s)?@[^@]*$` $variable) $address)) -}}
+{{- $head := regexReplaceAll `(?s)^([^/]*/[^?#]*)[?#].*$` $address "${1}" -}}
+{{- $literal := and (contains "@" $head) (not (regexMatch (printf `^[^:@/?#]*(:%s)?@[^@/]*(/[^@]*)?$` $variable) $head)) -}}
 {{- $query := regexReplaceAll `#.*$` (join "?" (rest (splitList "?" $address))) "" -}}
 {{- range splitList "&" $query -}}
 {{- if and (regexMatch `(?i)^(ssl)?password=` .) (not (regexMatch (printf `(?i)^(ssl)?password=%s$` $variable) .)) -}}
@@ -174,7 +184,8 @@ and Linux refuses to start a process with a single value over 128 KiB
 (gateway-runtime-service.yaml); the gateway ingress policy admits it there
 only from networkPolicy.publicEntry. */ -}}
 {{- $np := .Values.networkPolicy -}}
-{{- if and $np.gatewayIngressEnabled (not (or $np.publicEntry.namespaceSelector $np.publicEntry.podSelector)) -}}
+{{- $entry := $np.publicEntry | default dict -}}
+{{- if and $np.gatewayIngressEnabled (not (or $entry.namespaceSelector $entry.podSelector)) -}}
 {{- fail "gateway.enroller with networkPolicy.gatewayIngressEnabled needs networkPolicy.publicEntry.namespaceSelector or podSelector: the labels of your ingress controller's namespace or pods. The gateway ingress policy admits only them to the protected model port 5000; without them developers could not reach protected models." -}}
 {{- end -}}
 {{- end -}}

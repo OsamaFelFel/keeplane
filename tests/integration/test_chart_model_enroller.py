@@ -372,8 +372,10 @@ def test_me_08_the_enroller_adds_only_the_protected_service_and_the_apps_pull_se
     values["app"]["imagePullSecrets"] = [{"name": "keeplane-registry"}]
     before = rendered(make(values))
     after = rendered(make(with_enroller(values)))
-    # The only new object is the protected port's Service (PA-02); no new kind.
-    assert sorted(kinds(chart, before) + [("Service", f"{RELEASE}-gateway-runtime")]) \
+    # The only new objects are the protected port's Service (PA-02) and, with
+    # the chart's Ingress, the protected path's own Ingress (PA-03); no new kind.
+    assert sorted(kinds(chart, before) + [("Service", f"{RELEASE}-gateway-runtime"),
+                                          ("Ingress", f"{RELEASE}-gateway-runtime")]) \
         == kinds(chart, after)
     copies = next(doc for doc in chart.of_kind(after, "StatefulSet")
                   if chart.name_of(doc) == f"{RELEASE}-gateway")
@@ -629,6 +631,7 @@ def test_me_13_the_app_reads_the_callback_key_from_the_gateway_keys(chart, make)
 
 LITERAL_PASSWORD = "literal-gateway-db-password"
 DATABASE_HOST = "@gateway-db.database.svc.cluster.local:5432/keeplane"
+QUERY_AT = "keeplane@gateway-db"
 
 
 def with_gateway_url(values, url):
@@ -647,6 +650,15 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
         f"postgresql://keeplane{DATABASE_HOST}?sslmode=verify-full&password={LITERAL_PASSWORD}",
         f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
         f"?sslpassword={LITERAL_PASSWORD}",
+        # An "@" in the query doesn't hide a literal password before the host.
+        f"postgresql://keeplane:{LITERAL_PASSWORD}{DATABASE_HOST}"
+        f"?application_name={QUERY_AT}",
+        # Nor does a "?" or "#" inside the password, which some libraries
+        # read as part of it.
+        f"postgresql://keeplane:{LITERAL_PASSWORD}?x{DATABASE_HOST}",
+        f"postgresql://keeplane:{LITERAL_PASSWORD}#x{DATABASE_HOST}",
+        # Literal userinfo with no database path.
+        f"postgresql://keeplane:{LITERAL_PASSWORD}@gateway-db:5432",
     )
     for url in literal:
         result = make(with_gateway_url(with_enroller(managed(chart)), url))
@@ -662,7 +674,13 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
                 f"postgresql://keeplane:${{GATEWAY_DB_PASSWORD}}{DATABASE_HOST}",
                 f"postgresql://keeplane{DATABASE_HOST}?sslmode=verify-full",
                 f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
-                "?sslmode=verify-full&sslpassword=${KEEPLANE_DB_KEY_PASSWORD}"):
+                "?sslmode=verify-full&sslpassword=${KEEPLANE_DB_KEY_PASSWORD}",
+                # An "@" only in a query value is not userinfo: with the
+                # variable password, and with no userinfo at all.
+                f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
+                f"?application_name={QUERY_AT}",
+                f"postgresql://{DATABASE_HOST[1:]}?sslmode=verify-full"
+                f"&application_name={QUERY_AT}"):
         output = rendered(make(with_gateway_url(with_enroller(managed(chart)), url)))
         text, _ = runtime_base(chart, policy, output)
         assert json.loads(text)["config"]["database"]["url"] == url

@@ -98,6 +98,15 @@ gateway:
   # See docs/guide/kubernetes-installation-reference.md#secrets.
   extraVolumes: []
   extraVolumeMounts: []
+  # With gateway.enroller and ingress.enabled, the protected model path
+  # /v1/chat/completions has its own Ingress, <release>-gateway-runtime, on
+  # ingress.host with ingress.className and ingress.tlsSecretName. Its
+  # annotations are only these (ingress.annotations stay on the app's
+  # Ingress), so a longer read timeout or a larger request body for model
+  # calls leaves the app's "/" as it is. Empty by default; see
+  # docs/guide/kubernetes-installation-reference.md#how-developers-reach-protected-models.
+  protectedIngress:
+    annotations: {}
   # Managed mode with app.postgres: the private model enroller (ADR 027), a
   # container beside each gateway copy that keeps the copy's protected checks
   # in step with the saved models and records what it confirmed in the
@@ -175,10 +184,12 @@ networkPolicy:
     runners: []
 
 ingress:
-  # Publishes the Keeplane app Service on one host. With gateway.enroller it
-  # also routes the exact path /v1/chat/completions to the managed gateway's
-  # protected model port (Service <release>-gateway-runtime, 5000); no other
-  # gateway port or path is published.
+  # Publishes the Keeplane app Service on one host. With gateway.enroller a
+  # second Ingress on the same host routes the exact path
+  # /v1/chat/completions to the managed gateway's protected model port
+  # (Service <release>-gateway-runtime, 5000), with its own annotations in
+  # gateway.protectedIngress; no other gateway port or path is published.
+  # The annotations below apply to the app's Ingress only.
   enabled: false
   className: ""
   host: ""
