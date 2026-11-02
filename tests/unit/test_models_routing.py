@@ -398,20 +398,16 @@ class RefusingCatalog(Catalog):
         raise StorageUnavailable("approval storage is down")
 
 
-@pytest.mark.parametrize(
-    "body,lead",
-    [
-        (LOCAL, "Keeplane could not save the model approval."),
-        (cloud(approved_classes=["Public"]), "Keeplane couldn't save model approval."),
-    ],
-)
+@pytest.mark.parametrize("body", [LOCAL, cloud(approved_classes=["Public"])])
 def test_mrs_12_when_the_approval_cannot_be_saved_the_model_is_removed_and_nothing_is_saved(
-    tmp_path, monkeypatch, body, lead
+    tmp_path, monkeypatch, body
 ):
     gateway, catalog = Gateway(), RefusingCatalog()
     status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(body)
     assert status == 503
-    assert result == {"error": lead + " Nothing was saved."}
+    assert result == {
+        "error": "Keeplane couldn't save the model approval. Nothing was saved."
+    }
     assert gateway.records == {} and catalog.rows == {} and key_files(tmp_path) == []
 
 
@@ -423,5 +419,8 @@ def test_mrs_12_when_the_model_cannot_be_removed_either_keeplane_does_not_say_no
     gateway.delete_status = 500
     status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(body)
     assert status == 503
+    assert result == {
+        "error": "Keeplane couldn't save the model approval. The model may remain "
+        "in the gateway without Keeplane approval. Check Models."
+    }
     assert "Nothing was saved" not in result["error"]
-    assert "may remain in the gateway without Keeplane approval" in result["error"]

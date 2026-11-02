@@ -28,6 +28,18 @@ from model_registry.fingerprints import fingerprint
 from model_registry.provider_probe import provider_answers
 
 
+def approval_not_saved(undone):
+    # Spec 004 ST10 "[Model] wasn't added" and D170: cloud and local models
+    # read the same, and "Nothing was saved." only when the gateway entry
+    # was undone.
+    tail = (
+        "Nothing was saved."
+        if undone
+        else "The model may remain in the gateway without Keeplane approval. "
+        "Check Models."
+    )
+    return {"error": f"Keeplane couldn't save the model approval. {tail}"}
+
 
 class ModelManagement:
     def __init__(
@@ -541,17 +553,7 @@ class ModelManagement:
             removed = self.undo_cloud_model(name, resource)
             if key_path and removed:
                 remove_provider_key(self.provider_key_dir, key_path)
-            return self.reply(
-                503,
-                {
-                    "error": "Keeplane couldn't save model approval. "
-                    + (
-                        "Nothing was saved."
-                        if removed
-                        else "The model may remain in the gateway without Keeplane approval."
-                    )
-                },
-            )
+            return self.reply(503, approval_not_saved(removed))
         return self.reply(
             200,
             {
@@ -910,17 +912,7 @@ class ModelManagement:
             )
         except (ValueError, IdentityError, StorageUnavailable):
             removed = self.undo_new_model(name, params)
-            return self.reply(
-                503,
-                {
-                    "error": "Keeplane could not save the model approval. "
-                    + (
-                        "Nothing was saved."
-                        if removed
-                        else "It may remain in the gateway without Keeplane approval; check Models."
-                    )
-                },
-            )
+            return self.reply(503, approval_not_saved(removed))
         return self.reply(
             200, {"name": name, "approved_classes": approval["approved_classes"]}
         )
