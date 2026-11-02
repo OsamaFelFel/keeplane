@@ -7,7 +7,7 @@ chart runs in each gateway copy Pod before the gateway and the model enroller
 start (it also installs Keeplane's protected runtime there), with temporary
 folders, and load the app's settings in a fresh process. They need no
 database, Kubernetes or Helm. The rendered chart is
-[ME-01 to ME-13](../integration/chart-model-enroller-cases.md).
+[ME-01 to ME-15](../integration/chart-model-enroller-cases.md).
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
@@ -21,4 +21,6 @@ database, Kubernetes or Helm. The rendered chart is
 | EF-08 | Prepare a copy with its callback key, both key hashes and the chart's gateway configuration. | The guard holds exactly a disabled declaration (`version` 2, `enabled` false), the callback key, and `trusted.json` and `gateway.json`, byte for byte the same and in the installer's canonical JSON, with both hashes written out and the gateway database address left with its variable. The guard is mode 0700, each file mode 0600 and owned by the running user; the enroller's seven files are as in EF-02. |
 | EF-09 | Prepare again after the enroller had enabled a declaration, recorded served models, left a candidate and written a guarded configuration, with a new callback key. | The declaration is disabled again, the served-models record and the candidate are gone, `gateway.json` is the trusted base again and the callback key is the new one. The enroller's lock stays and no temporary file is left. |
 | EF-10 | Prepare a configuration whose key policies also name the next hashes, with and without them. | With them, each policy lists the current hash then the next one; without them the step is refused as "names a key hash this copy was not given". |
-| EF-11 | Leave out or spoil each runtime setting: no, short or malformed callback key; a missing or malformed hash; no, malformed or non-object configuration; a non-loopback admin address; a key hash the step doesn't know; or one of the enroller's own settings. | Each is refused with a message naming the setting, never a key, and nothing is written: neither the enroller's files nor the guard. |
+| EF-11 | Leave out or spoil each runtime setting: no, short or malformed callback key; a missing or malformed hash; no, malformed or non-object configuration; a non-loopback admin address; a next key hash the step wasn't given; or one of the enroller's own settings. | Each is refused with a message naming the setting, never a key, and nothing is written: neither the enroller's files nor the guard. |
+| EF-12 | Prepare a configuration of exactly 122880 bytes (120 KiB), then one byte more, then one under the limit in characters but over it in bytes. | The first is prepared. The others are refused as "is over 122880 bytes (120 KiB)", the most the chart passes as one environment value, and nothing is written. |
+| EF-13 | Prepare a configuration whose gateway database URL reads its password from `${GATEWAY_DB_PASSWORD}` and that names another `${GATEWAY_…}` variable; then leave out each key hash the configuration names. | The first is prepared, with both variables left as they are for the gateway to read and the key hashes written out. Leaving out a key hash the configuration names is still refused: a current hash as "is missing", a next hash as "names a key hash this copy was not given". |

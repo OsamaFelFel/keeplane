@@ -1,6 +1,6 @@
 """Render the model enroller and protected runtime on each managed gateway copy (ADR 027).
 
-Cases ME-01 to ME-13 in chart-model-enroller-cases.md. All but ME-10 render
+Cases ME-01 to ME-15 in chart-model-enroller-cases.md. All but ME-10 render
 the chart with Helm and are skipped when Helm is missing; ME-10 reads only the
 values file and the guides and always runs.
 """
@@ -502,7 +502,11 @@ def test_me_10_values_and_guides_describe_the_settings():
                    "gateway.mode=existing", "secretKeyRef", "no port",
                    "networkPolicy.egress.postgres", "restart", "Helm refuses",
                    "protected runtime", "65532", "callback-key", "/installed/gateway.json",
-                   "agentgateway-standalone.mode=database", "5000"):
+                   "agentgateway-standalone.mode=database", "5000",
+                   # The literal-password and base-size refusals (ME-14, ME-15).
+                   "agentgateway-standalone.database.postgres.url",
+                   "${KEEPLANE_DB_PASSWORD}", "gateway-database-secret.md",
+                   "KEEPLANE_ENROLLER_RUNTIME_BASE", "120 KiB", "122880"):
         assert phrase in section, phrase
     assert "can't be turned on yet" not in reference
     assert "Helm refuses the enroller for now" not in reference
@@ -612,3 +616,75 @@ def test_me_13_the_app_reads_the_callback_key_from_the_gateway_keys(chart, make)
     assert "RUNTIME_GUARD_MANIFEST_FILE" not in names
     # Off without the enroller.
     assert "RUNTIME_AUTHORIZER_KEY_FILE" not in rendered(make(managed(chart)))
+
+
+LITERAL_PASSWORD = "literal-gateway-db-password"
+DATABASE_HOST = "@gateway-db.database.svc.cluster.local:5432/keeplane"
+
+
+def with_gateway_url(values, url):
+    values = copy.deepcopy(values)
+    values["agentgateway-standalone"]["database"]["postgres"]["url"] = url
+    return values
+
+
+def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
+        chart, policy, make):
+    literal = (
+        f"postgresql://keeplane:{LITERAL_PASSWORD}{DATABASE_HOST}",
+        f"postgres://keeplane:{LITERAL_PASSWORD}{DATABASE_HOST}",
+        # A variable with literal text beside it is still a literal password.
+        f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{LITERAL_PASSWORD}{DATABASE_HOST}",
+        f"postgresql://keeplane{DATABASE_HOST}?sslmode=verify-full&password={LITERAL_PASSWORD}",
+        f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
+        f"?sslpassword={LITERAL_PASSWORD}",
+    )
+    for url in literal:
+        result = make(with_gateway_url(with_enroller(managed(chart)), url))
+        refused(result, "gateway.enroller needs the gateway database password",
+                "agentgateway-standalone.database.postgres.url",
+                "postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@",
+                "docs/guide/gateway-database-secret.md")
+        # The refusal never repeats the password.
+        assert LITERAL_PASSWORD not in result.stderr, url
+    # The variable form the guides show, a GATEWAY_* variable and a URL with
+    # no password render, and the base carries the URL as written.
+    for url in (GATEWAY_DATABASE_URL,
+                f"postgresql://keeplane:${{GATEWAY_DB_PASSWORD}}{DATABASE_HOST}",
+                f"postgresql://keeplane{DATABASE_HOST}?sslmode=verify-full",
+                f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
+                "?sslmode=verify-full&sslpassword=${KEEPLANE_DB_KEY_PASSWORD}"):
+        output = rendered(make(with_gateway_url(with_enroller(managed(chart)), url)))
+        text, _ = runtime_base(chart, policy, output)
+        assert json.loads(text)["config"]["database"]["url"] == url
+    # Without the enroller the chart renders the URL as before.
+    rendered(make(with_gateway_url(managed(chart), literal[0])))
+
+
+def with_models(values, count):
+    """values whose gateway configuration lists count copies of the installer's model."""
+    values = copy.deepcopy(values)
+    models = values["agentgateway-standalone"]["config"]["llm"]["models"]
+    model = models[0]
+    models[:] = [{**copy.deepcopy(model), "name": f"model-{index:04d}"}
+                 for index in range(count)]
+    return values
+
+
+def test_me_15_a_base_too_large_for_one_environment_value_is_refused(chart, policy, make):
+    # Linux refuses one environment value over 128 KiB; the chart stops at
+    # 120 KiB and names the cause instead of a Pod that can't start.
+    large = with_models(managed(chart), 1200)
+    result = make(with_enroller(large))
+    refused(result, "KEEPLANE_ENROLLER_RUNTIME_BASE", "over 128 KiB",
+            "over the chart's limit of 122880 bytes (120 KiB)",
+            "Shorten agentgateway-standalone.config")
+    size = int(re.search(r"configuration is (\d+) bytes", result.stderr).group(1))
+    assert size > 122880
+    # The same configuration renders without the enroller, and a smaller one
+    # with it.
+    rendered(make(large))
+    text, _ = runtime_base(chart, policy,
+                           rendered(make(with_enroller(with_models(managed(chart), 100)))))
+    assert len(json.loads(text)["llm"]["models"]) == 100
+    assert len(text.encode()) <= 122880

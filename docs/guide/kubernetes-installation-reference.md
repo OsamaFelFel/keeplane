@@ -577,6 +577,24 @@ writes into the copy's guard at `/installed`, in this order:
    as the gateway database password, stays for the gateway to read from its
    own environment, so no other credential reaches the guard.
 
+The init container gets this configuration as one plain setting,
+`KEEPLANE_ENROLLER_RUNTIME_BASE`, in the StatefulSet. Two limits follow:
+
+- **The gateway database password must be a variable.** Write
+  `agentgateway-standalone.database.postgres.url` as the
+  [gateway database Secret guide](gateway-database-secret.md) shows,
+  `postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@<host>:5432/keeplane`, with
+  `KEEPLANE_DB_PASSWORD` from a Secret in `agentgateway-standalone.extraEnv`.
+  A password written literally in the URL, or in a `password` or
+  `sslpassword` parameter, would land in the StatefulSet and the guard files,
+  so Helm refuses it while the enroller is on. A URL with no password is
+  allowed.
+- **The configuration must stay under 120 KiB.** Linux will not start a
+  container with a single setting over 128 KiB, so Helm refuses a rendered
+  gateway configuration over 122880 bytes (120 KiB) and names its size, and
+  the init container refuses one too. Keep `agentgateway-standalone.config`
+  shorter, for example by listing fewer models there.
+
 It also removes what an earlier start of the Pod left there (the record of
 served models and any candidate declaration). The gateway container then
 starts from `/installed/gateway.json` instead of the ConfigMap, and the
@@ -693,6 +711,9 @@ Helm refuses, before creating anything:
   gives every copy the same saved models);
 - an `agentgateway-standalone.config.config.adminAddr` other than
   `127.0.0.1:15000`;
+- an `agentgateway-standalone.database.postgres.url` with the password
+  written literally instead of as a `${...}` variable, or a rendered gateway
+  configuration over 120 KiB (see **Protected runtime** above);
 - `app.guardStatusCheck` without the enroller, or with `gateway.mode=existing`;
 - a gateway `runAsUser` other than 65532;
 - a missing or malformed `approvalsUser`, a `statusRoles` list that doesn't

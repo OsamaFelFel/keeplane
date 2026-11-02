@@ -51,7 +51,10 @@ CERTIFICATE = "-----BEGIN CERTIFICATE-----"
 MAX_SECRET = 4096
 MAX_CA = 262144
 PREFIX = "KEEPLANE_ENROLLER_"
-MAX_BASE = 1048576
+# The trusted base arrives as one environment value. Linux refuses to start a
+# process with a single value over 128 KiB (MAX_ARG_STRLEN), name included, so
+# the chart refuses a larger base with the same limit (_enroller.tpl).
+MAX_BASE = 122880
 HASH = re.compile(r"sha256:[0-9a-f]{64}")
 # The key-hash variables the managed gateway's key policies may name; the
 # chart refuses any other key policy. The first two are always there.
@@ -161,6 +164,12 @@ def runtime_plan(environ):
     callback = text(environ, PREFIX + "CALLBACK_KEY")
     if not KEY.fullmatch(callback):
         raise Unprepared(f"{PREFIX}CALLBACK_KEY is not a valid callback key")
+    raw = environ.get(PREFIX + "RUNTIME_BASE", "")
+    if len(raw.encode("utf-8", "surrogateescape")) > MAX_BASE:
+        raise Unprepared(
+            f"{PREFIX}RUNTIME_BASE is over {MAX_BASE} bytes (120 KiB), the most the "
+            "chart passes as one environment value; shorten the gateway configuration"
+        )
     template = text(environ, PREFIX + "RUNTIME_BASE", MAX_BASE)
     for name in HASH_VARIABLES:
         setting = PREFIX + name
@@ -170,7 +179,9 @@ def runtime_plan(environ):
         if not HASH.fullmatch(value):
             raise Unprepared(f"{setting} is not a sha256 key hash")
         template = template.replace("${" + name + "}", value)
-    if "${GATEWAY_" in template:
+    # Only the key-hash variables are this step's: another variable, even one
+    # named GATEWAY_*, such as a database password, is the gateway's to read.
+    if any("${" + name + "}" in template for name in HASH_VARIABLES):
         raise Unprepared(
             "The gateway configuration names a key hash this copy was not given"
         )
