@@ -168,6 +168,8 @@ def test_pa_03_the_one_public_host_routes_only_the_protected_path_to_the_gateway
     assert all(path[4] not in PRIVATE_PORTS for path in ingress_paths(chart, policy, output))
     # Without the chart's Ingress the Service still renders for your own edge.
     values["ingress"]["enabled"] = False
+    # The app then takes its HTTPS address from the installer, not the Ingress.
+    values["app"]["postgres"]["publicOrigin"] = "https://keeplane.example.test"
     output = rendered(make(values))
     assert not chart.of_kind(output, "Ingress")
     assert service_ports(chart, output)[RUNTIME_SERVICE] == [5000]
