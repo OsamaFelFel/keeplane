@@ -63,6 +63,61 @@ def test_pm_01_release_bar_on_both_english_sets(inspector, name):
     assert len(held) <= max_held
 
 
+# Missed personal-data requests per kind when the bar was measured: the
+# detector must do at least as well for each of the five kinds (Spec 005 ST20
+# "What detection finds"), not only in total.
+MISSED_BY_KIND = {
+    "english-set.json": {"PERSON": 2, "ADDRESS": 2},
+    "english-heldout-set.json": {"PERSON": 4, "ADDRESS": 6, "CARD": 1},
+}
+KINDS = ("PERSON", "ADDRESS", "EMAIL", "PHONE", "CARD")
+# Clean requests shaped like code (Spec 005 ST20 "Code isn't personal data"),
+# by the sets' form names, and how many of each were held when measured.
+CODE_FORMS = {
+    "english-set.json": {"code": 0, "trace": 0, "config": 0, "log": 0, "region": 0},
+    "english-heldout-set.json": {
+        "trace": 0, "import": 0, "path": 0, "code_tick": 0, "code_fence": 0,
+        "cli": 0, "config": 0, "log": 0, "timezone": 1,
+    },
+}
+
+
+def verdicts(inspector, name):
+    data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    return [(case, inspector.check(case["text"]).held) for case in data["cases"]]
+
+
+@pytest.mark.parametrize("name", sorted(BAR))
+def test_pm_03_each_kind_of_personal_data_is_found(inspector, name):
+    missed = dict.fromkeys(KINDS, 0)
+    seen = dict.fromkeys(KINDS, 0)
+    for case, held in verdicts(inspector, name):
+        if case["kind"] != "positive":
+            continue
+        for kind in {item["type"] for item in case["expect"]}:
+            seen[kind] += 1
+            missed[kind] += not held
+    print(json.dumps({"set": name, "positives": seen, "missed": missed}))
+    for kind in KINDS:
+        assert seen[kind] >= 20, kind
+        assert missed[kind] <= MISSED_BY_KIND[name].get(kind, 0), kind
+
+
+@pytest.mark.parametrize("name", sorted(BAR))
+def test_pm_04_code_shaped_requests_are_not_held(inspector, name):
+    held = dict.fromkeys(CODE_FORMS[name], 0)
+    seen = dict.fromkeys(CODE_FORMS[name], 0)
+    for case, was_held in verdicts(inspector, name):
+        form = case["form"].rsplit("-", 1)[0]
+        if case["kind"] == "clean" and form in held:
+            seen[form] += 1
+            held[form] += was_held
+    print(json.dumps({"set": name, "clean": seen, "held": held}))
+    for form, limit in CODE_FORMS[name].items():
+        assert seen[form] > 0, form
+        assert held[form] <= limit, form
+
+
 def test_pm_02_works_offline_and_names_no_text(inspector, monkeypatch):
     import socket
 
