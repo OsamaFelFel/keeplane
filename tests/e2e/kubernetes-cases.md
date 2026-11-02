@@ -3,9 +3,10 @@
 Run `test_local.py` against port 13000 first, then `test_kind.py`. The replica
 tests use `second-local`; `test_kind.py` registers it through Keeplane when it is
 absent (`test_local.py` removes the setups it added). The **Kubernetes live
-checks** CI workflow runs both, then `test_gateway_secret_rotation.py`, on a kind
-cluster for every pull request (see [Tests](../README.md)); the other cases here
-still run only locally. `test_kind.py` deletes one gateway
+checks** CI workflow runs both, then `test_gateway_secret_rotation.py`,
+`test_existing_gateway_preflight.py` and `test_gateway_down.py`, on a kind
+cluster for every pull request (see [Tests](../README.md)). K8S-START-01 and
+K8S-14 to K8S-16 run in the unit and integration checks. `test_kind.py` deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
 The managed kind preview and the customer-run gateway app require first-admin
 sign-in; the test helpers use the local password file and never print its value.

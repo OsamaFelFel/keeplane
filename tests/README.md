@@ -41,16 +41,17 @@ kind, kubectl and Helm (each checked against a recorded SHA-256), runs
 image and installs the chart twice on one kind cluster: with its managed gateway
 (two copies and the installer-made key Secret) and against a separately
 installed gateway. It then runs the test files on the workflow's `LIVE_TESTS`
-line: `e2e/test_local.py`, `e2e/test_kind.py` and
-`e2e/test_gateway_secret_rotation.py`. The job fails if any of them is skipped,
+line: `e2e/test_local.py`, `e2e/test_kind.py`,
+`e2e/test_gateway_secret_rotation.py`, `e2e/test_existing_gateway_preflight.py`
+and `e2e/test_gateway_down.py`. The job fails if any of them is skipped,
 fails or reports an incomplete case set. Reports, the JUnit file and the
 cluster's state and logs are uploaded as the `kubernetes-live-<commit>`
 artifact.
 
 The cluster has kind's default network plugin, which does not enforce
 NetworkPolicy, and no ingress controller; the app is reached through kind's
-NodePort mapping and a port-forward. The network policy, ingress, gateway-down,
-preflight and Qwen cases are not run there.
+NodePort mapping and a port-forward. The network policy, ingress, full chart
+(FULL, EXEDGE), browser and Qwen cases are not run there.
 
 The kind tests take their kubeconfig from `KEEPLANE_KUBECONFIG` (default
 `/private/tmp/keeplane-kind-kubeconfig` on macOS, `/tmp/keeplane-kind-kubeconfig`

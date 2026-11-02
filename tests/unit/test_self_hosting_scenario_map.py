@@ -27,15 +27,14 @@ SCENARIOS = {
 }
 # Scenarios not proven yet. Only a check that CI runs on the current
 # revision proves a scenario; a live trial recorded on an earlier chart
-# revision is closest evidence. The reason lives in the table only: its cell
+# revision is closest evidence. ST4 and ST5 are proven by the K8S cases the
+# Kubernetes live workflow runs on kind. The reason lives in the table only: its cell
 # starts "Not proven yet:" and says which run is missing before naming cases.
 NOT_PROVEN = {
     ("ST1", "Install on the isolated network"),
     ("ST2", "The install may pull from the registry"),
     ("ST2", "Runs where only the models are reachable"),
     ("ST3", "A local model works like a cloud one"),
-    ("ST4", "One gateway copy stops"),
-    ("ST5", "We already run the gateway"),
 }
 # Catalogs whose cases only render the chart. They can support a scenario but
 # never prove one alone.
@@ -197,7 +196,8 @@ def test_shm_05_the_map_links_every_catalog_it_names():
 
 def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     cases = live_ci_cases()
-    # test_kind's replica and customer-run gateway cases run there.
-    assert {"K8S-01", "K8S-03", "K8S-04", "K8S-05", "K8S-06", "K8S-17"} <= cases
-    # The preflight, gateway-down and retry cases run in no CI job yet.
-    assert not {"K8S-08", "K8S-10", "K8S-13", "K8S-14"} & cases
+    # The replica, customer-run gateway, preflight and gateway-down cases.
+    assert {f"K8S-{n:02d}" for n in range(1, 14)} | {"K8S-17"} <= cases
+    # The simulated preflight retries (K8S-14 to K8S-16) are in another test
+    # file this workflow does not run, so they never count through it.
+    assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
