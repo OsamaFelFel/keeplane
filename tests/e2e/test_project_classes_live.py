@@ -466,7 +466,7 @@ def run_cases():
             )
         finally:
             if state["enrolled"] and any(c["verdict"] != "pass" for c in cases):
-                enroller_diagnostics()
+                enroller_diagnostics(list(names.values()))
             restore(admin, password, project, created, state, cleanup_failures)
     cleanup = "complete" if not cleanup_failures else "; ".join(cleanup_failures)
     report = {
@@ -486,21 +486,49 @@ def run_cases():
     return int(bool(report["failed"]) or cleanup != "complete")
 
 
-def enroller_diagnostics():
-    """Print the guarded gateway's enrolment messages before restore removes them."""
-    logs = compose(
-        "--profile", "runtime", "logs", "--no-color", "--tail", "60",
-        "model-enroller", "gateway", runtime=True, timeout=60,
-    )
+PROBE = """
+import json, sys, time, urllib.request
+names = sys.argv[1:]
+manifest = json.load(open('/installed/manifest.json'))
+written = open('/installed/gateway.json').read()
+dump = urllib.request.urlopen('http://127.0.0.1:15000/config_dump', timeout=5).read().decode()
+print(json.dumps({
+    'enabled': manifest.get('enabled'),
+    'declared': sorted(manifest.get('models') or {}),
+    'gateway_json_mtime_age': round(time.time() - __import__('os').path.getmtime('/installed/gateway.json'), 1),
+    'in_written_config': {n: n in written for n in names},
+    'in_applied_config': {n: n in dump for n in names},
+    'files': sorted(__import__('os').listdir('/installed')),
+}))
+"""
+
+
+def enroller_diagnostics(names):
+    """Print the guarded gateway's enrolment state before restore removes it."""
+    # Let a pass under way finish (its applied-state wait is 15 seconds).
+    time.sleep(20)
     state = compose(
         "--profile", "runtime", "exec", "-T", "model-enroller", "python", "-c",
-        "import json; m = json.load(open('/installed/manifest.json')); "
-        "print(json.dumps({'enabled': m.get('enabled'), 'models': sorted(m.get('models') or {})}))",
+        PROBE, *names, runtime=True, timeout=60,
+    )
+    print("Guard state:", (state.stdout or state.stderr).strip())
+    enroller = compose(
+        "--profile", "runtime", "logs", "--no-color", "model-enroller",
         runtime=True, timeout=60,
     )
-    print("Guard declaration:", (state.stdout or state.stderr).strip())
-    print("Enroller and gateway messages:")
-    print(logs.stdout[-12000:])
+    print("Enroller messages:")
+    print((enroller.stdout + enroller.stderr)[-6000:])
+    gateway = compose(
+        "--profile", "runtime", "logs", "--no-color", "gateway",
+        runtime=True, timeout=60,
+    )
+    print("Gateway messages other than requests:")
+    lines = [
+        line
+        for line in gateway.stdout.splitlines()
+        if "request gateway=" not in line
+    ]
+    print("\n".join(lines[-80:]))
 
 
 def restore(admin, password, project, created, state, failures):
