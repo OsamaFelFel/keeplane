@@ -54,7 +54,11 @@ def not_changed(model_id, readback):
 def key_not_changed(model_id, readback, restored):
     title = f"{model_id} wasn't changed"
     if readback.misconfigured:
-        tail = "Nothing was saved." if restored else "The model may need attention."
+        tail = (
+            "Nothing was saved."
+            if restored
+            else "The model may need admin attention."
+        )
         return {"title": title, "error": f"{BAD_LIST} {tail} {ASK_INSTALLER}"}
     if restored:
         body = (
@@ -65,7 +69,7 @@ def key_not_changed(model_id, readback, restored):
     else:
         body = (
             f"Not every gateway copy confirmed the new key: {_did(readback)} "
-            "The model may need attention. Check Models."
+            "The model may need admin attention. Check Models."
         )
     return {"title": title, "error": body}
 

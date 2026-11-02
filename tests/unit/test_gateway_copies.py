@@ -14,6 +14,7 @@ from integrations.gateway.copies import (
     copy_urls,
 )
 from model_registry import registration
+from model_registry.copy_messages import key_not_changed
 from model_registry.fingerprints import fingerprint
 from model_registry.registration import ModelManagement
 from model_registry.removal import remove_model_setup
@@ -846,3 +847,28 @@ def test_gc_25_the_app_passes_its_copy_list_to_every_model_change(monkeypatch):
     response = views.model_setup(RequestFactory().delete("/api/models/m"), "m")
     assert response.status_code == 200
     assert seen[0][0] == "m" and seen[0][-1] is marker
+
+
+@pytest.mark.parametrize(
+    ("readback", "error"),
+    [
+        (
+            CopyReadback(total=0, confirmed=0, misconfigured=True),
+            "Keeplane can't check every gateway copy because the gateway copy "
+            "list in its settings isn't valid. The model may need admin "
+            "attention. Ask whoever installed Keeplane to fix it.",
+        ),
+        (
+            CopyReadback(total=2, confirmed=1),
+            "Not every gateway copy confirmed the new key: 1 of 2 did. "
+            "The model may need admin attention. Check Models.",
+        ),
+    ],
+)
+def test_gc_26_a_key_change_whose_previous_key_is_not_restored_asks_for_admin_attention(
+    readback, error
+):
+    assert key_not_changed("keyed", readback, restored=False) == {
+        "title": "keyed wasn't changed",
+        "error": error,
+    }

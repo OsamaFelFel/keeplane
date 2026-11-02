@@ -289,7 +289,7 @@ class ModelRemovalTests(unittest.TestCase):
         self.assertEqual(
             result["error"],
             "Keeplane couldn't record the removal. "
-            "The model may be missing from the gateway; check Models.",
+            "The model may be missing from the gateway. Check Models.",
         )
         self.assertEqual(catalog.repinned, [])
 
@@ -382,7 +382,7 @@ class ModelRemovalTests(unittest.TestCase):
         status, result = remove_model_setup(MODEL, ACTOR, catalog, gateway, None, "")
         self.assertEqual(status, 503)
         self.assert_not_recorded(
-            result, "The model may be missing from the gateway; check Models."
+            result, "The model may be missing from the gateway. Check Models."
         )
         self.assertEqual((gateway.restores, catalog.repinned), ([], []))
         self.assertEqual(catalog.approval["approved_classes"], ["Internal"])
