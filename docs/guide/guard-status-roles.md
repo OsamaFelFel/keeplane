@@ -187,6 +187,7 @@ row says:
 | `limited` | The role exists, can log in and can reach only its own copy's row, as the command set it. |
 | `cannot log in` | The role is `NOLOGIN`, its password has passed its `VALID UNTIL` date, or it has no `CONNECT` on the database. |
 | `unsafe` | The role could do more than the command allows: it is the table owner, a superuser, can bypass row-level security or create roles, belongs to the migration role or another listed role, isn't read-only by default, or holds a privilege beyond reading, adding and updating the guard-status table. |
+| `cannot write` | The role lacks reading, adding or updating the guard-status table, so its enroller can't record its row. Run the command again. |
 | `missing` | The policy names a role that doesn't exist. |
 | `not paired` | No status role is paired with this copy. Run the command again with every copy. |
 
@@ -202,18 +203,20 @@ table. `"row_security"` is `on` or `off`, and `"policies"` is `as set`, or
 `changed` when the table's policies aren't the ones the command writes.
 
 The check exits 1, with one sentence per fault under `guard_status_problems`,
-when a copy's role is `cannot log in`, `unsafe`, `missing` or `not paired`,
-when a copy's guard is `not recorded` or `unreadable`, when the app role is
-`unsafe`, when row-level security is off or the policies changed, or when the
-table or the roles can't be read. For example:
+when a copy's role is `cannot log in`, `unsafe`, `cannot write`, `missing` or
+`not paired`, when a copy's guard is `not recorded` or `unreadable`, when the
+app role is `unsafe`, when row-level security is off or the policies changed,
+when a status role is still paired with a copy that's no longer in
+`GATEWAY_COPY_URLS`, or when the table or the roles can't be read. For example:
 
 ```text
 Gateway copy keeplane-gateway-0: its status role keeplane_status_0 is a superuser, can bypass row-level security or can create roles
+Gateway copy keeplane-gateway-2 is no longer listed but status role keeplane_status_2 is still paired with it; remove the role or its pairing
 ```
 
-A role still paired with a copy that's no longer in `GATEWAY_COPY_URLS` is
-listed under `guard_status_warnings`; run the command with the current copies
-to remove its access. The check can't tell whether the password mounted for an
+To remove a pairing, run the command again with only the current copies. Only
+`not confirmed` copies are listed under `guard_status_warnings`; they don't
+fail the check. The check can't tell whether the password mounted for an
 enroller is right, because the app never sees it: the enroller's log shows that
 (below).
 

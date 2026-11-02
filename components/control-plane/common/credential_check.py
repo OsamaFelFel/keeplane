@@ -359,13 +359,15 @@ def _guard_status(cursor, copies, now):
     roles = {name: pairs[name] for name in names if name in pairs}
     status_roles = list(roles.values())
     found = access.role_attributes(cursor, [app, *status_roles], owner)
-    read_only = access.read_only_roles(cursor, status_roles)
-    members = access.memberships(cursor, [app, *status_roles])
     present = [role for role in status_roles if role in found]
+    read_only = access.read_only_roles(cursor, present)
+    # Only existing roles: pg_has_role fails on a role that doesn't exist.
+    members = access.memberships(cursor, [app, *present])
     extra = access.extra_privileges(
         cursor,
         {app: None, **{role: access.STATUS_WRITES for role in present}},
     )
+    lacking = access.missing_status_writes(cursor, present)
 
     def unsafe(role, label, read_only_roles):
         sentences = _role_problems(role, found[role], owner, read_only_roles, label)
@@ -399,10 +401,19 @@ def _guard_status(cursor, copies, now):
         else:
             sentences = unsafe(role, "its status role", read_only)
             login = _login_problems(role, found[role], "its status role")
-            entry["role_status"] = (
-                "unsafe" if sentences else "cannot log in" if login else "limited"
+            needed = [privilege for who, privilege in lacking if who == role]
+            write = (
+                [f"its status role {role} can't record its row: it lacks "
+                 + ", ".join(needed) + f" on {access.STATUS_TABLE}" + RERUN]
+                if needed else []
             )
-            problems.extend(f"{label} {sentence}" for sentence in sentences + login)
+            entry["role_status"] = (
+                "unsafe" if sentences
+                else "cannot log in" if login
+                else "cannot write" if write
+                else "limited"
+            )
+            problems.extend(f"{label} {sentence}" for sentence in sentences + login + write)
         entry.update(_guard_row(rows.get(name), now))
         if entry["guard"] == "not recorded":
             problems.append(f"{label} its enroller has recorded no guard status yet")
@@ -414,9 +425,9 @@ def _guard_status(cursor, copies, now):
         report["copies"].append(entry)
     for name, role in sorted(pairs.items()):
         if name not in roles:
-            warnings.append(
-                f"Guard status: status role {role} is still paired with {name}, which "
-                "isn't in the gateway copy list" + RERUN + " to remove its access"
+            problems.append(
+                f"Gateway copy {name} is no longer listed but status role {role} is "
+                "still paired with it; remove the role or its pairing"
             )
     return report, problems, warnings
 

@@ -585,6 +585,12 @@ UNSAFE = {
         "cannot log in",
         " has no CONNECT on the database",
     ),
+    "can't add its row": (
+        f"REVOKE INSERT ON {TABLE} FROM {{status0}}",
+        f"GRANT INSERT ON {TABLE} TO {{status0}}",
+        "cannot write",
+        f" can't record its row: it lacks INSERT on {TABLE}{RERUN}",
+    ),
 }
 
 
@@ -663,16 +669,14 @@ def test_gs_pg_13_postgresql_check_credentials_fails_on_a_changed_setup(reported
             not_paired(OTHER),
         ],
         "copy left out": [not_paired(OTHER)],
-        "stale pairing": [not_paired(OTHER)],
+        "stale pairing": [
+            not_paired(OTHER),
+            f"Gateway copy keeplane-gateway-7 is no longer listed but status role "
+            f"{status1} is still paired with it; remove the role or its pairing",
+        ],
         "no row": [f"Gateway copy {OTHER}: its enroller has recorded no guard status yet"],
     }[fault]
     report = found["report"]
-    if fault == "stale pairing":
-        assert found["warnings"][-1] == (
-            f"Guard status: status role {status1} is still paired with "
-            "keeplane-gateway-7, which isn't in the gateway copy list" + RERUN
-            + " to remove its access"
-        )
     if fault == "no row":
         assert copy_entry(report, OTHER)["guard"] == "not recorded"
     if fault == "row security off":

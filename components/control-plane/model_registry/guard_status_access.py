@@ -137,6 +137,27 @@ def extra_privileges(cursor, allowed):
     return sorted(extra)
 
 
+def missing_status_writes(cursor, roles):
+    """(role, privilege) for each status-table privilege a status role lacks.
+
+    A status role needs SELECT, INSERT and UPDATE on the table to record its
+    copy's row.
+    """
+    missing = []
+    for role in roles:
+        for privilege in ("SELECT", "INSERT", "UPDATE"):
+            cursor.execute(
+                "SELECT has_table_privilege(%s, c.oid, %s) FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE n.nspname = current_schema() AND c.relname = %s",
+                [role, privilege, STATUS_TABLE],
+            )
+            row = cursor.fetchone()
+            if row is None or not row[0]:
+                missing.append((role, privilege))
+    return missing
+
+
 def row_security(cursor):
     """Whether row-level security is on for the status table, or None if absent."""
     cursor.execute(
@@ -150,16 +171,19 @@ def row_security(cursor):
 
 
 def policies(cursor):
-    """The status table's policies as {name: (command, roles, using, check)}."""
+    """The status table's policies as {name: (command, roles, using, check, kind)}.
+
+    ``kind`` is PostgreSQL's ``permissive`` column: PERMISSIVE or RESTRICTIVE.
+    """
     cursor.execute(
         "SELECT policyname, cmd, roles::text[], coalesce(qual, ''), "
-        "coalesce(with_check, '') FROM pg_policies "
+        "coalesce(with_check, ''), permissive FROM pg_policies "
         "WHERE schemaname = current_schema() AND tablename = %s",
         [STATUS_TABLE],
     )
     return {
-        name: (command, set(roles), using, check)
-        for name, command, roles, using, check in cursor.fetchall()
+        name: (command, set(roles), using, check, kind)
+        for name, command, roles, using, check, kind in cursor.fetchall()
     }
 
 
@@ -187,13 +211,20 @@ def policy_pairs(found, app):
     """
     if set(found) != {APP_READ_POLICY, OWN_COPY_POLICY}:
         return None
-    command, roles, using, check = found[APP_READ_POLICY]
-    if command != "SELECT" or roles != {app} or using.strip("() ") != "true" or check:
+    command, roles, using, check, kind = found[APP_READ_POLICY]
+    if (
+        kind != "PERMISSIVE"
+        or command != "SELECT"
+        or roles != {app}
+        or using.strip("() ") != "true"
+        or check
+    ):
         return None
-    command, roles, using, check = found[OWN_COPY_POLICY]
+    command, roles, using, check, kind = found[OWN_COPY_POLICY]
     pairs = POLICY_PAIR.findall(using)
     if (
-        command != "ALL"
+        kind != "PERMISSIVE"
+        or command != "ALL"
         or not pairs
         or sorted(pairs) != sorted(POLICY_PAIR.findall(check))
         or not _only_pairs(using, len(pairs))
