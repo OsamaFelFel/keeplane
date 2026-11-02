@@ -74,3 +74,36 @@ test("UI-USERS-03: after Change role is done, Users shows the change and focus g
     expect(document.activeElement).toBe(within(updated).getByRole('button', { name: 'Change role' }))
   })
 })
+
+test('UI-USERS-04: when Create user gets no answer and Check finds the user, the dialog closes and Users shows the user', async () => {
+  const listed = users.map(row => ({ ...row }))
+  const created = { id: 'user-1', username: 'example-user', role: 'admin', sign_in: 'local', managed: false }
+  const request = vi.fn((path: string) => {
+    if (path === '/api/auth-options') return Promise.resolve(response({ csrf_token: 'masked' }))
+    if (path === '/api/edition-note/consume') return Promise.resolve(response({ show: false }))
+    if (path === '/api/users') {
+      // Keeplane saves the user, but the answer is lost on the way back.
+      listed.push(created)
+      return Promise.reject(new TypeError('Failed to fetch'))
+    }
+    if (path.startsWith('/api/user-operations/')) return Promise.resolve(response({ status: 'created', user: created }))
+    return Promise.resolve(response({ users: listed.map(row => ({ ...row })), page: 1, page_size: 25, total: listed.length, has_more: false }))
+  })
+  vi.stubGlobal('fetch', request)
+  const user = userEvent.setup()
+  render(<UsersPage />)
+  await screen.findByText('first-admin')
+  expect(screen.queryByText('example-user')).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Create user' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Create user' })
+  await user.type(within(dialog).getByLabelText('Username'), 'example-user')
+  await user.type(within(dialog).getByLabelText('Password'), 'a-test-password-123456')
+  await user.click(within(dialog).getByRole('radio', { name: 'Admin' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Create user' }))
+  expect(await within(dialog).findByText("It isn't clear whether example-user was created")).toBeTruthy()
+  await user.click(within(dialog).getByRole('button', { name: 'Check' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create user' })).toBeNull())
+  const row = (await screen.findByText('example-user')).closest('tr')!
+  expect(within(row).getByText('Admin')).toBeTruthy()
+  expect(request.mock.calls.filter(([path]) => path === '/api/users')).toHaveLength(1)
+})

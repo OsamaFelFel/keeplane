@@ -41,9 +41,13 @@ also cover concurrency, restart, expiry, credential rotation and storage failure
 ## Spec 003 scenarios (ST6–ST8, ST28)
 
 Each scenario in Spec 003 and the cases that prove it. LA cases are the
-[account API cases](../integration/local-accounts-cases.md), UI cases the
-[React unit cases](../unit/ui/cases.md) and BR/BSEC cases the
-[browser cases](../browser/users-cases.md). ACCT cases are the live cases above.
+[account API cases](../integration/local-accounts-cases.md), UI, UI-SIGN,
+UI-USERS and UI-ROLE cases the [React unit cases](../unit/ui/cases.md), BR
+cases the [Users browser cases](../browser/users-cases.md) and BSEC cases the
+[browser security cases](../browser/security-cases.md). ACCT cases are the live
+cases above. `tests/unit/test_accounts_scenario_map.py` fails if a scenario is
+missing here or a case named here, including each case inside a range such
+as "UI-ROLE-04 to UI-ROLE-09", has no catalog row or no test.
 
 | Story | Scenario | Checked by |
 | --- | --- | --- |
@@ -51,13 +55,13 @@ Each scenario in Spec 003 and the cases that prove it. LA cases are the
 | ST6 | A developer opens the web UI | LA-02, ACCT-05, BR-11 (layout), BR-12 (live) |
 | ST6 | Sign out | LA-01, ACCT-03, BSEC-01, BR-12 |
 | ST6 | No single sign-on yet | LA-03, UI-SIGN-01, BR-01 |
-| ST6 | Single sign-on connected | UI-SIGN-02 shows the option when the server reports a provider. No provider can be connected yet; the end-to-end case waits for task 003-04. |
+| ST6 | Single sign-on connected | Not built yet: no single sign-on provider can be connected until Spec 011 is handed off (task 003-04). Meanwhile UI-SIGN-02 and BR-15 show the option when the server reports a provider. |
 | ST7 | First sign-in after install | ACCT-21, ACCT-02, BR-02; rotation keeps the same account: ACCT-22, LA-05 |
 | ST7 | The break-glass admin in Users | LA-04, ACCT-16, ACCT-17, UI-USERS-01, BR-02 |
 | ST8 | Create a user with a role | LA-06, UI-02, ACCT-04, BR-12 |
 | ST8 | Developer by default | UI-01, BR-02; the API needs an explicit role: LA-07 |
 | ST8 | No answer | UI-03 (10 seconds, Check and Cancel), UI-05 (server errors), UI-06, UI-10 (Check gets no answer), BR-04 |
-| ST8 | Check finds the user | UI-03, LA-09, ACCT-18 |
+| ST8 | Check finds the user | UI-03, UI-USERS-04 (Users shows the user), LA-09, ACCT-18 |
 | ST8 | Check doesn't find the user | UI-04, LA-09, LA-10, BR-04 |
 | ST8 | Sent twice | LA-08, UI-04, ACCT-18, ACCT-19, BR-04 |
 | ST8 | Find a user | LA-11, UI-USERS-02, ACCT-07, BR-07 |
