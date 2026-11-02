@@ -9,6 +9,14 @@ not installed. Run it explicitly, keeping the output outside Git:
 python -m pytest tests/integration/test_personal_data_model.py -m optional -s
 ```
 
+The **detection image** CI job runs these cases inside the
+`postgres-detection` image it builds, so they check the image's own detector
+code and bundled model: no network, a read-only root filesystem and the
+image's own user, with only the pytest runner, the tests and `pytest.ini`
+mounted read-only. The job fails if any case is skipped or the bar is not
+checked on both sets. The [detection image cases](detection-image-cases.md)
+show how to build the image.
+
 The sets in `tests/fixtures/personal_data/` are copies of the fixed English
 sets the bar was measured on; every value in them is invented. Do not tune the
 rules on the held-out set.

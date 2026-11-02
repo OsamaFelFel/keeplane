@@ -353,9 +353,49 @@ jobs:
           KEEPLANE_RUNTIME_DETECTION_IMAGE: keeplane-preview:postgres-detection-local
           KEEPLANE_RUNTIME_DETECTION_SIGN_IN_IMAGE: keeplane-preview:postgres-cli-auth-detection-local
         run: .venv/bin/python -m pytest tests/integration/test_detection_image.py -m live -s -rs --junitxml=test-results/detection-image/junit.xml
-      - name: Fail if a detection image case was skipped
+      - name: Check the release-1 detection bar with the image's own detector and model, offline
+        # The image has no pytest and no pip, so the test runner (pure Python, the
+        # versions in tests/requirements.txt) is mounted read-only. The tests and
+        # pytest.ini are mounted without components/, so personal_data and the
+        # model come from the image itself. Output is counts and case IDs only.
         run: |
-          if grep -q '<skipped' test-results/detection-image/junit.xml; then
-            echo "The detection image case was skipped" >&2
-            exit 1
-          fi
+          runner="$RUNNER_TEMP/image-test-runner"
+          .venv/bin/python -m pip freeze | grep -E '^(pytest|pluggy|iniconfig)==' > "$RUNNER_TEMP/image-test-runner.txt"
+          test "$(wc -l < "$RUNNER_TEMP/image-test-runner.txt")" -eq 3
+          .venv/bin/pip install --no-deps --only-binary=:all: --target "$runner" -r "$RUNNER_TEMP/image-test-runner.txt"
+          mkdir -p test-results/detection-image
+          chmod 0777 test-results/detection-image
+          docker run --rm \
+            --network none \
+            --read-only --tmpfs /tmp \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -e PYTHONPATH=/opt/test-runner \
+            -v "$runner:/opt/test-runner:ro" \
+            -v "$PWD/tests:/src/tests:ro" \
+            -v "$PWD/pytest.ini:/src/pytest.ini:ro" \
+            -v "$PWD/test-results/detection-image:/results" \
+            --entrypoint python \
+            keeplane-preview:postgres-detection-local \
+            -m pytest /src/tests/integration/test_personal_data_model.py -m optional -p no:cacheprovider -s -rs --junitxml=/results/model-junit.xml
+      - name: Fail if a detection image or detector case was skipped
+        run: |
+          for report in junit.xml model-junit.xml; do
+            if grep -q '<skipped' "test-results/detection-image/$report"; then
+              echo "A detection case was skipped ($report)" >&2
+              exit 1
+            fi
+          done
+          # The bar must be checked on both English sets, not left uncollected.
+          for set in english-set.json english-heldout-set.json; do
+            if ! grep -q "test_pm_01_release_bar_on_both_english_sets\[$set\]" test-results/detection-image/model-junit.xml; then
+              echo "The release-1 bar was not checked on $set" >&2
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: detection-image-${{ github.sha }}
+          path: test-results/detection-image/
+          retention-days: 30
