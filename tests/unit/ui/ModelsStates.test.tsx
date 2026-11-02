@@ -46,6 +46,14 @@ test("MOD-UI-02: a model that isn't added keeps the dialog and says why, as in M
   expect((within(dialog).getByLabelText('Shared key') as HTMLInputElement).value).toBe('synthetic-shared-key')
 })
 
+test("MOD-UI-07: a model the gateway doesn't register keeps the dialog and says so", async () => {
+  fixture({ add: () => response({ error: "The gateway didn't register it. Nothing was saved." }, 503) })
+  const dialog = await addCloud('new-model')
+  const alert = await within(dialog).findByRole('alert')
+  expect(within(alert).getByText("new-model wasn't added")).toBeTruthy()
+  expect(within(alert).getByText("The gateway didn't register it. Nothing was saved. Check the details and try again.")).toBeTruthy()
+})
+
 test('MOD-UI-03: a model already added from the provider is named on the Model field', async () => {
   const request = fixture({ add: () => response({ error: 'coder from OpenAI is already added.' }, 409) })
   const dialog = await addCloud()

@@ -42,6 +42,7 @@ colocated tests.
 | MOD-UI-04 | Open Models while the models are still loading. | The Models table shows “Loading models…” in place of its rows, with no Edit or Set up. |
 | MOD-UI-05 | Open Models while the gateway isn't answering, then choose Try again once it answers; and lose the gateway after the models were listed. | The notice reads “The model gateway isn't answering.” and “Developers' tasks can't reach any model, and models can't be added or changed, until it answers again.”; Add model and every Edit are off; Try again reads the models once more and the notice goes when they load. |
 | MOD-UI-06 | Open Models with the gateway up, then down. | The page names no gateway product (such as agentgateway or LiteLLM) and no version. |
+| MOD-UI-07 | Add a model when the gateway refuses it (503 “The gateway didn't register it. Nothing was saved.”). | The dialog stays open and shows “[Model] wasn't added” with “The gateway didn't register it. Nothing was saved. Check the details and try again.” |
 | CL-UI-01 | Open Models with two levels on Keeplane's pick and one changed by an admin. | The Complexity table marks each model “Keeplane's pick” or “changed by an admin”. |
 | CL-UI-02 | Change Simple to another model. | The dialog offers only set-up models, names Keeplane's pick, disables Use Keeplane's pick for a level on Keeplane's pick, sends one protected request and shows the change. |
 | CL-UI-03 | Choose Use Keeplane's pick on an admin-changed level. | The request sends no model and the page says the level uses Keeplane's pick again. |

@@ -76,7 +76,7 @@ or a case named here has no row in its own catalog or no test.
 | ST10 | The customer runs its own gateway | MRS-03, EXIST-03 |
 | ST10 | Add a model from a local runner | MRS-04, ML-05 (listed as Local), MO-UI-02 |
 | ST10 | The model doesn't answer | MRS-05, MOD-UI-02, MO-UI-03, MO-UI-06, CADD-05 |
-| ST10 | The gateway doesn't register the model | MRS-06, MOD-UI-02 |
+| ST10 | The gateway doesn't register the model | MRS-06, MOD-UI-07 |
 | ST10 | Each developer adds their own key | PMR-01, PMR-02, MO-UI-06, PK-02 (the developer's key, in the CLI) |
 | ST10 | Already added | MRS-07, MOD-UI-03, CADD-04 |
 | ST11 | A shared key | CADD-02, MA-06, MA-07 (tied to the developer) |
@@ -94,7 +94,7 @@ or a case named here has no row in its own catalog or no test.
 | ST13 | Go back to Keeplane's pick | CL-INT-03, CL-UI-03, MO-UI-08 |
 | ST14 | Route by complexity | Not built yet: judging a task's complexity waits for task 004-03's router choice (ADR 024, governance issue #44). |
 | ST15 | Add a persona rule | PR-INT-01, PR-UI-02, MO-UI-10, RULE-LIVE-01 |
-| ST15 | The rule applies | RT-01, PR-05, RT-14 |
+| ST15 | The rule applies | RT-01, PR-05, RT-14; no client sends a persona yet (there is no Agents spec), so it is proven at the server |
 | ST16 | A model is down | RETRY-01, OUT-01, OUT-02, OUT-03, OUT-07, OUT-10, CODE-03, ALT-01, ALT-02 |
 | ST16 | The model answers on a retry | OUT-04, OUT-05, OUT-06 |
 | ST16 | A task too big for the model | RETRY-02, OUT-08, CODE-05 |
@@ -102,7 +102,7 @@ or a case named here has no row in its own catalog or no test.
 | ST16 | Too big, and no other model allowed | CODE-06 |
 | ST17 | See the model | Not built yet: the CLI doesn't show which model answered. The Developer CLI waits for Spec 009 (governance issue #28). |
 | ST17 | Switch the model | Not built yet: the CLI has no switch; `--model` names one task's model. It waits for Spec 009 (governance issue #28). |
-| ST17 | My switch beats Keeplane's picks | RT-02, RT-07, PR-05; the server's routing order, which the CLI's switch will use |
+| ST17 | My switch beats Keeplane's picks | Not built yet: the server's order (RT-02, RT-07, PR-05) is on main; the CLI switch waits for Spec 009 (governance issue #28). |
 | ST23 | Edit a model | EDIT-02, CADD-07, GC-14, MO-UI-05 |
 | ST23 | Keep the shared key | MRS-08, CADD-07 |
 | ST23 | Remove a model | MR-04, MR-06, REMOVE-03 |

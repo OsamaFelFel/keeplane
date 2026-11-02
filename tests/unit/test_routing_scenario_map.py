@@ -71,6 +71,8 @@ NOT_BUILT = {
     # The Developer CLI waits for Spec 009 (governance issue #28).
     ("ST17", "See the model"),
     ("ST17", "Switch the model"),
+    # The server's order is built; the CLI switch waits for Spec 009 too.
+    ("ST17", "My switch beats Keeplane's picks"),
 }
 CASE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-\d+\b")
 # The catalog each case prefix belongs to, as the map's intro links them. A
