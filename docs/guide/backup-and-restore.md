@@ -458,7 +458,8 @@ since then is undone, including ones that took access away
 - a developer key that was replaced or removed is back, if its file is;
 - Audit records written after the backup are not in the restored database.
   Keep the old database (or a backup of it taken just before the restore) for
-  as long as you must keep those records.
+  as long as you must keep those records, or
+  [export them](audit-storage.md#export-records) before you restore.
 
 Unless the restore only moved the same data with nothing changed since the
 backup, do all of these before reopening access:
