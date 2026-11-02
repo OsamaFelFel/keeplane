@@ -21,6 +21,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
+      KIND_VERSION: v0.33.0
+      KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+      KUBECTL_VERSION: v1.37.0
+      KUBECTL_SHA256: 6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f
       HELM_VERSION: v3.19.0
       HELM_SHA256: a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496
       # The live test files this job runs, in order: test_local registers the
@@ -49,35 +53,17 @@ jobs:
             echo "KEEPLANE_TEST_REPORT_DIR=$GITHUB_WORKSPACE/$RESULTS/reports"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Find the kind and kubectl releases (temporary, before pinning)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -x
-          curl --fail -sS -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/kubernetes-sigs/kind/releases?per_page=15" > /tmp/kind-releases.json
-          python3 - <<'PY'
-          import json
-          for release in json.load(open("/tmp/kind-releases.json")):
-              body = release.get("body") or ""
-              print(release["tag_name"], release["published_at"], "a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5" in body)
-              for line in body.splitlines():
-                  if "v1.37" in line or "v1.36" in line:
-                      print("   ", line.strip())
-          PY
-          curl --fail -sS https://dl.k8s.io/release/stable.txt; echo
       - name: Install pinned kind, kubectl and Helm and check their checksums
+        # Checksums from each project's published release checksum files:
+        # kind v0.33.0 (its default node image is the kindest/node v1.37.0
+        # digest deploy/local/kind-up.sh pins), kubectl v1.37.0 from dl.k8s.io
+        # and Helm v3.19.0 as in checks.yml.
         run: |
           cd "$RUNNER_TEMP"
-          KIND_VERSION=$(python3 -c 'import json; print(next(r["tag_name"] for r in json.load(open("/tmp/kind-releases.json")) if "a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5" in (r.get("body") or "")))')
           curl --fail --location -sS --output bin/kind "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64"
-          curl --fail --location -sS --output kind.sha256sum "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64.sha256sum"
-          echo "KIND $KIND_VERSION $(cut -d ' ' -f 1 kind.sha256sum)"
-          echo "$(cut -d ' ' -f 1 kind.sha256sum)  bin/kind" | sha256sum --check
-          KUBECTL_VERSION=v1.37.0
+          echo "$KIND_SHA256  bin/kind" | sha256sum --check
           curl --fail --location -sS --output bin/kubectl "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
-          curl --fail --location -sS --output kubectl.sha256 "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl.sha256"
-          echo "KUBECTL $KUBECTL_VERSION $(cat kubectl.sha256)"
-          echo "$(cat kubectl.sha256)  bin/kubectl" | sha256sum --check
+          echo "$KUBECTL_SHA256  bin/kubectl" | sha256sum --check
           curl --fail --location -sS --output helm.tar.gz "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
           echo "$HELM_SHA256  helm.tar.gz" | sha256sum --check
           tar -xzf helm.tar.gz linux-amd64/helm
@@ -131,6 +117,9 @@ jobs:
           mkdir -p "$out"
           kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" get pods,deployments,statefulsets,services,endpointslices,pvc -A -o wide > "$out/resources.txt" 2>&1 || true
           kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" get events -A --sort-by=.lastTimestamp > "$out/events.txt" 2>&1 || true
+          # Also in the log, so a failed setup can be read without the artifact.
+          cat "$out/resources.txt"
+          tail -n 60 "$out/events.txt"
           for ns in keeplane keeplane-existing supplied-gateway; do
             kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n "$ns" describe pods > "$out/$ns-pods.txt" 2>&1 || true
             kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n "$ns" logs --all-containers --prefix --tail=300 \

@@ -30,3 +30,28 @@ Each pytest invocation gets a fresh `test-results/pytest/` subdirectory. Set
 Use `tests/run_regression.py` for the full configured environments. Test reports,
 logs and traces stay out of Git. Earlier run notes
 remain available at [their recorded commit](https://github.com/OsamaFelFel/keeplane/tree/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests).
+
+## Kubernetes live checks in CI
+
+The **Kubernetes live checks** workflow (`.github/workflows/kubernetes-live.yml`)
+runs on every pull request and on `main`. On a GitHub runner it installs pinned
+kind, kubectl and Helm (each checked against a recorded SHA-256), runs
+`deploy/local/kind-up.sh` with `KEEPLANE_KIND_QWEN=off`, which builds the app
+image and installs the chart twice on one kind cluster: with its managed gateway
+(two copies and the installer-made key Secret) and against a separately
+installed gateway. It then runs the test files on the workflow's `LIVE_TESTS`
+line: `e2e/test_local.py`, `e2e/test_kind.py` and
+`e2e/test_gateway_secret_rotation.py`. The job fails if any of them is skipped,
+fails or reports an incomplete case set. Reports, the JUnit file and the
+cluster's state and logs are uploaded as the `kubernetes-live-<commit>`
+artifact.
+
+The cluster has kind's default network plugin, which does not enforce
+NetworkPolicy, and no ingress controller; the app is reached through kind's
+NodePort mapping and a port-forward. The network policy, ingress, gateway-down,
+preflight and Qwen cases are not run there.
+
+The kind tests take their kubeconfig from `KEEPLANE_KUBECONFIG` (default
+`/private/tmp/keeplane-kind-kubeconfig` on macOS, `/tmp/keeplane-kind-kubeconfig`
+elsewhere) and the trial's first-admin password from `KEEPLANE_RUNTIME_DIR`
+(see `support/client.py`). They refuse any context other than `kind-keeplane`.
