@@ -1,6 +1,6 @@
 """The model enroller's init step in Kubernetes and its status-role setting.
 
-Cases EF-01 to EF-11 in model-enroller-files-cases.md.
+Cases EF-01 to EF-13 in model-enroller-files-cases.md.
 """
 
 import hashlib
@@ -12,7 +12,9 @@ import subprocess
 import sys
 
 import pytest
-from prepare_enroller_files import Unprepared, plan, prepare, prepare_copy, runtime_plan
+from prepare_enroller_files import (
+    MAX_BASE, Unprepared, plan, prepare, prepare_copy, runtime_plan,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTROL_PLANE = ROOT / "components/control-plane"
@@ -188,7 +190,7 @@ def test_ef_07_an_empty_or_doubly_named_status_role_stops_start_up(tmp_path):
     assert missing.returncode != 0
 
 
-# --- The protected runtime (EF-08 to EF-11) -----------------------------------------
+# --- The protected runtime (EF-08 to EF-13) -----------------------------------------
 
 CALLBACK = "c" * 64
 ADMIN_HASH = "sha256:" + hashlib.sha256(ADMIN_KEY.encode()).hexdigest()
@@ -296,7 +298,7 @@ def test_ef_10_a_key_rotation_writes_out_both_hashes_only_when_given(tmp_path):
     ({"KEEPLANE_ENROLLER_RUNTIME_BASE": "[]"}, "not a gateway configuration"),
     ({"KEEPLANE_ENROLLER_RUNTIME_BASE": base(adminAddr="0.0.0.0:15000")},
      "admin address must stay on loopback"),
-    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": base(admin=("${GATEWAY_OTHER_HASH}",))},
+    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": base(admin=("${GATEWAY_ADMIN_KEY_HASH_NEXT}",))},
      "names a key hash this copy was not given"),
     ({"KEEPLANE_ENROLLER_STATUS_PASSWORD_1": None}, "STATUS_PASSWORD_1 is missing"),
 ])
@@ -308,3 +310,50 @@ def test_ef_11_a_missing_or_unsafe_runtime_setting_writes_nothing(tmp_path, chan
     assert not files.exists() and not guard.exists()
     for value in (CALLBACK, ADMIN_KEY, RUNTIME_KEY):
         assert value not in str(refused.value)
+
+
+def padded(size, fill="x"):
+    """A base of exactly size bytes, padded in a setting the step leaves alone."""
+    empty = len(base(note="").encode())
+    return base(note=fill * ((size - empty) // len(fill.encode())))
+
+
+def test_ef_12_a_base_over_the_one_value_limit_is_refused_clearly(tmp_path):
+    # Linux starts no process with one environment value over 128 KiB; the
+    # chart and this step stop at 120 KiB, so the message names the cause.
+    assert MAX_BASE == 122880
+    at_limit = padded(MAX_BASE)
+    assert len(at_limit.encode()) == MAX_BASE
+    assert runtime_plan(runtime_settings(KEEPLANE_ENROLLER_RUNTIME_BASE=at_limit))
+    # One byte over; and under the limit in characters but over it in bytes.
+    wide = base(note="wide").replace('"wide"', '"' + "é" * (MAX_BASE // 2) + '"')
+    assert len(wide) <= MAX_BASE < len(wide.encode())
+    for over in (padded(MAX_BASE + 1), wide):
+        files, guard = tmp_path / "files", tmp_path / "guard"
+        with pytest.raises(Unprepared, match=r"RUNTIME_BASE is over 122880 bytes \(120 KiB\)"):
+            prepare_copy(runtime_settings(KEEPLANE_ENROLLER_RUNTIME_BASE=over), files, guard)
+        assert not files.exists() and not guard.exists()
+
+
+def test_ef_13_only_the_key_hash_variables_must_be_given(tmp_path):
+    # A gateway database password variable named GATEWAY_* is the gateway's
+    # to read from its own environment: it is left as it is, not refused.
+    url = "postgresql://keeplane:${GATEWAY_DB_PASSWORD}@gateway-db:5432/keeplane"
+    configuration = json.loads(base())
+    configuration["config"]["database"]["url"] = url
+    configuration["config"]["note"] = "${GATEWAY_REGION}"
+    files, guard = tmp_path / "files", tmp_path / "guard"
+    prepare_copy(runtime_settings(KEEPLANE_ENROLLER_RUNTIME_BASE=json.dumps(configuration)),
+                 files, guard)
+    value = json.loads((guard / "trusted.json").read_text())
+    assert value["config"]["database"]["url"] == url
+    assert value["config"]["note"] == "${GATEWAY_REGION}"
+    assert value["ui"]["policies"]["apiKey"]["keys"] == [{"keyHash": ADMIN_HASH}]
+    # Each known key-hash variable still has to be given when the base names it.
+    for name in ("GATEWAY_ADMIN_KEY_HASH", "GATEWAY_RUNTIME_KEY_HASH"):
+        with pytest.raises(Unprepared, match=f"{name} is missing"):
+            runtime_plan(runtime_settings(**{f"KEEPLANE_ENROLLER_{name}": None}))
+    for name in ("GATEWAY_ADMIN_KEY_HASH_NEXT", "GATEWAY_RUNTIME_KEY_HASH_NEXT"):
+        named = base(admin=("${GATEWAY_ADMIN_KEY_HASH}", "${" + name + "}"))
+        with pytest.raises(Unprepared, match="names a key hash this copy was not given"):
+            runtime_plan(runtime_settings(KEEPLANE_ENROLLER_RUNTIME_BASE=named))

@@ -74,6 +74,26 @@ configuration; see keeplane.enroller.runtimeBase. */ -}}
 {{- if and (not (kindIs "invalid" $admin)) (ne (toString $admin) "127.0.0.1:15000") -}}
 {{- fail (printf "gateway.enroller keeps the gateway's admin address on loopback (127.0.0.1:15000), where only the enroller in the same Pod reads it; agentgateway-standalone.config.config.adminAddr is %v. Leave it unset." $admin) -}}
 {{- end -}}
+{{- /* The trusted base carries the gateway database address, and the base
+reaches the init container's settings in the StatefulSet and the guard files.
+Its password must therefore stay a ${...} variable the gateway reads from its
+own environment (from a Secret, as every credential is). A URL with no
+password is allowed; any other userinfo, and a password or sslpassword query
+parameter that is not a single variable, is refused. The message never
+repeats the URL. */ -}}
+{{- $url := toString (dig "database" "postgres" "url" "" $gateway) -}}
+{{- $address := regexReplaceAll `^postgres(ql)?://` $url "" -}}
+{{- $variable := `\$\{[A-Za-z_][A-Za-z0-9_]*\}` -}}
+{{- $literal := and (contains "@" $address) (not (regexMatch (printf `^[^:@/?#]*(:%s)?@[^@]*$` $variable) $address)) -}}
+{{- $query := regexReplaceAll `#.*$` (join "?" (rest (splitList "?" $address))) "" -}}
+{{- range splitList "&" $query -}}
+{{- if and (regexMatch `(?i)^(ssl)?password=` .) (not (regexMatch (printf `(?i)^(ssl)?password=%s$` $variable) .)) -}}
+{{- $literal = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $literal -}}
+{{- fail "gateway.enroller needs the gateway database password in agentgateway-standalone.database.postgres.url as a variable the gateway reads from its own environment, not written literally: the URL reaches each copy's init step settings and guard files. Write it as the guides show, postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@<host>:5432/keeplane, with KEEPLANE_DB_PASSWORD from a Secret in agentgateway-standalone.extraEnv (see docs/guide/gateway-database-secret.md)." -}}
+{{- end -}}
 {{- $role := "^[a-z_][a-z0-9_]{0,62}$" -}}
 {{- $copies := int .Values.gateway.copies -}}
 {{- $approvals := toString ($enroller.approvalsUser | default "") -}}
@@ -140,6 +160,15 @@ Docker preview, so the gateway reads it only as that user. */ -}}
 {{- if and (not (kindIs "invalid" $user)) (ne (int $user) 65532) -}}
 {{- fail (printf "gateway.enroller needs the gateway to run as user 65532, which owns the guard folder (mode 0700); agentgateway-standalone.%s.runAsUser is %v. Leave it unset or set it to 65532." $where $user) -}}
 {{- end -}}
+{{- end -}}
+{{- /* The trusted base reaches the init container as one environment value,
+and Linux refuses to start a process with a single value over 128 KiB
+(MAX_ARG_STRLEN), name included. The chart keeps a margin; the init step
+(prepare_enroller_files.MAX_BASE) has the same limit. */ -}}
+{{- $baseLimit := 122880 -}}
+{{- $baseSize := len (include "keeplane.enroller.runtimeBase" .) -}}
+{{- if gt $baseSize $baseLimit -}}
+{{- fail (printf "gateway.enroller passes the gateway configuration to each copy's init step as one environment value, KEEPLANE_ENROLLER_RUNTIME_BASE, and Linux will not start a container with a value over 128 KiB. The rendered configuration is %d bytes, over the chart's limit of %d bytes (120 KiB). Shorten agentgateway-standalone.config, for example by listing fewer models there." $baseSize $baseLimit) -}}
 {{- end -}}
 {{- end -}}
 {{- if .Values.app.guardStatusCheck -}}
