@@ -76,7 +76,9 @@ chart does not install. Included once, from app-networkpolicy.yaml.
 {{- $egress := $np.egress }}
 {{- $managed := eq .Values.gateway.mode "managed" }}
 {{- if $np.appIngressEnabled }}
-{{- if not (or $np.publicEntry.namespaceSelector $np.publicEntry.podSelector) }}
+{{- /* publicEntry: null (or left out) reaches this refusal, not a nil field. */}}
+{{- $entry := $np.publicEntry | default dict }}
+{{- if not (or $entry.namespaceSelector $entry.podSelector) }}
 {{- fail "networkPolicy.appIngressEnabled needs networkPolicy.publicEntry.namespaceSelector or podSelector: the labels of your ingress controller's namespace or pods" }}
 {{- end }}
 {{- if ne .Values.app.service.type "ClusterIP" }}

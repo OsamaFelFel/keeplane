@@ -1,0 +1,41 @@
+{{- /*
+With the model enroller and the chart's Ingress, the one route of the managed
+gateway's protected runtime on Keeplane's one public host (ADR 016, ADR 027):
+the exact path /v1/chat/completions to Service <release>-gateway-runtime, port
+5000 (see gateway-runtime-service.yaml), and nothing else of the gateway.
+Developers' CLIs use https://<ingress.host>/v1 as their gateway.
+
+It is its own Ingress, on the same host and TLS Secret as the app's, so that
+gateway.protectedIngress.annotations (a longer read timeout or a larger body
+for model calls) reach only this path and never the app's "/", and
+ingress.annotations never reach it. The app's Ingress carries no gateway path,
+so this is the only Ingress that claims /v1/chat/completions.
+*/ -}}
+{{- if and .Values.ingress.enabled (eq .Values.gateway.mode "managed") .Values.gateway.install (include "keeplane.enroller.on" .) }}
+{{- $protected := .Values.gateway.protectedIngress | default dict }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-gateway-runtime
+  {{- with $protected.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ required "ingress.className is required when ingress is enabled" .Values.ingress.className | quote }}
+  tls:
+    - hosts:
+        - {{ required "ingress.host is required when ingress is enabled" .Values.ingress.host | quote }}
+      secretName: {{ required "ingress.tlsSecretName is required when ingress is enabled" .Values.ingress.tlsSecretName | quote }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /v1/chat/completions
+            pathType: Exact
+            backend:
+              service:
+                name: {{ .Release.Name }}-gateway-runtime
+                port:
+                  number: 5000
+{{- end }}

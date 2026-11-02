@@ -315,8 +315,9 @@ retention for a production installation are **not decided**.
 The optional Ingress (`ingress.enabled`) has one host, requires TLS and routes
 to the app Service. It requires a `ClusterIP` app Service and refuses every
 other type, including `NodePort` and `LoadBalancer`. Without the model
-enroller the gateway is never an Ingress backend. With it, the same host also
-routes the one exact path `/v1/chat/completions` to the protected model port
+enroller the gateway is never an Ingress backend. With it, a second Ingress
+on the same host routes the one exact path `/v1/chat/completions` to the
+protected model port, with its own annotations
 (see [how developers reach protected models](#how-developers-reach-protected-models));
 no other gateway port or path is published.
 
@@ -595,7 +596,13 @@ The init container gets this configuration as one plain setting,
   A password written literally in the URL, or in a `password` or
   `sslpassword` parameter, would land in the StatefulSet and the guard files,
   so Helm refuses it while the enroller is on. A URL with no password is
-  allowed.
+  allowed, and so is an `@` in a query value after the database name, such
+  as `?application_name=team@site`, when the URL starts as the guides show:
+  an optional user name or user name and `${...}` password, `@`, a host name
+  or bracketed IPv6 address, an optional numeric port, then `/` and the
+  database name (with no `@`). Any other URL may hold only one `@` in all,
+  after a user name and at most a `${...}` password. A query parameter name
+  with `%` in it is refused too.
 - **The configuration must stay under 120 KiB.** Linux will not start a
   container with a single setting over 128 KiB, so Helm refuses a rendered
   gateway configuration over 122880 bytes (120 KiB) and names its size, and
@@ -756,10 +763,13 @@ the gateway's protected path, and every management path private.
   gateway Service and `<release>-gateway-copies`, and the admin (15000), stats
   (15020) and readiness (15021) ports stay on no Service. The containers
   declare no new port.
-- **Ingress.** With `ingress.enabled`, the chart's Ingress routes the exact
-  path `/v1/chat/completions` (`pathType: Exact`) on `ingress.host` to that
-  Service, and everything else to the app as before. Nothing else of the
-  gateway is routed. Developers give their CLI
+- **Ingress.** With `ingress.enabled`, the protected path has its own
+  Ingress, `<release>-gateway-runtime`, on `ingress.host` with the same
+  `ingress.className` and `ingress.tlsSecretName`. It routes only the exact
+  path `/v1/chat/completions` (`pathType: Exact`) to that Service; the app's
+  Ingress, `<release>-app`, routes everything else to the app as before and
+  carries no gateway path, so only one Ingress claims the protected path.
+  Nothing else of the gateway is routed. Developers give their CLI
   `https://<host>/v1` as its gateway (`--gateway`), signed in to the same
   Keeplane. If you run your own edge instead, route only that exact path, over
   TLS, to `<release>-gateway-runtime:5000`.
@@ -768,13 +778,29 @@ the gateway's protected path, and every management path private.
   controller) on TCP 5000, and only it; the app alone still reaches port
   4000. Helm refuses the enroller with that policy and no public entry, which
   would leave protected models unreachable.
-- **Your ingress controller.** `ingress.annotations` apply to the whole
-  Ingress, app and protected path alike, so don't add a rewrite there. Model
-  requests can be larger and slower than the app's: the protected route waits
-  up to three 60-second attempts for a model that is down, so allow request
-  bodies of the size your developers send and a read timeout of at least
-  about 190 seconds (for ingress-nginx, `nginx.ingress.kubernetes.io/proxy-body-size`
-  and `proxy-read-timeout`). The chart sets neither.
+- **Your ingress controller.** `ingress.annotations` apply only to the
+  app's Ingress, and `gateway.protectedIngress.annotations` (empty by
+  default) only to the protected path's, so you can tune model calls without
+  loosening the app. Model requests can be larger and slower than the app's:
+  the protected route waits up to three 60-second attempts for a model that
+  is down, so on the protected path allow request bodies of the size your
+  developers send and a read timeout of at least about 190 seconds. The chart
+  sets neither. For ingress-nginx:
+
+  ```yaml
+  gateway:
+    protectedIngress:
+      annotations:
+        nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "190"
+  ```
+
+  Annotation values are strings, so quote numbers. Don't add a rewrite to
+  either Ingress. Both use the same TLS Secret: if a certificate issuer
+  annotation fills it, put that annotation in `ingress.annotations` only, so
+  one Ingress owns the certificate. Some controllers apply a few annotations
+  to the whole host rather than one Ingress's paths; check your controller's
+  documentation for any you set.
 
 Each request reaches one copy. A copy whose enroller hasn't confirmed a model
 refuses it, so right after a copy starts or a model changes, a protected call

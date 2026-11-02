@@ -20,20 +20,10 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          {{- /* With the model enroller, the one route of the managed gateway's
-          protected runtime, and nothing else of the gateway: developers' CLIs
-          use https://<host>/v1 as their gateway (see
-          gateway-runtime-service.yaml). An exact path, so no other gateway or
-          app path follows it. */}}
-          {{- if and (eq .Values.gateway.mode "managed") .Values.gateway.install (include "keeplane.enroller.on" .) }}
-          - path: /v1/chat/completions
-            pathType: Exact
-            backend:
-              service:
-                name: {{ .Release.Name }}-gateway-runtime
-                port:
-                  number: 5000
-          {{- end }}
+          {{- /* The app only. With the model enroller the gateway's protected
+          path has its own Ingress on this host (gateway-runtime-ingress.yaml),
+          so ingress.annotations never reach model calls and the
+          protected path's annotations never reach the app. */}}
           - path: /
             pathType: Prefix
             backend:

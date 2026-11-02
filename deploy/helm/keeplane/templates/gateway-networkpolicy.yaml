@@ -31,7 +31,7 @@ spec:
           port: 4000
     {{- if include "keeplane.enroller.on" . }}
     - from:
-        {{- include "keeplane.networkPolicy.peer" (list "networkPolicy.publicEntry" .Values.networkPolicy.publicEntry) | nindent 8 }}
+        {{- include "keeplane.networkPolicy.peer" (list "networkPolicy.publicEntry" (.Values.networkPolicy.publicEntry | default dict)) | nindent 8 }}
       ports:
         - protocol: TCP
           port: 5000
