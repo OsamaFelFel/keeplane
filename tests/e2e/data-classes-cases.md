@@ -68,9 +68,15 @@ a request detection can't read or check within 200 ms is held; a held request
 needs a model approved for both the detection class and the project's class
 (PR-03); and a class detection uses can't be removed (PR-10).
 
-The CLASS and PCL-LIVE cases need the running Docker preview; the browser cases
-(DC-UI-01 to DC-UI-03, PRJ-UI) run against it in CI's preview job, except
-DC-UI-01, whose screenshot baselines are macOS-only. PM cases need the optional
-detector and run with `-m optional`. The DCA, MC, RT, CLI-CLASS, PR and PD
+The CLASS and PCL-LIVE cases need the running Docker preview. They have not yet
+passed against a running preview: CI's preview job doesn't run them, and the
+environment Spec 005 was built in refuses the image pulls the preview needs.
+Until they pass, the scenarios they prove rest on the other cases in their row.
+The browser cases (DC-UI-01 to DC-UI-03, PRJ-UI) run against the preview in
+CI's preview job, except DC-UI-01, whose screenshot baselines are macOS-only.
+PM cases need the optional detector and are marked `optional`, so no backend
+pytest run selects them; CI's detection image job runs them inside the
+`postgres-detection` image it builds, with no network and the model the image
+bundles, and fails if any is skipped. The DCA, MC, RT, CLI-CLASS, PR and PD
 cases run in every backend pytest run, and DC-UI-05 onwards in the UI unit
 tests.

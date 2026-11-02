@@ -14,7 +14,8 @@ For DI-02 with CLI sign-in, also build `postgres-cli-auth-detection` and set
 
 The **detection image** CI job builds `postgres-detection`, the target a
 Kubernetes PostgreSQL install uses, and `postgres-cli-auth-detection`, and
-runs both. The probe prints the load
+runs both. It then runs the [detector model cases](personal-data-model-cases.md)
+(PM-01 to PM-04, the release-1 bar) inside `postgres-detection`. The probe prints the load
 time, a short check's median time and the peak memory; it never prints
 request text.
 

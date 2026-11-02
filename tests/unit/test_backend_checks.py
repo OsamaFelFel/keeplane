@@ -92,3 +92,28 @@ def test_bc06_test_hashes_keep_the_application_algorithm_and_format():
     from_application = PBKDF2PasswordHasher().encode("synthetic-password", "fixedsalt" * 2)
     assert check_password("synthetic-password", from_application)
     assert not check_password("another-password", from_application)
+
+
+def test_bc07_detector_cases_run_offline_in_the_detection_image():
+    job = re.search(r"^  detection-image:\n(.*?)(?=^  \S|\Z)", WORKFLOW, re.M | re.S)
+    assert job, "detection-image job is missing from checks.yml"
+    steps = job.group(1)
+    detector_files = [
+        path.relative_to(ROOT / "tests").as_posix()
+        for path in sorted((ROOT / "tests").rglob("test_*.py"))
+        if re.search(r"^\s*from personal_data\.engine import .*PresidioDetector",
+                     text := path.read_text(encoding="utf-8"), re.M)
+        and re.search(r"^pytestmark = .*pytest\.mark\.optional", text, re.M)
+    ]
+    assert "integration/test_personal_data_model.py" in detector_files
+    run = re.search(r"docker run --rm \\\n(.*?)--junitxml=/results/model-junit\.xml", steps, re.S)
+    assert run, "the detection-image job does not run the detector cases in the image"
+    command = run.group(1)
+    for expected in ("--network none", "--read-only", "keeplane-preview:postgres-detection-local",
+                     "-m optional", '"$PWD/tests:/src/tests:ro"'):
+        assert expected in command, expected
+    for name in detector_files:
+        assert f"/src/tests/{name}" in command, name
+    # Nothing may fetch the model or install detector packages at test time.
+    assert "en_core_web_lg" not in steps and "requirements-detection" not in steps
+    assert "model-junit.xml" in steps.split("Fail if a detection image or detector case was skipped")[1]
