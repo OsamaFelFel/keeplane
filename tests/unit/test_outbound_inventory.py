@@ -8,6 +8,7 @@ tests/integration/test_outbound_connections.py.
 import ast
 import re
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -16,9 +17,19 @@ from tests.support.outbound import (
     ADDRESS_LITERALS,
     CALL_SITE_USERS,
     CALL_SITES,
+    CLI,
+    CLI_ADDRESS_LITERALS,
+    CLI_CALL_SITES,
+    CLI_DESTINATIONS,
     DESTINATIONS,
     GUIDE,
     REPO,
+    RUNTIME_GLOBAL_SETTINGS,
+    RUNTIME_INHERITED,
+    RUNTIME_SEARCH_KEYS,
+    RUNTIME_SETTINGS,
+    RUNTIME_SWITCHES,
+    RUNTIME_WEB_OFF,
     SERVER,
     address_literals,
     call_site_users,
@@ -356,6 +367,15 @@ def test_egr_05_settings_open_no_connection_of_their_own():
         "logging.StreamHandler",
     }
     assert list(settings.ADMINS) == [] and list(settings.MANAGERS) == []
+    # Classes Django loads from settings by name: mail and cache stay local.
+    # The real settings module, since the test runner swaps the mail backend.
+    from config import settings as installed
+
+    assert installed.EMAIL_BACKEND == "django.core.mail.backends.dummy.EmailBackend"
+    assert {row["BACKEND"] for row in settings.CACHES.values()} <= {
+        "django.core.cache.backends.locmem.LocMemCache",
+        "django.core.cache.backends.dummy.DummyCache",
+    }
     assert "RESOURCE_SERVER_INTROSPECTION_URL" not in settings.OAUTH2_PROVIDER
     assert "RESOURCE_SERVER_AUTH_TOKEN" not in settings.OAUTH2_PROVIDER
     gunicorn = (SERVER / "config" / "gunicorn.conf.py").read_text()
@@ -437,6 +457,123 @@ def test_egr_06_the_email_check_uses_the_bundled_suffix_list(fake_detector):
     assert fake_detector.extractors == [{"suffix_list_urls": (), "cache_dir": None}]
     assert fake_detector.email.tldextract.__name__ == "Offline"
     assert len(fake_detector.engines) == 1
+
+
+# EGR-15 Every CLI module that can open a connection, start a process or open
+# a browser is declared with what it imports and where it goes, and every
+# address written in CLI code is declared; the CLI pins no package of its own.
+def test_egr_15_every_cli_call_site_and_address_is_declared():
+    imports, addresses, _ = scan(CLI)
+    assert imports == {name: mods for name, (mods, _, _) in CLI_CALL_SITES.items()}, (
+        "Declare new CLI call sites in tests/support/outbound.py and the guide"
+    )
+    assert set().union(*addresses.values()) == set(CLI_ADDRESS_LITERALS)
+    used = set().union(*(dests for _, dests, _ in CLI_CALL_SITES.values()))
+    assert used == set(CLI_DESTINATIONS)
+    assert all(why for _, _, why in CLI_CALL_SITES.values())
+    project = (REPO / "pyproject.toml").read_text()
+    assert re.search(r"^dependencies = \[\]$", project, re.MULTILINE)
+
+
+# EGR-16 The guide has a developer-computer section naming each CLI
+# destination, the coding runtime's switches and the isolated-network rule.
+def test_egr_16_the_guide_covers_developer_computers():
+    guide = GUIDE.read_text()
+    assert "## Developers' computers" in guide
+    section = guide.split("## Developers' computers", 1)[1].split("\n## ", 1)[0]
+    for destination in CLI_DESTINATIONS.values():
+        assert destination["guide"] in section, destination["guide"]
+    for phrase in (*RUNTIME_SWITCHES, "models.opencode.ai", "proxy",
+                   "No web search and no web fetch"):
+        assert phrase in section, phrase
+
+
+def adapter_launch(tmp_path, monkeypatch, instructions=()):
+    """Run the adapter with a stand-in runtime; return its environment and files."""
+    import subprocess
+
+    from components.cli import opencode_adapter
+
+    seen = {}
+
+    def version(command, **options):
+        # The disposable settings folder exists only while the runtime runs.
+        folder = Path(options["env"]["XDG_CONFIG_HOME"]) / "opencode"
+        seen["global"] = {path.name: path.read_text() for path in folder.iterdir()}
+        return subprocess.CompletedProcess(command, 0, "2.0.27", "")
+
+    def turn(command, **options):
+        seen["command"], seen["env"] = command, options["env"]
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    binary = tmp_path / "runtime"
+    binary.touch()
+    directory = tmp_path / "repository"
+    directory.mkdir()
+    (directory / "AGENTS.md").write_text("Use tabs.\n")
+    for name in ("HTTP_PROXY", "https_proxy", "OPENCODE_MODELS_URL", "OPENAI_API_KEY",
+                 "OPENCODE_CONFIG", "NO_PROXY", *RUNTIME_SEARCH_KEYS):
+        monkeypatch.setenv(name, "https://outside.example.invalid")
+    monkeypatch.setenv("OPENCODE_DISABLE_AUTOUPDATE", "0")
+    monkeypatch.setattr(opencode_adapter.subprocess, "run", version)
+    monkeypatch.setattr(opencode_adapter, "coding_turn", turn)
+    opencode_adapter.run(
+        str(binary), str(directory), "https://gateway.test/v1", "coder", "Fix it.",
+        "synthetic-grant", instructions=[directory / name for name in instructions],
+    )
+    return seen
+
+
+# EGR-17 The coding runtime `keeplane code` starts has its own outbound
+# features off: no model catalogue download, no update check, no repository
+# settings, no proxy or provider setting from the developer's shell, only the
+# gateway as a provider, no MCP server or package to install, sharing off,
+# web search and web fetch off, and the instruction plugin is a local folder
+# with no dependency.
+@pytest.mark.parametrize("instructions", [(), ("AGENTS.md",)])
+def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
+    tmp_path, monkeypatch, instructions
+):
+    import json
+
+    seen = adapter_launch(tmp_path, monkeypatch, instructions)
+    environment = seen["env"]
+    for name, value in RUNTIME_SWITCHES.items():
+        assert environment[name] == value, name
+    profile = {"HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
+               "XDG_STATE_HOME", "TMPDIR"}
+    own = {"KEEPLANE_RUNTIME_GRANT", "OPENCODE_CONFIG_CONTENT", "OPENCODE_DISABLE_FFF"}
+    assert set(environment) <= RUNTIME_INHERITED | profile | own | set(RUNTIME_SWITCHES)
+    assert not {name for name in environment if "proxy" in name.lower()}
+    assert json.loads(seen["global"]["opencode.json"]) == RUNTIME_GLOBAL_SETTINGS
+    config = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
+    assert set(config) <= RUNTIME_SETTINGS
+    assert config["share"] == "disabled"
+    assert list(config["providers"]) == ["keeplane"]
+    provider = config["providers"]["keeplane"]
+    assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
+    # A provider built into the runtime: nothing is installed for it.
+    assert provider["package"] == "@opencode/ai/providers/openai-compatible"
+    addresses = set(re.findall(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", json.dumps(config)))
+    assert addresses == {"https://gateway.test/v1"}
+    assert seen["command"][1:4] == ["run", "--standalone", "--format"]
+    # No web search or web fetch, even with search provider keys in the shell.
+    assert config["websearch"] is False
+    directives = [row for row in config["plugins"] if isinstance(row, str)]
+    assert directives == list(RUNTIME_WEB_OFF)
+    assert not set(RUNTIME_SEARCH_KEYS) & set(environment)
+    plugins = [row for row in config["plugins"] if not isinstance(row, str)]
+    assert len(plugins) == len(instructions)
+    for plugin in plugins:
+        folder = CLI / "instruction_plugin"
+        assert plugin["package"] == str(folder.resolve())
+        package = json.loads((folder / "package.json").read_text())
+        assert not {key for key in package if "dependencies" in key.lower()}
+        source = (folder / "index.js").read_text()
+        imports = re.findall(r"""(?:from|import)\s*\(?\s*["']([^"']+)["']""", source)
+        assert imports and all(name.startswith("node:") for name in imports)
+        assert "node:http" not in imports and "node:net" not in imports
+        assert not re.search(r"\bfetch\s*\(|child_process|XMLHttpRequest|WebSocket", source)
 
 
 # EGR-07 Every case in the catalog has an executable check, and every check
