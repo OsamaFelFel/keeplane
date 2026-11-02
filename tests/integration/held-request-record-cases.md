@@ -12,6 +12,9 @@ text or anything detection found.
 gateway checks over HTTP in the test process, on SQLite, with a deterministic
 fake detector. HR-01 to HR-09, HR-11, HR-13 and HR-14 use the managed installed checks;
 HR-10, HR-12 and HR-15 a customer-run (`existing`) gateway's shared checks.
+HR-16 and HR-17 run the record producer and the Audit API in separate
+control-plane processes on a fresh database, on SQLite and, when configured,
+PostgreSQL.
 
 The entry check records every hold. The final model check, run once per
 backend attempt, records a hold only when detection was down, too slow or
@@ -36,3 +39,16 @@ isn't).
 | HR-15 Customer-run final check | Switch on; on an `existing` gateway, the shared final check holds one request for personal data and one because detection took too long | Only the second is recorded, with "Detection took longer than 200 ms". |
 | HR-11 One recorder per mode | Switch on; on a managed install, send a held request to the shared route check | No record: a managed install records on its installed entry check only, so one request is never recorded twice. |
 | HR-12 Only its developer, only admins | Two developers each send a held request for the same project; then the second developer and an anonymous visitor read Audit | Each record names the developer whose session sent it, by account ID and username. Neither the developer nor the anonymous visitor can read the records. |
+| HR-16 Stored for every app copy | Separate processes on SQLite and PostgreSQL. One process writes held records with the switch off, then on for a request allowed to model alpha and one refused for a model ID Keeplane doesn't know that looks like an email address, then while the write fails, then for a project that no longer exists | Only the two "on" calls write a record; the two failures each log one warning with the error kind only and never raise. A second process sees exactly two records, each with its own reference, a UTC time, the developer who sent it (account ID and username), project payments-api, the class, the reason and the model ("approved model alpha"; "a model Keeplane doesn't know isn't approved for it, nothing was sent"). No stored column holds the unknown model ID, the password or the database error. |
+| HR-17 Only admins, on every database | After HR-16's records on SQLite and PostgreSQL, an admin, each developer (including the one a record names) and an anonymous visitor read Audit over HTTP in another process | The admin sees both records, each naming its own developer. Each developer is refused (403) for held-back requests, a search and all records; the anonymous visitor is refused (401). No refused answer contains any record. |
+
+Run:
+
+```sh
+.venv/bin/python -m pytest tests/integration/test_held_request_records.py
+```
+
+To run HR-16 and HR-17 on PostgreSQL as well, set the `KEEPLANE_TEST_POSTGRES_*`
+variables described in the [persistence cases](audit-persistence-cases.md).
+Without them those cases are skipped and reported as skipped. The CI
+`postgres` job sets them.
