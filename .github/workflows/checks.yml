@@ -342,15 +342,18 @@ jobs:
           persist-credentials: false
       - name: Build the PostgreSQL app image with personal-data detection
         run: docker build --target postgres-detection -t keeplane-preview:postgres-detection-local -f components/control-plane/Dockerfile .
+      - name: Build the same image with CLI sign-in
+        run: docker build --target postgres-cli-auth-detection -t keeplane-preview:postgres-cli-auth-detection-local -f components/control-plane/Dockerfile .
       - name: Install Python test dependencies
         run: |
           python3 -m venv .venv
           .venv/bin/pip install -r tests/requirements.txt
-      - name: Load the detector offline on a read-only root within 1 GiB
+      - name: Load the detector offline on a read-only root within 1 GiB and check the installed packages
         env:
           KEEPLANE_RUNTIME_DETECTION_IMAGE: keeplane-preview:postgres-detection-local
+          KEEPLANE_RUNTIME_DETECTION_SIGN_IN_IMAGE: keeplane-preview:postgres-cli-auth-detection-local
         run: .venv/bin/python -m pytest tests/integration/test_detection_image.py -m live -s -rs --junitxml=test-results/detection-image/junit.xml
-      - name: Fail if the detection image case was skipped
+      - name: Fail if a detection image case was skipped
         run: |
           if grep -q '<skipped' test-results/detection-image/junit.xml; then
             echo "The detection image case was skipped" >&2

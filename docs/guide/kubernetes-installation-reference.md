@@ -254,7 +254,9 @@ be turned on. Check the log after the first install or upgrade with
 At run time:
 
 - **Start-up.** Each app copy loads the model from the image as it starts,
-  whether or not an admin has turned detection on. Readiness
+  whenever detection is installed, even while the admin switch under Data
+  classes is off, so it uses about 750 MiB from the start; set the memory as
+  above (1536Mi limit suggested). Readiness
   (`/health/ready`) answers 503 until that first load finishes, so a new copy
   takes no requests during a rollout until it can check them; liveness doesn't
   wait. If the load fails or takes longer than 300 s, the copy becomes ready

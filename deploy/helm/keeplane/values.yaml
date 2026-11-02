@@ -15,8 +15,10 @@ app:
     # under Data classes. app.image must be built from a detection image
     # target (postgres-detection with app.postgres); Helm can't see inside an
     # image, so the app logs and the Data classes page say if it is missing.
-    # The language model is in the image and loads at start, offline: give the
-    # app at least 1Gi of memory (Helm refuses a lower memory limit). Needs
+    # The language model is in the image and loads offline as each app copy
+    # starts, whenever detection is installed, even while the admin switch is
+    # off: about 750 MiB per copy. Helm refuses a memory limit below 1Gi; we
+    # suggest a 1Gi request and a 1536Mi limit. Needs
     # gateway.mode=existing for now: the managed gateway in this chart doesn't
     # run Keeplane's checks yet. See
     # docs/guide/kubernetes-installation-reference.md#personal-data-detection.

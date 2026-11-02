@@ -105,7 +105,7 @@ service and never stored or logged.
 
 Without this setting the gateway's checks carry only the project and model, as
 they always have, and detection can't be turned on. With it, the app loads the
-language model as it starts, whether or not detection is on, and reports ready
+language model (about 750 MiB) as it starts, whether or not detection is on, and reports ready
 only once the model has loaded (at most 300 seconds); if the image has no
 detector, the app's start-up log says so. Licences, notices and the
 source offer for the detector are in
