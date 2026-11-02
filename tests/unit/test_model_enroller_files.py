@@ -1,8 +1,10 @@
 """The model enroller's init step in Kubernetes and its status-role setting.
 
-Cases EF-01 to EF-07 in model-enroller-files-cases.md.
+Cases EF-01 to EF-11 in model-enroller-files-cases.md.
 """
 
+import hashlib
+import json
 import os
 from pathlib import Path
 import stat
@@ -10,7 +12,7 @@ import subprocess
 import sys
 
 import pytest
-from prepare_enroller_files import Unprepared, plan, prepare
+from prepare_enroller_files import Unprepared, plan, prepare, prepare_copy, runtime_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTROL_PLANE = ROOT / "components/control-plane"
@@ -184,3 +186,125 @@ def test_ef_07_an_empty_or_doubly_named_status_role_stops_start_up(tmp_path):
     missing = settings_probe(
         tmp_path, KEEPLANE_GUARD_STATUS_DATABASE_USER_FILE=str(tmp_path / "absent"))
     assert missing.returncode != 0
+
+
+# --- The protected runtime (EF-08 to EF-11) -----------------------------------------
+
+CALLBACK = "c" * 64
+ADMIN_HASH = "sha256:" + hashlib.sha256(ADMIN_KEY.encode()).hexdigest()
+RUNTIME_HASH = "sha256:" + hashlib.sha256(RUNTIME_KEY.encode()).hexdigest()
+DATABASE_URL = "postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@gateway-db:5432/keeplane"
+
+
+def base(admin=("${GATEWAY_ADMIN_KEY_HASH}",), runtime=("${GATEWAY_RUNTIME_KEY_HASH}",),
+         **config):
+    """A gateway configuration in the form the chart renders it (ME-12)."""
+    return json.dumps({
+        "config": {"adminAddr": "127.0.0.1:15000", "storage": {"mode": "hybrid"},
+                   "database": {"url": DATABASE_URL}, **config},
+        "gateways": {"default": {"port": 4000}},
+        "ui": {"gateways": "default", "policies": {"apiKey": {
+            "mode": "strict", "keys": [{"keyHash": value} for value in admin]}}},
+        "llm": {"policies": {"apiKey": {
+            "mode": "strict", "keys": [{"keyHash": value} for value in runtime]}},
+            "models": []},
+    })
+
+
+def runtime_settings(**changes):
+    return settings(**{
+        "KEEPLANE_ENROLLER_CALLBACK_KEY": CALLBACK,
+        "KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH": ADMIN_HASH,
+        "KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY_HASH": RUNTIME_HASH,
+        "KEEPLANE_ENROLLER_RUNTIME_BASE": base(),
+        **changes,
+    })
+
+
+def test_ef_08_a_fresh_copy_gets_a_disabled_guard_its_callback_key_and_trusted_base(
+        tmp_path):
+    files, guard = tmp_path / "files", tmp_path / "guard"
+    assert prepare_copy(runtime_settings(), files, guard) == "keeplane_status_1"
+    assert sorted(path.name for path in guard.iterdir()) == [
+        "callback-key", "gateway.json", "manifest.json", "trusted.json"]
+    assert json.loads((guard / "manifest.json").read_text()) == {
+        "version": 2, "enabled": False}
+    assert (guard / "callback-key").read_text() == CALLBACK
+    trusted = (guard / "trusted.json").read_bytes()
+    # Byte for byte the gateway's starting file, in the installer's canonical form.
+    assert trusted == (guard / "gateway.json").read_bytes()
+    value = json.loads(trusted)
+    assert trusted == json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    assert value["ui"]["policies"]["apiKey"]["keys"] == [{"keyHash": ADMIN_HASH}]
+    assert value["llm"]["policies"]["apiKey"]["keys"] == [{"keyHash": RUNTIME_HASH}]
+    # Only the key hashes are written out: no other credential reaches the guard.
+    assert value["config"]["database"]["url"] == DATABASE_URL
+    assert mode(guard) == 0o700
+    assert all(mode(path) == 0o600 for path in guard.iterdir())
+    assert all(path.lstat().st_uid == os.geteuid() for path in guard.iterdir())
+    # The enroller's own files are as before (EF-02), with no runtime file.
+    assert len(list(files.iterdir())) == 7
+
+
+def test_ef_09_a_restarted_pod_starts_its_guard_afresh(tmp_path):
+    files, guard = tmp_path / "files", tmp_path / "guard"
+    prepare_copy(runtime_settings(), files, guard)
+    # What the enroller left from the Pod's earlier start.
+    (guard / "manifest.json").write_text('{"version":2,"enabled":true,"models":{}}')
+    (guard / "served.json").write_text('{"served":{"m":"f"},"pending":null}')
+    (guard / "candidate.json").write_text("{}")
+    (guard / "gateway.json").write_text('{"guarded":true}')
+    (guard / ".installation.lock").write_text("")
+    rotated = "d" * 64
+    prepare_copy(runtime_settings(KEEPLANE_ENROLLER_CALLBACK_KEY=rotated), files, guard)
+    assert json.loads((guard / "manifest.json").read_text())["enabled"] is False
+    assert not (guard / "served.json").exists() and not (guard / "candidate.json").exists()
+    assert (guard / "gateway.json").read_bytes() == (guard / "trusted.json").read_bytes()
+    assert (guard / "callback-key").read_text() == rotated
+    # The enroller's lock stays; no temporary file is left.
+    assert (guard / ".installation.lock").exists()
+    assert not [path for path in guard.iterdir() if path.name.startswith(".runtime-")]
+
+
+def test_ef_10_a_key_rotation_writes_out_both_hashes_only_when_given(tmp_path):
+    rotating = base(admin=("${GATEWAY_ADMIN_KEY_HASH}", "${GATEWAY_ADMIN_KEY_HASH_NEXT}"),
+                    runtime=("${GATEWAY_RUNTIME_KEY_HASH}",
+                             "${GATEWAY_RUNTIME_KEY_HASH_NEXT}"))
+    next_admin, next_runtime = "sha256:" + "1" * 64, "sha256:" + "2" * 64
+    files = runtime_plan(runtime_settings(
+        KEEPLANE_ENROLLER_RUNTIME_BASE=rotating,
+        KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH_NEXT=next_admin,
+        KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY_HASH_NEXT=next_runtime))
+    value = json.loads(files["trusted.json"])
+    assert value["ui"]["policies"]["apiKey"]["keys"] == [
+        {"keyHash": ADMIN_HASH}, {"keyHash": next_admin}]
+    assert value["llm"]["policies"]["apiKey"]["keys"] == [
+        {"keyHash": RUNTIME_HASH}, {"keyHash": next_runtime}]
+    with pytest.raises(Unprepared, match="names a key hash this copy was not given"):
+        runtime_plan(runtime_settings(KEEPLANE_ENROLLER_RUNTIME_BASE=rotating))
+
+
+@pytest.mark.parametrize(("changes", "message"), [
+    ({"KEEPLANE_ENROLLER_CALLBACK_KEY": None}, "CALLBACK_KEY is missing"),
+    ({"KEEPLANE_ENROLLER_CALLBACK_KEY": "short"}, "not a valid callback key"),
+    ({"KEEPLANE_ENROLLER_CALLBACK_KEY": "c" * 40 + "!"}, "not a valid callback key"),
+    ({"KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH": None}, "ADMIN_KEY_HASH is missing"),
+    ({"KEEPLANE_ENROLLER_GATEWAY_RUNTIME_KEY_HASH": "sha256:XYZ"}, "not a sha256 key hash"),
+    ({"KEEPLANE_ENROLLER_GATEWAY_ADMIN_KEY_HASH_NEXT": "plain"}, "not a sha256 key hash"),
+    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": None}, "RUNTIME_BASE is missing"),
+    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": "{not json"}, "RUNTIME_BASE is not JSON"),
+    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": "[]"}, "not a gateway configuration"),
+    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": base(adminAddr="0.0.0.0:15000")},
+     "admin address must stay on loopback"),
+    ({"KEEPLANE_ENROLLER_RUNTIME_BASE": base(admin=("${GATEWAY_OTHER_HASH}",))},
+     "names a key hash this copy was not given"),
+    ({"KEEPLANE_ENROLLER_STATUS_PASSWORD_1": None}, "STATUS_PASSWORD_1 is missing"),
+])
+def test_ef_11_a_missing_or_unsafe_runtime_setting_writes_nothing(tmp_path, changes,
+                                                                   message):
+    files, guard = tmp_path / "files", tmp_path / "guard"
+    with pytest.raises(Unprepared, match=message) as refused:
+        prepare_copy(runtime_settings(**changes), files, guard)
+    assert not files.exists() and not guard.exists()
+    for value in (CALLBACK, ADMIN_KEY, RUNTIME_KEY):
+        assert value not in str(refused.value)

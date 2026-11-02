@@ -73,7 +73,9 @@ gateway:
   # install it without this Secret and its hash variables in extraEnv below.
   # During a key rotation the same Secret also holds the next keys
   # (runtime-key-next, admin-key-next, runtime-key-hash-next,
-  # admin-key-hash-next); see docs/guide/gateway-configuration.md.
+  # admin-key-hash-next); see docs/guide/gateway-configuration.md. With the
+  # model enroller (gateway.enroller) it also needs callback-key: the key the
+  # gateway copies' protected checks send to the app.
   keysSecret: ""
   # Existing mode only: a Secret with key ca.crt (one PEM CA certificate or a
   # bundle) that the app and preflight Job trust, in addition to the image's
@@ -101,11 +103,13 @@ gateway:
   # in step with the saved models and records what it confirmed in the
   # guard-status table. Off by default. It opens no port, runs as the app user
   # (app.image) with a read-only root file system and no API token, and also
-  # turns on app.guardStatusCheck. Create its database roles first, as in
-  # docs/guide/guard-status-roles.md; the migration Job then sets their grants.
-  # Helm refuses it for now: this chart doesn't yet install Keeplane's
-  # protected runtime on the managed gateway, so the enroller would have no
-  # guard to keep. See docs/guide/kubernetes-installation-reference.md#model-enroller.
+  # turns on app.guardStatusCheck. Turning it on also installs Keeplane's
+  # protected runtime on every gateway copy: each copy starts from this
+  # chart's gateway configuration, and the enroller enrols the saved models
+  # on it. That needs key callback-key in gateway.keysSecret and
+  # agentgateway-standalone.mode=database. Create its database roles first, as
+  # in docs/guide/guard-status-roles.md; the migration Job then sets their
+  # grants. See docs/guide/kubernetes-installation-reference.md#model-enroller.
   enroller:
     enabled: false
     # The read-only approvals role, shared by every copy's enroller.

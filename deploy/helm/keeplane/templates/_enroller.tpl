@@ -1,9 +1,18 @@
 {{- /*
-The private model enroller (ADR 027) in each managed gateway copy Pod, and the
-app's per-copy guard-status check. Both are off by default, and for now Helm
-refuses the enroller (checks/first/protected-runtime.yaml) until the chart
-installs Keeplane's protected runtime on the managed gateway; the check can be
-on only with the enroller.
+The private model enroller (ADR 027) in each managed gateway copy Pod, with
+Keeplane's protected runtime on that copy, and the app's per-copy guard-status
+check. Both are off by default; the check can be on only with the enroller.
+
+With the enroller, each copy runs Keeplane's protected runtime, as the Docker
+preview does (deploy/local/prepare_runtime.py and runtime.yaml): the init
+container writes a disabled declaration, the callback key, and the trusted
+base, which is this chart's rendered gateway configuration with its key-hash
+variables written out; the gateway container starts from that base
+(-f /installed/gateway.json) instead of the ConfigMap; and the enroller's first
+pass enrols the saved models on the fresh copy, reading its guard back before
+it enables the declaration. The base is part of the Pod template, so any change
+to the gateway configuration restarts the copies one at a time and each starts
+afresh from the new base.
 
 The enroller is a second container in every gateway copy Pod of the
 StatefulSet, so it shares that copy's network namespace and reads its
@@ -23,7 +32,11 @@ gateway container gets none of them.
 
 The guard is a Pod-local folder (keeplane-guard, at /installed) that only the
 enroller mounts read-write; the gateway container mounts it read-only and the
-app never mounts it.
+app never mounts it. It holds the protected runtime: the declaration, the
+guarded gateway configuration, the trusted base and the callback key. The
+callback key (key callback-key of gateway.keysSecret) is the one credential
+the gateway reads from it: its protected checks send it to the app, which
+reads the same key from its mounted gateway keys.
 */ -}}
 
 {{- define "keeplane.enroller.on" -}}
@@ -46,6 +59,20 @@ app never mounts it.
 {{- end -}}
 {{- if not .Values.app.postgres.enabled -}}
 {{- fail "gateway.enroller needs app.postgres: each copy's enroller records what it confirmed in the guard-status table, which only PostgreSQL keeps. The local trial's SQLite file stays with the app." -}}
+{{- end -}}
+{{- /* The protected runtime starts each copy from this chart's gateway
+configuration; see keeplane.enroller.runtimeBase. */ -}}
+{{- $gateway := index .Values "agentgateway-standalone" -}}
+{{- if ne (toString $gateway.mode) "database" -}}
+{{- fail "gateway.enroller needs agentgateway-standalone.mode=database: every gateway copy must read the same saved models from the gateway database, which the enroller enrols on each copy" -}}
+{{- end -}}
+{{- $startup := dig "config" "config" (dict) $gateway -}}
+{{- if not (kindIs "map" $startup) -}}
+{{- fail "agentgateway-standalone.config.config must be a mapping" -}}
+{{- end -}}
+{{- $admin := index $startup "adminAddr" -}}
+{{- if and (not (kindIs "invalid" $admin)) (ne (toString $admin) "127.0.0.1:15000") -}}
+{{- fail (printf "gateway.enroller keeps the gateway's admin address on loopback (127.0.0.1:15000), where only the enroller in the same Pod reads it; agentgateway-standalone.config.config.adminAddr is %v. Leave it unset." $admin) -}}
 {{- end -}}
 {{- $role := "^[a-z_][a-z0-9_]{0,62}$" -}}
 {{- $copies := int .Values.gateway.copies -}}
@@ -138,7 +165,23 @@ seccompProfile:
   type: RuntimeDefault
 {{- end -}}
 
-{{- /* Writes this copy's credentials and makes the guard folder private, then exits. */ -}}
+{{- /*
+The protected runtime's trusted base, as JSON: the gateway configuration the
+bundled chart renders into its ConfigMap (the same values, the database
+storage and address it adds), with the admin address pinned to loopback as in
+the Docker preview's runtime-base.json. Its ${...} variables stay as they are;
+the init container writes out only the key hashes. Nothing secret is in it.
+*/ -}}
+{{- define "keeplane.enroller.runtimeBase" -}}
+{{- $bundled := index .Subcharts "agentgateway-standalone" -}}
+{{- $base := include "agentgateway-standalone.renderedConfig" $bundled | fromYaml -}}
+{{- $startup := get $base "config" | default dict -}}
+{{- $_ := set $startup "adminAddr" "127.0.0.1:15000" -}}
+{{- $_ := set $base "config" $startup -}}
+{{- toJson $base -}}
+{{- end -}}
+
+{{- /* Writes this copy's credentials and protected runtime, then exits. */ -}}
 {{- define "keeplane.enroller.initContainer" -}}
 {{- $enroller := .Values.gateway.enroller -}}
 - name: prepare-model-enroller
@@ -181,6 +224,32 @@ seccompProfile:
         secretKeyRef:
           name: {{ .Values.gateway.keysSecret | quote }}
           key: runtime-key
+    {{- /* The protected runtime (see keeplane.enroller.runtimeBase). */}}
+    - name: KEEPLANE_ENROLLER_CALLBACK_KEY
+      valueFrom:
+        secretKeyRef:
+          name: {{ .Values.gateway.keysSecret | quote }}
+          key: callback-key
+    {{- /* The key hashes the gateway reads, from the same Secret keys its
+    extraEnv entries name (checks/first/managed-gateway-keys.yaml); the next
+    hashes only while a key rotation adds them. */}}
+    {{- $wired := list }}
+    {{- range (index .Values "agentgateway-standalone").extraEnv | default list }}
+    {{- if kindIs "map" . }}
+    {{- $wired = append $wired (toString .name) }}
+    {{- end }}
+    {{- end }}
+    {{- range $name, $key := dict "GATEWAY_ADMIN_KEY_HASH" "admin-key-hash" "GATEWAY_RUNTIME_KEY_HASH" "runtime-key-hash" "GATEWAY_ADMIN_KEY_HASH_NEXT" "admin-key-hash-next" "GATEWAY_RUNTIME_KEY_HASH_NEXT" "runtime-key-hash-next" }}
+    {{- if has $name $wired }}
+    - name: KEEPLANE_ENROLLER_{{ $name }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ $.Values.gateway.keysSecret | quote }}
+          key: {{ $key }}
+    {{- end }}
+    {{- end }}
+    - name: KEEPLANE_ENROLLER_RUNTIME_BASE
+      value: {{ include "keeplane.enroller.runtimeBase" . | quote }}
   volumeMounts:
     - name: keeplane-enroller-files
       mountPath: /run/keeplane-enroller

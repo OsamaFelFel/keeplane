@@ -104,7 +104,9 @@ spec:
       annotations:
         {{- /* As in the bundled chart, only settings agentgateway reads at
         startup restart the copies; other changes, including
-        config.modelCatalog, are reloaded in place. */}}
+        config.modelCatalog, are reloaded in place. With the enroller the
+        copies don't read the ConfigMap: the whole configuration is in the
+        init container's settings, so any change restarts them. */}}
         checksum/config: {{ include "agentgateway-standalone.startupConfig" $bundled | sha256sum }}
         {{- with $gw.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -163,9 +165,17 @@ spec:
             periodSeconds: 1
             successThreshold: 1
             timeoutSeconds: 2
+          {{- /* With the enroller the copy runs Keeplane's protected runtime:
+          it starts from the trusted base the init container wrote into the
+          guard, and the enroller then writes its guarded configuration
+          there (see _enroller.tpl). */}}
           args:
             - -f
+            {{- if $enroller }}
+            - /installed/gateway.json
+            {{- else }}
             - /config/config.yaml
+            {{- end }}
           env:
             - name: RUST_BACKTRACE
               value: "1"

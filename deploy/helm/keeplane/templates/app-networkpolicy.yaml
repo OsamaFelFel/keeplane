@@ -1,8 +1,10 @@
 {{- /*
 Opt-in policies for the app pods (label app: <release>-app). Ingress admits
-only the installer's public entry on TCP 3000: no other Keeplane pod calls the
-app in this chart (the gateway copies make no callback to it, and the Jobs call
-only PostgreSQL or the supplied gateway). Egress allows DNS, the gateway, the
+the installer's public entry on TCP 3000 and, with the model enroller
+(gateway.enroller), the managed gateway copies on TCP 3000: their protected
+runtime sends its checks to the app. No other Keeplane pod calls the app in
+this chart (the Jobs call only PostgreSQL or the supplied gateway, and without
+the enroller the copies make no callback). Egress allows DNS, the gateway, the
 app's PostgreSQL, model endpoints (provider-key checks call the provider
 directly) and any listed runners.
 */ -}}
@@ -24,6 +26,15 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
+    {{- if include "keeplane.enroller.on" . }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "keeplane.networkPolicy.gatewayPods" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 3000
+    {{- end }}
 {{- end }}
 {{- if $np.egressEnabled }}
 ---
