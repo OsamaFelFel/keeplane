@@ -107,9 +107,13 @@ gateway:
   # protected runtime on every gateway copy: each copy starts from this
   # chart's gateway configuration, and the enroller enrols the saved models
   # on it. That needs key callback-key in gateway.keysSecret and
-  # agentgateway-standalone.mode=database. Create its database roles first, as
-  # in docs/guide/guard-status-roles.md; the migration Job then sets their
-  # grants. See docs/guide/kubernetes-installation-reference.md#model-enroller.
+  # agentgateway-standalone.mode=database. Developers reach the protected
+  # models through Service <release>-gateway-runtime (port 5000 only) and,
+  # with ingress.enabled, the Ingress path /v1/chat/completions on
+  # ingress.host: their CLI's gateway is https://<ingress.host>/v1. Create
+  # its database roles first, as in docs/guide/guard-status-roles.md; the
+  # migration Job then sets their grants. See
+  # docs/guide/kubernetes-installation-reference.md#model-enroller.
   enroller:
     enabled: false
     # The read-only approvals role, shared by every copy's enroller.
@@ -136,6 +140,8 @@ networkPolicy:
   # Every policy here requires a Kubernetes CNI that enforces NetworkPolicy.
   # The local kindnet preview does not; keep them disabled in that preview.
   # Managed mode: admit only the app pods to the gateway copies on TCP 4000.
+  # With gateway.enroller it also admits publicEntry below, and only it, on
+  # the protected model port TCP 5000; Helm then requires publicEntry.
   gatewayIngressEnabled: false
   # Admit only the public entry (publicEntry below) to the app pods on TCP 3000.
   appIngressEnabled: false
@@ -169,7 +175,10 @@ networkPolicy:
     runners: []
 
 ingress:
-  # Publishes only the Keeplane app Service; the gateway stays internal.
+  # Publishes the Keeplane app Service on one host. With gateway.enroller it
+  # also routes the exact path /v1/chat/completions to the managed gateway's
+  # protected model port (Service <release>-gateway-runtime, 5000); no other
+  # gateway port or path is published.
   enabled: false
   className: ""
   host: ""

@@ -1,0 +1,39 @@
+{{- /*
+Developers' protected model access on the managed gateway (ADR 018, ADR 027).
+With the model enroller each gateway copy runs Keeplane's protected runtime,
+whose listener is port 5000 and serves one route, POST /v1/chat/completions;
+every call there is checked with the app before any model is called. This
+ClusterIP Service gives that port one in-cluster address,
+<release>-gateway-runtime:5000, across every copy, and is the backend of the
+optional Ingress's /v1/chat/completions path, so developers' CLIs reach
+protected models through Keeplane's one public address (ADR 016) with
+https://<ingress.host>/v1 as their gateway.
+
+It carries port 5000 only. The gateway's model and management port 4000 stays
+on the internal gateway Service and the headless copies Service, and the admin
+(15000), stats (15020) and readiness (15021) ports stay on no Service. It is
+always ClusterIP: publishing it beside the app would give Keeplane a second
+public address. Without the enroller no copy listens on 5000 and nothing
+renders here.
+*/ -}}
+{{- if and (eq .Values.gateway.mode "managed") .Values.gateway.install (include "keeplane.enroller.on" .) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gateway-runtime
+  labels:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: standalone
+  ports:
+    - name: protected
+      protocol: TCP
+      port: 5000
+      targetPort: 5000
+{{- end }}

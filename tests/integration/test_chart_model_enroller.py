@@ -31,6 +31,7 @@ MODELS = [{"cidr": "203.0.113.0/24", "ports": [443]}]
 NOT_YET = "templates/checks/first/protected-runtime.yaml"
 KEYS_SECRET = "keeplane-gateway-keys"
 BASE = "KEEPLANE_ENROLLER_RUNTIME_BASE"
+PUBLIC_ENTRY = {"namespaceSelector": {"kubernetes.io/metadata.name": "ingress-nginx"}}
 GATEWAY_DATABASE_URL = ("postgresql://keeplane:${KEEPLANE_DB_PASSWORD}"
                         "@gateway-db.database.svc.cluster.local:5432/keeplane")
 
@@ -48,6 +49,11 @@ def with_enroller(values, copies=None, **settings):
         "statusSecret": STATUS_SECRET,
         **settings,
     }
+    # With the gateway ingress policy, the enroller needs the public entry
+    # that may reach the protected port (chart-protected-access-cases.md).
+    policy = values.setdefault("networkPolicy", {})
+    if policy.get("gatewayIngressEnabled") and not policy.get("publicEntry"):
+        policy["publicEntry"] = PUBLIC_ENTRY
     return values
 
 
@@ -360,12 +366,15 @@ def test_me_07_copy_egress_reaches_postgres_only_with_the_enroller(chart, policy
     assert len(before) == 1
 
 
-def test_me_08_the_enroller_adds_no_kind_and_brings_the_apps_pull_secret(chart, make):
+def test_me_08_the_enroller_adds_only_the_protected_service_and_the_apps_pull_secret(
+        chart, make):
     values = managed(chart)
     values["app"]["imagePullSecrets"] = [{"name": "keeplane-registry"}]
     before = rendered(make(values))
     after = rendered(make(with_enroller(values)))
-    assert kinds(chart, before) == kinds(chart, after)
+    # The only new object is the protected port's Service (PA-02); no new kind.
+    assert sorted(kinds(chart, before) + [("Service", f"{RELEASE}-gateway-runtime")]) \
+        == kinds(chart, after)
     copies = next(doc for doc in chart.of_kind(after, "StatefulSet")
                   if chart.name_of(doc) == f"{RELEASE}-gateway")
     assert "- name: keeplane-registry" in copies

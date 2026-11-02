@@ -234,9 +234,14 @@ The Helm chart runs that enroller as a container beside every Kubernetes
 gateway copy and installs the protected runtime on each copy
 (`gateway.enroller`, see
 [the chart's model enroller](../guide/kubernetes-installation-reference.md#model-enroller)).
-Still to come: a live run on a cluster and on the real gateway image, a way for
-developers to reach the protected listener in Kubernetes, and customer-run
-gateways that don't share one model store.
+Developers reach the protected listener through Keeplane's one public address:
+the chart's ClusterIP Service `<release>-gateway-runtime` carries port 5000
+only, and its optional Ingress routes the exact path `/v1/chat/completions` to
+it (see
+[how developers reach protected models](../guide/kubernetes-installation-reference.md#how-developers-reach-protected-models)).
+Still to come: a live run on a cluster, through an ingress controller and on
+the real gateway image, and customer-run gateways that don't share one model
+store.
 
 ## Model enroller
 
@@ -608,8 +613,9 @@ flowchart LR
 A stream that fails after its first byte returns the error and contacts no other
 model ([protocol cases](../../tests/integration/native-runtime-protocol-cases.md),
 [outage cases](../../tests/integration/native-runtime-outage-cases.md)). This
-retry is installed only by the managed Docker runtime installer; the Kubernetes
-chart does not yet install the protected listener. A customer-run gateway must
+retry is installed by the managed Docker runtime installer and, with
+`gateway.enroller`, by the Kubernetes chart's protected runtime on each managed
+gateway copy, which builds the same route. A customer-run gateway must
 set the same route policy itself; see [gateway modes](../guide/gateway-configuration.md#retry-a-model-that-is-down).
 
 ```mermaid

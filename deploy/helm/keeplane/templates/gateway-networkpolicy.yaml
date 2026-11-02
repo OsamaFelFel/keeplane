@@ -1,3 +1,12 @@
+{{- /*
+Opt-in ingress policy for the managed gateway copies. Only this release's app
+pods reach port 4000 (model calls and management). With the model enroller,
+the public entry (networkPolicy.publicEntry, your ingress controller) also
+reaches the protected runtime's port 5000, the backend of the Ingress path
+/v1/chat/completions; it never reaches port 4000. The enroller check refuses
+the enroller with this policy and no public entry, which would leave the
+protected port unreachable.
+*/ -}}
 {{- if .Values.networkPolicy.gatewayIngressEnabled }}
 {{- if ne .Values.gateway.mode "managed" }}
 {{- fail "networkPolicy.gatewayIngressEnabled belongs to managed mode; secure a supplied gateway in its own installation" }}
@@ -20,4 +29,11 @@ spec:
       ports:
         - protocol: TCP
           port: 4000
+    {{- if include "keeplane.enroller.on" . }}
+    - from:
+        {{- include "keeplane.networkPolicy.peer" (list "networkPolicy.publicEntry" .Values.networkPolicy.publicEntry) | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 5000
+    {{- end }}
 {{- end }}

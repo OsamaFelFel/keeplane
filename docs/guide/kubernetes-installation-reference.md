@@ -307,15 +307,18 @@ retention for a production installation are **not decided**.
 | --- | --- | --- |
 | 3000 | App | Service `<release>-app` (`ClusterIP` by default) and the optional Ingress |
 | 4000 | Managed gateway: model calls and management | Service `<release>` (`ClusterIP`), and each copy's own address through the headless Service `<release>-gateway-copies` |
-| 5000 | Managed gateway's protected model access, with the [model enroller](#model-enroller) only | No Service, port declaration or Ingress; with `gatewayIngressEnabled` the gateway ingress policy admits port 4000 only |
+| 5000 | Managed gateway's protected model access, with the [model enroller](#model-enroller) only | Service `<release>-gateway-runtime` (`ClusterIP`, port 5000 only) and the optional Ingress path `/v1/chat/completions`; with `gatewayIngressEnabled` the gateway ingress policy admits only `publicEntry` there |
 | 15000 | Gateway admin | No Service; the chart keeps the gateway's loopback default |
 | 15020 | Gateway stats | No Service or declared container port; pod annotations only suggest scraping |
 | 15021 | Gateway readiness | No Service; used by the kubelet probe |
 
 The optional Ingress (`ingress.enabled`) has one host, requires TLS and routes
-only to the app Service. It requires a `ClusterIP` app Service and refuses
-every other type, including `NodePort` and `LoadBalancer`. The gateway is
-never an Ingress backend.
+to the app Service. It requires a `ClusterIP` app Service and refuses every
+other type, including `NodePort` and `LoadBalancer`. Without the model
+enroller the gateway is never an Ingress backend. With it, the same host also
+routes the one exact path `/v1/chat/completions` to the protected model port
+(see [how developers reach protected models](#how-developers-reach-protected-models));
+no other gateway port or path is published.
 
 The chart can also limit who reaches these ports and where Keeplane's pods
 connect; see [network policies](#network-policies).
@@ -332,7 +335,7 @@ list what the render checks cover.
 
 | Setting | Policy | Pods selected | Allows only |
 | --- | --- | --- | --- |
-| `gatewayIngressEnabled` (managed mode) | `<release>-gateway-ingress` | Gateway copies | In: this release's app pods, TCP 4000 |
+| `gatewayIngressEnabled` (managed mode) | `<release>-gateway-ingress` | Gateway copies | In: this release's app pods, TCP 4000; with the [model enroller](#model-enroller) also the pods matching `publicEntry`, TCP 5000 only |
 | `appIngressEnabled` | `<release>-app-ingress` | App pods | In: the pods matching `publicEntry`, TCP 3000; with the [model enroller](#model-enroller) also the gateway copies, TCP 3000 |
 | `egressEnabled` | `<release>-app-egress` | App pods | Out: DNS; the gateway copies on TCP 4000 (managed) or `egress.suppliedGateway` (existing); `egress.postgres`; `egress.modelEndpoints`; `egress.runners` |
 | `egressEnabled` (managed mode) | `<release>-gateway-egress` | Gateway copies | Out: DNS; `egress.gatewayDatabase` (database mode); `egress.modelEndpoints`; with the [model enroller](#model-enroller), `egress.postgres` and this release's app pods on TCP 3000 |
@@ -352,8 +355,12 @@ app Service other than `ClusterIP`. With the [model enroller](#model-enroller)
 the policy also admits the gateway copies on TCP 3000, whose protected runtime
 sends its checks to the app. No other Keeplane pod calls the app: without the
 enroller the gateway copies make no call to it, and the Jobs call only
-PostgreSQL or the supplied gateway. The kubelet's readiness and liveness checks come from the
-node, which most network plugins admit regardless of policy; check yours.
+PostgreSQL or the supplied gateway. With the model enroller and
+`gatewayIngressEnabled`, the gateway ingress policy admits the same public
+entry to the gateway copies on TCP 5000 (the protected model port) and nowhere
+else on them, so Helm then refuses an empty `publicEntry` too. The kubelet's
+readiness and liveness checks come from the node, which most network plugins
+admit regardless of policy; check yours.
 
 **Destinations.** Each entry in an `egress` list is either an address range or
 labels, with the TCP ports to allow:
@@ -625,12 +632,6 @@ only when it restarts, so protected calls through copies not yet restarted
 are refused until you restart them
 (`kubectl rollout restart statefulset <release>-gateway`).
 
-The protected listener is the guarded runtime's port 5000 inside each copy
-Pod. The chart publishes it through no Service, port declaration or Ingress,
-and with `networkPolicy.gatewayIngressEnabled` the gateway ingress policy
-admits only port 4000. How developers reach it in Kubernetes is not decided
-yet.
-
 **Database roles.** Create the roles first, as in
 [the enroller's database roles](guard-status-roles.md): one read-only
 approvals role for every enroller, and one status role per gateway copy.
@@ -698,8 +699,11 @@ runs. A policy covers the whole Pod, so the gateway container gets that path
 too, but no database credential. The copies' protected runtime sends its
 checks to the app, so the gateway egress policy also allows this release's app
 pods on TCP 3000, and with `networkPolicy.appIngressEnabled` the app ingress
-policy also admits the gateway copies on TCP 3000. Nothing new is reachable
-from outside.
+policy also admits the gateway copies on TCP 3000. The enroller itself opens
+no port; from outside, only the protected model path is reachable (see
+[how developers reach protected models](#how-developers-reach-protected-models)),
+and with `networkPolicy.gatewayIngressEnabled` the gateway ingress policy
+admits `networkPolicy.publicEntry` to it on TCP 5000.
 
 Helm refuses, before creating anything:
 
@@ -715,6 +719,9 @@ Helm refuses, before creating anything:
   written literally instead of as a `${...}` variable, or a rendered gateway
   configuration over 120 KiB (see **Protected runtime** above);
 - `app.guardStatusCheck` without the enroller, or with `gateway.mode=existing`;
+- `networkPolicy.gatewayIngressEnabled` with an empty
+  `networkPolicy.publicEntry`, which would leave the protected port
+  unreachable;
 - a gateway `runAsUser` other than 65532;
 - a missing or malformed `approvalsUser`, a `statusRoles` list that doesn't
   match `gateway.copies`, a shared role, a missing `approvalsSecret` or
@@ -731,3 +738,47 @@ check this section against rendered manifests, and the
 check the init step. They prove what the chart asks Kubernetes to run and what
 the init step writes, not a live run on a cluster or on the real gateway
 image.
+
+### How developers reach protected models
+
+The protected listener is the guarded runtime's port 5000 inside each copy
+Pod. It serves one route, `POST /v1/chat/completions`, and checks every call
+with the app before any model is called. Developers reach it through
+Keeplane's one public address, as
+[ADR 016](https://github.com/OsamaFelFel/keeplane-governance/blob/main/adrs/0016-control-plane-stack.md)
+sets out: one host, with the UI and admin API on the app and model calls on
+the gateway's protected path, and every management path private.
+
+- **Service.** With the enroller on, the chart adds Service
+  `<release>-gateway-runtime`: `ClusterIP`, port 5000 only (`protected`),
+  across every gateway copy. It is never `NodePort` or `LoadBalancer`; publish
+  it only through your ingress. The copies' port 4000 stays on the internal
+  gateway Service and `<release>-gateway-copies`, and the admin (15000), stats
+  (15020) and readiness (15021) ports stay on no Service. The containers
+  declare no new port.
+- **Ingress.** With `ingress.enabled`, the chart's Ingress routes the exact
+  path `/v1/chat/completions` (`pathType: Exact`) on `ingress.host` to that
+  Service, and everything else to the app as before. Nothing else of the
+  gateway is routed. Developers give their CLI
+  `https://<host>/v1` as its gateway (`--gateway`), signed in to the same
+  Keeplane. If you run your own edge instead, route only that exact path, over
+  TLS, to `<release>-gateway-runtime:5000`.
+- **Network policy.** With `networkPolicy.gatewayIngressEnabled`, the gateway
+  ingress policy also admits `networkPolicy.publicEntry` (your ingress
+  controller) on TCP 5000, and only it; the app alone still reaches port
+  4000. Helm refuses the enroller with that policy and no public entry, which
+  would leave protected models unreachable.
+- **Your ingress controller.** `ingress.annotations` apply to the whole
+  Ingress, app and protected path alike, so don't add a rewrite there. Model
+  requests can be larger and slower than the app's: the protected route waits
+  up to three 60-second attempts for a model that is down, so allow request
+  bodies of the size your developers send and a read timeout of at least
+  about 190 seconds (for ingress-nginx, `nginx.ingress.kubernetes.io/proxy-body-size`
+  and `proxy-read-timeout`). The chart sets neither.
+
+Each request reaches one copy. A copy whose enroller hasn't confirmed a model
+refuses it, so right after a copy starts or a model changes, a protected call
+can be refused by one copy while another serves it. The chart's render checks
+cover this shape
+([protected access cases](../../tests/integration/chart-protected-access-cases.md));
+a live run through an ingress controller hasn't been done yet.

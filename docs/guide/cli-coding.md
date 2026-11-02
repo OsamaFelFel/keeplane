@@ -22,7 +22,10 @@ keeplane code \
   'Fix the addition function and check the result.'
 ```
 
-Use your installation's project ID, model and gateway URL. `code` checks the
+Use your installation's project ID, model and gateway URL. On a Kubernetes
+installation with the chart's Ingress, the gateway URL is Keeplane's own
+address followed by `/v1`, such as `https://keeplane.example.com/v1` (see
+[how developers reach protected models](kubernetes-installation-reference.md#how-developers-reach-protected-models)). `code` checks the
 current account, records project use and checks the allowed model list before
 starting the runtime. If the model needs your own provider key and yours is
 missing or refused, the CLI uses another allowed model and says why; see
