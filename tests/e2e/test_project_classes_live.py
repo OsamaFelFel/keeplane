@@ -58,9 +58,14 @@ def environment():
     return {**os.environ, **values}
 
 
-def compose(*arguments, timeout=180):
+def compose(*arguments, timeout=180, runtime=False):
+    files = (
+        ["-f", str(REPO / "compose.yaml"), "-f", str(REPO / "deploy/local/runtime.yaml")]
+        if runtime
+        else []
+    )
     return subprocess.run(
-        ["docker", "compose", "--env-file", str(RUNTIME / ".env"), *arguments],
+        ["docker", "compose", "--env-file", str(RUNTIME / ".env"), *files, *arguments],
         cwd=REPO,
         env=environment(),
         capture_output=True,
@@ -482,6 +487,14 @@ def run_cases():
 def restore(admin, password, project, created, state, failures):
     """Return the preview to its ordinary gateway and remove this run's records."""
     if state["enrolled"]:
+        # The model enroller shares the guarded gateway's network and keeps the
+        # installation volume in use; the ordinary preview has no enroller.
+        stopped = compose(
+            "--profile", "runtime", "rm", "--stop", "--force", "model-enroller",
+            runtime=True,
+        )
+        if stopped.returncode:
+            failures.append("the model enroller was not removed")
         result = compose(
             "up",
             "-d",
@@ -506,12 +519,14 @@ def restore(admin, password, project, created, state, failures):
                     pass
                 time.sleep(1)
         if not state["volume_existed"]:
-            subprocess.run(
+            removed = subprocess.run(
                 ["docker", "volume", "rm", "keeplane-local_runtime-installation"],
                 capture_output=True,
                 check=False,
                 timeout=60,
             )
+            if removed.returncode:
+                failures.append("the guarded installation volume was not removed")
         if listening(RUNTIME_PORT):
             failures.append(f"guarded port {RUNTIME_PORT} still answers")
     try:

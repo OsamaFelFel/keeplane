@@ -92,6 +92,13 @@ jobs:
           docker ps --all > "$RESULTS/containers.txt" 2>&1 || true
           docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" -f compose.yaml -f deploy/local/runtime.yaml \
             --profile qwen --profile runtime logs --no-color > "$RESULTS/containers.log" 2>&1 || true
+          # The disposable preview's own messages, so a failure can be read from the job log.
+          for service in model-enroller gateway app; do
+            echo "::group::$service (last 150 lines)"
+            docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" -f compose.yaml -f deploy/local/runtime.yaml \
+              --profile runtime logs --no-color --tail 150 "$service" 2>&1 || true
+            echo "::endgroup::"
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

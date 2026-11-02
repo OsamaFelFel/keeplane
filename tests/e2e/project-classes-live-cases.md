@@ -40,7 +40,8 @@ those ports are not available. It is part of the `docker` regression group.
 
 ## Restoring the preview
 
-Afterwards the suite recreates the gateway and app from `compose.yaml` alone,
+Afterwards the suite removes the model enroller and recreates the gateway and
+app from `compose.yaml` alone,
 so the guarded endpoint is gone and the ordinary gateway configuration is back.
 It removes the guarded installation volume if the run created it. It clears
 the project's class, removes the three models from Keeplane and the gateway,

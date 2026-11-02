@@ -35,6 +35,24 @@ def outage_config(existing, admin, *, timeout=None):
     return value
 
 
+def finished_stream(response):
+    """Whether a streamed answer arrived whole: no transport break, a final event."""
+    if response["incomplete"]:
+        return False
+    events = [
+        line[6:] for line in response["body"].splitlines() if line.startswith("data: ")
+    ]
+    if events and events[-1] == "[DONE]":
+        return True
+    for event in reversed(events):
+        try:
+            choices = json.loads(event).get("choices") or []
+        except (ValueError, AttributeError):
+            continue
+        return any(choice.get("finish_reason") for choice in choices)
+    return False
+
+
 def checks(observed, check):
     return [row for row in observed["decisions"] if row["check"] == check]
 
@@ -152,14 +170,21 @@ def test_out_09_a_started_stream_is_never_retried(tmp_path, report_file, existin
             {
                 "response": response
                 if isinstance(response, int)
-                else {k: response[k] for k in ("status", "incomplete")},
+                else {
+                    **{k: response[k] for k in ("status", "incomplete")},
+                    "finished": finished_stream(response),
+                },
                 "provider_contacts": observed["calls"],
             }
         )
         report_file.write_text(json.dumps(report, indent=2) + "\n")
-        # The first byte went out: the failure shows, and nothing is sent again.
-        assert isinstance(response, dict) and response["incomplete"]
+        # The first byte went out: the partial answer shows, never as a finished
+        # one, and nothing is sent again. The pinned gateway may end the
+        # client's stream cleanly after the provider drops it, so a stream with
+        # no final event counts as incomplete, as in the protocol cases.
+        assert isinstance(response, dict) and response["status"] == 200
         assert "partial " in response["body"]
+        assert not finished_stream(response)
         assert observed["calls"] == ["mock-private"]
         assert observed["outage_steps"] == ["mid"]
         report["passed"] = True
