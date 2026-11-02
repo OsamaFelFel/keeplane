@@ -36,7 +36,8 @@ remain available at [their recorded commit](https://github.com/OsamaFelFel/keepl
 The **Kubernetes live checks** workflow (`.github/workflows/kubernetes-live.yml`)
 runs on every pull request and on `main`. On a GitHub runner it installs pinned
 kind, kubectl and Helm (each checked against a recorded SHA-256), runs
-`deploy/local/kind-up.sh` with `KEEPLANE_KIND_QWEN=off`, which builds the app
+`deploy/local/kind-up.sh` with `KEEPLANE_KIND_QWEN=off` and
+`KEEPLANE_KIND_LOAD_IMAGES=off`, which builds the app
 image and installs the chart twice on one kind cluster: with its managed gateway
 (two copies and the installer-made key Secret) and against a separately
 installed gateway. It then runs the test files on the workflow's `LIVE_TESTS`

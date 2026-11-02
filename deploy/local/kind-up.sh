@@ -8,6 +8,9 @@
 #   /private/tmp/keeplane-accounts-trial on macOS, .keeplane/local elsewhere,
 #   the folder the Docker preview and the tests use there).
 # KEEPLANE_KIND_QWEN=off: skip the optional Qwen runner and its model file.
+# KEEPLANE_KIND_LOAD_IMAGES=off: load only the app image into kind; the node
+#   pulls the digest-pinned public images itself. Some Docker image stores
+#   save a digest-pinned image that kind's containerd cannot run.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
@@ -20,6 +23,7 @@ else
 fi
 KUBECONFIG_PATH=${KEEPLANE_KUBECONFIG:-$DEFAULT_KUBECONFIG}
 QWEN=${KEEPLANE_KIND_QWEN:-on}
+LOAD_PUBLIC_IMAGES=${KEEPLANE_KIND_LOAD_IMAGES:-on}
 HELM_BIN=${KEEPLANE_HELM_BIN:-helm}
 PYTHON_IMAGE=python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
 POSTGRES_IMAGE=postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
@@ -62,6 +66,10 @@ checked(["docker", "info", "--format", "{{.ServerVersion}}"],
 PY
 if [ "$QWEN" != on ] && [ "$QWEN" != off ]; then
   printf 'KEEPLANE_KIND_QWEN must be on or off.\n' >&2
+  exit 1
+fi
+if [ "$LOAD_PUBLIC_IMAGES" != on ] && [ "$LOAD_PUBLIC_IMAGES" != off ]; then
+  printf 'KEEPLANE_KIND_LOAD_IMAGES must be on or off.\n' >&2
   exit 1
 fi
 if [ "$QWEN" = on ]; then
@@ -112,9 +120,11 @@ if [ ! -d components/admin-ui/node_modules ]; then
   (cd components/admin-ui && npm ci)
 fi
 (cd components/admin-ui && npm run build)
-docker pull "$PYTHON_IMAGE"
-docker pull "$POSTGRES_IMAGE"
-docker pull "$GATEWAY_IMAGE"
+if [ "$LOAD_PUBLIC_IMAGES" = on ]; then
+  docker pull "$PYTHON_IMAGE"
+  docker pull "$POSTGRES_IMAGE"
+  docker pull "$GATEWAY_IMAGE"
+fi
 docker build -f components/control-plane/Dockerfile -t keeplane-preview:kind-local .
 
 if kind get clusters | grep -qx keeplane; then
@@ -155,8 +165,12 @@ for namespace in ("keeplane", "supplied-gateway"):
             raise SystemExit("Database password file does not match the existing Secret in " + namespace +
                 "; recover the file before setup. See docs/guide/gateway-database-secret.md.")
 PY
-kind load docker-image "$PYTHON_IMAGE" "$POSTGRES_IMAGE" "$GATEWAY_IMAGE" \
-  keeplane-preview:kind-local --name keeplane
+if [ "$LOAD_PUBLIC_IMAGES" = on ]; then
+  kind load docker-image "$PYTHON_IMAGE" "$POSTGRES_IMAGE" "$GATEWAY_IMAGE" \
+    keeplane-preview:kind-local --name keeplane
+else
+  kind load docker-image keeplane-preview:kind-local --name keeplane
+fi
 if [ "$QWEN" = on ]; then
   docker exec keeplane-control-plane mkdir -p /models
   docker cp "$QWEN_MODEL" "keeplane-control-plane:/models/$(basename "$QWEN_MODEL")"

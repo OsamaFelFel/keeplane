@@ -30,7 +30,10 @@ path. Set `KEEPLANE_KUBECONFIG` to use another kubeconfig file, or
 `KEEPLANE_HELM_BIN` if Helm is outside `PATH`. Credentials such as the
 first-admin password go to `/private/tmp/keeplane-accounts-trial` on macOS and
 `.keeplane/local` on Linux; set `KEEPLANE_RUNTIME_DIR` to choose another folder,
-and use the same setting when you run the tests.
+and use the same setting when you run the tests. If pods report "failed to
+check if this is a checkpoint image", set `KEEPLANE_KIND_LOAD_IMAGES=off`: the
+script then loads only the app image and the cluster pulls the pinned public
+images itself.
 
 The **Kubernetes live checks** CI workflow runs this same script on a GitHub
 runner for every pull request; see [Tests](../../tests/README.md).
