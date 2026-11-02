@@ -25,7 +25,16 @@ KP_PROFILE="$KP_PRIVATE/account"
 Keep the profile and history outside the repository. The profile stores private
 plaintext credentials protected by OS file permissions. Use the server address
 for account commands and the protected gateway's `/v1` address for coding;
-an ordinary unprotected model listener is insufficient.
+an ordinary unprotected model listener is insufficient. The server doesn't
+tell the CLI its gateway address and the profile doesn't keep it, so pass it on
+every `keeplane code`. With `--state-dir`, the session history records the
+gateway address, and a later turn on that history, such as a resumed session,
+must use the same one. On a Kubernetes installation with the chart's Ingress, both are
+on Keeplane's one address: `KP_SERVER=https://<host>` and
+`KP_GATEWAY=https://<host>/v1` (see
+[what to give developers](kubernetes-installation-reference.md#how-developers-reach-protected-models)).
+On the Docker preview with [guarded model access](guarded-runtime.md) it is
+`http://127.0.0.1:5000/v1` unless the launcher was given another port.
 `KP_REPO` must be the Git repository root, owned by your OS user.
 These two addresses are the only ones the CLI and the coding runtime it starts
 need to reach, so the sequence also works on an isolated network; see

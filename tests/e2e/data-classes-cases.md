@@ -5,6 +5,12 @@ Run after the protected Docker preview is started. The live runner
 `local-fixture`, creates one temporary class and one temporary model approval,
 then removes only what it created. It records the HTTP observations as JSON.
 
+**Status: these live cases haven't passed against a running preview of the
+current code.** The CLASS cases last passed on 10 October 2026, in the 005-01
+run on its own branch, and the runner and the app have changed since. The
+PCL-LIVE cases named in the map below have never passed against a running
+preview. CI's preview job runs neither; see the end of this page.
+
 | Case | Plain-English action | Expected result |
 | --- | --- | --- |
 | CLASS-00 | Turn data classes off and try to add a class. | The list is empty and the change is refused while the mode is off. |
@@ -68,9 +74,11 @@ a request detection can't read or check within 200 ms is held; a held request
 needs a model approved for both the detection class and the project's class
 (PR-03); and a class detection uses can't be removed (PR-10).
 
-The CLASS and PCL-LIVE cases need the running Docker preview. They have not yet
-passed against a running preview: CI's preview job doesn't run them, and the
-environment Spec 005 was built in refuses the image pulls the preview needs.
+The CLASS and PCL-LIVE cases need the running Docker preview. They haven't
+passed against a running preview of the current code: CI's preview job doesn't
+run them, and the environment Spec 005 was built in refuses the image pulls the
+preview needs. The CLASS cases' last pass, on 10 October 2026, predates later
+changes to the runner and the app.
 Until they pass, the scenarios they prove rest on the other cases in their row.
 The browser cases (DC-UI-01 to DC-UI-03, PRJ-UI) run against the preview in
 CI's preview job, except DC-UI-01, whose screenshot baselines are macOS-only.

@@ -152,9 +152,8 @@ off everything the runtime would otherwise reach on its own:
   the web through hosted services (some work without any key) and fetch any
   page the model names. `keeplane code` turns off both tools and every hosted
   search provider, so a turn never sends its content to a service no admin
-  set up, even when the developer's shell holds a search provider key. Unlike
-  the vendors' own coding CLIs, a Keeplane coding turn cannot look things up
-  on the web.
+  set up, even when the developer's shell holds a search provider key. A
+  Keeplane coding turn cannot look things up on the web.
 
 ## How this is checked
 

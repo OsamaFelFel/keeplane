@@ -816,6 +816,33 @@ the gateway's protected path, and every management path private.
   to the whole host rather than one Ingress's paths; check your controller's
   documentation for any you set.
 
+**What to give developers.** The CLI doesn't get the gateway address from the
+server and doesn't save it in the profile: developers pass it to
+`keeplane code --gateway` on every turn, and a resumed session must use the
+same address it started with. With the chart's Ingress, give each
+developer two addresses on `ingress.host`:
+
+| For | Address | Where the developer uses it |
+| --- | --- | --- |
+| Sign-in and account commands | `https://<host>` | `keeplane login --server` |
+| Coding | `https://<host>/v1` | `keeplane code --gateway` |
+
+The coding runtime adds `/chat/completions` to the gateway address, so its
+model calls land on the one path the protected Ingress routes. The CLI refuses
+a gateway address whose path isn't `/v1` or that has a query, and refuses
+`http` for anything but the developer's own computer. Each model call carries
+the developer's Keeplane session, which the app checks, so developers code
+through the gateway of the same Keeplane they signed in to. If you run your
+own edge, the coding address is `https://` with the host you publish the path
+on, followed by `/v1`.
+
+The chart publishes a coding address only with the enroller on. Without it,
+or with a customer-run gateway (`gateway.mode=existing`), it routes nothing to
+a gateway: the managed gateway's port 4000 takes only the gateway keys, not a
+developer's session, and a customer-run gateway's coding address is the `/v1`
+address of the route you set up for developer model traffic (see
+[Keeplane's checks on a customer-run gateway](gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway)).
+
 Each request reaches one copy. A copy whose enroller hasn't confirmed a model
 refuses it, so right after a copy starts or a model changes, a protected call
 can be refused by one copy while another serves it. The chart's render checks

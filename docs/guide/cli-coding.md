@@ -55,9 +55,9 @@ not loaded, so they cannot send a task to a model outside the class.
 Settings your runtime sends with each request, such as temperature, reach the
 model unchanged: Keeplane adds none of its own.
 
-`keeplane code` has no web search and no web fetch. Unlike the vendors' own
-coding CLIs, the model cannot search the web or open a web page during a turn,
-even if your shell holds a search provider key: the runtime's built-in web
+`keeplane code` has no web search and no web fetch: the model cannot search
+the web or open a web page during a turn, even if your shell holds a search
+provider key: the runtime's built-in web
 tools and hosted search providers are turned off, so a turn never sends its
 content to a service your admin did not set up. The only places a turn reaches
 are your Keeplane server and the gateway; see
