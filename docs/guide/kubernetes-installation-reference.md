@@ -596,13 +596,18 @@ The init container gets this configuration as one plain setting,
   A password written literally in the URL, or in a `password` or
   `sslpassword` parameter, would land in the StatefulSet and the guard files,
   so Helm refuses it while the enroller is on. A URL with no password is
-  allowed, and so is an `@` in a query value after the database name, such
-  as `?application_name=team@site`, when the URL starts as the guides show:
-  an optional user name or user name and `${...}` password, `@`, a host name
-  or bracketed IPv6 address, an optional numeric port, then `/` and the
-  database name (with no `@`). Any other URL may hold only one `@` in all,
-  after a user name and at most a `${...}` password. A query parameter name
-  with `%` in it is refused too.
+  allowed. Connection libraries differ in which `@` ends the user name and
+  password: some stop looking at the first `/`, others take the first `@`
+  anywhere in the URL. So when the URL holds an `@` at all, the text before
+  the first one must be a user name with no `:`, `/`, `?` or `#`, and at most
+  a `${...}` password. A second `@` is allowed only in a query value or
+  fragment after the database name, such as `?application_name=team@site`,
+  when the URL starts as the guides show: the user name and optional
+  `${...}` password, `@`, a host name or bracketed IPv6 address, an optional
+  numeric port, then `/` and the database name (with no `@`). Any other URL
+  may hold only the one `@`. A URL with no user name may hold no `@`; write
+  one in a query value as `%40`. A query parameter name with `%` in it is
+  refused too.
 - **The configuration must stay under 120 KiB.** Linux will not start a
   container with a single setting over 128 KiB, so Helm refuses a rendered
   gateway configuration over 122880 bytes (120 KiB) and names its size, and

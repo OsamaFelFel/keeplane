@@ -82,28 +82,41 @@ password is allowed; any other userinfo, and a password or sslpassword query
 parameter that is not a single variable, is refused. The message never
 repeats the URL.
 
-Only the userinfo (before the host) is held to this, so an "@" in a query
-value or fragment, such as ?application_name=team@site, is allowed, but only
-when the part before the first "/" is a well-formed authority: an optional
-user name, or user name and a single ${...} password, then "@", then a host
-name or bracketed IPv6 address and an optional numeric port. Only then is the
-query and fragment after the database path set aside, and the database path
-may hold no "@". Any other URL is held to the whole-URL rule: at most one "@",
-after a user name and at most a single ${...} password. That keeps refusing a
-literal password holding "/", "?" or "#", which a connection library may read
-as part of it. A query parameter name with "%" is refused, as libraries
-decode it (pass%77ord is password). */ -}}
+Connection libraries differ in which "@" ends the userinfo: an authority
+parser (libpq, WHATWG URL) stops looking at the first "/" (or "?" or "#"),
+while others (tokio-postgres) take the first "@" anywhere in the URL, so
+postgresql://u:1234/x?y@h/db is host u and port 1234 to one and password
+1234/x?y to another. The chart therefore holds the text before the first "@"
+to the rule under every reading: when the URL has an "@" at all, the text
+before the first one must be a user name with no ":", "/", "?" or "#", and at
+most a single ${...} password. A URL with an "@" but no user name, such as
+host:5432/db?application_name=team@site, is refused, since the first-"@"
+reading takes 5432/db?application_name=team as a password; the "@" can be
+written %40 there.
+
+After that first "@", a second "@" is allowed only in a query value or
+fragment, such as ?application_name=team@site, and only when the part before
+the first "/" is a well-formed authority: the user name and optional ${...}
+password, "@", a host name or bracketed IPv6 address and an optional numeric
+port. The database path may hold no "@". Any other URL may hold only the one
+"@". A query parameter name with "%" is refused, as libraries decode it
+(pass%77ord is password). */ -}}
 {{- $url := toString (dig "database" "postgres" "url" "" $gateway) -}}
 {{- $address := regexReplaceAll `(?i)^postgres(ql)?://` $url "" -}}
 {{- $variable := `\$\{[A-Za-z_][A-Za-z0-9_]*\}` -}}
 {{- $authority := regexReplaceAll `(?s)/.*$` $address "" -}}
-{{- $wellFormed := and (contains "/" $address) (regexMatch (printf `^([A-Za-z0-9._~%%+-]*(:%s)?@)?([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:[0-9]+)?$` $variable) $authority) -}}
+{{- $wellFormed := and (contains "/" $address) (regexMatch (printf `^[A-Za-z0-9._~%%+-]*(:%s)?@([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:[0-9]+)?$` $variable) $authority) -}}
 {{- $literal := false -}}
-{{- if $wellFormed -}}
+{{- if contains "@" $address -}}
+{{- $userinfo := printf `^[^:@/?#]*(:%s)?@` $variable -}}
+{{- if not (regexMatch $userinfo $address) -}}
+{{- $literal = true -}}
+{{- else if $wellFormed -}}
 {{- $path := regexReplaceAll `(?s)[?#].*$` (trimPrefix $authority $address) "" -}}
 {{- $literal = contains "@" $path -}}
 {{- else -}}
-{{- $literal = and (contains "@" $address) (not (regexMatch (printf `^[^:@/?#]*(:%s)?@[^@]*$` $variable) $address)) -}}
+{{- $literal = not (regexMatch (printf `%s[^@]*$` $userinfo) $address) -}}
+{{- end -}}
 {{- end -}}
 {{- $query := regexReplaceAll `#.*$` (join "?" (rest (splitList "?" $address))) "" -}}
 {{- range splitList "&" $query -}}

@@ -632,6 +632,7 @@ def test_me_13_the_app_reads_the_callback_key_from_the_gateway_keys(chart, make)
 LITERAL_PASSWORD = "literal-gateway-db-password"
 DATABASE_HOST = "@gateway-db.database.svc.cluster.local:5432/keeplane"
 QUERY_AT = "keeplane@gateway-db"
+NUMERIC_PASSWORD = "20261102"
 
 
 def with_gateway_url(values, url):
@@ -668,6 +669,20 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
         f"POSTGRESQL://u:{LITERAL_PASSWORD}/x?y@h/db",
         # A percent-encoded parameter name, which libraries decode to password.
         f"postgresql://keeplane{DATABASE_HOST}?pass%77ord={LITERAL_PASSWORD}",
+        # A literal password that looks like a port: an authority parser stops
+        # at the first "/", but a library that takes the first "@" anywhere
+        # reads it, and what follows up to the "@", as the password.
+        f"postgresql://u:{NUMERIC_PASSWORD}/x?y@h/db",
+        f"postgresql://u:{NUMERIC_PASSWORD}/x#y@h/db",
+        f"postgresql://u:{NUMERIC_PASSWORD}?y@h/db",
+        f"postgresql://u:{NUMERIC_PASSWORD}#y@h/db",
+        f"postgresql://u:{NUMERIC_PASSWORD}/x?application_name={QUERY_AT}",
+        # With no user name, an "@" in a query value or fragment makes the
+        # first-"@" reading take the port and path as a password.
+        f"postgresql://{DATABASE_HOST[1:]}?sslmode=verify-full"
+        f"&application_name={QUERY_AT}",
+        f"postgresql://[fd00::1]:{NUMERIC_PASSWORD}/keeplane?application_name={QUERY_AT}",
+        f"postgresql://gateway-db:{NUMERIC_PASSWORD}/keeplane#{QUERY_AT}",
     )
     for url in literal:
         result = make(with_gateway_url(with_enroller(managed(chart)), url))
@@ -677,6 +692,7 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
                 "docs/guide/gateway-database-secret.md")
         # The refusal never repeats the password.
         assert LITERAL_PASSWORD not in result.stderr, url
+        assert NUMERIC_PASSWORD not in result.stderr, url
     # The variable form the guides show, a GATEWAY_* variable and a URL with
     # no password render, and the base carries the URL as written.
     for url in (GATEWAY_DATABASE_URL,
@@ -684,12 +700,18 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
                 f"postgresql://keeplane{DATABASE_HOST}?sslmode=verify-full",
                 f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
                 "?sslmode=verify-full&sslpassword=${KEEPLANE_DB_KEY_PASSWORD}",
-                # An "@" only in a query value is not userinfo: with the
-                # variable password, and with no userinfo at all.
+                # An "@" in a query value or fragment after the user name is
+                # not userinfo: with the variable password, with the user name
+                # alone, and with a bracketed IPv6 host.
                 f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}"
                 f"?application_name={QUERY_AT}",
+                f"postgresql://keeplane{DATABASE_HOST}?application_name={QUERY_AT}",
+                f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}@[fd00::1]:5432/keeplane"
+                f"?application_name={QUERY_AT}",
+                f"postgresql://keeplane:${{KEEPLANE_DB_PASSWORD}}{DATABASE_HOST}#{QUERY_AT}",
+                # With no user name, the "@" is written %40.
                 f"postgresql://{DATABASE_HOST[1:]}?sslmode=verify-full"
-                f"&application_name={QUERY_AT}"):
+                "&application_name=keeplane%40gateway-db"):
         output = rendered(make(with_gateway_url(with_enroller(managed(chart)), url)))
         text, _ = runtime_base(chart, policy, output)
         assert json.loads(text)["config"]["database"]["url"] == url
