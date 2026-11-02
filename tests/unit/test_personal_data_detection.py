@@ -197,6 +197,21 @@ def test_pd_05_a_2_series_card_holds_without_the_detector_finding_it():
     assert inspector.check("pay with " + make_card("2221")).held
 
 
+# PD-14 Each of the five release-1 kinds found in English prose holds the request.
+@pytest.mark.parametrize("kind,value", [
+    ("PERSON", NAME),
+    ("ADDRESS", "14 Larch Crescent, Bristol"),
+    ("EMAIL", "amara@example.com"),
+    ("PHONE", "020 7946 0958"),
+    ("CARD", "4111 1111 1111 1111"),
+])
+def test_pd_14_each_kind_of_personal_data_holds(kind, value):
+    inspector = ready(Fake({value: kind}))
+    verdict = inspector.check(f"Please update the customer record: {value}, thanks")
+    assert verdict.held and verdict.reason == FOUND
+    assert value not in repr(verdict)
+
+
 # PD-06 Anything that is not a clean answer within the limit holds the request.
 def test_pd_06_slower_than_the_limit_is_held():
     inspector = ready(Fake(delay=0.4), limit=0.05)

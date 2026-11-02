@@ -381,7 +381,7 @@ def test_no_other_allowed_model_fails_with_the_missing_key_message(
 def test_an_approved_model_that_is_not_up_stops_with_a_clear_message(
     connected, runtime, monkeypatch, tmp_path, capsys
 ):
-    # Spec 005 ST19 "No approved model is up": nothing is sent anywhere.
+    # CLI-CLASS-01, Spec 005 ST19 "No approved model is up": nothing is sent anywhere.
     connected.model_ids = ["coder", "general"]
     connected.choice = {"model_id": None, "reason": "unavailable"}
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
@@ -397,7 +397,7 @@ def test_an_approved_model_that_is_not_up_stops_with_a_clear_message(
 def test_repository_settings_cannot_change_the_model_or_destination(
     connected, runtime, monkeypatch, tmp_path
 ):
-    # Spec 005 ST19 "The repo can't change it": the repository's own runtime
+    # CLI-CLASS-02, Spec 005 ST19 "The repo can't change it": the repository's own runtime
     # settings and environment point elsewhere, but are never loaded.
     hostile = {
         "model": "direct/unapproved",
