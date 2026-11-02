@@ -31,7 +31,9 @@ refuses the same values, because both evaluate the templates before anything
 reaches the cluster. Any other render result shows what the chart asks Kubernetes
 to create, not what a cluster does with it, so a render check alone never proves
 a live install here. A scenario counts as proven only by checks that run on the
-current revision in CI. The live trials ran on a local kind cluster or Docker with
+current revision in CI, and never by render checks alone; the one exception is
+Helm's install refusal for the managed gateway's keys, which is the refusal itself.
+The live catalogs (K8S, FULL, EXEDGE, EXIST) and GW-KEY are not run in CI. The live trials ran on a local kind cluster or Docker with
 outside access, not on an isolated network, and a trial recorded on an earlier
 chart revision is named as the closest evidence, not as proof.
 
@@ -45,6 +47,6 @@ here, or a case named here has no row in its own catalog or no test.
 | ST2 | Runs where only the models are reachable | Not proven yet: no install has run with only model endpoints reachable, and browser and device sign-in, the real coding runtime binary and the gateway image have not run under the outbound guard (task 002-03). EGR-01, EGR-02, EGR-11, EGR-12, EGR-15 and EGR-18 show the server and CLI contact only declared places; NETPOL-04, NETPOL-05 and NETPOL-10 render egress limited to DNS, databases and listed model endpoints. |
 | ST2 | The web UI loads from inside | OFF-01, OFF-02, OFF-03, OFF-04, OFF-05, OFF-06, OFF-UI-01, OFF-UI-02 |
 | ST3 | A local model works like a cloud one | Not proven yet: no live run on the current revision has asked an in-cluster model through Keeplane's gateway (task 002-04). The closest evidence is the earlier kind trials FULL-07, K8S-02 and EXEDGE-03, recorded on older chart revisions; EGR-12 shows in CI that the gateway adapter reaches only the address it is given. |
-| ST3 | The managed gateway always requires keys | SHAPE-08, PKG-04 (Helm refuses the install without the key Secret), SHAPE-07 (the gateway checks a key for model calls and management), GW-KEY-01, GW-KEY-02, GW-KEY-03 (the pinned gateway image refuses calls without the right key) |
+| ST3 | The managed gateway always requires keys | SHAPE-08, PKG-04 (Helm refuses the install without the key Secret, run in CI; the owner's rule from governance issue #47), SHAPE-07 (the rendered gateway checks a key for model calls and management). Supporting, not run in CI: GW-KEY-01, GW-KEY-02, GW-KEY-03 (the pinned gateway image refuses calls without the right key, using a hand-written strict-keys configuration, not the chart's). |
 | ST4 | One gateway copy stops | Not proven yet: the gateway copies became a StatefulSet in keeplane #180 and no live run has stopped a copy since (tasks 002-02 and 002-04). K8S-03 and K8S-04, then FULL-08, prove it once run; SHAPE-10 and SHAPE-13 only render two copies and their disruption budget. |
 | ST5 | We already run the gateway | Not proven yet: no live run on the current revision has installed Keeplane against a customer-run gateway (task 002-04). SHAPE-06, SHAPE-09 and PKG-02 render no gateway of Keeplane's own; the closest live evidence is the earlier trials K8S-05, EXEDGE-01, EXEDGE-03 and EXIST-03, recorded on older chart revisions. |

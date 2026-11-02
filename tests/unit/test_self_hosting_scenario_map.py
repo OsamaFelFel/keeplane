@@ -22,41 +22,33 @@ SCENARIOS = {
     ("ST4", "One gateway copy stops"),
     ("ST5", "We already run the gateway"),
 }
-# Scenarios not proven yet, each with the run that is still missing. Only a
-# check that runs on the current revision proves a scenario; a live trial
-# recorded on an earlier chart revision is closest evidence. The
-# table's cell starts "Not proven yet:" and says the same.
+# Scenarios not proven yet. Only a check that CI runs on the current
+# revision proves a scenario; a live trial recorded on an earlier chart
+# revision is closest evidence. The reason lives in the table only: its cell
+# starts "Not proven yet:" and says which run is missing before naming cases.
 NOT_PROVEN = {
-    ("ST1", "Install on the isolated network"): (
-        "No install has run on an isolated network (task 002-03)."
-    ),
-    ("ST2", "The install may pull from the registry"): (
-        "No install has run through temporary registry access that was then "
-        "closed (task 002-03)."
-    ),
-    ("ST2", "Runs where only the models are reachable"): (
-        "No install has run with only model endpoints reachable; browser and "
-        "device sign-in, the real coding runtime and the gateway image have "
-        "not run under the outbound guard (task 002-03)."
-    ),
-    ("ST3", "A local model works like a cloud one"): (
-        "No live run on the current revision has asked an in-cluster model "
-        "through the gateway; the kind trials ran on older chart revisions "
-        "(task 002-04)."
-    ),
-    ("ST4", "One gateway copy stops"): (
-        "No live run has stopped a gateway copy since the copies became a "
-        "StatefulSet (keeplane #180; tasks 002-02 and 002-04)."
-    ),
-    ("ST5", "We already run the gateway"): (
-        "No live run on the current revision has installed Keeplane against a "
-        "customer-run gateway; the trials ran on older chart revisions "
-        "(task 002-04)."
-    ),
+    ("ST1", "Install on the isolated network"),
+    ("ST2", "The install may pull from the registry"),
+    ("ST2", "Runs where only the models are reachable"),
+    ("ST3", "A local model works like a cloud one"),
+    ("ST4", "One gateway copy stops"),
+    ("ST5", "We already run the gateway"),
 }
 # Catalogs whose cases only render the chart. They can support a scenario but
-# never prove one alone: a proven row must also name a case from elsewhere.
+# never prove one alone.
 RENDER_ONLY = {"SHAPE", "NETPOL", "PKG"}
+# Catalogs CI does not run: live, kubernetes or optional checks that need a
+# cluster, Docker fixtures or the pinned gateway image. They can support a
+# scenario but never prove one alone.
+NOT_IN_CI = {"K8S", "FULL", "EXEDGE", "EXIST", "GW-KEY"}
+# Owner decision on governance issue #47: the managed gateway refuses to
+# install without the installer's key Secret. Helm evaluates the templates
+# before anything reaches the cluster, so a refusal under `helm template` in
+# CI is the same refusal `helm install` gives; for this scenario only, these
+# refusal cases count as CI proof.
+REFUSAL_PROOF = {
+    ("ST3", "The managed gateway always requires keys"): {"SHAPE-08", "PKG-04"},
+}
 CASE = re.compile(r"\b[A-Z][A-Z0-9]*(?:-[A-Z]+)*-\d+\b")
 # The catalog each case prefix belongs to, as the map's intro links them. A
 # case counts only if its row is in its own catalog, so a row with the same ID
@@ -121,8 +113,13 @@ def test_shm_02_proven_scenarios_name_cases_and_unproven_ones_say_why():
     for scenario, checked_by in scenario_rows().items():
         named = CASE.findall(checked_by)
         if scenario in NOT_PROVEN:
-            assert NOT_PROVEN[scenario], f"{scenario} needs a reason"
-            assert re.match(r"Not proven yet: \S", checked_by), scenario
+            reason = re.match(r"Not proven yet: (.*)", checked_by)
+            assert reason, f"{scenario} must start with 'Not proven yet:'"
+            # The reason comes before the first case it names, in words.
+            before_cases = CASE.split(reason.group(1), 1)[0]
+            assert len(re.findall(r"[a-z]+", before_cases)) >= 5, (
+                f"{scenario} gives no reason before naming cases"
+            )
             # It names the cases that come closest, so the gap is visible.
             assert named, f"{scenario} names no case"
         else:
@@ -130,12 +127,20 @@ def test_shm_02_proven_scenarios_name_cases_and_unproven_ones_say_why():
             assert named, scenario
 
 
-def test_shm_03_a_render_check_never_proves_a_scenario_alone():
+def test_shm_03_a_proven_scenario_rests_on_a_check_ci_runs():
     for scenario, checked_by in scenario_rows().items():
         if scenario in NOT_PROVEN:
             continue
-        prefixes = {prefix_of(case) for case in CASE.findall(checked_by)}
-        assert prefixes - RENDER_ONLY, f"{scenario} is proven only by rendering"
+        named = set(CASE.findall(checked_by))
+        in_ci = {
+            case
+            for case in named
+            if prefix_of(case) not in RENDER_ONLY | NOT_IN_CI
+        }
+        refusals = named & REFUSAL_PROOF.get(scenario, set())
+        assert in_ci or refusals, (
+            f"{scenario} is proven only by rendering or by checks CI does not run"
+        )
 
 
 def test_shm_04_every_named_case_has_a_row_in_its_own_catalog_and_a_test():
