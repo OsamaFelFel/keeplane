@@ -40,10 +40,37 @@ file and sign in as `first-admin`.
 
 New installations keep private credentials under `.keeplane/local/`, which Git
 ignores. Earlier installations reuse `/private/tmp/keeplane-accounts-trial/`
-when it exists. Accounts and registered models live in Docker volumes. Existing preview records
-are imported into Django once; sign in again after this update. The original
-database files are kept. Preserve
-both the credential files and the volumes when keeping an installation.
+when it exists. Accounts and registered models live in Docker volumes and are
+kept between restarts. Preserve both the credential files and the volumes when
+keeping an installation.
+
+### Earlier preview data
+
+Before the first release Keeplane doesn't carry an earlier preview's data
+forward. The app database now has its own folder, `/state/database`, in the
+account volume. If you ran an earlier preview, this one starts a fresh database
+there with only the first admin: earlier accounts, models, classes and Audit
+records aren't imported. The earlier files (`/state/keeplane.sqlite3`, or
+before that `accounts.sqlite3` and `model-approvals.sqlite3`) are left unused
+and unchanged, and each start prints a notice naming the ones it found. The
+launcher also removes the containers of the earlier port 3001 preview (the
+`keeplane-accounts-trial` Compose project); its data stays in the volume.
+
+To reset the preview fully, stop everything, including the
+[guarded runtime's](guarded-runtime.md) model enroller, remove every container
+still using the account volume (an earlier preview's stopped containers hold it
+too, and Docker won't remove a volume in use), remove the volume, then start the
+preview again:
+
+```sh
+docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime down --remove-orphans
+docker ps -aq --filter volume=keeplane-accounts-trial_model-approvals | xargs -r docker rm -f
+docker volume rm keeplane-accounts-trial_model-approvals
+python3 deploy/local/up.py
+```
+
+This deletes every account, model setting and Audit record in the preview,
+along with the earlier files.
 
 ## Configuration
 

@@ -26,6 +26,7 @@ services:
       RUNTIME_AUTHORIZER_KEY_FILE: /installed/callback-key
       RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
       GATEWAY_FILE_CONFIG: /installed/gateway.json
+      KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
     volumes:
       - runtime-installation:/installed:ro
 
@@ -46,6 +47,7 @@ services:
       PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
       GATEWAY_MODE: managed
       KEEPLANE_CLI_OAUTH_ENABLED: ${KEEPLANE_RUNTIME_OAUTH_ENABLED:-0}
+      KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
     volumes:
       - ./components/control-plane:/app:ro
       - runtime-installation:/installed
@@ -56,6 +58,8 @@ services:
   # ADR 027: the only writer of the guard after enrollment. It has no port,
   # reads approvals from a read-only database connection and shares the
   # gateway's network namespace to read the loopback-only applied state.
+  # Of the account volume it sees only the database folder, read-only: not the
+  # signing secret, earlier preview files or anything else kept in /state.
   model-enroller:
     profiles: ["runtime"]
     image: ${KEEPLANE_RUNTIME_APP_IMAGE:-keeplane-preview:docker-local}
@@ -74,10 +78,19 @@ services:
       PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
       GATEWAY_MODE: managed
       KEEPLANE_DATABASE_READ_ONLY: "1"
+      KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
     volumes:
       - ./components/control-plane:/app:ro
       - runtime-installation:/installed
-      - account-data:/state:ro
+      # The whole folder, not the file alone: SQLite keeps its journal beside
+      # the database, and a reader that can't see it can read a half-written
+      # change.
+      - type: volume
+        source: account-data
+        target: /state/database
+        read_only: true
+        volume:
+          subpath: database
       # Only the two gateway keys, not the first admin password.
       - type: volume
         source: app-secrets

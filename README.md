@@ -15,7 +15,9 @@ python3 deploy/local/up.py
 ```
 
 Open the address printed by the command and sign in as `first-admin` using the
-printed password-file location. Existing accounts and models are kept.
+printed password-file location. Accounts and models are kept between
+restarts; a preview from before the database moved to its own folder starts
+fresh and leaves the earlier files unused.
 
 Use `--port 3080` to choose another port, or `--verbose` to see build output.
 The [local setup guide](docs/guide/local-preview.md) covers prerequisites,

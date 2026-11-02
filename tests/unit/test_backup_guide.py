@@ -225,6 +225,15 @@ def test_bkg06_paths_in_the_guide_are_the_apps_defaults():
     assert '"/state/keeplane.sqlite3"' in SETTINGS
     assert '"/state/django-secret-key"' in SETTINGS
     assert "/state/keeplane.sqlite3" in GUIDE and "/state/django-secret-key" in GUIDE
+    # The Docker preview keeps its database in a folder of its own.
+    preview_database = set(re.findall(r"KEEPLANE_SQLITE_PATH: (\S+)", COMPOSE))
+    assert preview_database == {"/state/database/keeplane.sqlite3"}
+    (path,) = preview_database
+    assert f"`{path}` in the `account-data` volume" in GUIDE
+    assert [line for line in DOCKER if "keeplane.sqlite3" in line]
+    for line in DOCKER:
+        if "keeplane.sqlite3" in line:
+            assert path in line and "/state/keeplane.sqlite3" not in line, line
     local_config = (ROOT / "integrations/gateway/local.yaml").read_text()
     assert "sqlite:///data/agentgateway.db" in local_config
     assert "/data/agentgateway.db" in GUIDE
