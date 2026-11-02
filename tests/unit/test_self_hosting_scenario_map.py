@@ -22,7 +22,9 @@ SCENARIOS = {
     ("ST4", "One gateway copy stops"),
     ("ST5", "We already run the gateway"),
 }
-# Scenarios not proven yet, each with the run that is still missing. The
+# Scenarios not proven yet, each with the run that is still missing. Only a
+# check that runs on the current revision proves a scenario; a live trial
+# recorded on an earlier chart revision is closest evidence. The
 # table's cell starts "Not proven yet:" and says the same.
 NOT_PROVEN = {
     ("ST1", "Install on the isolated network"): (
@@ -37,9 +39,19 @@ NOT_PROVEN = {
         "device sign-in, the real coding runtime and the gateway image have "
         "not run under the outbound guard (task 002-03)."
     ),
+    ("ST3", "A local model works like a cloud one"): (
+        "No live run on the current revision has asked an in-cluster model "
+        "through the gateway; the kind trials ran on older chart revisions "
+        "(task 002-04)."
+    ),
     ("ST4", "One gateway copy stops"): (
         "No live run has stopped a gateway copy since the copies became a "
         "StatefulSet (keeplane #180; tasks 002-02 and 002-04)."
+    ),
+    ("ST5", "We already run the gateway"): (
+        "No live run on the current revision has installed Keeplane against a "
+        "customer-run gateway; the trials ran on older chart revisions "
+        "(task 002-04)."
     ),
 }
 # Catalogs whose cases only render the chart. They can support a scenario but
