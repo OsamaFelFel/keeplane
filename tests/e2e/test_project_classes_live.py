@@ -27,7 +27,7 @@ import pytest
 from components.cli import coding, server_connection
 from tests.fixtures.class_runner import ClassRunner
 from tests.support.client import BASE, RUNTIME, Browser
-from tests.support.gateway import GATEWAY_SCRIPT, RESOURCE_PATH
+from tests.support.gateway import GATEWAY_SCRIPT, RESOURCE_PATH, app_exec, resource
 from tests.support.reporting import report_path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -169,7 +169,8 @@ def run_cases():
     suffix = uuid.uuid4().hex[:8]
     upstream = {
         "conf": "up-conf-" + suffix,
-        "spare": "up-spare-" + suffix,
+        # A cloud model on the preview's mock provider, not on the runner.
+        "spare": "mock-cloud",
         "public": "up-public-" + suffix,
     }
     names = {
@@ -188,7 +189,13 @@ def run_cases():
     developer_name = "class-live-" + suffix
     developer_password = uuid.uuid4().hex + uuid.uuid4().hex
     cases, created, cleanup_failures = [], [], []
-    state = {"mode": None, "developer": None, "enrolled": False, "volume_existed": True}
+    state = {
+        "mode": None,
+        "developer": None,
+        "enrolled": False,
+        "volume_existed": True,
+        "settled": False,
+    }
     admin = Browser()
 
     def record(identifier, passed, observed):
@@ -236,22 +243,39 @@ def run_cases():
                 == 200
             )
             for key in ("conf", "spare", "public"):
+                if key == "spare":
+                    source = {
+                        "source": "openai",
+                        "key_choice": "shared",
+                        "shared_key": (RUNTIME / "cloud-provider-key")
+                        .read_text()
+                        .strip(),
+                    }
+                else:
+                    source = {"source": "runner", "address": RUNNER_ADDRESS}
                 status, result, _ = admin.fetch(
                     "/api/models",
                     {
                         "name": names[key],
                         "model": upstream[key],
-                        "source": "runner",
-                        "address": RUNNER_ADDRESS,
+                        **source,
                         "approved_classes": approvals[key],
                     },
                     method="POST",
                 )
+                source = None
                 if status != 200:
                     raise RuntimeError(
-                        f"Adding fixture model {key} returned {status}: {result}"
+                        f"Adding fixture model {key} returned {status}"
                     )
                 created.append(names[key])
+            # The second Confidential model can't be used: its shared key file
+            # is gone, so the model enroller (ADR 027) leaves it out of the
+            # guard and the runtime gate refuses it, while it stays set up and
+            # approved. Any usable set-up model would be enrolled at once.
+            _, spare_resource = resource(names["spare"])
+            key_file = spare_resource["auth"]["key"]["value"]["file"]
+            app_exec("python", "-c", "import os, sys; os.remove(sys.argv[1])", key_file)
 
             volume = "keeplane-local_runtime-installation"
             state["volume_existed"] = (
@@ -276,6 +300,9 @@ def run_cases():
                 env=environment(),
                 wait_ready=lambda: launcher.wait_preview(BASE),
             )
+            state["settled"] = enroller_settled(2)
+            if not state["settled"]:
+                raise RuntimeError("The model enroller did not settle after enrolment")
             admin = Browser()
             assert admin.login("first-admin", password)[0] == 200
             admin_token = bearer(admin)
@@ -465,7 +492,9 @@ def run_cases():
                 },
             )
         finally:
-            if state["enrolled"] and any(c["verdict"] != "pass" for c in cases):
+            if state["enrolled"] and (
+                not state["settled"] or any(c["verdict"] != "pass" for c in cases)
+            ):
                 enroller_diagnostics(list(names.values()))
             restore(admin, password, project, created, state, cleanup_failures)
     cleanup = "complete" if not cleanup_failures else "; ".join(cleanup_failures)
@@ -501,6 +530,29 @@ print(json.dumps({
     'files': sorted(__import__('os').listdir('/installed')),
 }))
 """
+
+
+def enroller_settled(count, timeout=90):
+    """Wait for the model enroller's first pass over the new installation.
+
+    It reports when the guard matches the saved models; until then a pass may
+    be replacing the guard, which refuses every protected call meanwhile.
+    """
+    expected = (
+        f"Protected access is up to date: {count} models are enrolled.",
+        f"Protected access is ready: {count} models are enrolled.",
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        logs = compose(
+            "--profile", "runtime", "logs", "--no-color", "--no-log-prefix",
+            "model-enroller", runtime=True, timeout=60,
+        )
+        lines = [line.strip() for line in logs.stdout.splitlines() if line.strip()]
+        if lines and lines[-1] in expected:
+            return True
+        time.sleep(1)
+    return False
 
 
 def enroller_diagnostics(names):
