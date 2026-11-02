@@ -63,6 +63,18 @@ colocated tests.
 - A refused write keeps the choice. A lost reply or ten-second timeout offers Check without repeating the write.
 - Readback confirms the saved class. If classes were turned off, the dialog keeps the result uncertain rather than clearing an assignment.
 
+## Data classes (`DataClassesPage.test.tsx`)
+
+Spec 005 ST18. The fake server keeps class rows and answers like the data-class
+API; the 1280px and 320px looks are in the
+[browser cases](../../browser/data-classes-cases.md) (DC-UI-01 to DC-UI-03).
+
+| Case | Plain-English action | Expected result |
+| --- | --- | --- |
+| DC-UI-11 | Choose Add class, enter Restricted, tick `coder` and add it. | Only models set up in Keeplane are offered and none is ticked to begin with. One protected request carries the name and `coder`; the page says "Added Restricted." and the table lists Restricted with `coder`. |
+| DC-UI-12 | Edit Confidential: rename it Secret, untick `coder`, tick `reviewer` and save. | The dialog starts with `coder` ticked. One protected request carries the new name and `reviewer`; the page says "Saved Secret." and the table shows Secret with `reviewer` and no Confidential row. |
+| DC-UI-13 | Edit Confidential, which a project uses, choose Remove class and confirm. | Keeplane refuses it: the confirmation shows "Projects still use this class". After Cancel, Confidential is still listed with its one project and no removal notice. |
+
 ## Personal data in requests (`DataClassesDetection.test.tsx`)
 
 | Case | Plain-English action | Expected result |
