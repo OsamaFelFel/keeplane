@@ -8,7 +8,7 @@ These cases cover the protected Docker preview against its real agentgateway and
 4. **Use only approved classes.** The protected model list and data-class lists show the chosen classes. A developer request to the model through Keeplane succeeds.
 5. **Keep duplicate behavior.** Repeating the same model registration reports that it already exists and preserves its approval and gateway definition.
 6. **Use the real local runner.** Register a separate alias of the running Qwen model with Public approval. The runner and gateway must both return a real answer, and the model must be listed as approved.
-7. **Roll back a model that does not answer through the gateway.** The test fixture intentionally returns HTTP 503 for one reserved upstream model ID. Keeplane reports failure, removes the new gateway registration, and does not approve the model.
+7. **Roll back a model that does not answer through the gateway.** The test fixture intentionally returns HTTP 503 for one reserved upstream model ID. Keeplane removes the new gateway registration, does not approve the model, and answers 503 with “The model didn't answer through the gateway. Nothing was saved.”
 8. **Clean up only the trial models.** Remove their Keeplane approvals and gateway registrations. Other model definitions and both local previews remain available.
 
 The test does not prove cloud-provider keys, two-replica atomicity, or model classification. A gateway accepted write followed by a failed readback/inference triggers a guarded cleanup attempt; if cleanup cannot be verified, the API reports that the model may remain unapproved instead of claiming nothing was saved.

@@ -222,7 +222,8 @@ def run_cases():
         record(
             "ADD-07",
             no_answer_status == 503
-            and "Registration was removed" in no_answer.get("error", "")
+            and no_answer.get("error")
+            == "The model didn't answer through the gateway. Nothing was saved."
             and resource_status == 200
             and list_status == 200
             and bad_name

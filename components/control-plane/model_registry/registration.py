@@ -546,7 +546,7 @@ class ModelManagement:
                 {
                     "error": "Keeplane couldn't save model approval. "
                     + (
-                        "Registration was removed."
+                        "Nothing was saved."
                         if removed
                         else "The model may remain in the gateway without Keeplane approval."
                     )
@@ -885,9 +885,11 @@ class ModelManagement:
             return self.reply(
                 503,
                 {
-                    "error": "The model did not answer through the gateway. "
+                    # Spec 004 ST10 and D170: say "Nothing was saved." only
+                    # when the gateway entry this request wrote is gone.
+                    "error": "The model didn't answer through the gateway. "
                     + (
-                        "Registration was removed."
+                        "Nothing was saved."
                         if removed
                         else "It may remain in the gateway without Keeplane approval; check Models."
                     )
@@ -913,7 +915,7 @@ class ModelManagement:
                 {
                     "error": "Keeplane could not save the model approval. "
                     + (
-                        "Registration was removed."
+                        "Nothing was saved."
                         if removed
                         else "It may remain in the gateway without Keeplane approval; check Models."
                     )

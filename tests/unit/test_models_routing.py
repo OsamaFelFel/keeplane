@@ -1,6 +1,6 @@
 """Spec 004 ST10, ST23, ST24 and ST26: adding and setting up models (fakes only).
 
-The plain-English cases are MRS-01 to MRS-10 in models-routing-cases.md. The
+The plain-English cases are MRS-01 to MRS-12 in models-routing-cases.md. The
 gateway is an in-memory store and the local runner a loopback HTTP server, so
 no Docker, gateway or provider is used.
 """
@@ -14,6 +14,7 @@ from threading import Thread
 from types import SimpleNamespace
 
 import pytest
+from common.errors import StorageUnavailable
 from integrations.runners import local_runner
 from model_registry import registration
 from model_registry.fingerprints import fingerprint
@@ -31,6 +32,7 @@ class Gateway:
         self.writes, self.deletes, self.asked = [], [], []
         self.answer = (200, {"choices": [{"message": {"content": "OK"}}]})
         self.write_status = 200
+        self.delete_status = 200
 
     def put(self, value, revision=1):
         self.records[value["name"]] = {
@@ -46,6 +48,8 @@ class Gateway:
         if method == "DELETE":
             model_id = path.rsplit("/", 1)[1]
             self.deletes.append(model_id)
+            if self.delete_status != 200:
+                return self.delete_status, {"error": "delete refused"}
             self.records.pop(model_id, None)
             return 200, {}
         if body is None:
@@ -357,3 +361,67 @@ def test_mrs_10_keeplane_only_reads_and_asks_a_local_runner(tmp_path, monkeypatc
             {"model": "runner-model", "messages": [{"role": "user", "content": "Reply OK."}], "max_tokens": 1},
         )
     ]
+
+
+LOCAL = {"name": "local", "model": "upstream", "source": "fixture", "approved_classes": ["Public"]}
+
+
+def test_mrs_11_a_local_model_that_does_not_answer_through_the_gateway_is_not_added(
+    tmp_path, monkeypatch
+):
+    gateway, catalog = Gateway(), Catalog()
+    gateway.answer = (503, {})
+    status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(LOCAL)
+    assert status == 503
+    assert result == {"error": "The model didn't answer through the gateway. Nothing was saved."}
+    assert gateway.asked == ["local"] and gateway.deletes == ["local"]
+    assert gateway.records == {} and catalog.rows == {}
+
+
+def test_mrs_11_when_its_entry_cannot_be_removed_keeplane_does_not_say_nothing_was_saved(
+    tmp_path, monkeypatch
+):
+    gateway, catalog = Gateway(), Catalog()
+    gateway.answer, gateway.delete_status = (503, {}), 500
+    status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(LOCAL)
+    assert status == 503
+    assert result == {
+        "error": "The model didn't answer through the gateway. "
+        "It may remain in the gateway without Keeplane approval; check Models."
+    }
+    assert "Nothing was saved" not in result["error"]
+    assert "local" in gateway.records and catalog.rows == {}
+
+
+class RefusingCatalog(Catalog):
+    def approve(self, *_, **__):
+        raise StorageUnavailable("approval storage is down")
+
+
+@pytest.mark.parametrize(
+    "body,lead",
+    [
+        (LOCAL, "Keeplane could not save the model approval."),
+        (cloud(approved_classes=["Public"]), "Keeplane couldn't save model approval."),
+    ],
+)
+def test_mrs_12_when_the_approval_cannot_be_saved_the_model_is_removed_and_nothing_is_saved(
+    tmp_path, monkeypatch, body, lead
+):
+    gateway, catalog = Gateway(), RefusingCatalog()
+    status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(body)
+    assert status == 503
+    assert result == {"error": lead + " Nothing was saved."}
+    assert gateway.records == {} and catalog.rows == {} and key_files(tmp_path) == []
+
+
+@pytest.mark.parametrize("body", [LOCAL, cloud(approved_classes=["Public"])])
+def test_mrs_12_when_the_model_cannot_be_removed_either_keeplane_does_not_say_nothing_was_saved(
+    tmp_path, monkeypatch, body
+):
+    gateway, catalog = Gateway(), RefusingCatalog()
+    gateway.delete_status = 500
+    status, result = management(gateway, catalog, tmp_path, monkeypatch, classes_on=True).add(body)
+    assert status == 503
+    assert "Nothing was saved" not in result["error"]
+    assert "may remain in the gateway without Keeplane approval" in result["error"]

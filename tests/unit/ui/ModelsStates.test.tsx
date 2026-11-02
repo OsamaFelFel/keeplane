@@ -10,11 +10,12 @@ const listing = { models: [{ id: 'coder', provider: 'OpenAI', kind: 'cloud', app
 // Gateway products and versions the page must never name (Spec 004 ST25).
 const gatewayNames = /agentgateway|litellm|envoy|semantic router|routellm|plano|\bv?\d+\.\d+(\.\d+)?\b/i
 
-function fixture({ add, models = () => response(listing) }: {
-  add?: () => object; models?: () => object | Promise<object>
+function fixture({ add, runners, models = () => response(listing) }: {
+  add?: () => object; runners?: () => object; models?: () => object | Promise<object>
 } = {}) {
   const request = vi.fn(async (path: string, options: RequestInit = {}) => {
     if (path === '/api/models' && (options.method ?? 'GET') === 'GET') return models()
+    if (path === '/api/runners/models' && runners) return runners()
     if (path === '/api/data-classes') return response({ enabled: false, classes: [] })
     if (path === '/api/auth-options') return response({ csrf_token: 'masked' })
     if (path === '/api/models' && add) return add()
@@ -52,6 +53,41 @@ test("MOD-UI-07: a model the gateway doesn't register keeps the dialog and says 
   const alert = await within(dialog).findByRole('alert')
   expect(within(alert).getByText("new-model wasn't added")).toBeTruthy()
   expect(within(alert).getByText("The gateway didn't register it. Nothing was saved. Check the details and try again.")).toBeTruthy()
+})
+
+async function addLocal(name = 'runner-model') {
+  const user = userEvent.setup()
+  render(<ModelsPage />)
+  await user.click(await screen.findByRole('button', { name: 'Add model' }))
+  const dialog = screen.getByRole('dialog')
+  await user.type(within(dialog).getByLabelText('Runner address'), 'http://runner.example:8080')
+  await user.click(within(dialog).getByRole('button', { name: 'Find models' }))
+  await within(dialog).findByRole('option', { name })
+  await user.selectOptions(within(dialog).getByLabelText('Model', { selector: 'select' }), name)
+  await user.click(within(dialog).getByRole('button', { name: 'Add model' }))
+  return dialog
+}
+
+test("MOD-UI-08: a local model that doesn't answer through the gateway keeps the dialog and says nothing was saved", async () => {
+  fixture({
+    runners: () => response({ models: ['runner-model'] }),
+    add: () => response({ error: "The model didn't answer through the gateway. Nothing was saved." }, 503),
+  })
+  const dialog = await addLocal()
+  const alert = await within(dialog).findByRole('alert')
+  expect(within(alert).getByText("runner-model wasn't added")).toBeTruthy()
+  expect(within(alert).getByText("The model didn't answer through the gateway. Nothing was saved. Check the details and try again.")).toBeTruthy()
+  expect(screen.getByRole('dialog')).toBe(dialog)
+})
+
+test("MOD-UI-08: when its gateway entry may remain, the dialog doesn't say nothing was saved", async () => {
+  const error = "The model didn't answer through the gateway. It may remain in the gateway without Keeplane approval; check Models."
+  fixture({ runners: () => response({ models: ['runner-model'] }), add: () => response({ error }, 503) })
+  const dialog = await addLocal()
+  const alert = await within(dialog).findByRole('alert')
+  expect(within(alert).getByText("runner-model wasn't added")).toBeTruthy()
+  expect(within(alert).getByText(error)).toBeTruthy()
+  expect(within(alert).queryByText(/Nothing was saved/)).toBeNull()
 })
 
 test('MOD-UI-03: a model already added from the provider is named on the Model field', async () => {
