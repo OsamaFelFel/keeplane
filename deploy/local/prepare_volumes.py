@@ -8,20 +8,29 @@ from pathlib import Path
 # ADR 014: no migration from earlier previews. Their files stay where they
 # were, untouched and unused, and start-up says so.
 EARLIER_FILES = ("keeplane.sqlite3", "accounts.sqlite3", "model-approvals.sqlite3")
+VOLUME = "keeplane-accounts-trial_model-approvals"
+# The full reset, in order: stop this preview (with the enroller), remove every
+# container still holding the account volume (an earlier preview's stopped
+# containers in the old keeplane-accounts-trial project hold it too, and Docker
+# refuses to remove a volume in use), then remove the volume.
 RESET = (
-    "docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime "
-    "down --remove-orphans"
+    ("docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime "
+     "down --remove-orphans"),
+    f"docker ps -aq --filter volume={VOLUME} | xargs -r docker rm -f",
+    f"docker volume rm {VOLUME}",
 )
 
 
 def earlier_database_notice(names):
     files = ", ".join("/state/" + name for name in names)
+    stop, release, remove = RESET
     return (
         "Notice: this preview keeps its app database in /state/database and "
-        f"started it fresh. It doesn't use or import the earlier preview files ({files}) "
-        "and left them unchanged. To reset the preview fully, stop it with "
-        f"'{RESET}', remove its account volume with 'docker volume rm "
-        "keeplane-accounts-trial_model-approvals', then start it again."
+        f"started it fresh, with only the first admin. It doesn't use or import the "
+        f"earlier preview files ({files}) and left them unchanged. To reset the preview "
+        f"fully, stop it with '{stop}', remove every container still using its account "
+        f"volume, including the earlier keeplane-accounts-trial preview's stopped ones, "
+        f"with '{release}', remove the volume with '{remove}', then start it again."
     )
 
 

@@ -1,4 +1,4 @@
-"""Build and start Keeplane locally. Existing accounts and models are kept."""
+"""Build and start Keeplane locally. Accounts and models are kept between restarts."""
 
 import argparse
 import hashlib
@@ -149,14 +149,21 @@ def wait_preview(base="http://127.0.0.1:3000", timeout=120):
 
 
 def retire_old_preview():
-    """Stop the former port 3001 app before sharing its SQLite volume."""
-    result = subprocess.run(["docker", "ps", "--filter",
+    """Remove the former port 3001 preview's containers, running or stopped.
+
+    They belong to the old keeplane-accounts-trial Compose project and mount the
+    account volume this preview shares. Their data stays in the volume; the
+    containers are never started again, and a stopped one would still hold the
+    volume and make `docker volume rm` fail during a full reset.
+    """
+    result = subprocess.run(["docker", "ps", "--all", "--filter",
                              "label=com.docker.compose.project=keeplane-accounts-trial",
                              "--format", "{{.Names}}"], check=True, cwd=REPO,
                             capture_output=True, text=True)
     names = result.stdout.splitlines()
     if names:
-        subprocess.run(["docker", "stop", *names], check=True, cwd=REPO)
+        print("Removing the earlier preview's containers (its data stays in the volume)…", flush=True)
+        run(["docker", "rm", "--force", *names])
 
 
 def earlier_database_notices(env, since):

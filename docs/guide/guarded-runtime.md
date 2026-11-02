@@ -64,11 +64,14 @@ that in `accounts.sqlite3` and `model-approvals.sqlite3`). Before the first
 release Keeplane doesn't carry trial data forward, so this preview starts a
 fresh database in the folder, with only the first admin, and leaves the earlier
 files unused and unchanged; start-up prints a notice when it finds them. To
-reset the preview fully, stop everything, including the enroller, remove the
-account volume, then start the preview again:
+reset the preview fully, stop everything, including the enroller, remove every
+container still using the account volume (an earlier preview's stopped
+containers hold it too), remove the volume, then start the preview again (see
+[earlier preview data](local-preview.md#earlier-preview-data)):
 
 ```sh
 docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime down --remove-orphans
+docker ps -aq --filter volume=keeplane-accounts-trial_model-approvals | xargs -r docker rm -f
 docker volume rm keeplane-accounts-trial_model-approvals
 ```
 

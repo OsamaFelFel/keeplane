@@ -1,6 +1,6 @@
 """The Docker preview's model enroller sees only the app database folder.
 
-Cases EDM-01 to EDM-06 in enroller-database-mount-cases.md. The Compose
+Cases EDM-01 to EDM-08 in enroller-database-mount-cases.md. The Compose
 checks render compose.yaml with deploy/local/runtime.yaml through
 `docker compose config`, which reads files only and starts nothing.
 """
@@ -169,10 +169,23 @@ def test_edm04_a_new_preview_gets_a_private_database_folder(volumes, capsys):
 
 
 EARLIER = ("keeplane.sqlite3", "accounts.sqlite3", "model-approvals.sqlite3")
+VOLUME = "keeplane-accounts-trial_model-approvals"
+# Stop this preview (with the enroller), remove every container still holding the
+# volume (the earlier keeplane-accounts-trial project's stopped ones too), then the
+# volume: Docker refuses `docker volume rm` while any container, even a stopped
+# one, uses it.
 FULL_RESET = (
-    "docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime "
-    "down --remove-orphans"
+    ("docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime "
+     "down --remove-orphans"),
+    f"docker ps -aq --filter volume={VOLUME} | xargs -r docker rm -f",
+    f"docker volume rm {VOLUME}",
 )
+GUIDES = ("docs/guide/local-preview.md", "docs/guide/guarded-runtime.md")
+
+
+def in_order(text, steps):
+    positions = [text.index(step) for step in steps]
+    return positions == sorted(positions)
 
 
 @pytest.mark.parametrize("present", [EARLIER[:1], EARLIER[1:], EARLIER])
@@ -196,13 +209,59 @@ def test_edm05_earlier_preview_files_are_left_unchanged_with_a_notice(
     assert notice.startswith("Notice: ")
     for name in EARLIER:
         assert (("/state/" + name) in notice) == (name in present), name
-    for words in ("doesn't use or import", "unchanged", f"'{FULL_RESET}'",
-                  "docker volume rm keeplane-accounts-trial_model-approvals"):
+    for words in ("doesn't use or import", "unchanged", "only the first admin",
+                  "keeplane-accounts-trial preview's stopped ones",
+                  *(f"'{step}'" for step in FULL_RESET)):
         assert words in notice, words
-    # The guide gives the same full reset, which also stops the enroller.
-    guide = (ROOT / "docs/guide/guarded-runtime.md").read_text()
-    assert FULL_RESET in guide
-    assert "docker volume rm keeplane-accounts-trial_model-approvals" in guide
+    assert in_order(notice, FULL_RESET)
+    # Both guides give the same full reset, in the same order; the first step
+    # also stops the enroller.
+    for name in GUIDES:
+        guide = (ROOT / name).read_text()
+        block = guide[guide.index(FULL_RESET[0]):]
+        block = block[:block.index("```")]
+        assert [line for line in block.splitlines()[:3]] == list(FULL_RESET), name
+
+
+def test_edm05_the_guides_no_longer_promise_imported_accounts():
+    guide = (ROOT / "docs/guide/local-preview.md").read_text()
+    architecture = (ROOT / "docs/architecture/local-preview.md").read_text()
+    readme = (ROOT / "README.md").read_text()
+    for text in (guide, architecture, readme):
+        flat = " ".join(text.split())
+        for stale in ("are imported into Django", "Existing accounts and models are kept",
+                      "Their data is imported", "original database files are kept"):
+            assert stale not in flat, stale
+    flat = " ".join(guide.split())
+    for words in ("starts a fresh database there with only the first admin",
+                  "left unused and unchanged", "each start prints a notice"):
+        assert words in flat, words
+
+
+def test_edm08_the_launcher_removes_the_earlier_previews_containers(monkeypatch):
+    spec = importlib.util.spec_from_file_location("local_up_retire", ROOT / "deploy/local/up.py")
+    up = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(up)
+    calls = []
+
+    def listing(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="old-app-1\nold-init-1\n")
+
+    monkeypatch.setattr(up.subprocess, "run", listing)
+    monkeypatch.setattr(up, "run", lambda command, **kwargs: calls.append(command) or "")
+    up.retire_old_preview()
+    # Stopped containers count too: they still hold the shared account volume.
+    assert calls == [
+        ["docker", "ps", "--all", "--filter",
+         "label=com.docker.compose.project=keeplane-accounts-trial", "--format", "{{.Names}}"],
+        ["docker", "rm", "--force", "old-app-1", "old-init-1"],
+    ]
+    calls.clear()
+    monkeypatch.setattr(up.subprocess, "run", lambda command, **kwargs: calls.append(command)
+                        or subprocess.CompletedProcess(command, 0, stdout=""))
+    up.retire_old_preview()
+    assert len(calls) == 1 and calls[0][:3] == ["docker", "ps", "--all"]
 
 
 def test_edm07_earlier_accounts_are_not_imported_into_the_fresh_database(
