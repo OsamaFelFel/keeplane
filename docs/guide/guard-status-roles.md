@@ -10,10 +10,12 @@ the model.
 
 This page is for whoever sets up Keeplane's PostgreSQL database. You create
 two kinds of extra login roles, then run one Keeplane command that limits what
-each role can do. The chart settings that mount these credentials into the
-enroller containers are separate work; until they ship, nothing on this page is
-used by a running install. It applies to PostgreSQL only: the Docker preview
-keeps no guard-status table.
+each role can do. The Helm chart holds the enroller containers and the
+settings that give them these credentials (`gateway.enroller`), but refuses to
+turn them on until it installs Keeplane's protected runtime on the managed
+gateway; see
+[the chart's model enroller settings](kubernetes-installation-reference.md#model-enroller).
+It applies to PostgreSQL only: the Docker preview keeps no guard-status table.
 
 ## What each role may do
 
@@ -63,9 +65,13 @@ Keeplane command or its logs.
 
 ## 2. Limit the roles with Keeplane's command
 
-After `migrate`, run this with the **migration** credential (the same
-environment the migration Job uses), naming every gateway copy and its status
-role:
+With the Helm chart's migration Job (`app.postgres.migration.enabled`, the
+default) and `gateway.enroller.enabled`, the Job runs this command for you after
+every `migrate`, from `app.postgres.user`, `gateway.enroller.approvalsUser`
+and `gateway.enroller.statusRoles`; create the roles before you install or
+upgrade. Otherwise, after `migrate`, run it with the **migration** credential
+(the same environment the migration Job uses), naming every gateway copy and
+its status role:
 
 ```sh
 python /app/manage.py configure_guard_status_access \
@@ -123,8 +129,14 @@ connection stays read-only.
 | `KEEPLANE_DATABASE_USER`, `KEEPLANE_DATABASE_PASSWORD_FILE` | Enroller | The enroller approvals role and its password file |
 | `KEEPLANE_DATABASE_READ_ONLY` | Enroller | `1` |
 | `KEEPLANE_GATEWAY_COPY` | Enroller | This copy's Pod name, for example from the Pod's `metadata.name` |
-| `KEEPLANE_GUARD_STATUS_DATABASE_USER`, `KEEPLANE_GUARD_STATUS_DATABASE_PASSWORD_FILE` | Enroller | This copy's status role and its password file |
+| `KEEPLANE_GUARD_STATUS_DATABASE_USER` (or `..._USER_FILE`, a file holding it), `KEEPLANE_GUARD_STATUS_DATABASE_PASSWORD_FILE` | Enroller | This copy's status role and its password file |
 | `KEEPLANE_GUARD_STATUS_CHECK` | App | `1` turns on the per-copy check |
+
+The Helm chart sets all of these from `gateway.enroller` and
+`app.guardStatusCheck`. Every copy shares one Pod template, so it names each
+copy's status role in a file (`KEEPLANE_GUARD_STATUS_DATABASE_USER_FILE`) that
+the copy's init container writes; setting both the role and the file stops
+start-up.
 
 The status connection uses the same host, port, database name and TLS settings
 as the approvals connection. The enroller refuses to start when only one of
@@ -146,6 +158,9 @@ for how to run it in a pod). It runs as the app role, changes nothing, and
 uses the same checks as `configure_guard_status_access`. It never reads or
 prints a status role's password. With SQLite, or with the per-copy check off,
 it reports `"guard_status": "not in use"` and doesn't affect `"passed"`.
+The chart turns the per-copy check on with `app.guardStatusCheck`, which Helm
+allows only together with the enroller, so until Helm accepts the enroller a
+chart install reports `"not in use"`.
 
 For each copy in `GATEWAY_COPY_URLS` it shows the status role the
 row-level security policy pairs with it, that role's state and what the copy's
@@ -224,36 +239,44 @@ enroller is right, because the app never sees it: the enroller's log shows that
 
 The enroller reads its two password files whenever it opens a new database
 connection, in the same way as the app
-([rotate the app role's password](postgres-accounts.md#rotate-the-app-roles-password)).
-It keeps its connections open between passes, so a connection it already has
-keeps working after the role's password changes, and the new password is first
-used when it reconnects, for example after a restart. Change the Secret first
-and the role second, one role at a time:
+([rotate the app role's password](postgres-accounts.md#rotate-the-app-roles-password)),
+and keeps its connections open between passes, so a connection it already has
+keeps working after the role's password changes. With the chart, those files
+are written by the copy's `prepare-model-enroller` init container from
+`gateway.enroller.approvalsSecret` and `gateway.enroller.statusSecret` when the
+gateway copy Pod starts (see
+[the chart's model enroller settings](kubernetes-installation-reference.md#model-enroller)),
+so a changed Secret reaches an enroller only when its Pod restarts. Change the
+Secret first, then the role, then restart, one role at a time:
 
 1. Save `before.json` with `check_credentials`: `"passed": true`, and the
    copy's `"role_status": "limited"`.
-2. Make a new password and write it to the Secret that holds the role's
-   password file for the enroller (`KEEPLANE_GUARD_STATUS_DATABASE_PASSWORD_FILE`
-   for a status role, `KEEPLANE_DATABASE_PASSWORD_FILE` for the approvals
-   role, which every copy's enroller uses), with the commands of step 1 of
-   [rotate the app role's password](postgres-accounts.md#rotate-the-app-roles-password).
-3. Wait until the file has reached the enroller: its SHA-256 inside the
-   enroller container matches your new file, as in "Before and after every
-   rotation" of that page.
-4. Change the role's password with `\password <role>`, as in step 3 of that
-   section.
-5. Restart the enrollers that use the role, one copy at a time, so they
-   connect with the new password. After each restart, the enroller's log
-   shows no "Model enrolment did not complete" line.
-6. Save `after.json`: `"passed": true`, the copy's `"role_status"` still
+2. Make a new password and write it to the Secret, with the commands of step 1
+   of [rotate the app role's password](postgres-accounts.md#rotate-the-app-roles-password):
+   key `password` of `gateway.enroller.approvalsSecret` for the approvals role
+   (every copy's enroller uses it), or key `copy-<N>-password` of
+   `gateway.enroller.statusSecret` for copy N's status role. Running
+   enrollers keep the old password in their files.
+3. Change the role's password with `\password <role>`, as in step 3 of that
+   section. Running enrollers keep working on the connections they have.
+4. Restart the gateway copy Pods whose enroller uses the role, one at a time,
+   waiting for each to be ready: copy N's Pod for its status role, every copy
+   for the approvals role. Each restarted enroller connects with the new
+   password; its log shows no "Model enrolment did not complete" line.
+5. Save `after.json`: `"passed": true`, the copy's `"role_status"` still
    `limited`, and its `"guard"` and `models` unchanged.
+
+Without the chart, give the enroller the new password file
+(`KEEPLANE_GUARD_STATUS_DATABASE_PASSWORD_FILE` for a status role,
+`KEEPLANE_DATABASE_PASSWORD_FILE` for the approvals role) in step 2 and restart
+it in step 4.
 
 If an enroller can't connect, for example because its Secret holds a different
 password from the role, it logs "Model enrolment did not complete" on every
 pass and records nothing, so its copy keeps its last confirmation; a model
 changed meanwhile is refused through that copy until the enroller connects
 again. Put the password you set on the role into the Secret, then restart that
-enroller. Changing a password changes no grant, so you don't need to run
+copy's Pod. Changing a password changes no grant, so you don't need to run
 `configure_guard_status_access` again; run it again only after a role is
 renamed or recreated.
 
@@ -274,6 +297,7 @@ How the app checks a copy is described in
 [runtime authorization](../architecture/runtime-authorization.md#per-copy-guard-status).
 The `check_credentials` lines are covered by GS-26 and GS-PG-11 to GS-PG-14 in
 [the guard-status cases](../../tests/integration/guard-status-cases.md).
-These checks have been tested against PostgreSQL and simulated gateways; the
-enroller container in each gateway copy Pod, and a live Kubernetes run, are
-still to come.
+These checks have been tested against PostgreSQL and simulated gateways, and
+the chart's enroller container is checked by rendering only. The chart doesn't
+yet install Keeplane's protected runtime on the managed gateway, so Helm
+refuses the enroller until it does; a live Kubernetes run is still to come.

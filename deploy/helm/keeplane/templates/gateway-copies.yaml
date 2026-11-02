@@ -53,6 +53,12 @@ v1.6.0, and using its app version when no tag is set), the same pull policy
 and the same restart hash.
 */}}
 {{- $bundled := index .Subcharts "agentgateway-standalone" }}
+{{- /* ADR 027: the private model enroller beside each copy; see _enroller.tpl. */}}
+{{- $enroller := include "keeplane.enroller.on" . }}
+{{- $pullSecrets := $gw.imagePullSecrets | default list }}
+{{- if $enroller }}
+{{- $pullSecrets = concat $pullSecrets (.Values.app.imagePullSecrets | default list) | uniq }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -111,7 +117,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      {{- with $gw.imagePullSecrets }}
+      {{- with $pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -131,6 +137,10 @@ spec:
       {{- with $podSecurity }}
       securityContext:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $enroller }}
+      initContainers:
+        {{- include "keeplane.enroller.initContainer" . | nindent 8 }}
       {{- end }}
       containers:
         - name: agentgateway
@@ -168,6 +178,9 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            {{- if $enroller }}
+            {{- include "keeplane.enroller.gatewayMount" . | nindent 12 }}
+            {{- end }}
             {{- with $volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -175,6 +188,9 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- if $enroller }}
+        {{- include "keeplane.enroller.container" . | nindent 8 }}
+        {{- end }}
       volumes:
         - name: config
           configMap:
@@ -185,6 +201,9 @@ spec:
         see keeplane.gatewayExtraVolumes. */}}
         {{- if $volumes }}
         {{- include "keeplane.gatewayExtraVolumes" (dict "extraVolumes" $volumes "podSecurityContext" $gw.podSecurityContext) | nindent 8 }}
+        {{- end }}
+        {{- if $enroller }}
+        {{- include "keeplane.enroller.volumes" . | nindent 8 }}
         {{- end }}
       {{- with $gw.nodeSelector }}
       nodeSelector:

@@ -23,6 +23,13 @@ app:
     # run Keeplane's checks yet. See
     # docs/guide/kubernetes-installation-reference.md#personal-data-detection.
     enabled: false
+  # The app's per-copy guard-status check (KEEPLANE_GUARD_STATUS_CHECK=1,
+  # ADR 027): a protected check from a managed gateway copy counts only when
+  # that copy's model enroller has confirmed the model in its guard-status row.
+  # On whenever gateway.enroller.enabled is true, whatever this says. Helm
+  # refuses true without the enroller, and with gateway.mode=existing. See
+  # docs/guide/guard-status-roles.md.
+  guardStatusCheck: false
   runnerUrls: "http://qwen:8080"
   postgres:
     enabled: false
@@ -89,6 +96,37 @@ gateway:
   # See docs/guide/kubernetes-installation-reference.md#secrets.
   extraVolumes: []
   extraVolumeMounts: []
+  # Managed mode with app.postgres: the private model enroller (ADR 027), a
+  # container beside each gateway copy that keeps the copy's protected checks
+  # in step with the saved models and records what it confirmed in the
+  # guard-status table. Off by default. It opens no port, runs as the app user
+  # (app.image) with a read-only root file system and no API token, and also
+  # turns on app.guardStatusCheck. Create its database roles first, as in
+  # docs/guide/guard-status-roles.md; the migration Job then sets their grants.
+  # Helm refuses it for now: this chart doesn't yet install Keeplane's
+  # protected runtime on the managed gateway, so the enroller would have no
+  # guard to keep. See docs/guide/kubernetes-installation-reference.md#model-enroller.
+  enroller:
+    enabled: false
+    # The read-only approvals role, shared by every copy's enroller.
+    approvalsUser: ""
+    # Installer-made Secret with key password for approvalsUser.
+    approvalsSecret: ""
+    # One status role per gateway copy, in copy order: entry N is the role of
+    # <release>-gateway-N. Exactly gateway.copies entries.
+    statusRoles: []
+    # Installer-made Secret with keys copy-0-password, copy-1-password and so
+    # on: the password of each statusRoles entry. Only a copy's short-lived
+    # init container reads them all; its enroller gets only its own.
+    statusSecret: ""
+    # Limits are required.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 384Mi
 
 networkPolicy:
   # Every policy here requires a Kubernetes CNI that enforces NetworkPolicy.

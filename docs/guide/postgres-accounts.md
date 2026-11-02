@@ -398,9 +398,12 @@ password to your own migration process instead.
 
 The model enroller's approvals role and each gateway copy's status role (see
 [the enroller's database roles](guard-status-roles.md)) rotate in the same
-order: the Secret first, then the role, then a restart of the enrollers that
-use it. App copies never read these passwords, so the app keeps serving
-throughout. Follow
+order: the Secret first, then the role, then a restart of the gateway copy
+Pods whose enroller uses it (the chart gives the enroller its password when
+the Pod starts). App copies never read these passwords, so the app keeps
+serving throughout. Helm refuses the enroller for now
+([model enroller](kubernetes-installation-reference.md#model-enroller)), so
+these steps apply once it runs. Follow
 [rotate a status or enroller role's password](guard-status-roles.md#rotate-a-status-or-enroller-roles-password);
 `check_credentials` shows each copy's `"role_status"` and `"guard"` before and
 after.

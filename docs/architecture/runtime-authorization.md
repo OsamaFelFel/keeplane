@@ -230,9 +230,13 @@ confirmed state without restarting the gateway (see
 [the model enroller](#model-enroller)). For Kubernetes, each copy's enroller
 records its confirmed guard in a database row that the app checks for the copy
 that sends each protected check (see [per-copy guard status](#per-copy-guard-status)).
-The remaining integration must run the enroller container beside every
-Kubernetes gateway copy and cover customer-run gateways that don't share one
-model store.
+The Helm chart holds that enroller as a container beside every Kubernetes
+gateway copy (`gateway.enroller`, see
+[the chart's model enroller](../guide/kubernetes-installation-reference.md#model-enroller)),
+but it doesn't yet install the protected runtime on the managed gateway, so
+Helm refuses the enroller for now: it would have no guard to keep. The
+remaining integration must install that runtime in Kubernetes, then lift the
+refusal, and cover customer-run gateways that don't share one model store.
 
 ## Model enroller
 
@@ -240,7 +244,10 @@ model store.
 namespace. It has no listener and takes nothing from the app. Its database
 connection is read-only (`KEEPLANE_DATABASE_READ_ONLY=1` opens SQLite with
 `mode=ro` and makes every PostgreSQL transaction read-only; in PostgreSQL its
-role must also be read-only). Every 2 seconds it:
+role must also be read-only). In the Docker preview it mounts only the app
+database's own folder of the account volume (`/state/database`, read-only, with
+the journal SQLite keeps beside the file), not the signing secret or the rest of
+`/state`; the preview has no PostgreSQL mode. Every 2 seconds it:
 
 1. works out the models to enroll: every saved approval whose fingerprint
    matches the gateway's current definition and passes the installer's checks.
@@ -301,6 +308,18 @@ whose row-level security admits only its own copy's row; its transactions are
 read-only by default, and the write opens an explicit `BEGIN READ WRITE`. A
 mistaken write on the approvals connection still fails. Installers create
 these roles as in [the enroller's database roles](../guide/guard-status-roles.md).
+
+In the Helm chart (`gateway.enroller`, refused until the chart installs the
+protected runtime), the enroller is a second container in
+each gateway copy Pod, with no port and no API token. Every copy shares one
+Pod template, so an init container receives the installer's Secrets through
+`secretKeyRef` and writes only this copy's credentials, picked by Pod name,
+into an in-memory folder that only the enroller mounts: the approvals password,
+this copy's status role and password, the two gateway keys, the database CA
+and a random signing secret of its own. The guard is a Pod-local folder the
+enroller writes and the gateway container reads; the app never mounts it. The
+chart then sets `KEEPLANE_GUARD_STATUS_CHECK=1` on the app, and the migration
+Job runs `configure_guard_status_access` for every copy.
 
 With `KEEPLANE_GUARD_STATUS_CHECK=1`, the app's installed entry, final and
 Personal key exchange checks require `gateway_copy` and then:

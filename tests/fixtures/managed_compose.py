@@ -301,6 +301,18 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
             for row in config["volumes"].values()
         )
         assert "keeplane-accounts-trial_model-approvals" not in json.dumps(config)
+        # The enroller sees only the database folder of the account volume.
+        enroller = config["services"]["model-enroller"]
+        assert [
+            (row["target"], row.get("read_only"), row.get("volume", {}).get("subpath"))
+            for row in enroller["volumes"]
+            if row["source"] == "account-data"
+        ] == [("/state/database", True, "database")]
+        for name in ("app", "runtime-install", "model-enroller"):
+            assert (
+                config["services"][name]["environment"]["KEEPLANE_SQLITE_PATH"]
+                == "/state/database/keeplane.sqlite3"
+            )
         assert all(
             not row.get("external")
             and row["name"].startswith(self.project + "_")

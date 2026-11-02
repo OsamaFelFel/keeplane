@@ -120,7 +120,8 @@ Schema changes are Django migrations, run once before new workers start (see
 recreating or copying them. Records written under the earlier schema stay in
 place and can be found by Show, search and paging after the upgrade.
 `manage.py import_preview` copies records once from an untouched earlier preview
-file and keeps their original times.
+file and keeps their original times. The Docker preview no longer runs it: it
+starts a fresh database and leaves earlier preview files unused (ADR 014).
 
 ## What is not retained or provided
 

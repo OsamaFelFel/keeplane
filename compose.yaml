@@ -89,9 +89,11 @@ services:
       context: .
       dockerfile: components/control-plane/Dockerfile
     image: keeplane-preview:docker-local
-    command: ["sh", "-ec", "python manage.py migrate --noinput && python manage.py import_preview && python manage.py bootstrap"]
+    # ADR 014: a fresh database; nothing is imported from earlier previews.
+    command: ["sh", "-ec", "python manage.py migrate --noinput && python manage.py bootstrap"]
     environment:
       FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
+      KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
     depends_on:
       account-volume-init:
         condition: service_completed_successfully
@@ -117,6 +119,8 @@ services:
       GATEWAY_ADMIN_KEY_FILE: /run/secrets/gateway-admin-key
       PREVIEW_OPENAI_BASE_URL: http://cloud-provider:18082/v1
       PREVIEW_ANTHROPIC_BASE_URL: http://cloud-provider:18082/v1
+      # In its own folder, so the model enroller can mount only the database.
+      KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
     depends_on:
       gateway:
         condition: service_started
