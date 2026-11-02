@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 # guide with kubectl commands is checked against the example Roles
 # (tests/integration/test_chart_namespace_permissions.py).
 CHECKED_GUIDES = {
+    "docs/guide/audit-storage.md",
     "docs/guide/backup-and-restore.md",
     "docs/guide/certificate-operations.md",
     "docs/guide/data-classes-local.md",

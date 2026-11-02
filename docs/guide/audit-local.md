@@ -93,8 +93,11 @@ the change is not saved and the screen reports that storage is unavailable. A br
 mandatory record commit together; if the record cannot be written, the sign-in
 fails. The record contains the account and time, not the password or session
 token. Every app copy finds the same records, and they survive restarts and
-upgrades. Nothing deletes them automatically. See
-[Audit storage](../architecture/audit-storage.md).
+upgrades. Nothing deletes them automatically: they stay until the database is
+removed. [Keep and export Audit records](audit-storage.md) covers where they
+are stored, upgrades, backups, the space they take and how to export them; the
+[Audit storage design](../architecture/audit-storage.md) covers how the app
+writes and finds them.
 
 The reusable [plain-English cases](../../tests/e2e/audit-cases.md) run with
 `.venv/bin/python -m pytest tests/e2e/test_audit.py -m live`; the isolated store check runs with

@@ -126,7 +126,9 @@ unused (ADR 014).
 ## What is not retained or provided
 
 - Nothing deletes records automatically. There is no retention period and no
-  delete or export action. Records stay until the database itself is removed.
+  delete or export action in Keeplane. Records stay until the database itself
+  is removed. Operators export them with Django's `dumpdata` or `psql`, as in
+  [Keep and export Audit records](../guide/audit-storage.md).
 - Turning a switch off stops new records of that kind; older ones stay visible.
 - A database restore returns Audit to the backup's state, like accounts and
   policy. Back up the whole database as described in the PostgreSQL guide.

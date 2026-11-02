@@ -11,7 +11,7 @@
 | Send a persona's work to a chosen model | [Persona rules](guide/persona-rules.md), [how a task's model is chosen](architecture/task-routing.md) |
 | Enable data classes | [Data classes](guide/data-classes-local.md) |
 | Hold requests with personal data to a stricter class | [Detect personal data](guide/data-classes-local.md#detect-personal-data-in-requests), [how requests are checked](architecture/runtime-authorization.md#personal-data-detection) |
-| Find recorded events | [Audit](guide/audit-local.md), [Audit storage](architecture/audit-storage.md) |
+| Find recorded events | [Audit](guide/audit-local.md), [keep and export records](guide/audit-storage.md), [Audit storage design](architecture/audit-storage.md) |
 | Use a managed or customer-run gateway | [Gateway configuration](guide/gateway-configuration.md) |
 | Try Kubernetes deployment | [Kubernetes](guide/kubernetes-local.md) |
 | Check Secrets, readiness, storage, ports and gateway modes for a Kubernetes install | [Kubernetes installation reference](guide/kubernetes-installation-reference.md) |
