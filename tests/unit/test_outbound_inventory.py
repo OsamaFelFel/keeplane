@@ -176,6 +176,17 @@ def test_egr_01_every_server_call_site_is_declared():
         ("import os\nos.spawnlp(os.P_WAIT, 'curl', 'curl')", {"os.process"}),
         ("import os\nos.posix_spawnp('curl', ['curl'], {})", {"os.process"}),
         ("from os import system\nsystem('curl x')", {"os.process"}),
+        ("import posix\nposix.system('curl x')", {"os.process"}),
+        ("from posix import posix_spawn", {"os.process"}),
+        ("import nt\nnt.spawnv(0, 'curl', ['curl'])", {"os.process"}),
+        ("import _socket\n_socket.socket().connect(('x', 1))", {"_socket"}),
+        ("from _socket import socket", {"_socket"}),
+        ("import _ssl", {"_ssl"}),
+        ("from urllib.robotparser import RobotFileParser", {"urllib.robotparser"}),
+        (
+            "import urllib\nurllib.robotparser.RobotFileParser('x').read()",
+            {"urllib.robotparser"},
+        ),
         ("from urllib.parse import urlsplit", set()),
         ("import os\nos.path.join('a', 'b')", set()),
         ("import urllib\nurllib.parse.quote('x')", set()),
@@ -214,11 +225,15 @@ def test_egr_02_every_address_in_server_code_is_declared():
 def test_egr_02_addresses_inside_longer_strings_are_found():
     tree = ast.parse(
         'CHECK = "Checking https://updates.example.com/v1/latest daily"\n'
-        'url = f"https://telemetry.example.com/{name}"'
+        'url = f"https://telemetry.example.com/{name}"\n'
+        'LOUD = "HTTPS://evil.example.com/"\n'
+        'RAW = b"GET https://bytes.example.com/ping"'
     )
     assert address_literals(tree) == {
         "https://updates.example.com/v1/latest",
         "https://telemetry.example.com/",
+        "HTTPS://evil.example.com/",
+        "https://bytes.example.com/ping",
     }
 
 

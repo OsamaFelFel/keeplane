@@ -55,14 +55,17 @@ NETWORK_MODULES = (
     "requests",
     "smart_open",
     "smtplib",
+    "_socket",
     "socket",
     "socketserver",
     "spacy.cli",
+    "_ssl",
     "ssl",
     "subprocess",
     "telnetlib",
     "tldextract",
     "urllib.request",
+    "urllib.robotparser",
     "urllib3",
     "weasel",
     "websocket",
@@ -70,8 +73,11 @@ NETWORK_MODULES = (
     "xmlrpc.client",
 )
 
-# os functions that start another program; reported as "os.process".
-OS_PROCESS = re.compile(r"os\.(system|popen|exec\w*|spawn\w*|posix_spawn\w*)")
+# os (or posix/nt) functions that start another program; reported as
+# "os.process".
+OS_PROCESS = re.compile(
+    r"(os|posix|nt)\.(system|popen|exec\w*|spawn\w*|posix_spawn\w*)"
+)
 
 # Where the server connects. "when" is runtime (a running installation),
 # preview (the Docker preview only) or build (building an image or collecting
@@ -274,7 +280,7 @@ ADDRESS_LITERALS = {
     "https://provider.invalid": None,
 }
 
-ADDRESS = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+")
+ADDRESS = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", re.IGNORECASE)
 
 
 def server_files():
@@ -361,12 +367,13 @@ def call_site_users(tree, package, own):
 
 
 def address_literals(tree):
-    return {
-        match[0]
+    """Addresses in str and bytes constants (bytes read as latin-1)."""
+    texts = (
+        node.value if isinstance(node.value, str) else node.value.decode("latin-1")
         for node in ast.walk(tree)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str)
-        for match in ADDRESS.finditer(node.value)
-    }
+        if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes))
+    )
+    return {match[0] for text in texts for match in ADDRESS.finditer(text)}
 
 
 def package_of(name):
