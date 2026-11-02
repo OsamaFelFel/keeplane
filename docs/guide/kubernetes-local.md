@@ -213,7 +213,14 @@ values override if you want to reapply your addresses after setup.
 Rerunning setup preserves the app's PVC-backed records and existing credential
 files. Earlier preview files on the state claim (`accounts.sqlite3` and
 `model-approvals.sqlite3`) aren't imported: before the first release Keeplane
-doesn't carry an earlier preview's data forward. Keep the files under `/private/tmp/keeplane-accounts-trial/`; recovering
+doesn't carry an earlier preview's data forward. A trial whose state claim
+already holds accounts that an earlier setup imported from those files keeps
+them, but their passwords were stored in the earlier preview's format, which
+Keeplane no longer checks, so those users can't sign in. The first admin isn't
+affected: each start sets its password again from the password file. Keeplane
+has no password reset for other users yet, so to sign them in again delete the
+kind cluster (`kind delete cluster --name keeplane`), run setup again and
+create them in **Users**. Keep the files under `/private/tmp/keeplane-accounts-trial/`; recovering
 a missing gateway database password needs the
 [database credential guide](gateway-database-secret.md). Deleting the kind
 cluster deletes its local volumes. The gateway databases use temporary storage:
