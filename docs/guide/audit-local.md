@@ -102,7 +102,9 @@ The reusable [plain-English cases](../../tests/e2e/audit-cases.md) run with
 [settings-change cases](../../tests/integration/settings-change-record-cases.md)
 check each change above on SQLite and, when configured, PostgreSQL. The
 [model-answer cases](../../tests/integration/model-answer-record-cases.md)
-check model request records the same way. The [mandatory sign-in cases](../../tests/e2e/audit-cases.md#always-on-break-glass-sign-ins)
+check model request records the same way, and the
+[held-back request cases](../../tests/integration/held-request-record-cases.md)
+check held request records and who can read them the same way. The [mandatory sign-in cases](../../tests/e2e/audit-cases.md#always-on-break-glass-sign-ins)
 run in both an isolated store and the Docker preview, and the
 [break-glass sign-in cases](../../tests/integration/break-glass-sign-in-cases.md)
 check first use, repeated use, restart, rotation, a wrong password and a

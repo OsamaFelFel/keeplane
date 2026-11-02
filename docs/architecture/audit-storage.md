@@ -145,8 +145,9 @@ cover the switch, refused requests, failed writes, leaks and other developers'
 records in both gateway modes, with the producer also run on both databases. The
 [held-back request cases](../../tests/integration/held-request-record-cases.md)
 cover one record per held request, each reason, refused and allowed requests,
-failed writes, leaks and other developers' records in both gateway modes. The
-[break-glass sign-in cases](../../tests/integration/break-glass-sign-in-cases.md)
+failed writes, leaks and other developers' records in both gateway modes, with
+the producer and the Audit API's admin-only reading also run on both databases.
+The [break-glass sign-in cases](../../tests/integration/break-glass-sign-in-cases.md)
 sign in through the API on both databases, including after a restart, after a
 password rotation and while the database refuses Audit or session rows. The
 [browser cases](../../tests/browser/audit-cases.md) cover the screen.

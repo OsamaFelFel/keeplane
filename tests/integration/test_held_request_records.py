@@ -25,9 +25,14 @@ from personal_data.inspection import (
     Verdict,
 )
 
+from tests.integration import test_audit_persistence as persistence
 from tests.integration.test_installed_runtime import send as send_managed
 
 pytest_plugins = ("tests.integration.test_installed_runtime",)
+
+# Reuse the separate-process SQLite and PostgreSQL harness.
+database = persistence.database
+start_process = persistence.start_process
 
 KIND = "held_requests"
 LOGGER = "model_registry.held_request_records"
@@ -348,6 +353,112 @@ def test_hr_12_each_record_names_only_its_developer(customer_run):
         anonymous = Client().get("/api/audit/records?kind=held_requests")
         assert anonymous.status_code in (401, 403)
         assert b"held back" not in anonymous.content
+
+
+# Separate app processes on one fresh database, SQLite and PostgreSQL.
+
+DEVELOPER_PASSWORD = "process-developer-password"
+NOT_WRITTEN = "Held-back request record was not written; the hold still applies"
+
+
+def write_in_a_process(start_process):
+    """Run the producer in one app process and stop it; answer its result."""
+    app = start_process()
+    app.ask("migrate")
+    result = app.ask("held_requests", password=DEVELOPER_PASSWORD, unknown_model=EMAIL)
+    app.stop()
+    return result
+
+
+def test_hr_16_records_are_stored_for_every_app_copy(start_process):
+    result = write_in_a_process(start_process)
+    first, second = result.pop("developers")
+    logged = result.pop("logged")
+    assert result == {
+        "off": False,
+        "on_allowed": True,
+        "on_refused": True,
+        "failed_write": False,
+        "missing_project": False,
+    }
+    # Each failure logs one warning with the error kind only: the Audit
+    # store reports the failed insert as storage being unavailable.
+    assert logged == [
+        NOT_WRITTEN + " (StorageUnavailable)",
+        NOT_WRITTEN + " (DoesNotExist)",
+    ]
+
+    reader = start_process()
+    rows = list(reversed(reader.records(kind=KIND)["records"]))
+    assert [(row["kind"], row["who"]) for row in rows] == [
+        (KIND, "process-developer"),
+        (KIND, "second-developer"),
+    ]
+    assert re.fullmatch(
+        r"Request HR-[0-9a-f]{12} held back as Confidential "
+        r"\(Personal data detected\); project payments-api; approved model alpha",
+        rows[0]["what"],
+    ), rows[0]["what"]
+    assert re.fullmatch(
+        r"Request HR-[0-9a-f]{12} held back as Public \(Detection was down\); "
+        r"project payments-api; a model Keeplane doesn't know isn't approved "
+        r"for it, nothing was sent",
+        rows[1]["what"],
+    ), rows[1]["what"]
+    # Each held request has its own reference, and search finds it.
+    assert rows[0]["what"][8:23] != rows[1]["what"][8:23]
+    assert reader.records(kind=KIND, search=rows[1]["what"][8:23])["total"] == 1
+    assert all(row["when"].endswith("+00:00") for row in rows)
+    # Every stored column: the sending developer's own account ID and
+    # username, the description above, and never any request text.
+    stored = reader.ask("stored")
+    assert stored["records"] == 2
+    assert [row[:3] for row in stored["record_text"]] == [
+        [KIND, first, "process-developer"],
+        [KIND, second, "second-developer"],
+    ]
+    text = json.dumps(stored)
+    for secret in (EMAIL, "amara", DEVELOPER_PASSWORD, "audit down"):
+        assert secret not in text
+
+
+def test_hr_17_only_admins_read_them_over_the_audit_api(start_process, tmp_path):
+    write_in_a_process(start_process)
+    app = start_process()
+    admin_password = (tmp_path / "first-admin-password").read_text().strip()
+
+    def call(path, session=None):
+        return app.ask("http", method="GET", path=path, session=session)
+
+    def sign_in(username, password):
+        answer = app.ask(
+            "http",
+            method="POST",
+            path="/api/session",
+            body={"username": username, "password": password},
+        )
+        assert answer["status"] == 200, answer
+        return answer["session"]
+
+    path = f"/api/audit/records?kind={KIND}"
+    admin = call(path, sign_in("first-admin", admin_password))
+    assert admin["status"] == 200, admin
+    assert [row["who"] for row in admin["body"]["records"]] == [
+        "second-developer",
+        "process-developer",
+    ]
+    # No developer, not even the one a record names, and no anonymous
+    # visitor can read any record.
+    for username in ("process-developer", "second-developer"):
+        session = sign_in(username, DEVELOPER_PASSWORD)
+        for query in (path, path + "&search=held", "/api/audit/records"):
+            refused = call(query, session)
+            assert refused["status"] == 403, refused
+            assert "held back" not in json.dumps(refused["body"])
+            assert "records" not in (refused["body"] or {})
+    anonymous = call(path)
+    assert anonymous["status"] == 401, anonymous
+    assert "held back" not in json.dumps(anonymous["body"])
 
 
 class Sequence(FakeInspector):

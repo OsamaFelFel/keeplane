@@ -488,6 +488,79 @@ def model_answers():
     return result
 
 
+def held_requests(command):
+    """Write "Held-back requests" records through the producer the checks use.
+
+    Off, then on for an allowed hold and a refused one, then while the write
+    fails and for a project that no longer exists; the producer never raises.
+    The refused request names a model ID Keeplane doesn't know, which the
+    record must never copy. Two developers are created with the given
+    password, so a test can sign each in over HTTP.
+    """
+    import logging
+    import uuid
+    from unittest.mock import patch
+
+    from audit.models import AuditRecord
+    from django.db import OperationalError
+    from model_registry.held_request_records import record_held_request
+    from model_registry.models import ModelApproval
+    from personal_data.inspection import FOUND, UNAVAILABLE, Verdict
+    from projects.models import Project
+
+    audit, identity, _ = services()
+    first, second = (
+        identity.create_user(
+            {"username": name, "role": "developer", "password": command["password"]}
+        )
+        for name in ("process-developer", "second-developer")
+    )
+    project = Project.objects.create(name="payments-api")
+    ModelApproval.objects.create(
+        model_id="alpha",
+        key_choice="shared",
+        approved_classes=[],
+        gateway_fingerprint=FIRST,
+    )
+    allowed = {
+        "actor_id": first["id"],
+        "project_id": str(project.pk),
+        "model_id": "alpha",
+        "held_class": "Confidential",
+        "allowed": True,
+    }
+    refused = {
+        "actor_id": second["id"],
+        "project_id": str(project.pk),
+        "model_id": command["unknown_model"],
+        "held_class": "Public",
+        "allowed": False,
+    }
+    logged = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            logged.append(record.getMessage())
+
+    logger = logging.getLogger("model_registry.held_request_records")
+    logger.addHandler(Collect())
+    found, down = Verdict(True, FOUND), Verdict(True, UNAVAILABLE)
+    result = {"off": record_held_request(allowed, found, audit)}
+    audit.set_option("held_requests", True)
+    result["on_allowed"] = record_held_request(allowed, found, audit)
+    result["on_refused"] = record_held_request(refused, down, audit)
+    with patch.object(
+        AuditRecord.objects, "create", side_effect=OperationalError("audit down")
+    ):
+        result["failed_write"] = record_held_request(allowed, found, audit)
+    result["missing_project"] = record_held_request(
+        dict(allowed, project_id=str(uuid.uuid4())), found, audit
+    )
+    result["logged"] = logged
+    result["developers"] = [first["id"], second["id"]]
+    return result
+
+
 def wait_for(path, timeout=60):
     import time
 
@@ -679,6 +752,8 @@ def handle(command):
         return removal_rollbacks()
     if action == "model_answers":
         return model_answers()
+    if action == "held_requests":
+        return held_requests(command)
     audit, identity, password_file = services()
     if action == "audit_option":
         return audit.set_option(command["kind"], command["enabled"])
