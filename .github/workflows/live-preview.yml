@@ -49,15 +49,15 @@ jobs:
           .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py tests/e2e/test_project_classes_live.py \
             -m live --collect-only -q | grep '::' > "$RESULTS/expected-cases.txt"
           cat "$RESULTS/expected-cases.txt"
-      - name: Retry a down model twice, then stop (Spec 004 ST16, task 004-04)
-        env:
-          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/outage-cases
-        run: .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py -m live -rs --junitxml="$RESULTS/outage-junit.xml"
       - name: Project classes through the guarded preview gateway (Spec 005 ST19, task 005-02)
-        if: ${{ !cancelled() }}
         env:
           KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/class-cases
         run: .venv/bin/python -m pytest tests/e2e/test_project_classes_live.py -m live -rs --junitxml="$RESULTS/classes-junit.xml"
+      - name: Retry a down model twice, then stop (Spec 004 ST16, task 004-04)
+        if: ${{ !cancelled() }}
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/outage-cases
+        run: .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py -m live -rs --junitxml="$RESULTS/outage-junit.xml"
       - name: Fail if a live gateway case was skipped or did not run
         if: ${{ !cancelled() }}
         run: |

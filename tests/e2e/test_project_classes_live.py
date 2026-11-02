@@ -465,6 +465,8 @@ def run_cases():
                 },
             )
         finally:
+            if state["enrolled"] and any(c["verdict"] != "pass" for c in cases):
+                enroller_diagnostics()
             restore(admin, password, project, created, state, cleanup_failures)
     cleanup = "complete" if not cleanup_failures else "; ".join(cleanup_failures)
     report = {
@@ -482,6 +484,23 @@ def run_cases():
     for case in cases:
         print(case["id"], case["verdict"], json.dumps(case["observed"]))
     return int(bool(report["failed"]) or cleanup != "complete")
+
+
+def enroller_diagnostics():
+    """Print the guarded gateway's enrolment messages before restore removes them."""
+    logs = compose(
+        "--profile", "runtime", "logs", "--no-color", "--tail", "60",
+        "model-enroller", "gateway", runtime=True, timeout=60,
+    )
+    state = compose(
+        "--profile", "runtime", "exec", "-T", "model-enroller", "python", "-c",
+        "import json; m = json.load(open('/installed/manifest.json')); "
+        "print(json.dumps({'enabled': m.get('enabled'), 'models': sorted(m.get('models') or {})}))",
+        runtime=True, timeout=60,
+    )
+    print("Guard declaration:", (state.stdout or state.stderr).strip())
+    print("Enroller and gateway messages:")
+    print(logs.stdout[-12000:])
 
 
 def restore(admin, password, project, created, state, failures):
