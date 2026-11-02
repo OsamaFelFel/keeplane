@@ -157,7 +157,7 @@ def approvals(path):
         connection.close()
 
 
-def test_edm04_a_new_preview_gets_a_private_database_folder(volumes):
+def test_edm04_a_new_preview_gets_a_private_database_folder(volumes, capsys):
     volumes.prepare()
     folder = volumes.state / "database"
     assert folder.is_dir() and stat.S_IMODE(folder.stat().st_mode) == 0o700
@@ -165,39 +165,45 @@ def test_edm04_a_new_preview_gets_a_private_database_folder(volumes):
     assert (volumes.state / "django-secret-key").is_file()
     volumes.prepare()
     assert list(folder.iterdir()) == []
+    assert "Notice:" not in capsys.readouterr().out
 
 
-def test_edm05_an_earlier_database_moves_into_the_folder(volumes):
-    old, new = volumes.state / "keeplane.sqlite3", volumes.state / "database/keeplane.sqlite3"
-    database(old, ["demo"])
-    volumes.prepare()
-    # First start: the same file under both names, so an app still running
-    # from before writes the database the new app reads.
-    assert os.path.samefile(old, new) and approvals(new) == ["demo"]
-    volumes.prepare()
-    assert not old.exists() and approvals(new) == ["demo"]
-    volumes.prepare()
-    assert approvals(new) == ["demo"]
-    # An empty file an earlier app created under the old name is removed.
-    old.touch()
-    volumes.prepare()
-    assert not old.exists() and approvals(new) == ["demo"]
-
-
-@pytest.mark.parametrize("case", ["-journal", "-wal", "two databases"])
-def test_edm06_an_unclear_earlier_database_stops_start_up_unchanged(volumes, case):
-    old, new = volumes.state / "keeplane.sqlite3", volumes.state / "database/keeplane.sqlite3"
+def test_edm05_an_earlier_database_is_left_unchanged_with_a_notice(volumes, capsys):
+    # ADR 014: no migration. The earlier file stays as it was and isn't used.
+    old = volumes.state / "keeplane.sqlite3"
     database(old, ["earlier"])
-    if case == "two databases":
-        new.parent.mkdir(mode=0o700)
-        database(new, ["later"])
-    else:
-        old.with_name(old.name + case).write_bytes(b"synthetic journal")
-    before = old.read_bytes()
-    with pytest.raises(RuntimeError):
-        volumes.prepare()
-    assert old.read_bytes() == before
-    if case == "two databases":
-        assert approvals(new) == ["later"] and not os.path.samefile(old, new)
-    else:
-        assert not new.exists()
+    before = (old.read_bytes(), old.stat().st_mtime_ns)
+    volumes.prepare()
+    volumes.prepare()
+    assert (old.read_bytes(), old.stat().st_mtime_ns) == before
+    assert approvals(old) == ["earlier"]
+    assert list((volumes.state / "database").iterdir()) == []
+    lines = capsys.readouterr().out.splitlines()
+    assert lines == [volumes.EARLIER_DATABASE_NOTICE] * 2
+    notice = volumes.EARLIER_DATABASE_NOTICE
+    assert notice.startswith("Notice: ")
+    for words in ("no longer uses", "/state/keeplane.sqlite3", "unchanged",
+                  "docker compose down",
+                  "docker volume rm keeplane-accounts-trial_model-approvals"):
+        assert words in notice, words
+
+
+def test_edm06_start_up_repeats_only_this_starts_notice(monkeypatch, tmp_path):
+    spec = importlib.util.spec_from_file_location("local_up", ROOT / "deploy/local/up.py")
+    up = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(up)
+    monkeypatch.setattr(up, "RUNTIME", tmp_path)
+    calls = []
+    notice = "Notice: this preview keeps its app database in /state/database."
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return "\n".join(["chown done", notice, notice, "other output"])
+
+    monkeypatch.setattr(up, "run", run)
+    assert up.earlier_database_notices({}, "2026-11-02T00:00:00Z") == [notice]
+    assert calls == [["docker", "compose", "--env-file", str(tmp_path / ".env"), "logs",
+                      "--no-color", "--no-log-prefix", "--since", "2026-11-02T00:00:00Z",
+                      "account-volume-init"]]
+    monkeypatch.setattr(up, "run", lambda command, **kwargs: "chown done\n")
+    assert up.earlier_database_notices({}, "2026-11-02T00:00:00Z") == []

@@ -159,6 +159,14 @@ def retire_old_preview():
         subprocess.run(["docker", "stop", *names], check=True, cwd=REPO)
 
 
+def earlier_database_notices(env, since):
+    """Repeat this start's volume-step notices (an earlier preview database left unused)."""
+    logs = run(["docker", "compose", "--env-file", str(RUNTIME / ".env"), "logs", "--no-color",
+                "--no-log-prefix", "--since", since, "account-volume-init"], env=env)
+    return list(dict.fromkeys(line.strip() for line in logs.splitlines()
+                              if line.strip().startswith("Notice: ")))
+
+
 def main():
     global RUNTIME
     parser = argparse.ArgumentParser(description=__doc__)
@@ -198,9 +206,13 @@ def main():
     retire_old_preview()
     run(["docker", "volume", "create", "keeplane-accounts-trial_model-approvals"])
     print("Starting containers…", flush=True)
+    compose_env = {**os.environ, **dict(line.split("=", 1) for line in (RUNTIME / ".env").read_text().splitlines())}
+    # A few seconds' margin for the Docker host's clock; earlier starts' logs are older.
+    since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 5))
     run(["docker", "compose", "--env-file", str(RUNTIME / ".env"),
-         "--profile", "qwen", "up", "-d", "--build", "--wait"], verbose=args.verbose,
-        env={**os.environ, **dict(line.split("=", 1) for line in (RUNTIME / ".env").read_text().splitlines())})
+         "--profile", "qwen", "up", "-d", "--build", "--wait"], verbose=args.verbose, env=compose_env)
+    for notice in earlier_database_notices(compose_env, since):
+        print(notice, flush=True)
     base = f"http://127.0.0.1:{args.port}"
     print("Checking sign-in and the model gateway…", flush=True)
     wait_preview(base)

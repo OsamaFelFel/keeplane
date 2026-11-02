@@ -37,8 +37,9 @@ In the Docker preview, the `account-data` volume is the Docker volume
 `keeplane-local_provider-keys` and `keeplane-local_gateway-data`. The app
 database has its own `database` folder in that volume, so the guarded preview's
 model enroller can read it without the rest of the volume. Earlier previews kept
-it at `/state/keeplane.sqlite3`; the preview moves it into the folder when it
-starts. The app
+it at `/state/keeplane.sqlite3`; this preview doesn't use or change that file
+and starts a fresh database in the folder. Before the first release Keeplane
+doesn't carry an earlier preview's data forward. The app
 container runs as UID 65532 and the gateway container as UID 65532 too: the
 preview's `volume-init` step gives the gateway volume to that user before the
 gateway starts. In the Kubernetes trial, the app's `/state` and

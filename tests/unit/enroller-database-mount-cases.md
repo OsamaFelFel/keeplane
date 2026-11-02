@@ -3,7 +3,8 @@
 **Edition:** Open Source. Spec 004 ST10 and ST23, ADR 027.
 [`test_enroller_database_mount.py`](test_enroller_database_mount.py) renders
 `compose.yaml` with `deploy/local/runtime.yaml` (`docker compose config`, which
-starts nothing) and runs `deploy/local/prepare_volumes.py` on temporary folders.
+starts nothing) and runs `deploy/local/prepare_volumes.py` on temporary folders and the
+launcher's notice step with Docker substituted.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
@@ -11,8 +12,8 @@ starts nothing) and runs `deploy/local/prepare_volumes.py` on temporary folders.
 | EDM-02 | Look at every service that opens the app database. | The app, its migration step, the runtime installer and the enroller all open `/state/database/keeplane.sqlite3`; the writers keep the whole account volume. No service names a PostgreSQL server: the Docker preview has no PostgreSQL mode, so no enroller database mount applies there. |
 | EDM-03 | Load the app's settings and the enroller command with the enroller's environment and no signing secret. | The database opens with `mode=ro`, Django's start-up checks pass and the signing secret stays empty: the enroller doesn't need it. |
 | EDM-04 | Prepare a new preview's volumes, twice. | The `database` folder exists, mode 0700, and stays empty until the app migrates. |
-| EDM-05 | Prepare volumes that hold a database at the earlier path, then start again. | The first start gives the same file a second name in the folder, so an app still running from before keeps writing the database the new one reads; the next start removes the earlier name. An empty file created at the earlier path afterwards is removed. The approvals are unchanged throughout. |
-| EDM-06 | Prepare volumes whose earlier database has a journal beside it, or where both paths hold different databases. | Start-up stops with a message and changes neither file. |
+| EDM-05 | Prepare volumes that still hold an earlier preview's database at `/state/keeplane.sqlite3`, twice. | No migration (ADR 014): the earlier file keeps its bytes and modification time, the new folder stays empty for a fresh database, and each start prints the notice that the earlier database is no longer used and how to reset the preview. |
+| EDM-06 | The launcher reads the volume step's log after starting. | It asks only for this start's log, repeats each notice line once and prints nothing when there is none. |
 
 Not proven here: the mounts inside running containers. The guarded preview's
 live run (`tests/integration/test_managed_runtime_orchestration.py`) checks the

@@ -3,45 +3,28 @@
 import os
 import secrets
 import shutil
-import sys
 from pathlib import Path
 
-DATABASE = "keeplane.sqlite3"
-# SQLite's files beside a database while it changes or after a crash.
-JOURNALS = ("-journal", "-wal", "-shm")
+# ADR 014: no migration from earlier previews. Their database stays where it
+# was, untouched, and start-up says so.
+EARLIER_DATABASE_NOTICE = (
+    "Notice: this preview keeps its app database in /state/database, so it no "
+    "longer uses the earlier preview database (/state/keeplane.sqlite3) and has "
+    "left that file unchanged. To reset "
+    "the preview fully, stop it with 'docker compose down', remove its account "
+    "volume with 'docker volume rm keeplane-accounts-trial_model-approvals', "
+    "then start it again."
+)
 
 
 def prepare_database_folder():
-    """Give the app database its own folder in the account volume.
-
-    The model enroller (ADR 027) mounts only this folder, read-only. Earlier
-    previews kept the database at /state/keeplane.sqlite3: it gets a second
-    name in the folder first, so an app still running from before keeps using
-    the same file, and the earlier name is removed on a later start.
-    """
+    """Give the app database its own folder: the model enroller (ADR 027)
+    mounts only this folder of the account volume, read-only."""
     folder = Path("/state/database")
     folder.mkdir(mode=0o700, exist_ok=True)
     folder.chmod(0o700)
-    old, new = Path("/state") / DATABASE, folder / DATABASE
-    if not old.exists():
-        return
-    if any(old.with_name(DATABASE + suffix).exists() for suffix in JOURNALS):
-        raise RuntimeError(
-            "The app database is in the middle of a change. Stop the app, then "
-            "start the preview again."
-        )
-    if not new.exists():
-        os.link(old, new)
-    elif os.path.samefile(old, new) or old.stat().st_size == 0:
-        # The same file under its earlier name, or an empty one an app from
-        # before created after the move.
-        old.unlink()
-    else:
-        raise RuntimeError(
-            "Two app databases were found: /state/keeplane.sqlite3 and "
-            "/state/database/keeplane.sqlite3. Keep the one you use and remove "
-            "the other before starting the preview."
-        )
+    if Path("/state/keeplane.sqlite3").exists():
+        print(EARLIER_DATABASE_NOTICE, flush=True)
 
 
 def prepare():
@@ -67,9 +50,4 @@ def prepare():
 
 
 if __name__ == "__main__":
-    try:
-        prepare()
-    except RuntimeError as error:
-        # Shown by `docker compose logs account-volume-init`.
-        print(error, file=sys.stderr)
-        sys.exit(1)
+    prepare()
