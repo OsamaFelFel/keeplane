@@ -11,10 +11,11 @@ python -m pytest tests/integration/test_personal_data_model.py -m optional -s
 
 The **detection image** CI job runs these cases inside the
 `postgres-detection` image it builds, so they check the image's own detector
-code and bundled model: no network, a read-only root filesystem and the
-image's own user, with only the pytest runner, the tests and `pytest.ini`
-mounted read-only. The job fails if any case is skipped or the bar is not
-checked on both sets. The [detection image cases](detection-image-cases.md)
+code and bundled model: no network, a read-only root filesystem, the image's
+own user, the same 1 GiB memory limit with no swap as the load check and a
+limit of 256 processes, with only the pytest runner, the tests and
+`pytest.ini` mounted read-only. The job fails if any of PM-01 to PM-04 is
+skipped or did not run, on either set. The [detection image cases](detection-image-cases.md)
 show how to build the image.
 
 The sets in `tests/fixtures/personal_data/` are copies of the fixed English
@@ -23,7 +24,7 @@ rules on the held-out set.
 
 | Case | Plain-English action | Expected result |
 | --- | --- | --- |
-| PM-01 | Check every request in the development set (`2026-10-31.1`) and the held-out set (`2026-10-31.h1`) through the shipped check, with its 200 ms limit. | Development: at most 4 of 120 personal-data requests missed and 1 of 240 clean requests held. Held-out: at most 11 missed and 14 held. Output is counts and case IDs only. |
+| PM-01 | Check every request in the development set (`2026-10-31.1`) and the held-out set (`2026-10-31.h1`) through the shipped check, with its 200 ms limit. | Development: at most 4 of 120 personal-data requests missed and 1 of 240 clean requests held. Held-out: at most 11 missed and 14 held. Output is counts and case IDs only: held clean requests by reason, and the cases that took longer than 200 ms. If the bar fails on held clean requests, the message says whether requests held as personal data alone exceed it (detection quality) or the excess comes from slow or failed checks (timing on the runner). |
 | PM-02 | Check a request with an email while every network connection fails. | The request is held for personal data; nothing is downloaded or fetched, and the verdict names no text. |
 | PM-03 | Count, for each of the five kinds (name, address, email, phone, card), the personal-data requests of that kind in both sets and how many the shipped check misses. | Each kind has at least 20 requests in each set and none is missed more often than when the bar was measured: development 2 names and 2 addresses; held-out 4 names, 6 addresses and 1 card; no email or phone. Output is counts only. |
 | PM-04 | Check the clean requests shaped like code: code, stack traces, imports, package paths, code in backticks or fences, command lines, configuration, logs, regions and time zones. | None is held, except at most 1 of the 23 held-out time zones, as measured. Output is counts only. |

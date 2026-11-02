@@ -114,6 +114,23 @@ def test_bc07_detector_cases_run_offline_in_the_detection_image():
         assert expected in command, expected
     for name in detector_files:
         assert f"/src/tests/{name}" in command, name
+    # The same 1 GiB limit with no swap as the load check (DI-01), and a
+    # process limit, so a runaway case can't exhaust the runner.
+    load_check = (ROOT / "tests/integration/test_detection_image.py").read_text(encoding="utf-8")
+    assert '"--memory", "1g", "--memory-swap", "1g"' in load_check
+    assert "--memory 1g --memory-swap 1g" in command
+    pids = re.search(r"--pids-limit (\d+)", command)
+    assert pids and 0 < int(pids.group(1)) <= 1024, "the detector cases run without a process limit"
     # Nothing may fetch the model or install detector packages at test time.
     assert "en_core_web_lg" not in steps and "requirements-detection" not in steps
-    assert "model-junit.xml" in steps.split("Fail if a detection image or detector case was skipped")[1]
+    guard = steps.split("Fail if a detection image or detector case was skipped")[1]
+    assert "model-junit.xml" in guard
+    # The guard names every detector case, so none can be skipped or go
+    # uncollected unnoticed.
+    expected = re.search(r"expected = \{\n(.*?)\n\s*\}", guard, re.S)
+    assert expected, "the skipped-case guard does not list the detector cases"
+    guarded = set(re.findall(r'"([^"]+)"', expected.group(1)))
+    collected = collect("-m", "optional", *(f"tests/{name}" for name in detector_files))
+    assert collected.returncode == 0, collected.stdout + collected.stderr
+    node_ids = {line.split("::", 1)[1] for line in collected.stdout.splitlines() if "::" in line}
+    assert node_ids and node_ids == guarded, node_ids ^ guarded

@@ -48,19 +48,32 @@ def test_pm_01_release_bar_on_both_english_sets(inspector, name):
     data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
     version, max_missed, max_held = BAR[name]
     assert data["version"] == version
-    missed, held, slow = [], [], 0
+    missed, held, slow = [], {}, []
     for case in data["cases"]:
         verdict = inspector.check(case["text"])
-        slow += verdict.reason == "detector_slow"
+        if verdict.reason == "detector_slow":
+            slow.append(case["id"])
         if case["kind"] == "positive" and not verdict.held:
             missed.append(case["id"])
         elif case["kind"] == "clean" and verdict.held:
-            held.append(case["id"])
-    print(json.dumps({"set": name, "version": version, "missed": len(missed),
-                      "held_clean": len(held), "slow": slow,
-                      "missed_cases": missed, "held_cases": held}))
-    assert len(missed) <= max_missed
-    assert len(held) <= max_held
+            held.setdefault(verdict.reason, []).append(case["id"])
+    held_count = sum(map(len, held.values()))
+    report = {"set": name, "version": version, "missed": len(missed),
+              "held_clean": held_count, "slow": len(slow),
+              "missed_cases": missed, "held_cases_by_reason": held, "slow_cases": slow}
+    print(json.dumps(report))
+    # A slow check holds the request (the 200 ms rule), so a slow runner can
+    # push clean requests over the bar without any change in detection. Say
+    # which it was, so a timing failure is not read as a detection regression.
+    found = len(held.get("personal_data", []))
+    cause = (
+        "detection quality: held as personal data alone exceeds the bar"
+        if found > max_held
+        else "timing or detector errors, not detection quality: held as personal "
+             f"data is {found}, within the bar"
+    )
+    assert len(missed) <= max_missed, f"{len(missed)} personal-data requests missed, bar {max_missed}: {report}"
+    assert held_count <= max_held, f"{held_count} clean requests held, bar {max_held}; cause: {cause}: {report}"
 
 
 # Missed personal-data requests per kind when the bar was measured: the

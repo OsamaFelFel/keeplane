@@ -370,6 +370,8 @@ jobs:
             --read-only --tmpfs /tmp \
             --cap-drop ALL \
             --security-opt no-new-privileges \
+            --memory 1g --memory-swap 1g \
+            --pids-limit 256 \
             -e PYTHONPATH=/opt/test-runner \
             -v "$runner:/opt/test-runner:ro" \
             -v "$PWD/tests:/src/tests:ro" \
@@ -386,13 +388,31 @@ jobs:
               exit 1
             fi
           done
-          # The bar must be checked on both English sets, not left uncollected.
-          for set in english-set.json english-heldout-set.json; do
-            if ! grep -q "test_pm_01_release_bar_on_both_english_sets\[$set\]" test-results/detection-image/model-junit.xml; then
-              echo "The release-1 bar was not checked on $set" >&2
-              exit 1
-            fi
-          done
+          # Every detector case (PM-01 to PM-04, on both English sets) must have
+          # run in the image: none skipped, none left uncollected.
+          python3 - test-results/detection-image/model-junit.xml <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          expected = {
+              "test_pm_01_release_bar_on_both_english_sets[english-heldout-set.json]",
+              "test_pm_01_release_bar_on_both_english_sets[english-set.json]",
+              "test_pm_02_works_offline_and_names_no_text",
+              "test_pm_03_each_kind_of_personal_data_is_found[english-heldout-set.json]",
+              "test_pm_03_each_kind_of_personal_data_is_found[english-set.json]",
+              "test_pm_04_code_shaped_requests_are_not_held[english-heldout-set.json]",
+              "test_pm_04_code_shaped_requests_are_not_held[english-set.json]",
+          }
+          cases = {case.get("name"): case for case in ET.parse(sys.argv[1]).iter("testcase")}
+          missing = sorted(expected - cases.keys())
+          skipped = sorted(name for name in expected & cases.keys()
+                           if cases[name].find("skipped") is not None)
+          for name in missing:
+              print(f"Detector case did not run: {name}", file=sys.stderr)
+          for name in skipped:
+              print(f"Detector case was skipped: {name}", file=sys.stderr)
+          sys.exit(1 if missing or skipped else 0)
+          EOF
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
