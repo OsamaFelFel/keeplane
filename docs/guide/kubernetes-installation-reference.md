@@ -818,7 +818,8 @@ the gateway's protected path, and every management path private.
 
 **What to give developers.** The CLI doesn't get the gateway address from the
 server and doesn't save it in the profile: developers pass it to
-`keeplane code --gateway` on every turn. With the chart's Ingress, give each
+`keeplane code --gateway` on every turn, and a resumed session must use the
+same address it started with. With the chart's Ingress, give each
 developer two addresses on `ingress.host`:
 
 | For | Address | Where the developer uses it |

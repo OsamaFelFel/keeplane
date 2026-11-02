@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from components.cli import coding, credential_profile, keeplane
+from components.cli import coding, credential_profile, keeplane, opencode_adapter
 from tests.integration.test_chart_model_enroller import RELEASE, with_enroller
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -341,14 +341,18 @@ def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
     for phrase in ("| `https://<host>` | `keeplane login --server` |",
                    "| `https://<host>/v1` | `keeplane code --gateway` |",
                    "doesn't save it in the profile", "/chat/completions",
+                   "a resumed session must use the\nsame address",
                    "`gateway.mode=existing`", "port 4000"):
         assert phrase in section, phrase
     quickstart = QUICKSTART.read_text()
     for phrase in ("KP_SERVER=https://<host>", "KP_GATEWAY=https://<host>/v1",
-                   "doesn't learn\nthe gateway address"):
+                   "the profile doesn't keep it",
+                   "a resumed session,\nmust use the same one"):
         assert phrase in quickstart, phrase
     # The CLI saves no gateway and needs one on every coding turn.
     assert "gateway" not in inspect.getsource(credential_profile).lower()
+    # A session history records the gateway, so a resumed turn needs the same one.
+    assert '"gateway": gateway' in inspect.getsource(opencode_adapter.run)
     assert '"runtime", "gateway"):\n        code.add_argument("--" + flag, required=True)' in inspect.getsource(keeplane.main)
     for given, used in (("https://keeplane.example/v1", "https://keeplane.example/v1"),
                         ("https://keeplane.example/v1/", "https://keeplane.example/v1"),
