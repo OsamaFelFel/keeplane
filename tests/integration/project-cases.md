@@ -32,10 +32,10 @@
 
 ## Class enforcement (Spec 005 ST19)
 
-| Scenario | Where it is checked |
-| --- | --- |
-| Set a class | The cases above and browser case PRJ-UI-03 in `tests/browser/projects.spec.ts`. |
-| Only approved models, whatever the routing picks | [Model policy](model-policy-cases.md); gateway entry and selected-model checks in `test_installed_runtime.py`; fallback choice MC-07/MC-08/MC-17; native fallback (live) in [native fallback cases](native-runtime-fallback-cases.md); admins get no bypass ([runtime callback](runtime-callback-cases.md)). |
-| The repo can't change it | MC-20 and the repository-settings case in [signed-in coding](../unit/cli-signed-in-coding-cases.md). |
-| No approved model is up | MC-06, MC-18 and MC-19; the CLI stops with a clear message and starts no runtime. |
-| No class | [Model policy](model-policy-cases.md) and MC-21. |
+Each ST19 scenario and the cases that prove it are in the
+[Spec 005 scenario map](../e2e/data-classes-cases.md#spec-005-scenarios-st18-st19-st20).
+Beneath those cases, the [model policy](model-policy-cases.md) gives a classed
+project only models approved for its class, the gateway entry and selected-model
+checks in `test_installed_runtime.py` apply it to every request, admins get no
+bypass ([runtime callback](runtime-callback-cases.md)), and the
+[native fallback cases](native-runtime-fallback-cases.md) check it live.

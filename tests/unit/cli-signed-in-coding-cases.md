@@ -10,16 +10,8 @@
   malformed choice, or a 403/503 stops before launch; an older server without
   the route (404) keeps the requested model. See the
   [model choice cases](../integration/model-choice-cases.md).
-- Spec 005 ST19: when the server reports the requested model `unavailable`
-  (approved but not usable right now), the CLI says “… can't be used right now,
-  so nothing was sent” and starts no runtime. An `unavailable` reason that still
-  names a model is treated as an invalid choice.
-- Repository settings (ST19 “The repo can't change it”): an `opencode.json` in
-  the repository or its `.opencode/` folder, and `OPENCODE_CONFIG`,
-  `OPENCODE_CONFIG_CONTENT` or `OPENCODE_MODEL` in the environment, all naming
-  another model and provider, change nothing: the runtime gets only the chosen
-  Keeplane model and the gateway URL. The gateway still refuses a model outside
-  the class ([MC-20](../integration/model-choice-cases.md)).
+- Spec 005 ST19 project classes: CLI-CLASS-01 and CLI-CLASS-02 below. An
+  `unavailable` reason that still names a model is treated as an invalid choice.
 - Changed account, withdrawn session, server outage or an unavailable model
   prevents runtime launch. Invalid gateway destinations stop before any request.
 - No models yet (Spec 004 ST12): when the project's allowed model list is empty,
@@ -69,3 +61,12 @@ actual V2 processes through the shared `code` command. It checks read/edit tools
 the project header, retained tool history, fresh credentials for the same account,
 another-account refusal and withdrawal before another launch. Its account server
 is synthetic; it does not prove Django issuance or native gateway enforcement.
+
+## Project classes (Spec 005 ST19)
+
+Run `python -m pytest tests/unit/test_cli_project_profile.py`.
+
+| Case | Plain-English action | Expected result |
+| --- | --- | --- |
+| CLI-CLASS-01 | “No approved model is up”: the server reports the requested model `unavailable` (approved for the project's class but not usable right now). | The CLI says “coder is approved for this project but can't be used right now, so nothing was sent. Choose another model allowed for this project, or ask an admin to check it in Models and routing.” and starts no runtime. |
+| CLI-CLASS-02 | “The repo can't change it”: an `opencode.json` in the repository or its `.opencode/` folder, and `OPENCODE_CONFIG`, `OPENCODE_CONFIG_CONTENT` or `OPENCODE_MODEL` in the environment, all name another model, provider and key. | None of them is loaded: the runtime gets only the chosen Keeplane model and the gateway URL, and neither the other model nor the key reaches it. The gateway still refuses a model outside the class ([MC-20](../integration/model-choice-cases.md)). |

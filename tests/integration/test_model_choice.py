@@ -127,6 +127,7 @@ def test_no_other_allowed_model_fails_clearly(choice):
     ["other-class", "not-installed", "gateway-only", "own-key-missing", "shared-key-gone"],
 )
 def test_fallback_never_bypasses_setup_installation_key_or_class(choice, candidate):
+    # MC-07: no fallback skips setup, installation, keys or the class (Spec 005 ST19).
     f = choice
     f.store.remove("private")
     if candidate == "other-class":
@@ -164,6 +165,7 @@ def test_fallback_never_bypasses_setup_installation_key_or_class(choice, candida
 
 
 def test_candidates_are_tried_in_model_id_order(choice):
+    # MC-08: withdrawing a model's class approval moves the choice on.
     choice.install("public")
     choice.install("outside")
     choice.store.remove("private")
@@ -289,7 +291,7 @@ def shared_model(f, name="public", classes=("Confidential",)):
 
 @pytest.mark.parametrize("state", ["not-installed", "shared-key-gone"])
 def test_an_approved_model_that_is_not_up_stops_and_nothing_moves(choice, state):
-    # Spec 005 ST19 "No approved model is up": the task stops with a reason,
+    # MC-18, Spec 005 ST19 "No approved model is up": the task stops with a reason,
     # and no other model is chosen, even one that is up for another class.
     f = choice
     f.install("outside", classes=("Public",))
@@ -309,6 +311,7 @@ def test_an_approved_model_that_is_not_up_stops_and_nothing_moves(choice, state)
 
 
 def test_all_approved_models_down_leaves_nothing_to_choose(choice):
+    # MC-19, Spec 005 ST19 "No approved model is up": nothing for another class.
     f = choice
     f.install("outside", classes=("Public",))
     shared_model(f).unlink()
@@ -319,7 +322,7 @@ def test_all_approved_models_down_leaves_nothing_to_choose(choice):
 
 
 def test_a_model_for_another_class_is_refused_when_asked_for_directly(choice):
-    # Spec 005 ST19 "Only approved models": naming a model directly, as a
+    # MC-20, Spec 005 ST19 "Only approved models": naming a model directly, as a
     # repository setting or a hand-made request would, does not get past the class.
     f = choice
     f.install("public", classes=("Public",))
@@ -329,7 +332,7 @@ def test_a_model_for_another_class_is_refused_when_asked_for_directly(choice):
 
 
 def test_a_project_with_no_class_may_use_any_set_up_model(choice):
-    # Spec 005 ST19 "No class": the project's class is cleared.
+    # MC-21, Spec 005 ST19 "No class": the project's class is cleared.
     f = choice
     f.install("public", classes=("Public",))
     assert ask(f, "public").status_code == 403
