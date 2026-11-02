@@ -345,6 +345,9 @@ list what the render checks cover.
 
 All settings sit under `networkPolicy`. Each selected pod is denied every
 connection in that direction that its policy does not list.
+[Outbound connections](outbound-connections.md) lists every destination
+Keeplane's own code connects to and when, for choosing these destinations on
+an isolated network.
 
 **Public entry.** `publicEntry.namespaceSelector` and `publicEntry.podSelector`
 are label maps for your ingress controller, for example
