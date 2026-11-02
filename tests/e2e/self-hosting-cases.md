@@ -1,0 +1,48 @@
+# Self-hosting cases
+
+**Edition:** Open Source. **Spec:** 002 Self-hosting (ADRs 007 to 011).
+
+This page holds no checks of its own. It names, for each Spec 002 scenario, the
+cases elsewhere that prove it, and says plainly which scenarios are not proven
+yet and what run is still missing.
+
+## Spec 002 scenarios (ST1–ST5)
+
+Each scenario in Spec 002 and the cases that prove it. Each case is in its own
+catalog:
+
+- Chart render checks: SHAPE the
+  [installation shape cases](../integration/chart-installation-shape-cases.md),
+  NETPOL the [network policy cases](../integration/chart-network-policies-cases.md)
+  and PKG the [chart package cases](../integration/chart-package-cases.md).
+- Outbound connections: EGR the
+  [outbound connection cases](../unit/outbound-connection-cases.md).
+- Web UI assets: OFF the [built UI asset cases](../unit/ui-offline-assets-cases.md)
+  and OFF-UI the [browser asset cases](../browser/offline-assets-cases.md).
+- The pinned gateway image: GW-KEY the
+  [gateway key cases](../integration/gateway-policy-cases.md).
+- Live cluster and Docker trials: K8S the [local Kubernetes cases](kubernetes-cases.md),
+  FULL the [full chart cases](full-product-edge-cases.md), EXEDGE the
+  [customer-run gateway edge cases](full-existing-edge-cases.md) and EXIST the
+  [customer-run gateway trial cases](existing-gateway-cases.md).
+
+A render check runs `helm template`. When Helm refuses values there, `helm install`
+refuses the same values, because both evaluate the templates before anything
+reaches the cluster. Any other render result shows what the chart asks Kubernetes
+to create, not what a cluster does with it, so a render check alone never proves
+a live install here. The live trials ran on a local kind cluster or Docker with
+outside access, not on an isolated network.
+
+`tests/unit/test_self_hosting_scenario_map.py` fails if a scenario is missing
+here, or a case named here has no row in its own catalog or no test.
+
+| Story | Scenario | Checked by |
+| --- | --- | --- |
+| ST1 | Install on the isolated network | Not proven yet: no install has run on an isolated network (task 002-03). FULL-01 and FULL-02 install the chart on a local kind cluster that can reach the internet and open sign-in over HTTPS; SHAPE-01 shows every PostgreSQL install image is pinned by digest. |
+| ST2 | The install may pull from the registry | Not proven yet: no install has run through temporary registry access that was then closed (task 002-03). SHAPE-01 shows every image and the gateway chart are pinned, so the registry is the only source the chart names. |
+| ST2 | Runs where only the models are reachable | Not proven yet: no install has run with only model endpoints reachable, and browser and device sign-in, the real coding runtime binary and the gateway image have not run under the outbound guard (task 002-03). EGR-01, EGR-02, EGR-11, EGR-12, EGR-15 and EGR-18 show the server and CLI contact only declared places; NETPOL-04, NETPOL-05 and NETPOL-10 render egress limited to DNS, databases and listed model endpoints. |
+| ST2 | The web UI loads from inside | OFF-01, OFF-02, OFF-03, OFF-04, OFF-05, OFF-06, OFF-UI-01, OFF-UI-02 |
+| ST3 | A local model works like a cloud one | FULL-07, K8S-02, EXEDGE-03 (an in-cluster model answers through the gateway), EGR-12 (the gateway adapter reaches only the address it is given) |
+| ST3 | The managed gateway always requires keys | SHAPE-08, PKG-04 (Helm refuses the install without the key Secret), SHAPE-07 (the gateway checks a key for model calls and management), GW-KEY-01, GW-KEY-02, GW-KEY-03 (the pinned gateway image refuses calls without the right key) |
+| ST4 | One gateway copy stops | Not proven yet: the gateway copies became a StatefulSet in keeplane #180 and no live run has stopped a copy since (tasks 002-02 and 002-04). K8S-03 and K8S-04, then FULL-08, prove it once run; SHAPE-10 and SHAPE-13 only render two copies and their disruption budget. |
+| ST5 | We already run the gateway | SHAPE-06, SHAPE-09, PKG-02 (no gateway of Keeplane's own is rendered), K8S-05, EXEDGE-01, EXEDGE-03, EXIST-03 (Keeplane registers and asks models through the customer's gateway) |

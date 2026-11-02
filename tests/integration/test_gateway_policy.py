@@ -156,6 +156,7 @@ def run_cases():
         )
         report = {
             "trial": "isolated strict runtime and UI keys",
+            "cases": ["GW-KEY-01", "GW-KEY-02", "GW-KEY-03"],
             "image": IMAGE,
             "observations": observations,
             "trial_passes": trial_passes,
