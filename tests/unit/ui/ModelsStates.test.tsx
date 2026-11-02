@@ -10,8 +10,8 @@ const listing = { models: [{ id: 'coder', provider: 'OpenAI', kind: 'cloud', app
 // Gateway products and versions the page must never name (Spec 004 ST25).
 const gatewayNames = /agentgateway|litellm|envoy|semantic router|routellm|plano|\bv?\d+\.\d+(\.\d+)?\b/i
 
-function fixture({ add, runners, models = () => response(listing) }: {
-  add?: () => object; runners?: () => object; models?: () => object | Promise<object>
+function fixture({ add, runners, setup, models = () => response(listing) }: {
+  add?: () => object; runners?: () => object; setup?: () => object; models?: () => object | Promise<object>
 } = {}) {
   const request = vi.fn(async (path: string, options: RequestInit = {}) => {
     if (path === '/api/models' && (options.method ?? 'GET') === 'GET') return models()
@@ -19,6 +19,7 @@ function fixture({ add, runners, models = () => response(listing) }: {
     if (path === '/api/data-classes') return response({ enabled: false, classes: [] })
     if (path === '/api/auth-options') return response({ csrf_token: 'masked' })
     if (path === '/api/models' && add) return add()
+    if (path === '/api/models/coder/setup' && setup) return setup()
     return response({})
   })
   vi.stubGlobal('fetch', request)
@@ -81,13 +82,28 @@ test("MOD-UI-08: a local model that doesn't answer through the gateway keeps the
 })
 
 test("MOD-UI-08: when its gateway entry may remain, the dialog doesn't say nothing was saved", async () => {
-  const error = "The model didn't answer through the gateway. It may remain in the gateway without Keeplane approval; check Models."
+  const error = "The model didn't answer through the gateway. The model may remain in the gateway without Keeplane approval. Check Models."
   fixture({ runners: () => response({ models: ['runner-model'] }), add: () => response({ error }, 503) })
   const dialog = await addLocal()
   const alert = await within(dialog).findByRole('alert')
   expect(within(alert).getByText("runner-model wasn't added")).toBeTruthy()
   expect(within(alert).getByText(error)).toBeTruthy()
   expect(within(alert).queryByText(/Nothing was saved/)).toBeNull()
+})
+
+const entryRemains = 'The model may remain in the gateway without Keeplane approval. Check Models.'
+
+test.each([
+  ["The gateway didn't register it."],
+  ['OpenAI refused the key.'],
+])("MOD-UI-08: a cloud model whose gateway entry may remain shows %s and to check Models as given", async reason => {
+  const error = `${reason} ${entryRemains}`
+  fixture({ add: () => response({ error }, 503) })
+  const dialog = await addCloud('new-model')
+  const alert = await within(dialog).findByRole('alert')
+  expect(within(alert).getByText("new-model wasn't added")).toBeTruthy()
+  expect(within(alert).getByText(error)).toBeTruthy()
+  expect(within(alert).queryByText(/Nothing was saved|try again/)).toBeNull()
 })
 
 const approvalNotSaved = "Keeplane couldn't save the model approval. Nothing was saved."
@@ -179,4 +195,21 @@ test('MOD-UI-06: the page names no gateway product or version, up or down', asyn
   render(<ModelsPage />)
   await screen.findByRole('alert')
   expect(document.body.textContent).not.toMatch(gatewayNames)
+})
+
+test.each([
+  ["The replacement key didn't answer through the gateway. A verification model may need cleanup. Check Models."],
+  ["The replacement key didn't work. The model may need admin attention. Check Models."],
+  ["Keeplane couldn't save the change. The model may need admin attention. Check Models."],
+])('MOD-UI-10: a replaced key whose previous key isn\'t restored keeps Edit open and shows "%s" as given', async error => {
+  fixture({ setup: () => response({ error }, 503) })
+  const user = userEvent.setup()
+  render(<ModelsPage />)
+  await user.click(await within(await screen.findByRole('row', { name: /coder/ })).findByRole('button', { name: 'Edit' }))
+  const dialog = screen.getByRole('dialog')
+  await user.type(within(dialog).getByLabelText('Replace shared key'), 'synthetic-replacement-key')
+  await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+  const alert = await within(dialog).findByRole('alert')
+  expect(alert.textContent).toBe(error)
+  expect(screen.getByRole('dialog')).toBe(dialog)
 })
