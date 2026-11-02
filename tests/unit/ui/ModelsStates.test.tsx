@@ -90,6 +90,33 @@ test("MOD-UI-08: when its gateway entry may remain, the dialog doesn't say nothi
   expect(within(alert).queryByText(/Nothing was saved/)).toBeNull()
 })
 
+const approvalNotSaved = "Keeplane couldn't save the model approval. Nothing was saved."
+const approvalNotSavedEntryRemains =
+  "Keeplane couldn't save the model approval. The model may remain in the gateway without Keeplane approval. Check Models."
+
+test.each([
+  ['cloud', () => addCloud('new-model'), 'new-model'],
+  ['local', () => addLocal(), 'runner-model'],
+])("MOD-UI-09: a %s model whose approval isn't saved says nothing was saved and to try again", async (_kind, add, name) => {
+  fixture({ runners: () => response({ models: ['runner-model'] }), add: () => response({ error: approvalNotSaved }, 503) })
+  const dialog = await add()
+  const alert = await within(dialog).findByRole('alert')
+  expect(within(alert).getByText(`${name} wasn't added`)).toBeTruthy()
+  expect(within(alert).getByText(`${approvalNotSaved} Check the details and try again.`)).toBeTruthy()
+})
+
+test.each([
+  ['cloud', () => addCloud('new-model'), 'new-model'],
+  ['local', () => addLocal(), 'runner-model'],
+])("MOD-UI-09: a %s model whose gateway entry may remain says to check Models, not that nothing was saved", async (_kind, add, name) => {
+  fixture({ runners: () => response({ models: ['runner-model'] }), add: () => response({ error: approvalNotSavedEntryRemains }, 503) })
+  const dialog = await add()
+  const alert = await within(dialog).findByRole('alert')
+  expect(within(alert).getByText(`${name} wasn't added`)).toBeTruthy()
+  expect(within(alert).getByText(approvalNotSavedEntryRemains)).toBeTruthy()
+  expect(within(alert).queryByText(/Nothing was saved|try again/)).toBeNull()
+})
+
 test('MOD-UI-03: a model already added from the provider is named on the Model field', async () => {
   const request = fixture({ add: () => response({ error: 'coder from OpenAI is already added.' }, 409) })
   const dialog = await addCloud()
