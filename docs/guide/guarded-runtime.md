@@ -51,18 +51,26 @@ The enroller has no port, reads models through a read-only database connection
 and is the only service that writes the private installation volume after
 enrollment; the app's copy of that volume stays read-only. Of the app's account
 volume it mounts only the `database` folder, read-only, so it can't read the
-signing secret or anything else kept there. Earlier previews kept the database
-at `/state/keeplane.sqlite3`. Before the first release Keeplane doesn't carry
-trial data forward, so this preview starts a fresh database in the folder and
-leaves the earlier file unused and unchanged; start-up prints a notice when it
-finds one. To reset the preview fully, run `docker compose down`, then
-`docker volume rm keeplane-accounts-trial_model-approvals`, and start it again. Check it with
+signing secret or anything else kept there. Check it with
 `docker compose -f compose.yaml -f deploy/local/runtime.yaml logs model-enroller`.
 If it reports that enrollment did not complete, protected access stays refused
 and it tries again every 2 seconds. To stop automatic changes, stop the
 `model-enroller` service. Access then stays as last enrolled until a model
 changes; after that, protected models are refused until you start it again or
 rerun the launcher.
+
+Earlier previews kept the database at `/state/keeplane.sqlite3` (and before
+that in `accounts.sqlite3` and `model-approvals.sqlite3`). Before the first
+release Keeplane doesn't carry trial data forward, so this preview starts a
+fresh database in the folder, with only the first admin, and leaves the earlier
+files unused and unchanged; start-up prints a notice when it finds them. To
+reset the preview fully, stop everything, including the enroller, remove the
+account volume, then start the preview again:
+
+```sh
+docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime down --remove-orphans
+docker volume rm keeplane-accounts-trial_model-approvals
+```
 
 Changing the gateway configuration itself still needs the opt-in command again
 so a fresh gateway verifies it. Personal key changes apply to the next request.

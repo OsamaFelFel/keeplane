@@ -26,7 +26,8 @@ For manual container builds, prepare the web UI assets first using the commands
 in the PostgreSQL guide. The local launcher handles this step automatically.
 
 Python tests live in the repository's `tests/` tree and run through pytest.
-The one-time `import_preview` command preserves earlier local records without
-changing their original files. Serving workers never run schema migrations.
+The one-time `import_preview` command copies records from earlier preview files
+without changing them. The Docker preview no longer runs it (ADR 014: a fresh
+database); the Kubernetes trial still does. Serving workers never run schema migrations.
 The original Django migration is retained. Moving models between apps changes
 their migration state only, preserving existing PostgreSQL tables and records.

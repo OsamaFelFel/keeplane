@@ -5,16 +5,24 @@ import secrets
 import shutil
 from pathlib import Path
 
-# ADR 014: no migration from earlier previews. Their database stays where it
-# was, untouched, and start-up says so.
-EARLIER_DATABASE_NOTICE = (
-    "Notice: this preview keeps its app database in /state/database, so it no "
-    "longer uses the earlier preview database (/state/keeplane.sqlite3) and has "
-    "left that file unchanged. To reset "
-    "the preview fully, stop it with 'docker compose down', remove its account "
-    "volume with 'docker volume rm keeplane-accounts-trial_model-approvals', "
-    "then start it again."
+# ADR 014: no migration from earlier previews. Their files stay where they
+# were, untouched and unused, and start-up says so.
+EARLIER_FILES = ("keeplane.sqlite3", "accounts.sqlite3", "model-approvals.sqlite3")
+RESET = (
+    "docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime "
+    "down --remove-orphans"
 )
+
+
+def earlier_database_notice(names):
+    files = ", ".join("/state/" + name for name in names)
+    return (
+        "Notice: this preview keeps its app database in /state/database and "
+        f"started it fresh. It doesn't use or import the earlier preview files ({files}) "
+        "and left them unchanged. To reset the preview fully, stop it with "
+        f"'{RESET}', remove its account volume with 'docker volume rm "
+        "keeplane-accounts-trial_model-approvals', then start it again."
+    )
 
 
 def prepare_database_folder():
@@ -23,8 +31,9 @@ def prepare_database_folder():
     folder = Path("/state/database")
     folder.mkdir(mode=0o700, exist_ok=True)
     folder.chmod(0o700)
-    if Path("/state/keeplane.sqlite3").exists():
-        print(EARLIER_DATABASE_NOTICE, flush=True)
+    earlier = [name for name in EARLIER_FILES if (Path("/state") / name).exists()]
+    if earlier:
+        print(earlier_database_notice(earlier), flush=True)
 
 
 def prepare():

@@ -89,7 +89,8 @@ services:
       context: .
       dockerfile: components/control-plane/Dockerfile
     image: keeplane-preview:docker-local
-    command: ["sh", "-ec", "python manage.py migrate --noinput && python manage.py import_preview && python manage.py bootstrap"]
+    # ADR 014: a fresh database; nothing is imported from earlier previews.
+    command: ["sh", "-ec", "python manage.py migrate --noinput && python manage.py bootstrap"]
     environment:
       FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first-admin-password
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3

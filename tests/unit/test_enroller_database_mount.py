@@ -168,24 +168,83 @@ def test_edm04_a_new_preview_gets_a_private_database_folder(volumes, capsys):
     assert "Notice:" not in capsys.readouterr().out
 
 
-def test_edm05_an_earlier_database_is_left_unchanged_with_a_notice(volumes, capsys):
-    # ADR 014: no migration. The earlier file stays as it was and isn't used.
-    old = volumes.state / "keeplane.sqlite3"
-    database(old, ["earlier"])
-    before = (old.read_bytes(), old.stat().st_mtime_ns)
+EARLIER = ("keeplane.sqlite3", "accounts.sqlite3", "model-approvals.sqlite3")
+FULL_RESET = (
+    "docker compose -f compose.yaml -f deploy/local/runtime.yaml --profile runtime "
+    "down --remove-orphans"
+)
+
+
+@pytest.mark.parametrize("present", [EARLIER[:1], EARLIER[1:], EARLIER])
+def test_edm05_earlier_preview_files_are_left_unchanged_with_a_notice(
+    volumes, capsys, present
+):
+    # ADR 014: no migration. The earlier files stay as they were, unused.
+    before = {}
+    for name in present:
+        database(volumes.state / name, ["earlier"])
+        path = volumes.state / name
+        before[name] = (path.read_bytes(), path.stat().st_mtime_ns)
     volumes.prepare()
     volumes.prepare()
-    assert (old.read_bytes(), old.stat().st_mtime_ns) == before
-    assert approvals(old) == ["earlier"]
+    for name in present:
+        path = volumes.state / name
+        assert (path.read_bytes(), path.stat().st_mtime_ns) == before[name], name
     assert list((volumes.state / "database").iterdir()) == []
-    lines = capsys.readouterr().out.splitlines()
-    assert lines == [volumes.EARLIER_DATABASE_NOTICE] * 2
-    notice = volumes.EARLIER_DATABASE_NOTICE
+    notice = volumes.earlier_database_notice(list(present))
+    assert capsys.readouterr().out.splitlines() == [notice] * 2
     assert notice.startswith("Notice: ")
-    for words in ("no longer uses", "/state/keeplane.sqlite3", "unchanged",
-                  "docker compose down",
+    for name in EARLIER:
+        assert (("/state/" + name) in notice) == (name in present), name
+    for words in ("doesn't use or import", "unchanged", f"'{FULL_RESET}'",
                   "docker volume rm keeplane-accounts-trial_model-approvals"):
         assert words in notice, words
+    # The guide gives the same full reset, which also stops the enroller.
+    guide = (ROOT / "docs/guide/guarded-runtime.md").read_text()
+    assert FULL_RESET in guide
+    assert "docker volume rm keeplane-accounts-trial_model-approvals" in guide
+
+
+def test_edm07_earlier_accounts_are_not_imported_into_the_fresh_database(
+    rendered, tmp_path
+):
+    command = rendered["app-migrate"]["command"]
+    assert command[:2] == ["sh", "-ec"] and "import_preview" not in command[2]
+    state = tmp_path / "state"
+    (state / "database").mkdir(parents=True)
+    with sqlite3.connect(state / "accounts.sqlite3") as db:
+        db.execute("CREATE TABLE users(id,username,password_hash,role)")
+        db.execute("INSERT INTO users VALUES('u1','earlier-developer','x','admin')")
+    with sqlite3.connect(state / "model-approvals.sqlite3") as db:
+        db.execute("CREATE TABLE approved_models(model_id,key_choice)")
+        db.execute("INSERT INTO approved_models VALUES('earlier-model','none')")
+    before = {p.name: p.read_bytes() for p in state.glob("*.sqlite3")}
+    password = tmp_path / "first-admin-password"
+    password.write_text("synthetic-first-admin-password-123")
+    secret = tmp_path / "secret"
+    secret.write_text("s" * 64)
+    path = state / "database/keeplane.sqlite3"
+    environment = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("KEEPLANE_", "DJANGO_"))
+    }
+    environment.update(
+        DJANGO_SETTINGS_MODULE="config.settings",
+        KEEPLANE_SQLITE_PATH=str(path),
+        DJANGO_SECRET_KEY_FILE=str(secret),
+        FIRST_ADMIN_PASSWORD_FILE=str(password),
+        PYTHONDONTWRITEBYTECODE="1",
+    )
+    # The preview's own migration step, with this interpreter.
+    script = command[2].replace("python manage.py", f"'{sys.executable}' manage.py")
+    subprocess.run(["sh", "-ec", script], cwd=ROOT / "components/control-plane",
+                   env=environment, capture_output=True, text=True, timeout=300,
+                   check=True)
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+        users = [row for (row,) in db.execute("SELECT username FROM accounts_user")]
+        models = db.execute("SELECT count(*) FROM accounts_modelapproval").fetchone()
+    assert users == ["first-admin"] and models == (0,)
+    assert before == {p.name: p.read_bytes() for p in state.glob("*.sqlite3")}
 
 
 def test_edm06_start_up_repeats_only_this_starts_notice(monkeypatch, tmp_path):
