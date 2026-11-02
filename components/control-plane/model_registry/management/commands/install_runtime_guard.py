@@ -8,6 +8,7 @@ from common.errors import StorageUnavailable
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from model_registry.guard_status import valid_copy_name
 from model_registry.installed_runtime import ModelPolicyUnavailable
 from model_registry.runtime_installation import DjangoRuntimeInstallation
 
@@ -29,6 +30,11 @@ class Command(BaseCommand):
             or settings.RUNTIME_AUTHORIZER_KEY_FILE != str(directory / "callback-key")
         ):
             raise CommandError("Configure the private managed installation volume")
+        # Kubernetes (ADR 027): name this copy in its protected checks. The
+        # copy's enroller records its guard status on its first pass.
+        copy_name = os.environ.get("KEEPLANE_GATEWAY_COPY") or None
+        if copy_name is not None and not valid_copy_name(copy_name):
+            raise CommandError("The gateway copy name is not a valid Pod name")
         try:
             DjangoRuntimeInstallation(
                 MODEL_GATEWAY,
@@ -37,6 +43,7 @@ class Command(BaseCommand):
                 os.environ.get("PROVIDER_KEY_DIR", ""),
                 gateway_mode=os.environ.get("GATEWAY_MODE", "managed"),
                 callback_host=options["callback_host"],
+                gateway_copy=copy_name,
             ).install(options["model"])
         except (
             OSError,

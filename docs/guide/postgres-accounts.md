@@ -169,6 +169,9 @@ this database, `USAGE` on its schema, and table `SELECT, INSERT, UPDATE, DELETE`
 plus sequence `USAGE, SELECT`. Set the migration role's default privileges so
 new tables and sequences receive those grants. Keep database ownership and DDL
 permission with the migration role. See [PostgreSQL privileges](https://www.postgresql.org/docs/16/ddl-priv.html).
+The app role can't write the gateway guard-status table even with those
+grants; the private model enroller's own roles are set up as in
+[the enroller's database roles](guard-status-roles.md).
 
 Create namespaced Secrets with these keys:
 

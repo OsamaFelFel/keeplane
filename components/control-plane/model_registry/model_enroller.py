@@ -31,6 +31,13 @@ change has passed its last final check (HOLD_SECONDS). Meanwhile the old guard
 and declaration stay as they are: the app refuses the changed or removed model,
 and every model if the gateway's own state moved. Adding a model changes no
 existing guard and is enrolled at once.
+
+In Kubernetes the app cannot read the copy's private declaration, so the
+enroller also records it in the copy's guard-status row (see guard_status):
+before the guard moves the row says nothing is confirmed, and only after the
+new guard reads back does it list the enrolled models again. A pass that fails
+after that point leaves nothing confirmed; one that fails before touching the
+guard keeps the last confirmation. The Docker preview keeps no row.
 """
 
 import json
@@ -44,6 +51,7 @@ from integrations.gateway.runtime_config import (
     RETRY_ATTEMPTS,
     RETRY_BACKOFF,
     RuntimeInstallationUnavailable,
+    callback_copies,
 )
 
 from .fingerprints import fingerprint
@@ -89,12 +97,24 @@ class DjangoModelEnroller:
     """The only writer of one gateway copy's private guard directory."""
 
     def __init__(
-        self, installation, *, deadline=15.0, sleep=time.sleep, now=time.monotonic
+        self,
+        installation,
+        *,
+        deadline=15.0,
+        sleep=time.sleep,
+        now=time.monotonic,
+        status=None,
     ):
         if not isinstance(installation, DjangoRuntimeInstallation):
             raise TypeError("A managed runtime installation is required")
+        if (status is None) != (installation.gateway_copy is None) or (
+            status is not None and status.copy_name != installation.gateway_copy
+        ):
+            raise TypeError("Record guard status for exactly this gateway copy")
         self.installation = installation
         self.deadline, self.sleep, self.now = deadline, sleep, now
+        # Kubernetes only: this copy's guard-status recorder (ADR 027).
+        self.status = status
 
     @property
     def directory(self):
@@ -152,6 +172,13 @@ class DjangoModelEnroller:
             return None
         if declaration["models"] != planned:
             return None
+        # Every protected check must name exactly this copy (none in Docker).
+        try:
+            config = json.loads((self.directory / "gateway.json").read_bytes())
+        except (OSError, ValueError, RecursionError):
+            return None
+        if callback_copies(config) != {self.installation.gateway_copy}:
+            return None
         gate = DjangoInstalledRuntimeGate(
             self.installation.gateway, str(active), self.installation.key_directory
         )
@@ -194,6 +221,32 @@ class DjangoModelEnroller:
             self.sleep(0.1)
 
     def reconcile(self):
+        # Set once this pass starts to disable or change the guard.
+        self._moving = False
+        try:
+            return self._reconcile()
+        except Exception:
+            # ADR 027 "Failure": a pass that failed before touching the guard
+            # keeps the copy's last confirmation; one that disabled or changed
+            # it leaves nothing confirmed (the row was cleared first; this
+            # repeats that in case a later write moved it on).
+            if self._moving:
+                self._unconfirmed()
+            raise
+
+    def _unconfirmed(self):
+        if self.status is None:
+            return
+        try:
+            self.status.clear()
+        except Exception:  # noqa: BLE001 - the pass already failed; keep its error
+            log.warning("This gateway copy's guard status could not be cleared")
+
+    def _confirmed(self, declaration):
+        if self.status is not None:
+            self.status.confirm(declaration)
+
+    def _reconcile(self):
         installation = self.installation
         if (
             installation.gateway_mode != "managed"
@@ -214,8 +267,12 @@ class DjangoModelEnroller:
             planned = self.plan(resources, file_models)
             wanted = {key: row["fingerprint"] for key, row in planned.items()}
             record = self._record()
-            if planned and self._current(planned) is not None:
+            current = self._current(planned) if planned else None
+            if current is not None:
                 self._save(record, {"served": wanted, "pending": None})
+                # Read back just now; record it if the row says otherwise
+                # (a first pass after the operator's enrolment or a restart).
+                self._confirmed(current)
                 return Enrolment("unchanged", tuple(planned))
             active = self.directory / "manifest.json"
             try:
@@ -248,7 +305,12 @@ class DjangoModelEnroller:
                     return Enrolment("held", ())
                 if now - pending["since"] < HOLD_SECONDS:
                     return Enrolment("held", ())
-            # Refuse every protected call before the guard moves.
+            # Refuse every protected call before the guard moves. In
+            # Kubernetes the app reads the row, so it goes first: if it cannot
+            # be written, the guard is not touched.
+            self._moving = True
+            if self.status is not None:
+                self.status.clear()
             atomic_private(active, DISABLED)
             if not planned:
                 changed = self._withdrawn(base)
@@ -258,6 +320,8 @@ class DjangoModelEnroller:
             initial = installation.read_applied()
             result = installation.publish(base, resources, planned, initial)
             self._save(record, {"served": wanted, "pending": None})
+            # Only now, with the new guard read back and enabled.
+            self._confirmed(manifest(active))
             return Enrolment("enrolled", tuple(result["models"]))
 
     def _record(self):

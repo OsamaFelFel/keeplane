@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from copy import deepcopy
 
 from .applied import private_applied_route
@@ -17,6 +18,21 @@ MESSAGES = (
     f'"messages": size(request.body) <= {MESSAGES_LIMIT} '
     "? json(request.body).messages : null"
 )
+# ADR 027, Kubernetes: each copy's guard names the copy (its StatefulSet Pod
+# name) in every protected check, so the app checks that copy's own confirmed
+# guard-status row. It is a constant written by the copy's own enroller, never
+# a value a client can set.
+COPY_NAME = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
+COPY_FIELD = '"gateway_copy": '
+
+
+def copy_field(gateway_copy):
+    """The body text naming the copy; empty when no copy is named."""
+    if gateway_copy is None:
+        return ""
+    if not isinstance(gateway_copy, str) or not COPY_NAME.fullmatch(gateway_copy):
+        raise RuntimeInstallationUnavailable("The gateway copy name is not valid")
+    return ", " + COPY_FIELD + json.dumps(gateway_copy)
 
 
 # Spec 004 ST16, owner decision of 31 October 2026: a model that is down gets
@@ -89,13 +105,22 @@ def model_backends(dump, model_ids):
     return result
 
 
-def callback(host, path, model_expression, fingerprint=None, *, messages=False):
+def callback(
+    host,
+    path,
+    model_expression,
+    fingerprint=None,
+    *,
+    messages=False,
+    gateway_copy=None,
+):
     fields = (
         '{"project_id": request.headers["x-keeplane-project-id"], "model_id": '
         + model_expression
     )
     if fingerprint is not None:
         fields += ', "definition_fingerprint": ' + json.dumps(fingerprint)
+    fields += copy_field(gateway_copy)
     if messages:
         fields += ", " + MESSAGES
     return {
@@ -128,13 +153,16 @@ def callback(host, path, model_expression, fingerprint=None, *, messages=False):
     }
 
 
-def selected_callback(host, model_id, fingerprint, *, messages=False):
+def selected_callback(
+    host, model_id, fingerprint, *, messages=False, gateway_copy=None
+):
     result = callback(
         host,
         "/internal/runtime/installed/selected",
         json.dumps(model_id),
         fingerprint,
         messages=messages,
+        gateway_copy=gateway_copy,
     )
     protocol = result["protocol"]["http"]
     protected_body = protocol["body"]
@@ -161,18 +189,21 @@ def selected_callback(host, model_id, fingerprint, *, messages=False):
     return result
 
 
-def personal_exchange(host, model_id, fingerprint, provider):
+def personal_exchange(host, model_id, fingerprint, provider, *, gateway_copy=None):
     if provider not in ("openAI", "anthropic"):
         raise RuntimeInstallationUnavailable("The Personal provider is unsupported")
+    params = {
+        "project_id": 'request.headers["x-keeplane-project-id"]',
+        "model_id": json.dumps(model_id),
+        "definition_fingerprint": json.dumps(fingerprint),
+    }
+    if copy_field(gateway_copy):
+        params["gateway_copy"] = json.dumps(gateway_copy)
     result = {
         "host": host,
         "path": "/internal/runtime/installed-provider-token",
         "cache": {"maxEntries": 0},
-        "additionalParams": {
-            "project_id": 'request.headers["x-keeplane-project-id"]',
-            "model_id": json.dumps(model_id),
-            "definition_fingerprint": json.dumps(fingerprint),
-        },
+        "additionalParams": params,
         "policies": {
             "backendAuth": {
                 "key": {
@@ -203,7 +234,9 @@ def overlay(
     port=5000,
     personal_providers=None,
     send_messages=False,
+    gateway_copy=None,
 ):
+    copy_field(gateway_copy)  # refuse a bad copy name before building anything
     if not isinstance(base, dict) or set(models) != set(targets) or not models:
         raise RuntimeInstallationUnavailable(
             "Declare exact installed models and targets"
@@ -277,6 +310,7 @@ def overlay(
                                     "/internal/runtime/installed/entry",
                                     "json(request.body).model",
                                     messages=send_messages,
+                                    gateway_copy=gateway_copy,
                                 ),
                                 **outage_retry(),
                             },
@@ -291,7 +325,11 @@ def overlay(
         target = {"backend": {"backend": {"name": targets[model_id], "namespace": ""}}}
         suffix = hashlib.sha256(model_id.encode()).hexdigest()[:32]
         selected = selected_callback(
-            callback_host, model_id, declaration["fingerprint"], messages=send_messages
+            callback_host,
+            model_id,
+            declaration["fingerprint"],
+            messages=send_messages,
+            gateway_copy=gateway_copy,
         )
         policies.append(
             {
@@ -314,6 +352,7 @@ def overlay(
                                 model_id,
                                 declaration["fingerprint"],
                                 personal_providers[model_id],
+                                gateway_copy=gateway_copy,
                             )
                         }
                     },
@@ -340,3 +379,38 @@ def overlay(
             }
         )
     return result
+
+
+def _named_copy(body):
+    found = set(re.findall(re.escape(COPY_FIELD) + r'("[a-z0-9-]*")', body))
+    if len(found) > 1:
+        raise ValueError()
+    return json.loads(found.pop()) if found else None
+
+
+def callback_copies(config):
+    """The copy names the protected checks in `config` send.
+
+    None stands for a check that names no copy. The enroller keeps a guard
+    only when every check names exactly its own copy (none in the Docker
+    preview). Returns None when the configuration cannot be read.
+    """
+    names = set()
+    try:
+        for bind in config.get("binds", []):
+            for listener in bind.get("listeners", []):
+                for route in listener.get("routes", []):
+                    auth = route.get("policies", {}).get("extAuthz")
+                    if auth is not None:
+                        names.add(_named_copy(auth["protocol"]["http"]["body"]))
+        for row in config.get("policies", []):
+            policy = row["policy"]
+            if "extAuthz" in policy:
+                names.add(_named_copy(policy["extAuthz"]["protocol"]["http"]["body"]))
+            exchange = policy.get("backendAuth", {}).get("oauthTokenExchange")
+            if exchange is not None:
+                value = exchange["additionalParams"].get("gateway_copy")
+                names.add(None if value is None else json.loads(value))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return names

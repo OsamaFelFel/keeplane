@@ -227,9 +227,12 @@ listed in `GATEWAY_COPY_URLS` before they are acknowledged; see
 can't confirm leaves the change unapproved (or, for a removal, withdrawn and
 reported), and other models are untouched. In the Docker preview, the private model enroller now re-enrolls from that
 confirmed state without restarting the gateway (see
-[the model enroller](#model-enroller)). The remaining integration must run it
-beside every Kubernetes gateway copy and cover customer-run gateways that don't
-share one model store.
+[the model enroller](#model-enroller)). For Kubernetes, each copy's enroller
+records its confirmed guard in a database row that the app checks for the copy
+that sends each protected check (see [per-copy guard status](#per-copy-guard-status)).
+The remaining integration must run the enroller container beside every
+Kubernetes gateway copy and cover customer-run gateways that don't share one
+model store.
 
 ## Model enroller
 
@@ -261,6 +264,78 @@ role must also be read-only). Every 2 seconds it:
 
 It shares the installer's private lock, so the two never write at once. A
 failure leaves the declaration disabled and is retried on the next pass.
+
+### Per-copy guard status
+
+In Kubernetes each gateway copy is a StatefulSet Pod with its own private guard
+volume, which the app never mounts. So each copy's enroller also records the
+declaration it confirmed in the guard-status table
+(`model_registry_gatewayguardstatus`), one row per copy, keyed by the Pod name.
+A row holds whether the copy has a confirmed guard, the declaration itself
+(the enrolled models with their definition fingerprints, key choices and the
+file, effective and applied digests) and when it was confirmed. The Docker
+preview keeps no row and the app reads the declaration file as before.
+
+The enroller, configured with `KEEPLANE_GATEWAY_COPY` and a status connection
+(`KEEPLANE_GUARD_STATUS_DATABASE_USER` and `..._PASSWORD_FILE`):
+
+1. writes the copy name into every protected check of its guard (entry, final
+   and Personal key exchange; not operator validation), as `gateway_copy`. A
+   guard that names another copy, or none, is replaced;
+2. before it disables the declaration to move the guard, records that nothing
+   is confirmed. If that write fails, the guard isn't touched;
+3. only after the new guard reads back and the declaration is enabled, records
+   the new declaration as confirmed. An unchanged guard is recorded once, for
+   example on the first pass after the operator's enrollment;
+4. while a change is held, leaves the old confirmation in place: the app still
+   refuses the changed model, because its fingerprint no longer matches;
+5. once no model is left, or when a pass fails after it disabled or changed
+   the guard (for example a readback that never completes), leaves nothing
+   confirmed. A pass that fails before touching the guard, such as an
+   unreadable gateway, keeps the last confirmation (ADR 027 "Failure"); the
+   app still checks the copy's live state on every call.
+
+Approvals are read on the read-only connection. The status write uses a
+second connection, as a role whose only grant is on the status table and
+whose row-level security admits only its own copy's row; its transactions are
+read-only by default, and the write opens an explicit `BEGIN READ WRITE`. A
+mistaken write on the approvals connection still fails. Installers create
+these roles as in [the enroller's database roles](../guide/guard-status-roles.md).
+
+With `KEEPLANE_GUARD_STATUS_CHECK=1`, the app's installed entry, final and
+Personal key exchange checks require `gateway_copy` and then:
+
+- find that copy's private address among `GATEWAY_COPY_URLS` (the first label
+  of the host is the Pod name; exactly one must match);
+- read the copy's row as the app role, which can only read the table. A
+  missing, unconfirmed or malformed row refuses the call (503);
+- apply every existing check to that declaration on that copy: the model must
+  be listed (else 403), its fingerprint must match the saved approval, the
+  copy's current definition and the fingerprint the final check carries, and
+  the copy's file, effective and applied state must still match the recorded
+  digests. A row that no longer matches its copy is refused.
+
+Another copy's row never vouches for the sender. A model choice for the CLI,
+made before any copy is known, picks a model only when every listed copy's
+confirmed row lists it with the saved fingerprint; the serving copy still
+checks it in full.
+
+```mermaid
+sequenceDiagram
+  participant E as Enroller (copy 0 Pod)
+  participant G as Gateway (copy 0 Pod)
+  participant DB as PostgreSQL
+  participant A as App
+  E->>DB: Read approvals (read-only approvals role)
+  E->>DB: Row for copy 0: nothing confirmed (status role, BEGIN READ WRITE)
+  E->>G: Disable declaration, write guard naming copy 0
+  E->>G: Read the guard back from applied state
+  E->>DB: Row for copy 0: confirmed declaration
+  G->>A: Final check: model, fingerprint, gateway_copy = copy 0
+  A->>DB: Read copy 0's row (app role, read only)
+  A->>G: Read copy 0's definition and applied state (private address)
+  A-->>G: Allowed only if the row lists the model with that fingerprint
+```
 
 ## Managed operator contract
 

@@ -62,7 +62,18 @@ def manifest(path):
             raw = source.read(65537)
         if len(raw) > 65536:
             raise ValueError()
-        value = json.loads(raw, object_pairs_hook=unique_pairs)
+        return valid_declaration(json.loads(raw, object_pairs_hook=unique_pairs))
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        raise ModelPolicyUnavailable("Runtime enrollment is unavailable") from None
+
+
+def valid_declaration(value):
+    """An enabled version-2 declaration, exactly; anything else is refused.
+
+    Shared by the private declaration file (Docker preview) and a gateway
+    copy's confirmed guard-status row (Kubernetes, ADR 027).
+    """
+    try:
         if (
             not isinstance(value, dict)
             or set(value)
@@ -115,12 +126,21 @@ def manifest(path):
 
 @storage_service
 class DjangoInstalledRuntimeGate:
-    def __init__(self, gateway, manifest_file, key_directory):
+    """Admit a model only while its enabled declaration still holds.
+
+    The declaration comes from the private file by default. In Kubernetes,
+    ``declaration`` reads the sending copy's confirmed guard-status row
+    instead, and ``gateway`` is that copy's own private address, so every
+    digest and the applied state are checked on the copy that sent the check.
+    """
+
+    def __init__(self, gateway, manifest_file, key_directory, *, declaration=None):
         self.gateway, self.manifest_file, self.key_directory = (
             gateway,
             manifest_file,
             key_directory,
         )
+        self.declaration = declaration or (lambda: manifest(self.manifest_file))
 
     def _read(self, path):
         try:
@@ -139,7 +159,7 @@ class DjangoInstalledRuntimeGate:
         return body
 
     def require_installed(self, model_id, selected_fingerprint=None):
-        declaration = manifest(self.manifest_file)
+        declaration = self.declaration()
         expected = declaration["models"].get(model_id)
         if expected is None:
             raise ModelAccessDenied(
