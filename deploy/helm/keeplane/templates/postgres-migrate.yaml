@@ -32,14 +32,23 @@ spec:
         - name: migrate
           image: {{ .Values.app.image | quote }}
           imagePullPolicy: {{ .Values.app.pullPolicy }}
-          {{- if .Values.app.cliSignIn.enabled }}
+          {{- /* With the model enroller, the grants and row-level security
+          for its roles are set after every migration, naming each gateway
+          copy, so a changed copy count is applied on upgrade (ADR 027). */}}
+          {{- $enroller := include "keeplane.enroller.on" . }}
+          {{- if or .Values.app.cliSignIn.enabled $enroller }}
           command:
             - sh
             - -ec
             - |
               python /app/manage.py migrate --noinput
+              {{- if .Values.app.cliSignIn.enabled }}
               python /app/manage.py register_cli_client
               python /app/manage.py register_cli_client --device
+              {{- end }}
+              {{- if $enroller }}
+              {{ include "keeplane.enroller.configureCommand" . }}
+              {{- end }}
           {{- else }}
           command: ["python", "/app/manage.py", "migrate", "--noinput"]
           {{- end }}

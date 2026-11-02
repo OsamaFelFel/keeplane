@@ -1,0 +1,7 @@
+{{- /*
+Renders no object: refuses unsafe or incomplete model enroller and
+guard-status check settings (ADR 027; see _enroller.tpl). It sits two folders
+down so Helm runs it before the templates that use these settings, and its
+message is the one shown.
+*/ -}}
+{{- include "keeplane.enroller.check" . }}

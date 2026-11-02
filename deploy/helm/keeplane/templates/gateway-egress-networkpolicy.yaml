@@ -1,6 +1,7 @@
 {{- /*
 Opt-in egress for the managed gateway copies: DNS, the gateway database and the
-listed model endpoints only. Rendered only for a gateway this chart installs.
+listed model endpoints only, plus Keeplane's PostgreSQL with the model enroller
+(gateway.enroller). Rendered only for a gateway this chart installs.
 The copies make no call to the app, so the app is not a destination.
 */ -}}
 {{- $np := .Values.networkPolicy }}
@@ -20,4 +21,11 @@ spec:
     {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.gatewayDatabase" $np.egress.gatewayDatabase) | trim | nindent 4 }}
     {{- end }}
     {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.modelEndpoints" $np.egress.modelEndpoints) | trim | nindent 4 }}
+    {{- /* The model enroller beside each copy reads approvals and writes its
+    copy's guard-status row in Keeplane's PostgreSQL. A policy covers the whole
+    Pod, so the gateway container gets this path too, but no credential for it:
+    those reach only the enroller (ADR 027). */}}
+    {{- if include "keeplane.enroller.on" . }}
+    {{- include "keeplane.networkPolicy.egressRules" (list "networkPolicy.egress.postgres" $np.egress.postgres) | trim | nindent 4 }}
+    {{- end }}
 {{- end }}

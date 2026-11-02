@@ -202,14 +202,24 @@ if os.environ.get("KEEPLANE_DATABASE_READ_ONLY") == "1":
 # ADR 027, Kubernetes: the enroller's one write, its own gateway copy's
 # guard-status row, goes through a second connection with a separate role
 # (see model_registry.guard_status). Its transactions are read-only by default
-# too; the write opens an explicit READ WRITE transaction.
-if os.environ.get("KEEPLANE_GUARD_STATUS_DATABASE_USER"):
+# too; the write opens an explicit READ WRITE transaction. In Kubernetes every
+# copy shares one Pod template, so the chart names each copy's own status role
+# in a file (..._USER_FILE) that the copy's init container writes.
+status_user = os.environ.get("KEEPLANE_GUARD_STATUS_DATABASE_USER", "")
+status_user_file = os.environ.get("KEEPLANE_GUARD_STATUS_DATABASE_USER_FILE", "")
+if status_user and status_user_file:
+    raise RuntimeError("Name the guard status role once: as a setting or in a file")
+if status_user_file:
+    status_user = Path(status_user_file).read_text().strip()
+    if not status_user:
+        raise RuntimeError("The guard status role file is empty")
+if status_user:
     if DATABASES["default"]["ENGINE"] != "common.postgresql":
         raise RuntimeError("The guard status connection needs PostgreSQL")
     status_password = os.environ["KEEPLANE_GUARD_STATUS_DATABASE_PASSWORD_FILE"]
     DATABASES["guard_status"] = {
         **DATABASES["default"],
-        "USER": os.environ["KEEPLANE_GUARD_STATUS_DATABASE_USER"],
+        "USER": status_user,
         "PASSWORD": Path(status_password).read_text().strip(),
         "PASSWORD_FILE": status_password,
         "OPTIONS": {
