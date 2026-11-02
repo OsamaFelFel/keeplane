@@ -1,6 +1,6 @@
 """Each copy's guard names its copy; the app finds that copy's address (ADR 027).
 
-Cases GS-U01 to GS-U05 in tests/integration/guard-status-cases.md.
+Cases GS-U01 to GS-U06 in tests/integration/guard-status-cases.md.
 """
 
 import json
@@ -13,6 +13,7 @@ from integrations.gateway.runtime_config import (
     model_backends,
     overlay,
 )
+from model_registry import guard_status_access as access
 from model_registry.guard_status import copy_gateway
 from model_registry.policy import ModelPolicyUnavailable
 
@@ -131,3 +132,63 @@ def test_gs_u05_the_app_reads_only_the_named_copy_address():
         copy_gateway("gw-0", twice)
     with pytest.raises(ModelPolicyUnavailable):
         copy_gateway("gw-0", copies("http://gw-0.a.svc:4000", misconfigured=True))
+
+
+def printed(*pairs, column="(copy_name)::text"):
+    """An own-copy condition as PostgreSQL prints it back from pg_policies."""
+    values = ", ".join(f"('{name}'::text,'{role}'::text)" for name, role in pairs)
+    return f"(({column}, (CURRENT_USER)::text) IN ( VALUES {values}))"
+
+
+PAIRS = (("keeplane-gateway-0", "status_0"), ("keeplane-gateway-1", "status_1"))
+APP_READ = ("SELECT", {"app"}, "true", "")
+
+
+def as_set(using=None, check=None, roles=None, command="ALL", app=APP_READ, **more):
+    using = printed(*PAIRS) if using is None else using
+    return {
+        access.APP_READ_POLICY: app,
+        access.OWN_COPY_POLICY: (
+            command,
+            {"status_0", "status_1"} if roles is None else roles,
+            using,
+            using if check is None else check,
+        ),
+        **more,
+    }
+
+
+def test_gs_u06_check_credentials_reads_the_pairs_the_command_set():
+    assert access.policy_pairs(as_set(), "app") == dict(PAIRS)
+    # Without the cast, as a text column would print it.
+    plain = printed(*PAIRS, column="copy_name")
+    assert access.policy_pairs(as_set(plain), "app") == dict(PAIRS)
+    # The condition the command writes is the one read back.
+    assert access.own_row_condition(PAIRS) == (
+        "(copy_name, current_user::text) IN (VALUES "
+        "('keeplane-gateway-0', 'status_0'), ('keeplane-gateway-1', 'status_1'))"
+    )
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"check": printed(PAIRS[0])},  # writes allowed for fewer pairs than reads
+        {"using": printed(*PAIRS) + " OR true"},
+        {"using": "true", "check": "true"},
+        {"roles": {"status_0", "status_1", "other"}},
+        {"command": "SELECT"},
+        {"using": printed(PAIRS[0], ("keeplane-gateway-1", "status_0"))},
+        {"using": printed(PAIRS[0], ("keeplane-gateway-0", "status_1"))},
+        {"app": ("SELECT", {"app", "status_0"}, "true", "")},
+        {"app": ("ALL", {"app"}, "true", "true")},
+        {"anyone": ("ALL", {"status_0"}, "true", "true")},
+    ],
+)
+def test_gs_u06_a_changed_policy_is_not_read_as_set(changed):
+    assert access.policy_pairs(as_set(**changed), "app") is None
+
+
+def test_gs_u06_the_app_read_policy_must_name_this_app_role():
+    assert access.policy_pairs(as_set(), "another_app") is None
+    assert access.policy_pairs({}, "app") is None

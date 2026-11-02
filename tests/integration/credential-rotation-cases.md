@@ -20,7 +20,9 @@ PostgreSQL role passwords and run only in CI's PostgreSQL job (or locally with
 `KEEPLANE_TEST_POSTGRES_*`). CR-07 to CR-09, CR-13 and CR-14 render the chart
 with Helm and are skipped where Helm is missing. CR-10 needs PostgreSQL's
 client driver and runs with CR-04 to CR-06. CR-U1 to CR-U8 (with CR-U3b to
-CR-U3d) are unit cases.
+CR-U3d) are unit cases. What `check_credentials` reports about the model
+enroller's status roles is covered by GS-26 and GS-PG-11 to GS-PG-14 in
+[guard-status-cases.md](guard-status-cases.md).
 
 | Case | Given | Expected result |
 | --- | --- | --- |

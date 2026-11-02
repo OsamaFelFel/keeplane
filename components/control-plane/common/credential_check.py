@@ -12,6 +12,9 @@ It also reports the certificates Keeplane itself verifies (the database CA,
 the database server's certificate, and with a customer-run HTTPS gateway its
 CA and certificates) with their expiry dates; see
 docs/guide/certificate-operations.md.
+With the per-copy guard check on PostgreSQL (ADR 027), it also reports each
+gateway copy's status role and confirmed guard; see
+docs/guide/guard-status-roles.md.
 It only reads; it never prints a password, key, key hash or provider key.
 """
 
@@ -215,6 +218,209 @@ def ssl_context_for_database(options):
     return context
 
 
+NOT_IN_USE = "not in use"
+RERUN = "; run configure_guard_status_access again"
+
+
+def guard_status_report(copies, now=None):
+    """The guard-status roles and each copy's confirmed guard (ADR 027).
+
+    Returns (report, problems, warnings). With the per-copy check off or
+    without PostgreSQL the report is "not in use". Otherwise it checks, with
+    the same catalog reads as configure_guard_status_access, that each listed
+    copy's status role exists, can log in and is limited to its own row, and
+    that the app role only reads the table; and it summarises each copy's row.
+    Problems fail the check; a copy with no confirmed guard only warns. It
+    never reads a status role's password: whether the enroller's mounted
+    password works shows in the enroller's log.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, "GUARD_STATUS_CHECK", False) or connection.vendor != "postgresql":
+        return NOT_IN_USE, [], []
+    from django.utils import timezone
+
+    try:
+        with connection.cursor() as cursor:
+            return _guard_status(cursor, copies, now or timezone.now())
+    except DatabaseError:
+        return (
+            {"problem": "the guard-status table cannot be read"},
+            ["Guard status: the guard-status table and roles cannot be read"],
+            [],
+        )
+    finally:
+        connection.close()
+
+
+def _copy_names(copies):
+    from urllib.parse import urlsplit
+
+    from model_registry.guard_status import valid_copy_name
+
+    names = []
+    for copy in copies:
+        try:
+            names.append((urlsplit(copy.base_url).hostname or "").split(".", 1)[0])
+        except (AttributeError, ValueError):
+            return None
+    if not names or not all(map(valid_copy_name, names)) or len(set(names)) != len(names):
+        return None
+    return names
+
+
+def _role_problems(name, found, owner, read_only, label):
+    """Sentences for one role's attributes; empty when it is an ordinary role."""
+    problems = []
+    if name == owner:
+        problems.append(f"{label} {name} is the role that owns Keeplane's tables")
+    if found["powerful"]:
+        problems.append(
+            f"{label} {name} is a superuser, can bypass row-level security or can "
+            "create roles"
+        )
+    if found["in_owner"] and name != owner:
+        problems.append(f"{label} {name} is a member of the migration role {owner}")
+    if read_only is not None and name not in read_only:
+        problems.append(f"{label} {name} doesn't have default_transaction_read_only = on")
+    return problems
+
+
+def _login_problems(name, found, label):
+    problems = []
+    if not found["can_login"]:
+        problems.append(f"{label} {name} can't log in (NOLOGIN)")
+    if found["password_expired"]:
+        problems.append(f"{label} {name}'s password has expired (VALID UNTIL)")
+    if not found["can_connect"]:
+        problems.append(f"{label} {name} has no CONNECT on the database")
+    return problems
+
+
+def _guard_row(row, now):
+    """One copy's row as the report shows it, with its guard status."""
+    from model_registry.installed_runtime import valid_declaration
+    from model_registry.policy import ModelPolicyUnavailable
+
+    if row is None:
+        return {"guard": "not recorded"}
+    entry = {"updated_at": row.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if not row.confirmed:
+        return {"guard": "not confirmed", **entry}
+    try:
+        declaration = valid_declaration(row.declaration)
+    except ModelPolicyUnavailable:
+        return {"guard": "unreadable", **entry}
+    return {
+        "guard": "confirmed",
+        "confirmed_at": row.confirmed_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "age_minutes": max(0, int((now - row.confirmed_at).total_seconds() // 60)),
+        "models": [
+            {"id": model_id, "fingerprint": model["fingerprint"]}
+            for model_id, model in sorted(declaration["models"].items())
+        ],
+        **entry,
+    }
+
+
+def _guard_status(cursor, copies, now):
+    from model_registry import guard_status_access as access
+    from model_registry.models import GatewayGuardStatus
+
+    names = _copy_names(copies)
+    if names is None:
+        return (
+            {"problem": "the gateway copy list doesn't name each copy"},
+            ["Guard status: GATEWAY_COPY_URLS must list every gateway copy at its "
+             "Pod address"],
+            [],
+        )
+    app, _, owner = access.table_owner(cursor)
+    if owner is None:
+        return (
+            {"problem": "the guard-status table doesn't exist"},
+            ["Guard status: the guard-status table doesn't exist; run migrate"],
+            [],
+        )
+    problems, warnings = [], []
+    pairs = access.policy_pairs(access.policies(cursor), app)
+    secured = access.row_security(cursor)
+    report = {
+        "row_security": "on" if secured else "off",
+        "policies": "as set" if pairs is not None else "changed",
+    }
+    if not secured:
+        problems.append("Guard status: row-level security is off for the guard-status "
+                        "table" + RERUN)
+    if pairs is None:
+        problems.append("Guard status: the guard-status table's policies aren't the ones "
+                        "configure_guard_status_access sets" + RERUN)
+        pairs = {}
+    roles = {name: pairs[name] for name in names if name in pairs}
+    status_roles = list(roles.values())
+    found = access.role_attributes(cursor, [app, *status_roles], owner)
+    read_only = access.read_only_roles(cursor, status_roles)
+    members = access.memberships(cursor, [app, *status_roles])
+    present = [role for role in status_roles if role in found]
+    extra = access.extra_privileges(
+        cursor,
+        {app: None, **{role: access.STATUS_WRITES for role in present}},
+    )
+
+    def unsafe(role, label, read_only_roles):
+        sentences = _role_problems(role, found[role], owner, read_only_roles, label)
+        sentences += [f"{label} {role} belongs to {target}; revoke the membership"
+                      for member, target in members if member == role]
+        more = [f"{privilege} on {table}" for who, privilege, table in extra if who == role]
+        if more:
+            listed = ", ".join(more[:5]) + (f" and {len(more) - 5} more" if len(more) > 5 else "")
+            sentences.append(f"{label} {role} has more access than allowed: {listed}")
+        return sentences
+
+    app_problems = unsafe(app, "The app role", None)
+    report["app_role"] = "reads only" if not app_problems else "unsafe"
+    problems.extend("Guard status: " + sentence for sentence in app_problems)
+
+    rows = {row.copy_name: row
+            for row in GatewayGuardStatus.objects.filter(copy_name__in=names)}
+    report["copies"] = []
+    for name in names:
+        role = roles.get(name)
+        label = f"Gateway copy {name}:"
+        entry = {"copy": name, "status_role": role}
+        if role is None:
+            entry["role_status"] = "not paired"
+            problems.append(f"{label} no status role is paired with it" + RERUN
+                            + f" with --copy {name}=<role>")
+        elif role not in found:
+            entry["role_status"] = "missing"
+            problems.append(f"{label} its status role {role} doesn't exist; ask your "
+                            "database operator to create it")
+        else:
+            sentences = unsafe(role, "its status role", read_only)
+            login = _login_problems(role, found[role], "its status role")
+            entry["role_status"] = (
+                "unsafe" if sentences else "cannot log in" if login else "limited"
+            )
+            problems.extend(f"{label} {sentence}" for sentence in sentences + login)
+        entry.update(_guard_row(rows.get(name), now))
+        if entry["guard"] == "not recorded":
+            problems.append(f"{label} its enroller has recorded no guard status yet")
+        elif entry["guard"] == "unreadable":
+            problems.append(f"{label} its confirmed guard status can't be read")
+        elif entry["guard"] == "not confirmed":
+            warnings.append(f"{label} no guard is confirmed; protected models are "
+                            "refused through it until its enroller confirms one")
+        report["copies"].append(entry)
+    for name, role in sorted(pairs.items()):
+        if name not in roles:
+            warnings.append(
+                f"Guard status: status role {role} is still paired with {name}, which "
+                "isn't in the gateway copy list" + RERUN + " to remove its access"
+            )
+    return report, problems, warnings
+
+
 def check(primary, copies, warning_days=None):
     """Return the report and whether every credential was accepted."""
     from common.certificates import WARNING_DAYS
@@ -222,6 +428,7 @@ def check(primary, copies, warning_days=None):
     gateways = [primary, *(copy for copy in copies if copy.base_url != primary.base_url)]
     certificates, refusals, warnings = certificate_report(
         gateways, WARNING_DAYS if warning_days is None else warning_days)
+    guard_status, guard_problems, guard_warnings = guard_status_report(copies)
     report = {
         "database": database_status(),
         "gateway": gateway_status(gateways),
@@ -230,6 +437,9 @@ def check(primary, copies, warning_days=None):
         "certificates": certificates,
         "certificate_problems": refusals,
         "certificate_warnings": warnings,
+        "guard_status": guard_status,
+        "guard_status_problems": guard_problems,
+        "guard_status_warnings": guard_warnings,
     }
     passed = (
         report["database"] == "connected"
@@ -242,5 +452,6 @@ def check(primary, copies, warning_days=None):
         and report["gateway_models"] is not None
         and report["approvals"] is not None
         and not refusals
+        and not guard_problems
     )
     return report, passed

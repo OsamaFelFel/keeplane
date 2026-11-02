@@ -10,12 +10,12 @@ confirmed row listing the model with the same fingerprint, and that copy's
 gateway still matches it.
 
 - [`test_guard_status_names.py`](../unit/test_guard_status_names.py) (unit):
-  GS-U01 to GS-U05.
-- [`test_guard_status.py`](test_guard_status.py): GS-01 to GS-25, on SQLite,
+  GS-U01 to GS-U06.
+- [`test_guard_status.py`](test_guard_status.py): GS-01 to GS-26, on SQLite,
   with the fake gateway of `test_model_enroller.py` and the HTTP checks of
   `test_installed_runtime.py`.
 - [`test_guard_status_postgres.py`](test_guard_status_postgres.py): GS-PG-01
-  to GS-PG-10, on a disposable PostgreSQL server named by
+  to GS-PG-14, on a disposable PostgreSQL server named by
   `KEEPLANE_TEST_POSTGRES_*` (CI's PostgreSQL job); skipped without one:
 
 ```sh
@@ -39,6 +39,7 @@ container, Helm values and a live run are separate work.
 | GS-U03 Only Pod names | Name the copy with an empty, upper-case, dotted, quoted, spaced, over-long or non-text name | Refused before any guard is built. |
 | GS-U04 Which copy a guard names | Read the names back from a copy's guard, a preview guard, a guard mixing two copies and a malformed one | `{copy}`, `{none}`, both names, and unreadable. |
 | GS-U05 Only the named copy's address | Look up `keeplane-gateway-1` and `-10` among three listed copies; then a prefix, an unlisted copy, wrong case, a name listed twice and an unusable list | The exact Pod's address each time; every other case is refused. |
+| GS-U06 Policy read back | Read the (copy, role) pairs from the own-copy policy as PostgreSQL prints it, with and without the column cast; then a policy whose writes allow fewer pairs than its reads, with an added `OR true`, with `true` only, for a role it doesn't pair, for SELECT only, pairing a role or a copy twice; an app read policy for another role too, or for writes; an extra policy; no policies; the app read policy for another app role | The pairs the command wrote; every changed setup reads as "changed". |
 
 ## Enroller (SQLite)
 
@@ -78,6 +79,12 @@ and the app has no declaration file.
 | GS-23 Model choice | A developer's own key is missing; another model is confirmed on one copy only, then on both | No model is offered until every listed copy confirms it; then that model is offered. |
 | GS-25 Model choice checks live state | A shared-key model is confirmed on both copies; then its key file is replaced, or the gateway's definition moves on while the rows still list the old guard | Offered while unchanged; not offered after either change, as in the preview path. |
 
+## `check_credentials` (task 002-02, Spec 002 ST4–ST5)
+
+| Case | Plain-English action | Expected result |
+| --- | --- | --- |
+| GS-26 Not in use | Run the guard-status part of `check_credentials` on SQLite with the per-copy check on, then off; then combine a guard-status problem, a warning or neither with otherwise passing credentials | `"not in use"` with no problem or warning; only a problem fails the check, a warning doesn't. |
+
 ## PostgreSQL roles
 
 Roles as the guide creates them: a migration role owning the database, an app
@@ -96,3 +103,7 @@ status roles with `default_transaction_read_only = on`, and one role without it.
 | GS-PG-07 App reads only | The app reads every row, then inserts, updates, deletes and truncates | Reads both rows; every write is denied. |
 | GS-PG-08 A copy left out | Run the command again with only copy 0 | Copy 1's role can no longer write; copy 0's still can. |
 | GS-PG-09 End to end | An enroller process (read-only approvals role, copy 0's status role) confirms, clears and confirms its row, tries copy 1's row and an approval change; the app process reads the rows and tries to write | Its own row is confirmed and cleared; copy 1 and the approval change are refused; the app sees copy 0's models, refuses unconfirmed copy 1 and can't write. |
+| GS-PG-11 `check_credentials` reports each copy | After the command, copy 0 has a confirmed row from 90 minutes ago and copy 1 an unconfirmed one; the app role runs the check with the per-copy check on and both copies listed | Row-level security `on`, policies `as set`, app `reads only`; both roles `limited`; copy 0 `confirmed` with its time, an age of about 90 minutes and its model's id and fingerprint; copy 1 `not confirmed`, which only warns. No password or digest is printed. |
+| GS-PG-12 Unsafe or unusable role | Copy 0's status role bypasses row security, creates roles, belongs to the migration role or to copy 1's role, isn't read-only by default, reads another table, can delete rows, can't log in, has an expired password or has no CONNECT; separately, the app role can insert and delete rows | Copy 0's role is `unsafe` or `cannot log in` with one sentence naming the fault (the migration role's inherited privileges are summarised in a second one); copy 1 stays `limited`; the app is `unsafe`, naming its extra privileges. Each passes again once undone. |
+| GS-PG-13 Changed setup | Row security turned off; an extra policy; the command run again without copy 1, or pairing its role with a copy no longer listed; copy 1's row deleted | Each fails with its sentence: row security `off`; policies `changed` and both copies `not paired`; copy 1 `not paired` (with a warning naming the stale pairing); copy 1 `not recorded`. |
+| GS-PG-14 The command | Run `manage.py check_credentials` as the app role with copy 0's role able to bypass row security; then the guard-status part with the per-copy check off | Exit 1, `"passed": false`, copy 0 `unsafe` with one problem, no password in the output; then `"not in use"`. |
