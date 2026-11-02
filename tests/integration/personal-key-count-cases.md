@@ -10,6 +10,6 @@ file or provider is read; the count describes current-bound registrations.
 | DK-COUNT-02 | List current and changed personal models. | Only current personal models carry a count; owner identities, key names and fingerprints are absent. |
 | DK-COUNT-03 | Fetch Models as an admin, developer and anonymous user, then interrupt count storage. | Admin sees the count; other callers are denied. Storage failure gives 503 rather than an invented zero. |
 
-The React `MO-UI-COUNT` case shows zero, singular and plural counts using the
+The React `MOD-UI-01` case shows zero, singular and plural counts using the
 Models canvas wording; shared models show no developer count. Runtime dispatch,
 public key writes and provider health are outside these checks.
