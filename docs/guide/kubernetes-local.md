@@ -215,12 +215,15 @@ files. Earlier preview files on the state claim (`accounts.sqlite3` and
 `model-approvals.sqlite3`) aren't imported: before the first release Keeplane
 doesn't carry an earlier preview's data forward. A trial whose state claim
 already holds accounts that an earlier setup imported from those files keeps
-them, but their passwords were stored in the earlier preview's format, which
-Keeplane no longer checks, so those users can't sign in. The first admin isn't
-affected: each start sets its password again from the password file. Keeplane
-has no password reset for other users yet, so to sign them in again delete the
-kind cluster (`kind delete cluster --name keeplane`), run setup again and
-create them in **Users**. Keep the files under `/private/tmp/keeplane-accounts-trial/`; recovering
+them. An imported user who signed in at least once since the import had their
+password stored again in the current format and can still sign in. One who
+never signed in still has the earlier preview's format, which Keeplane no
+longer checks, so they can't sign in. The first admin isn't affected: each
+start sets its password again from the password file. Keeplane has no password
+reset for other users yet. An admin can remove such a user through the API
+(`DELETE /api/users/<id>`, signed in as an admin) and create them again in
+**Users**, or delete the kind cluster (`kind delete cluster --name keeplane`)
+and run setup again for a fresh trial. Keep the files under `/private/tmp/keeplane-accounts-trial/`; recovering
 a missing gateway database password needs the
 [database credential guide](gateway-database-secret.md). Deleting the kind
 cluster deletes its local volumes. The gateway databases use temporary storage:
