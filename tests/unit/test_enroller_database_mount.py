@@ -206,11 +206,18 @@ def test_edm05_earlier_preview_files_are_left_unchanged_with_a_notice(
     assert list((volumes.state / "database").iterdir()) == []
     notice = volumes.earlier_database_notice(list(present))
     assert capsys.readouterr().out.splitlines() == [notice] * 2
-    assert notice.startswith("Notice: ")
+    files = ", ".join("/state/" + name for name in present)
+    # The agreed wording: it prints on every start, so it says nothing about
+    # having just started the database fresh.
+    assert notice.startswith(
+        "Notice: this preview keeps its app database in /state/database. It doesn't "
+        f"use or import the earlier preview files ({files}) and leaves them "
+        "unchanged. To reset the preview fully, "
+    )
+    assert "started it fresh" not in notice and "left them" not in notice
     for name in EARLIER:
         assert (("/state/" + name) in notice) == (name in present), name
-    for words in ("doesn't use or import", "unchanged", "only the first admin",
-                  "keeplane-accounts-trial preview's stopped ones",
+    for words in ("keeplane-accounts-trial preview's stopped ones",
                   *(f"'{step}'" for step in FULL_RESET)):
         assert words in notice, words
     assert in_order(notice, FULL_RESET)

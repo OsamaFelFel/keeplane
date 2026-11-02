@@ -25,9 +25,9 @@ def earlier_database_notice(names):
     files = ", ".join("/state/" + name for name in names)
     stop, release, remove = RESET
     return (
-        "Notice: this preview keeps its app database in /state/database and "
-        f"started it fresh, with only the first admin. It doesn't use or import the "
-        f"earlier preview files ({files}) and left them unchanged. To reset the preview "
+        "Notice: this preview keeps its app database in /state/database. It doesn't "
+        f"use or import the earlier preview files ({files}) and leaves them "
+        f"unchanged. To reset the preview "
         f"fully, stop it with '{stop}', remove every container still using its account "
         f"volume, including the earlier keeplane-accounts-trial preview's stopped ones, "
         f"with '{release}', remove the volume with '{remove}', then start it again."
