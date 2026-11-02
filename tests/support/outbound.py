@@ -20,41 +20,58 @@ REPO = Path(__file__).resolve().parents[2]
 SERVER = REPO / "components" / "control-plane"
 GUIDE = REPO / "docs" / "guide" / "outbound-connections.md"
 
-# Standard-library and third-party modules that can open a network connection
-# or start a process that could. Importing any part of one is a call site.
+# Standard-library and third-party modules that can open a network connection,
+# download something, or start a process that could. Importing any part of
+# one, or reaching it through a bare parent import (`import urllib` then
+# `urllib.request.urlopen`), is a call site.
 NETWORK_MODULES = (
     "aiohttp",
+    "anyio",
     "asyncio",
     "boto3",
     "botocore",
+    "cloudpathlib",
     "django.core.mail",
     "django.db.backends.mysql",
     "django.db.backends.oracle",
     "django.db.backends.postgresql",
+    "ensurepip",
     "ftplib",
     "grpc",
+    "h11",
     "http.client",
+    "httpcore",
     "httpx",
     "imaplib",
     "logging.handlers",
     "multiprocessing.connection",
     "paramiko",
+    "pip",
     "poplib",
+    "presidio_analyzer",
     "psycopg",
     "psycopg2",
+    "pty",
     "requests",
+    "smart_open",
     "smtplib",
     "socket",
     "socketserver",
+    "spacy.cli",
     "ssl",
     "subprocess",
     "telnetlib",
+    "tldextract",
     "urllib.request",
     "urllib3",
+    "weasel",
     "websocket",
     "websockets",
     "xmlrpc.client",
 )
+
+# os functions that start another program; reported as "os.process".
+OS_PROCESS = re.compile(r"os\.(system|popen|exec\w*|spawn\w*|posix_spawn\w*)")
 
 # Where the server connects. "when" is runtime (a running installation),
 # preview (the Docker preview only) or build (building an image or collecting
@@ -176,11 +193,59 @@ CALL_SITES = {
         {"build-sources"},
         "Image build: downloads the pinned PostgreSQL driver and its sources",
     ),
+    "collect_cli_auth_sources.py": (
+        set(),
+        {"build-sources"},
+        "Collects the sign-in trial's crates and workflow sources through collect_runtime_sources",
+    ),
     "remove_runtime_installers.py": (
         {"subprocess"},
         set(),
         "Image build: uninstalls pip; connects nowhere",
     ),
+    "personal_data/engine.py": (
+        {"presidio_analyzer", "tldextract"},
+        set(),
+        "Loads the detector offline: no download, bundled suffix list (EGR-06)",
+    ),
+}
+
+# Modules that import a declared call site directly, and which ones. The
+# destinations are those of the call sites they import; a new direct user of
+# a call site fails EGR-01 until it is listed here.
+CALL_SITE_USERS = {
+    "collect_cli_auth_sources.py": {"collect_runtime_sources.py"},
+    "common/api.py": {"integrations/gateway/adapter.py"},
+    "common/credential_check.py": {
+        "common/certificates.py",
+        "common/postgresql/base.py",
+        "integrations/gateway/adapter.py",
+    },
+    "common/management/commands/check_credentials.py": {"common/credential_check.py"},
+    "common/web.py": {"common/credential_check.py"},
+    "integrations/gateway/copies.py": {"integrations/gateway/adapter.py"},
+    "integrations/gateway/runtime_binding.py": {"integrations/gateway/applied.py"},
+    "integrations/gateway/runtime_config.py": {"integrations/gateway/applied.py"},
+    "model_registry/developer_keys.py": {"model_registry/key_validation.py"},
+    "model_registry/installed_runtime.py": {"integrations/gateway/applied.py"},
+    "model_registry/management/commands/install_runtime_guard.py": {
+        "model_registry/runtime_installation.py"
+    },
+    "model_registry/management/commands/run_model_enroller.py": {
+        "model_registry/runtime_installation.py"
+    },
+    "model_registry/model_enroller.py": {"model_registry/runtime_installation.py"},
+    "model_registry/personal_dispatch.py": {"model_registry/key_validation.py"},
+    "model_registry/registration.py": {
+        "integrations/runners.py",
+        "model_registry/provider_probe.py",
+    },
+    "model_registry/resolved_keys.py": {"model_registry/provider_key_http.py"},
+    "model_registry/runtime_installation.py": {"integrations/gateway/applied.py"},
+    "model_registry/runtime_keys.py": {"model_registry/key_validation.py"},
+    "model_registry/use_cases.py": {"model_registry/registration.py"},
+    "model_registry/views.py": {"integrations/runners.py"},
+    "personal_data/inspection.py": {"personal_data/engine.py"},
 }
 
 # Every full address written in server code, and what it is.
@@ -209,22 +274,45 @@ ADDRESS_LITERALS = {
     "https://provider.invalid": None,
 }
 
-ADDRESS = re.compile(r"[a-z][a-z0-9+.-]*://\S+")
+ADDRESS = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+")
 
 
 def server_files():
     return sorted(SERVER.rglob("*.py"))
 
 
-def network_imports(tree):
-    """The network-capable modules a parsed file imports, at any depth."""
-    found = set()
+def dotted(node):
+    """'a.b.c' for an attribute chain rooted at a name, else None."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    return ".".join([node.id, *reversed(parts)])
+
+
+def imported_names(tree, package=""):
+    """Every module or module attribute a parsed file names through imports.
+
+    Relative imports are resolved against `package`. A bare `import a` makes
+    each attribute chain `a.b.c` used in the file count as a named import.
+    """
+    names, aliases = [], {}
     for node in ast.walk(tree):
-        names = []
         if isinstance(node, ast.Import):
-            names = [alias.name for alias in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            names = [node.module] + [f"{node.module}.{a.name}" for a in node.names]
+            for alias in node.names:
+                names.append(alias.name)
+                aliases[alias.asname or alias.name.split(".", 1)[0]] = (
+                    alias.name if alias.asname else alias.name.split(".", 1)[0]
+                )
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parts = package.split(".") if package else []
+                parts = parts[: len(parts) - (node.level - 1)]
+                base = ".".join([*parts, *([node.module] if node.module else [])])
+            names += [base] + [f"{base}.{a.name}" for a in node.names]
         elif (
             isinstance(node, ast.Call)
             and (
@@ -241,35 +329,64 @@ def network_imports(tree):
             and isinstance(node.args[0], ast.Constant)
             and isinstance(node.args[0].value, str)
         ):
-            names = [node.args[0].value]
-        for name in names:
-            for module in NETWORK_MODULES:
-                if name == module or name.startswith(module + "."):
-                    found.add(module)
+            names.append(node.args[0].value)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and (chain := dotted(node)):
+            root, _, rest = chain.partition(".")
+            if root in aliases and rest:
+                names.append(f"{aliases[root]}.{rest}")
+    return names
+
+
+def network_imports(tree, package=""):
+    """The network-capable modules a parsed file reaches, at any depth."""
+    found = set()
+    for name in imported_names(tree, package):
+        for module in NETWORK_MODULES:
+            if name == module or name.startswith(module + "."):
+                found.add(module)
+        if OS_PROCESS.fullmatch(name):
+            found.add("os.process")
     return found
+
+
+def call_site_users(tree, package, own):
+    """The declared call-site modules a parsed file imports directly."""
+    modules = {site[:-3].replace("/", "."): site for site in CALL_SITES}
+    return {
+        modules[name]
+        for name in imported_names(tree, package)
+        if name in modules and modules[name] != own
+    }
 
 
 def address_literals(tree):
     return {
-        node.value
+        match[0]
         for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and ADDRESS.fullmatch(node.value)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        for match in ADDRESS.finditer(node.value)
     }
 
 
+def package_of(name):
+    return name[:-3].replace("/", ".").rpartition(".")[0]
+
+
 def scan():
-    """(module -> network imports, module -> address literals) for server code."""
-    imports, addresses = {}, {}
+    """Module -> network imports, -> address literals, -> call sites it imports."""
+    imports, addresses, users = {}, {}, {}
     for path in server_files():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         name = path.relative_to(SERVER).as_posix()
-        if found := network_imports(tree):
+        package = package_of(name)
+        if found := network_imports(tree, package):
             imports[name] = found
         if found := address_literals(tree):
             addresses[name] = found
-    return imports, addresses
+        if found := call_site_users(tree, package, name):
+            users[name] = found
+    return imports, addresses, users
 
 
 class OutboundRefused(OSError):
@@ -290,9 +407,11 @@ class OutboundGuard:
     """Record every connection and name lookup; refuse all but declared loopback.
 
     `ports` are the loopback ports of the declared test endpoints. A
-    connection to any other address or port, and a name lookup for any host
-    that is not a loopback name, is recorded in `refused` and fails with
-    OutboundRefused (or a lookup error) before a packet leaves the process.
+    connection or datagram (connect, connect_ex, sendto, sendmsg) to any
+    other address or port, a name lookup for any host that is not a loopback
+    name, and a reverse lookup of any address that is not loopback are
+    recorded in `refused` and fail with OutboundRefused (or a lookup error)
+    before a packet leaves the process.
     Unix sockets are local and allowed. The guard sees this Python process
     only: a worker process or the PostgreSQL client library (libpq) opens its
     own sockets.
@@ -337,48 +456,83 @@ class OutboundGuard:
         self.refused.append((host, port))
         raise socket.gaierror(socket.EAI_NONAME, f"Undeclared name lookup for {host}")
 
+    def check_reverse(self, host):
+        if isinstance(host, bytes):
+            host = host.decode("ascii", "replace")
+        if self.loopback(host):
+            return
+        self.refused.append((host, None))
+        raise socket.herror(1, f"Undeclared reverse lookup for {host}")
+
     @contextmanager
     def active(self):
         guard = self
-        saved = {
-            (socket.socket, "connect"): socket.socket.connect,
-            (socket.socket, "connect_ex"): socket.socket.connect_ex,
-            (socket, "getaddrinfo"): socket.getaddrinfo,
-            (socket, "gethostbyname"): socket.gethostbyname,
-            (socket, "gethostbyname_ex"): socket.gethostbyname_ex,
+        original = {
+            (socket.socket, name): getattr(socket.socket, name)
+            for name in ("connect", "connect_ex", "sendto", "sendmsg")
+        } | {
+            (socket, name): getattr(socket, name)
+            for name in (
+                "getaddrinfo",
+                "gethostbyname",
+                "gethostbyname_ex",
+                "gethostbyaddr",
+                "getnameinfo",
+            )
         }
-        connect = saved[(socket.socket, "connect")]
-        connect_ex = saved[(socket.socket, "connect_ex")]
-        getaddrinfo = saved[(socket, "getaddrinfo")]
-        gethostbyname = saved[(socket, "gethostbyname")]
-        gethostbyname_ex = saved[(socket, "gethostbyname_ex")]
+
+        def call(owner, name, *args, **kwargs):
+            return original[(owner, name)](*args, **kwargs)
 
         def guarded_connect(sock, address):
             guard.check_connect(sock.family, address)
-            return connect(sock, address)
+            return call(socket.socket, "connect", sock, address)
 
         def guarded_connect_ex(sock, address):
             guard.check_connect(sock.family, address)
-            return connect_ex(sock, address)
+            return call(socket.socket, "connect_ex", sock, address)
+
+        def guarded_sendto(sock, data, *rest):
+            # sendto(data, address) or sendto(data, flags, address)
+            guard.check_connect(sock.family, rest[-1])
+            return call(socket.socket, "sendto", sock, data, *rest)
+
+        def guarded_sendmsg(sock, buffers, *rest):
+            # sendmsg(buffers[, ancdata[, flags[, address]]])
+            if len(rest) >= 3 and rest[2] is not None:
+                guard.check_connect(sock.family, rest[2])
+            return call(socket.socket, "sendmsg", sock, buffers, *rest)
 
         def guarded_getaddrinfo(host, port, *args, **kwargs):
             guard.check_lookup(host, port)
-            return getaddrinfo(host, port, *args, **kwargs)
+            return call(socket, "getaddrinfo", host, port, *args, **kwargs)
 
         def guarded_gethostbyname(host):
             guard.check_lookup(host, None)
-            return gethostbyname(host)
+            return call(socket, "gethostbyname", host)
 
         def guarded_gethostbyname_ex(host):
             guard.check_lookup(host, None)
-            return gethostbyname_ex(host)
+            return call(socket, "gethostbyname_ex", host)
+
+        def guarded_gethostbyaddr(host):
+            guard.check_reverse(host)
+            return call(socket, "gethostbyaddr", host)
+
+        def guarded_getnameinfo(address, flags):
+            guard.check_reverse(address[0])
+            return call(socket, "getnameinfo", address, flags)
 
         replacements = {
             (socket.socket, "connect"): guarded_connect,
             (socket.socket, "connect_ex"): guarded_connect_ex,
+            (socket.socket, "sendto"): guarded_sendto,
+            (socket.socket, "sendmsg"): guarded_sendmsg,
             (socket, "getaddrinfo"): guarded_getaddrinfo,
             (socket, "gethostbyname"): guarded_gethostbyname,
             (socket, "gethostbyname_ex"): guarded_gethostbyname_ex,
+            (socket, "gethostbyaddr"): guarded_gethostbyaddr,
+            (socket, "getnameinfo"): guarded_getnameinfo,
         }
         # The run's own proxy settings must not turn a loopback call into a
         # call to a proxy; which call sites use a proxy is checked separately.
@@ -396,7 +550,7 @@ class OutboundGuard:
         try:
             yield self
         finally:
-            for (owner, name), value in saved.items():
+            for (owner, name), value in original.items():
                 setattr(owner, name, value)
             urllib.request._opener = opener
             environment.update(proxies)

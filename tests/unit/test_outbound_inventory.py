@@ -5,6 +5,7 @@ runtime cases (EGR-10 to EGR-14) are in
 tests/integration/test_outbound_connections.py.
 """
 
+import ast
 import re
 import sys
 from types import ModuleType, SimpleNamespace
@@ -13,11 +14,14 @@ import pytest
 
 from tests.support.outbound import (
     ADDRESS_LITERALS,
+    CALL_SITE_USERS,
     CALL_SITES,
     DESTINATIONS,
     GUIDE,
     REPO,
     SERVER,
+    address_literals,
+    call_site_users,
     network_imports,
     scan,
 )
@@ -48,24 +52,24 @@ REVIEWED_PACKAGES = {
     "jwcrypto": "none",
     "oauthlib": "none",
     "pycparser": "none",
-    "requests": "HTTP client, only when imported; no server module imports it (EGR-01)",
+    "requests": "HTTP client, only when imported; EGR-01 fails if a server module imports it",
     "typing-extensions": "none",
-    "urllib3": "HTTP client, only when imported; no server module imports it (EGR-01)",
+    "urllib3": "HTTP client, only when imported; EGR-01 fails if a server module imports it",
     # requirements-detection.txt (optional personal-data detection)
     "annotated-doc": "none",
     "annotated-types": "none",
-    "anyio": "none",
+    "anyio": "Opens connections only when called; EGR-01 fails if a server module imports it",
     "blis": "none",
     "catalogue": "none",
     "click": "none",
-    "cloudpathlib": "Cloud paths only when given one; the model is a local package",
+    "cloudpathlib": "Cloud paths only when given one; the model is a local package. EGR-01 fails if a server module imports it",
     "confection": "none",
     "cymem": "none",
     "en-core-web-lg": "none (model data, installed in the image)",
     "filelock": "none",
-    "h11": "none",
-    "httpcore": "HTTP client, only when imported; no server module imports it (EGR-01)",
-    "httpx": "HTTP client, only when imported; no server module imports it (EGR-01)",
+    "h11": "HTTP protocol only, when imported; EGR-01 fails if a server module imports it",
+    "httpcore": "HTTP transport, only when imported; EGR-01 fails if a server module imports it",
+    "httpx": "HTTP client, only when imported; EGR-01 fails if a server module imports it",
     "jinja2": "none",
     "markdown-it-py": "none",
     "markupsafe": "none",
@@ -84,18 +88,18 @@ REVIEWED_PACKAGES = {
     "rich": "none",
     "setuptools": "none",
     "shellingham": "none",
-    "smart-open": "Remote paths only when given one; Keeplane gives none",
-    "spacy": "spacy.cli.download only through Presidio's missing-model path, which Keeplane closes (EGR-06)",
+    "smart-open": "Remote paths only when given one; Keeplane gives none. EGR-01 fails if a server module imports it",
+    "spacy": "spacy.cli.download only through Presidio's missing-model path, which Keeplane closes (EGR-06); EGR-01 fails if a server module reaches spacy.cli",
     "spacy-legacy": "none",
     "spacy-loggers": "none",
     "srsly": "none",
     "thinc": "none",
-    "tldextract": "Fetches the public-suffix list by default; Keeplane uses the bundled copy (EGR-06)",
+    "tldextract": "Fetches the public-suffix list by default; Keeplane uses the bundled copy (EGR-06), and personal_data/engine.py is its only declared importer (EGR-01)",
     "tqdm": "none",
     "typer": "none",
     "typing-inspection": "none",
     "wasabi": "none",
-    "weasel": "Remote project storage only through its own CLI; not used",
+    "weasel": "Remote project storage only through its own CLI. EGR-01 fails if a server module imports it",
     "wrapt": "none",
 }
 
@@ -113,50 +117,109 @@ def pinned_packages():
     return names
 
 
-# EGR-01 Every server module that can open a connection or start a process is
-# declared with what it imports and which destinations it reaches; a new
-# call site or a new network module in a declared one fails.
+# EGR-01 Every server module that can open a connection, download something
+# or start a process is declared with what it imports and which destinations
+# it reaches, and so is every module that imports such a call site directly;
+# a new call site, a new network module in a declared one, or a new direct
+# user of a call site fails.
 def test_egr_01_every_server_call_site_is_declared():
-    imports, _ = scan()
-    declared = {name: modules for name, (modules, _, _) in CALL_SITES.items()}
+    imports, _, users = scan()
+    declared = {name: mods for name, (mods, _, _) in CALL_SITES.items() if mods}
     assert imports == declared, (
         "Declare new outbound call sites in tests/support/outbound.py and "
         "docs/guide/outbound-connections.md"
     )
-
-
-def test_egr_01_the_scan_finds_hidden_and_dynamic_imports():
-    import ast
-
-    tree = ast.parse(
-        "def f():\n"
-        "    import importlib\n"
-        "    importlib.import_module('requests.adapters')\n"
-        "    __import__('smtplib')\n"
-        "    from urllib import request\n"
-        "    from http.client import HTTPSConnection\n"
-        "    from logging.handlers import HTTPHandler\n"
+    assert users == CALL_SITE_USERS, (
+        "Declare modules that import a call site in CALL_SITE_USERS"
     )
-    assert network_imports(tree) == {
-        "requests",
-        "smtplib",
-        "urllib.request",
-        "http.client",
-        "logging.handlers",
+    # A call site with no network import of its own reaches its destinations
+    # through another call site it imports.
+    for name, (modules, dests, _) in CALL_SITES.items():
+        if not modules:
+            assert name in CALL_SITE_USERS, name
+            reached = set().union(*(CALL_SITES[s][1] for s in CALL_SITE_USERS[name]))
+            assert dests <= reached, name
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        (
+            "import importlib\nimportlib.import_module('requests.adapters')",
+            {"requests"},
+        ),
+        ("__import__('smtplib')", {"smtplib"}),
+        ("def f():\n    from urllib import request", {"urllib.request"}),
+        ("from http.client import HTTPSConnection", {"http.client"}),
+        ("from logging.handlers import HTTPHandler", {"logging.handlers"}),
+        ("import urllib.request", {"urllib.request"}),
+        ("import httpcore", {"httpcore"}),
+        ("import h11", {"h11"}),
+        ("import anyio", {"anyio"}),
+        ("import tldextract", {"tldextract"}),
+        ("from spacy.cli import download", {"spacy.cli"}),
+        ("import spacy.cli", {"spacy.cli"}),
+        ("import spacy\nspacy.cli.download('en_core_web_lg')", {"spacy.cli"}),
+        ("from presidio_analyzer import AnalyzerEngine", {"presidio_analyzer"}),
+        ("import smart_open", {"smart_open"}),
+        ("from cloudpathlib import CloudPath", {"cloudpathlib"}),
+        ("import weasel", {"weasel"}),
+        ("import pip", {"pip"}),
+        ("import ensurepip", {"ensurepip"}),
+        ("import pty", {"pty"}),
+        ("import urllib\nurllib.request.urlopen('x')", {"urllib.request"}),
+        ("import http\nhttp.client.HTTPConnection('x')", {"http.client"}),
+        ("import urllib as u\nu.request.urlopen('x')", {"urllib.request"}),
+        ("import os\nos.system('curl x')", {"os.process"}),
+        ("import os\nos.popen('wget x')", {"os.process"}),
+        ("import os\nos.execvp('curl', ['curl'])", {"os.process"}),
+        ("import os\nos.spawnlp(os.P_WAIT, 'curl', 'curl')", {"os.process"}),
+        ("import os\nos.posix_spawnp('curl', ['curl'], {})", {"os.process"}),
+        ("from os import system\nsystem('curl x')", {"os.process"}),
+        ("from urllib.parse import urlsplit", set()),
+        ("import os\nos.path.join('a', 'b')", set()),
+        ("import urllib\nurllib.parse.quote('x')", set()),
+    ],
+)
+def test_egr_01_the_scan_finds_hidden_and_indirect_call_sites(source, expected):
+    assert network_imports(ast.parse(source)) == expected
+
+
+def test_egr_01_importing_a_call_site_is_a_call_site():
+    tree = ast.parse("from collect_runtime_sources import download")
+    assert call_site_users(tree, "", "new.py") == {"collect_runtime_sources.py"}
+    tree = ast.parse("from .adapter import AgentgatewayModelAdapter")
+    assert call_site_users(tree, "integrations.gateway", "x.py") == {
+        "integrations/gateway/adapter.py"
     }
-    assert network_imports(ast.parse("import urllib.request")) == {"urllib.request"}
-    assert network_imports(ast.parse("from urllib.parse import urlsplit")) == set()
+    tree = ast.parse("from ..runners import local_runner")
+    assert call_site_users(tree, "integrations.gateway", "x.py") == {
+        "integrations/runners.py"
+    }
+    tree = ast.parse("import integrations.gateway.applied")
+    assert call_site_users(tree, "", "x.py") == {"integrations/gateway/applied.py"}
 
 
 # EGR-02 Every full address written in server code is declared, with the
 # destination it belongs to, or as an address that is never contacted.
 def test_egr_02_every_address_in_server_code_is_declared():
-    _, addresses = scan()
+    _, addresses, _ = scan()
     found = set().union(*addresses.values())
     assert found == set(ADDRESS_LITERALS), (
         "Declare new addresses in tests/support/outbound.py and the guide"
     )
     assert {d for d in ADDRESS_LITERALS.values() if d} <= set(DESTINATIONS)
+
+
+def test_egr_02_addresses_inside_longer_strings_are_found():
+    tree = ast.parse(
+        'CHECK = "Checking https://updates.example.com/v1/latest daily"\n'
+        'url = f"https://telemetry.example.com/{name}"'
+    )
+    assert address_literals(tree) == {
+        "https://updates.example.com/v1/latest",
+        "https://telemetry.example.com/",
+    }
 
 
 # EGR-03 The declarations, the guide and the installation reference agree:
@@ -185,6 +248,10 @@ def test_egr_03_destinations_call_sites_and_guide_agree():
     reference = REFERENCE.read_text()
     section = reference.split("## Network policies", 1)[1].split("\n## ", 1)[0]
     assert "outbound-connections.md" in section
+    # Provider-key checks and probes never use a proxy, so the reference must
+    # say the app needs direct access rather than suggest a proxy is enough.
+    assert "provider-key checks and Personal provider probes" in section
+    assert "always connect directly" in section
 
 
 # EGR-04 Every pinned server dependency has been reviewed for connections it

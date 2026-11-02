@@ -129,12 +129,35 @@ def test_egr_10_the_guard_refuses_undeclared_destinations():
                 socket.create_connection(("127.0.0.1", 9), timeout=1)
             with pytest.raises(URLError):
                 urlopen("https://telemetry.example.invalid/ping", timeout=1)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+                with pytest.raises(OutboundRefused):
+                    udp.sendto(b"ping", ("192.0.2.2", 53))
+                with pytest.raises(OutboundRefused):
+                    udp.sendto(b"ping", 0, ("192.0.2.3", 514))
+                with pytest.raises(OutboundRefused):
+                    udp.sendmsg([b"ping"], [], 0, ("192.0.2.4", 123))
+            with pytest.raises(socket.herror):
+                socket.gethostbyaddr("192.0.2.5")
+            with pytest.raises(socket.herror):
+                socket.getnameinfo(("192.0.2.6", 80), 0)
+            with pytest.raises(socket.gaierror):
+                socket.gethostbyname("updates.example.invalid")
         assert guard.refused == [
             ("192.0.2.1", 443),
             ("127.0.0.1", 9),
             ("telemetry.example.invalid", 443),
+            ("192.0.2.2", 53),
+            ("192.0.2.3", 514),
+            ("192.0.2.4", 123),
+            ("192.0.2.5", None),
+            ("192.0.2.6", None),
+            ("updates.example.invalid", None),
         ]
-    assert socket.socket.connect.__name__ == "connect"  # the guard is removed
+    # The guard is removed afterwards.
+    for name in ("connect", "connect_ex", "sendto", "sendmsg"):
+        assert getattr(socket.socket, name).__name__ == name
+    for name in ("getaddrinfo", "gethostbyaddr", "getnameinfo"):
+        assert getattr(socket, name).__name__ == name
 
 
 @pytest.fixture
@@ -282,9 +305,10 @@ def test_egr_12_each_call_site_reaches_only_its_configured_address(
         assert "/internal/keeplane/applied" in gateway.paths()
 
 
-# EGR-13 Proxies: the applied-configuration read, the provider-key check and
-# the provider probe never use a proxy from the environment; the gateway
-# adapter and runner discovery use one when the process starts with one set.
+# EGR-13 Proxies: the applied-configuration read, the provider-key check (its
+# worker started by the key validator) and the Personal provider probe never
+# use a proxy from the environment; the gateway adapter and runner discovery
+# use one when the process starts with one set.
 PROXIED = """
 import sys
 sys.path.insert(0, sys.argv[1])
@@ -300,6 +324,10 @@ def test_egr_13_which_calls_use_an_environment_proxy(tmp_path, monkeypatch):
     import sys
 
     from integrations.gateway.applied import AppliedStateUnavailable, read_applied
+    from model_registry.key_validation import (
+        DjangoProviderKeyValidator,
+        ProviderKeyRefused,
+    )
     from model_registry.provider_probe import provider_answers
 
     from tests.support.outbound import SERVER
@@ -327,6 +355,22 @@ def test_egr_13_which_calls_use_an_environment_proxy(tmp_path, monkeypatch):
         }
         assert provider_answers(definition, allow_loopback_http=True)
         assert provider.paths() == ["/v1/chat/completions"]
+        # The real key check, with the approved definition read stubbed: the
+        # validator starts its worker, which sends the key to the provider.
+        validator = DjangoProviderKeyValidator(None)
+        approved = {
+            "provider": "openAI",
+            "model": "upstream",
+            "url": provider.url + "/v1/chat/completions",
+        }
+        monkeypatch.setattr(
+            validator, "_definition", lambda model_id, lock=False: ("fp", approved)
+        )
+        with pytest.raises(ProviderKeyRefused):
+            validator("owner", "personal", "synthetic-developer-key-1234")
+        assert provider.paths() == ["/v1/chat/completions"] * 2
+        sent = {k.lower(): v for k, v in provider.calls[1][2].items()}
+        assert sent["authorization"] == "Bearer synthetic-developer-key-1234"
         assert proxy.calls == []
         subprocess.run(
             [sys.executable, "-c", PROXIED, str(SERVER), gateway.url, runner.url],
