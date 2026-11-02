@@ -20,16 +20,13 @@ those ports are not available. It is part of the `docker` regression group.
 ## Fixtures
 
 - A runner on the host at the preview's allowed address
-  `http://host.docker.internal:14424` serves the upstream models and counts
+  `http://host.docker.internal:14424` serves three upstream models and counts
   every request it receives for each one.
-- Three temporary models: a Confidential model and a Public-only model from
-  that runner, and a second Confidential model from the preview's mock cloud
-  provider with a shared key. The suite then removes that shared key's file,
-  so the second model stays set up and approved but can't be used. The first
-  and the Public-only model are enrolled on a fresh guarded gateway with
-  `up.py`'s installer. The model enroller (ADR 027) enrols every usable set-up
-  model, and leaves the second one out because its key is gone. The cases
-  start once the enroller reports that the guard matches the two models.
+- Three temporary models from that runner: a Confidential model, a second
+  Confidential model and a Public-only model. The first and the Public-only
+  model are enrolled on a fresh guarded gateway with `up.py`'s installer. The
+  model enroller (ADR 027) then enrols every usable set-up model, the second
+  Confidential model too; the cases start once it reports all three.
 - One temporary developer and one new project registered by that developer's
   first use.
 

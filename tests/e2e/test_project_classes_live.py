@@ -27,7 +27,7 @@ import pytest
 from components.cli import coding, server_connection
 from tests.fixtures.class_runner import ClassRunner
 from tests.support.client import BASE, RUNTIME, Browser
-from tests.support.gateway import GATEWAY_SCRIPT, RESOURCE_PATH, app_exec, resource
+from tests.support.gateway import GATEWAY_SCRIPT, RESOURCE_PATH
 from tests.support.reporting import report_path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -169,8 +169,7 @@ def run_cases():
     suffix = uuid.uuid4().hex[:8]
     upstream = {
         "conf": "up-conf-" + suffix,
-        # A cloud model on the preview's mock provider, not on the runner.
-        "spare": "mock-cloud",
+        "spare": "up-spare-" + suffix,
         "public": "up-public-" + suffix,
     }
     names = {
@@ -243,39 +242,22 @@ def run_cases():
                 == 200
             )
             for key in ("conf", "spare", "public"):
-                if key == "spare":
-                    source = {
-                        "source": "openai",
-                        "key_choice": "shared",
-                        "shared_key": (RUNTIME / "cloud-provider-key")
-                        .read_text()
-                        .strip(),
-                    }
-                else:
-                    source = {"source": "runner", "address": RUNNER_ADDRESS}
                 status, result, _ = admin.fetch(
                     "/api/models",
                     {
                         "name": names[key],
                         "model": upstream[key],
-                        **source,
+                        "source": "runner",
+                        "address": RUNNER_ADDRESS,
                         "approved_classes": approvals[key],
                     },
                     method="POST",
                 )
-                source = None
                 if status != 200:
                     raise RuntimeError(
-                        f"Adding fixture model {key} returned {status}"
+                        f"Adding fixture model {key} returned {status}: {result}"
                     )
                 created.append(names[key])
-            # The second Confidential model can't be used: its shared key file
-            # is gone, so the model enroller (ADR 027) leaves it out of the
-            # guard and the runtime gate refuses it, while it stays set up and
-            # approved. Any usable set-up model would be enrolled at once.
-            _, spare_resource = resource(names["spare"])
-            key_file = spare_resource["auth"]["key"]["value"]["file"]
-            app_exec("python", "-c", "import os, sys; os.remove(sys.argv[1])", key_file)
 
             volume = "keeplane-local_runtime-installation"
             state["volume_existed"] = (
@@ -300,7 +282,9 @@ def run_cases():
                 env=environment(),
                 wait_ready=lambda: launcher.wait_preview(BASE),
             )
-            state["settled"] = enroller_settled(2)
+            # The model enroller (ADR 027) then enrols every usable set-up
+            # model, so the spare Confidential model is enrolled as well.
+            state["settled"] = enroller_settled(3)
             if not state["settled"]:
                 raise RuntimeError("The model enroller did not settle after enrolment")
             admin = Browser()
