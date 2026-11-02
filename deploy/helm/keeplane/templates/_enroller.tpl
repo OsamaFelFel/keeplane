@@ -83,21 +83,34 @@ parameter that is not a single variable, is refused. The message never
 repeats the URL.
 
 Only the userinfo (before the host) is held to this, so an "@" in a query
-value or fragment, such as ?application_name=team@site, is allowed. The query
-and fragment are set aside only after the first "/" (the database path):
-every "/", "?" or "#" before it could still be part of a password that a
-connection library reads, so up to the first "/" exactly one "@" may appear,
-with a user name and at most a single ${...} password before it, and none in
-the database path. A URL with no database path and an "@" in its query is
-refused, as some libraries would read the query as userinfo. */ -}}
+value or fragment, such as ?application_name=team@site, is allowed, but only
+when the part before the first "/" is a well-formed authority: an optional
+user name, or user name and a single ${...} password, then "@", then a host
+name or bracketed IPv6 address and an optional numeric port. Only then is the
+query and fragment after the database path set aside, and the database path
+may hold no "@". Any other URL is held to the whole-URL rule: at most one "@",
+after a user name and at most a single ${...} password. That keeps refusing a
+literal password holding "/", "?" or "#", which a connection library may read
+as part of it. A query parameter name with "%" is refused, as libraries
+decode it (pass%77ord is password). */ -}}
 {{- $url := toString (dig "database" "postgres" "url" "" $gateway) -}}
-{{- $address := regexReplaceAll `^postgres(ql)?://` $url "" -}}
+{{- $address := regexReplaceAll `(?i)^postgres(ql)?://` $url "" -}}
 {{- $variable := `\$\{[A-Za-z_][A-Za-z0-9_]*\}` -}}
-{{- $head := regexReplaceAll `(?s)^([^/]*/[^?#]*)[?#].*$` $address "${1}" -}}
-{{- $literal := and (contains "@" $head) (not (regexMatch (printf `^[^:@/?#]*(:%s)?@[^@/]*(/[^@]*)?$` $variable) $head)) -}}
+{{- $authority := regexReplaceAll `(?s)/.*$` $address "" -}}
+{{- $wellFormed := and (contains "/" $address) (regexMatch (printf `^([A-Za-z0-9._~%%+-]*(:%s)?@)?([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:[0-9]+)?$` $variable) $authority) -}}
+{{- $literal := false -}}
+{{- if $wellFormed -}}
+{{- $path := regexReplaceAll `(?s)[?#].*$` (trimPrefix $authority $address) "" -}}
+{{- $literal = contains "@" $path -}}
+{{- else -}}
+{{- $literal = and (contains "@" $address) (not (regexMatch (printf `^[^:@/?#]*(:%s)?@[^@]*$` $variable) $address)) -}}
+{{- end -}}
 {{- $query := regexReplaceAll `#.*$` (join "?" (rest (splitList "?" $address))) "" -}}
 {{- range splitList "&" $query -}}
 {{- if and (regexMatch `(?i)^(ssl)?password=` .) (not (regexMatch (printf `(?i)^(ssl)?password=%s$` $variable) .)) -}}
+{{- $literal = true -}}
+{{- end -}}
+{{- if contains "%" (regexReplaceAll `(?s)=.*$` . "") -}}
 {{- $literal = true -}}
 {{- end -}}
 {{- end -}}

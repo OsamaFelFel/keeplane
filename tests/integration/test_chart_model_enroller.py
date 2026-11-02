@@ -659,6 +659,15 @@ def test_me_14_a_literal_gateway_database_password_is_refused_with_the_enroller(
         f"postgresql://keeplane:{LITERAL_PASSWORD}#x{DATABASE_HOST}",
         # Literal userinfo with no database path.
         f"postgresql://keeplane:{LITERAL_PASSWORD}@gateway-db:5432",
+        # A "/" in the password, then "?" or "#": the part before the first
+        # "/" is no well-formed authority, so the whole URL is held to the rule.
+        f"postgresql://keeplane:{LITERAL_PASSWORD}/a?x@gateway-db:5432/keeplane",
+        f"postgresql://keeplane:{LITERAL_PASSWORD}/a#x@gateway-db/keeplane?sslmode=require",
+        f"postgresql://keeplane:{LITERAL_PASSWORD}/b/c?d@h/db",
+        # The scheme is matched in any case.
+        f"POSTGRESQL://u:{LITERAL_PASSWORD}/x?y@h/db",
+        # A percent-encoded parameter name, which libraries decode to password.
+        f"postgresql://keeplane{DATABASE_HOST}?pass%77ord={LITERAL_PASSWORD}",
     )
     for url in literal:
         result = make(with_gateway_url(with_enroller(managed(chart)), url))
