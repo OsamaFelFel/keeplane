@@ -23,7 +23,9 @@ GUIDE = REPO / "docs" / "guide" / "outbound-connections.md"
 # Standard-library and third-party modules that can open a network connection,
 # download something, or start a process that could. Importing any part of
 # one, or reaching it through a bare parent import (`import urllib` then
-# `urllib.request.urlopen`), is a call site.
+# `urllib.request.urlopen`), is a call site. `ctypes` is listed because it can
+# call the C library's socket and process functions directly, past every
+# Python-level guard.
 NETWORK_MODULES = (
     "aiohttp",
     "anyio",
@@ -31,6 +33,7 @@ NETWORK_MODULES = (
     "boto3",
     "botocore",
     "cloudpathlib",
+    "ctypes",
     "django.core.mail",
     "django.db.backends.mysql",
     "django.db.backends.oracle",
@@ -48,6 +51,7 @@ NETWORK_MODULES = (
     "paramiko",
     "pip",
     "poplib",
+    "_posixsubprocess",
     "presidio_analyzer",
     "psycopg",
     "psycopg2",
@@ -68,10 +72,19 @@ NETWORK_MODULES = (
     "urllib.robotparser",
     "urllib3",
     "weasel",
+    "webbrowser",
     "websocket",
     "websockets",
+    "_winapi",
     "xmlrpc.client",
 )
+
+# Functions that import a module named by a string: `__import__`,
+# `importlib.import_module`, `importlib.__import__`, `builtins.__import__`.
+# Calls through these, or through a name bound to one (`from importlib import
+# import_module as im`, `im = importlib.import_module`), count as imports.
+IMPORTERS = frozenset({"__import__", "import_module"})
+IMPORTER_MODULES = frozenset({"importlib", "builtins"})
 
 # os (or posix/nt) functions that start another program; reported as
 # "os.process".
@@ -298,13 +311,54 @@ def dotted(node):
     return ".".join([node.id, *reversed(parts)])
 
 
+def importer_names(tree):
+    """Names in a parsed file bound to a function that imports by string."""
+    found = set(IMPORTERS)
+
+    def is_importer(node):
+        return (isinstance(node, ast.Name) and node.id in found) or (
+            isinstance(node, ast.Attribute) and node.attr in IMPORTERS
+        )
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module in IMPORTER_MODULES:
+            found |= {a.asname or a.name for a in node.names if a.name in IMPORTERS}
+    # `im = importlib.import_module`, then possibly `load = im`: repeat until
+    # no new name is bound.
+    while True:
+        bound = {
+            target.id
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
+            and node.value is not None
+            and is_importer(node.value)
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            )
+            if isinstance(target, ast.Name)
+        } - found
+        if not bound:
+            return found
+        found |= bound
+
+
+def imported_by(call):
+    """The module-name argument of an importer call, positional or `name=`."""
+    if call.args:
+        return call.args[0]
+    return next((k.value for k in call.keywords if k.arg == "name"), None)
+
+
 def imported_names(tree, package=""):
     """Every module or module attribute a parsed file names through imports.
 
     Relative imports are resolved against `package`. A bare `import a` makes
-    each attribute chain `a.b.c` used in the file count as a named import.
+    each attribute chain `a.b.c` used in the file count as a named import. A
+    call with a string literal to an importer (see IMPORTERS), directly, as
+    an attribute of any module, or through a name bound to it, counts too.
     """
     names, aliases = [], {}
+    importers = importer_names(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -322,20 +376,15 @@ def imported_names(tree, package=""):
         elif (
             isinstance(node, ast.Call)
             and (
-                (
-                    isinstance(node.func, ast.Name)
-                    and node.func.id in ("__import__", "import_module")
-                )
+                (isinstance(node.func, ast.Name) and node.func.id in importers)
                 or (
-                    isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "import_module"
+                    isinstance(node.func, ast.Attribute) and node.func.attr in IMPORTERS
                 )
             )
-            and node.args
-            and isinstance(node.args[0], ast.Constant)
-            and isinstance(node.args[0].value, str)
+            and isinstance(target := imported_by(node), ast.Constant)
+            and isinstance(target.value, str)
         ):
-            names.append(node.args[0].value)
+            names.append(target.value)
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and (chain := dotted(node)):
             root, _, rest = chain.partition(".")

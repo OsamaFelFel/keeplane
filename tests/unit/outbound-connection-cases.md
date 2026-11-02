@@ -18,7 +18,7 @@ checks: `pytest tests/unit/test_outbound_inventory.py tests/integration/test_out
 
 | ID | Plain-English check | Expected result |
 | --- | --- | --- |
-| EGR-01 | Read every Python file under `components/control-plane` for imports, at any depth, through `import_module` or `__import__`, or through a bare parent import (`import urllib` then `urllib.request.urlopen`), of a module that can open a connection, download something or start a process: sockets and TLS (including the low-level `_socket` and `_ssl`), `urllib.robotparser`, HTTP clients and transports (including `httpcore`, `h11`, `anyio`), mail clients, database drivers, network log handlers, `subprocess`, `pty`, `pip`, `ensurepip`, `tldextract`, Presidio, `spacy.cli`, `smart_open`, `cloudpathlib`, `weasel`, and `system`, `popen`, `exec*`, `spawn*` and `posix_spawn*` from `os`, `posix` or `nt`. Also list every module that directly imports one of those call sites (relative imports resolved). | The modules and what each imports match the declared call sites exactly, and the direct users of call sites match their declaration; a call site with no network import of its own (such as `collect_cli_auth_sources.py`) reaches its destinations through one it imports. A new call site, a new network module in a declared one, or a new direct user fails and names the file. Each of the listed forms, written into a sample file, is found. |
+| EGR-01 | Read every Python file under `components/control-plane` for imports, at any depth, through a bare parent import (`import urllib` then `urllib.request.urlopen`), or through a call with a written module name to `__import__`, `importlib.import_module`, `importlib.__import__` or `builtins.__import__`, including under another name (`from importlib import import_module as im`, `load = importlib.import_module`), of a module that can open a connection, download something or start a process: sockets and TLS (including the low-level `_socket` and `_ssl`), `urllib.robotparser`, `webbrowser`, HTTP clients and transports (including `httpcore`, `h11`, `anyio`), mail clients, database drivers, network log handlers, `subprocess` and its low-level `_posixsubprocess` and `_winapi`, `pty`, `ctypes`, `pip`, `ensurepip`, `tldextract`, Presidio, `spacy.cli`, `smart_open`, `cloudpathlib`, `weasel`, and `system`, `popen`, `exec*`, `spawn*` and `posix_spawn*` from `os`, `posix` or `nt`. Also list every module that directly imports one of those call sites (relative imports resolved). | The modules and what each imports match the declared call sites exactly, and the direct users of call sites match their declaration; a call site with no network import of its own (such as `collect_cli_auth_sources.py`) reaches its destinations through one it imports. A new call site, a new network module in a declared one, or a new direct user fails and names the file. Each of the listed forms, written into a sample file, is found. |
 | EGR-02 | Collect every full address (`scheme://…`) written in server code, including one inside a longer string, an f-string or a bytes literal, in any letter case. | Each is declared with its destination, or as never contacted (the app's own default address, the CLI's loopback sign-in redirect, a parse-only placeholder). Anything new fails. |
 | EGR-03 | Compare the declared destinations, call sites, the guide and the Kubernetes installation reference. | Every destination has a call site and every call site names known destinations; no build-time download shares a module with a runtime connection. The guide names each destination with its chart setting, says there is no telemetry or update check, covers DNS, proxies and `check_credentials`, and links this catalog; the reference's network policy section links the guide. |
 | EGR-04 | List every package pinned in the server's `requirements-*.txt` files. | Each has a review note saying whether it can connect on its own and how that path is closed; a new or removed pin fails until the review is updated. |
@@ -39,9 +39,17 @@ Not covered here:
   opens nothing else. The PostgreSQL client library (libpq) opens its own
   sockets and is not run here (the tests use SQLite). EGR-01 declares all
   three, and the chart's egress policies limit them in a cluster.
-- The guard patches the `socket` module. Code that uses the low-level `_socket`
-  module directly bypasses it (its type cannot be patched); EGR-01 is the only
-  check for `_socket` and fails on any server module that imports it.
+- The guard patches the `socket` module's Python functions. Code that uses
+  the low-level `_socket` module, or calls the C library through `ctypes`,
+  bypasses it (neither can be patched from Python), and so would a compiled
+  extension that opens its own sockets. EGR-01 is the only check for
+  `_socket` and `ctypes` and fails on any server module that imports either;
+  compiled code in dependencies is covered by the dependency review (EGR-04).
+- EGR-01 finds an import by string only when the module name is written in
+  the call. A name built at runtime (`import_module(name)`), or an importer
+  reached through `getattr`, is not found; no server module imports by
+  string today. On the paths EGR-11 and EGR-12 run, the guard would still
+  refuse such a module's connection if it went through `socket`.
 - EGR-01 lists direct users of a call site only. A module that reaches a
   call site through another module (for example a view using the gateway
   object from `common/api.py`) is not listed; the runtime checks EGR-11 and
