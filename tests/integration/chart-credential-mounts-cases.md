@@ -10,7 +10,9 @@ guides and always run.
 
 The installations rendered are: both local trials (`deploy/local/values.yaml`
 and `deploy/local/existing-values.yaml`); managed PostgreSQL, with and without
-CLI sign-in; existing-gateway PostgreSQL, with and without an `https` gateway
+CLI sign-in, and with the [model enroller](chart-model-enroller-cases.md) on
+(its credentials reach only its init step, through `secretKeyRef`, so the
+gateway copies still mount no Secret); existing-gateway PostgreSQL, with and without an `https` gateway
 and `gateway.caSecret`; and an existing-gateway install with only
 `gateway.keysSecret` and `gateway.caSecret`, without PostgreSQL or the local
 trial. Rendering proves what the chart asks Kubernetes to create, not how a

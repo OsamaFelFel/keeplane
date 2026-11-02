@@ -10,7 +10,8 @@ and need Helm 3.19 or newer, found through `KEEPLANE_HELM_BIN`, else `helm` on
 The supported installations rendered are: the managed local trial
 (`deploy/local/values.yaml`); managed PostgreSQL with Ingress, the gateway
 NetworkPolicy, the disruption budget and an extra gateway Service turned on;
-the same with CLI sign-in; the existing-gateway local trial
+the same with CLI sign-in; the same with the
+[model enroller](chart-model-enroller-cases.md) on; the existing-gateway local trial
 (`deploy/local/existing-values.yaml`); existing-gateway PostgreSQL, with and
 without CLI sign-in; and `deploy/postgres/values.example.yaml`. Rendering
 proves what the chart asks Kubernetes to create. It does not prove that a

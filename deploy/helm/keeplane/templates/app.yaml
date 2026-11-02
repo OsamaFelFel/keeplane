@@ -128,6 +128,12 @@ spec:
             - name: GATEWAY_COPY_URLS
               value: {{ join "," .Values.gateway.copyUrls | quote }}
             {{- end }}
+            {{- /* ADR 027: a protected check counts only from a copy whose
+            enroller confirmed the model in its guard-status row. */}}
+            {{- if include "keeplane.guardStatusCheck.on" . }}
+            - name: KEEPLANE_GUARD_STATUS_CHECK
+              value: "1"
+            {{- end }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
             {{- if .Values.app.personalDataDetection.enabled }}

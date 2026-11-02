@@ -298,6 +298,7 @@ CHART_SWITCHES = {
     "networkPolicy.egressEnabled": "egress_network_policy",
     "ingress.enabled": "ingress",
     "app.personalDataDetection.enabled": "personal_data_detection_install",
+    "gateway.enroller.enabled": "model_enroller",
 }
 # Sub-settings that apply only once their parent feature is turned on.
 CHART_SUB_SETTINGS = {"app.postgres.migration.enabled"}

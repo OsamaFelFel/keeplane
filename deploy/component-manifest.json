@@ -127,6 +127,7 @@
       "gateway_ingress_network_policy",
       "ingress",
       "local_trial",
+      "model_enroller",
       "optional_audit_kinds",
       "personal_data_detection",
       "personal_data_detection_install",
