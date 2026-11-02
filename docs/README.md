@@ -15,6 +15,7 @@
 | Use a managed or customer-run gateway | [Gateway configuration](guide/gateway-configuration.md) |
 | Try Kubernetes deployment | [Kubernetes](guide/kubernetes-local.md) |
 | Check Secrets, readiness, storage, ports and gateway modes for a Kubernetes install | [Kubernetes installation reference](guide/kubernetes-installation-reference.md) |
+| Open only the connections Keeplane needs on an isolated network | [Outbound connections](guide/outbound-connections.md) |
 | Give an installer only the permissions a Kubernetes install needs in one namespace | [Kubernetes namespace permissions](guide/kubernetes-namespace-permissions.md) |
 | Configure PostgreSQL, credentials and recovery | [PostgreSQL](guide/postgres-accounts.md), [gateway database credentials](guide/gateway-database-secret.md) |
 | Create the model enroller's database roles for each gateway copy | [Enroller database roles](guide/guard-status-roles.md), [per-copy guard status](architecture/runtime-authorization.md#per-copy-guard-status) |

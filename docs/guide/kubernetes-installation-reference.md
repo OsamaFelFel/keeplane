@@ -345,6 +345,9 @@ list what the render checks cover.
 
 All settings sit under `networkPolicy`. Each selected pod is denied every
 connection in that direction that its policy does not list.
+[Outbound connections](outbound-connections.md) lists every destination
+Keeplane's own code connects to and when, for choosing these destinations on
+an isolated network.
 
 **Public entry.** `publicEntry.namespaceSelector` and `publicEntry.podSelector`
 are label maps for your ingress controller, for example
@@ -398,8 +401,11 @@ Service address is not reliable, because pod addresses change and most plugins
 check the pod address behind a Service, not the Service address. Use `cidr` for
 destinations outside the cluster. NetworkPolicy cannot match host names: if a
 model provider has no fixed addresses, you must either allow a wide range on
-port 443 or send that traffic through an egress proxy you run, and list the
-proxy instead.
+port 443 or send the gateway copies' traffic through an egress proxy you run,
+and list the proxy instead. A proxy is not enough for the app: its
+provider-key checks and Personal provider probes always connect directly to
+the provider, so the app egress policy still needs that provider's addresses
+(see [proxies](outbound-connections.md#proxies)).
 
 `dns` defaults to the cluster DNS pods (`k8s-app: kube-dns` in `kube-system`)
 on UDP and TCP 53. Replace both label maps, or set them to `null` and give
