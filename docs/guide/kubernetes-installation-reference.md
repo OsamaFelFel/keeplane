@@ -509,8 +509,9 @@ or widen access are not confirmed.
 
 **When a copy stops.** Once the gateway Service drops a stopped copy, new model
 calls go to the copies still running. A reply that was streaming through the
-stopped copy ends early, without its final chunk; the caller sees an incomplete
-reply and can send the request again. While a copy is down, an admin's add or
+stopped copy ends early, without its final chunk and `[DONE]`. The connection
+can close normally, with no error, so a client must treat a stream that ends
+without them as failed; it can send the request again. While a copy is down, an admin's add or
 widening is refused with "Not every gateway copy confirmed it: [N] of [M] did.
 Nothing was saved." (or "…confirmed the change…" for an edit), and a withdrawal
 is saved at once. This also holds if you scale StatefulSet `<release>-gateway`
