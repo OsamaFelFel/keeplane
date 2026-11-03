@@ -202,10 +202,35 @@ def test_shm_05_the_map_links_every_catalog_it_names():
 
 def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     cases = live_ci_cases()
-    # The replica, customer-run gateway, preflight and gateway-down cases.
-    assert {f"K8S-{n:02d}" for n in range(1, 14)} | {"K8S-17"} <= cases
+    # The replica, customer-run gateway, preflight and gateway-down cases,
+    # and the copy-stop cases (a stream cut short, access changes).
+    assert {f"K8S-{n:02d}" for n in range(1, 14)} | {
+        f"K8S-{n:02d}" for n in range(17, 22)
+    } <= cases
     # The simulated preflight retries (K8S-14 to K8S-16) are in another test
     # file this workflow does not run, so they never count through it.
     assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
     # The isolated-network cases, from the isolated network workflow.
     assert {f"ISO-{n:02d}" for n in range(1, 10)} <= cases
+
+
+# Each clause of a proven scenario whose proof is a separate case: the
+# scenario, the clause in Spec 002's words and the cases that prove it.
+CLAUSE_PROOF = {
+    ("ST4", "One gateway copy stops"): {
+        "new model calls are still answered": {"K8S-03"},
+        "a reply already streaming from that copy may fail visibly and can be "
+        "retried": {"K8S-18"},
+    },
+}
+
+
+def test_shm_07_each_clause_with_its_own_proof_names_it_and_ci_runs_it():
+    rows = scenario_rows()
+    live = live_ci_cases()
+    for scenario, clauses in CLAUSE_PROOF.items():
+        named = set(CASE.findall(rows[scenario]))
+        for clause, cases in clauses.items():
+            assert cases <= named, f"{scenario} does not name {cases} for {clause!r}"
+            assert cases <= live, f"CI does not run {cases} for {clause!r}"
+        assert "not exercised" not in rows[scenario].lower(), scenario

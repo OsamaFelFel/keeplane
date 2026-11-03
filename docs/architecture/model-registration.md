@@ -97,9 +97,10 @@ shows; `[N] of [M]` counts the copies.
 - **Removing a model Keeplane added**: the approval is removed first, so every
   copy's checks refuse the model before the admin is answered, and the shared
   key file is deleted. Keeplane then waits for every copy to stop listing the
-  model. If one still lists it, the removal stands: "[Model] was removed",
-  "Developers can't use it, but [N] of [M] gateway copies still list it. Check
-  the gateway." This also holds when the database reports a failed commit
+  model. If one still lists it or doesn't answer, the removal stands:
+  "[Model] was removed", "Developers can't use it, but Keeplane couldn't
+  confirm it's gone from [N] of [M] gateway copies. Check the gateway." This
+  also holds when the database reports a failed commit
   that was in fact kept. Removing a model added outside Keeplane reads no copy.
 
 An unusable `GATEWAY_COPY_URLS` (any bad entry) is logged as a warning when
@@ -113,4 +114,7 @@ can't use it, but Keeplane can't check every gateway copy …".
 Only the changed model is read and written. Other models keep their
 definitions, approvals and access whatever a copy answers. The
 [copy cases](../../tests/unit/gateway-copy-cases.md) cover these rules with
-fake copies that lag, stay stale, hang or are down.
+fake copies that lag, stay stale, hang or are down. On a kind cluster with two
+managed copies, CI stops one copy and checks the narrowing, removal, add and
+widening rules above against the real gateway (K8S-19 to K8S-21 in the
+[local Kubernetes cases](../../tests/e2e/kubernetes-cases.md)).

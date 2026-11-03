@@ -81,9 +81,10 @@ def removed_but_listed(model_id, readback):
             "title": title,
             "error": f"Developers can't use it, but {BAD_LIST} {ASK_INSTALLER}",
         }
-    listed = readback.total - readback.confirmed
+    unconfirmed = readback.total - readback.confirmed
     return {
         "title": title,
-        "error": f"Developers can't use it, but {listed} of {readback.total} "
-        "gateway copies still list it. Check the gateway.",
+        "error": "Developers can't use it, but Keeplane couldn't confirm it's "
+        f"gone from {unconfirmed} of {readback.total} gateway copies. Check the "
+        "gateway.",
     }
