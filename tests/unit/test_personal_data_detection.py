@@ -17,6 +17,7 @@ from personal_data.inspection import (
     MAX_CHECK_CHARS,
     NOT_SENT,
     SLOW,
+    TOO_LONG,
     UNAVAILABLE,
     Inspector,
     contains_personal_data,
@@ -225,7 +226,9 @@ def test_pd_06_long_requests_that_cannot_finish_are_held():
     inspector = ready(Fake(delay=0.03), limit=0.1)
     verdict = inspector.check("word " * 6000)
     assert verdict.held and verdict.reason == SLOW
-    assert inspector.check("x" * (MAX_CHECK_CHARS + 1)).reason == SLOW
+    # Too long to check at all: held without a check, told apart from a slow
+    # one so the final model check doesn't record it again.
+    assert inspector.check("x" * (MAX_CHECK_CHARS + 1)).reason == TOO_LONG
 
 
 def test_pd_06_a_detector_error_is_held():

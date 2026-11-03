@@ -45,6 +45,7 @@ CATALOGS = {
     "DCA": ("integration/data-class-admin-cases.md",),
     "MC": ("integration/model-choice-cases.md",),
     "PCL-LIVE": ("e2e/project-classes-live-cases.md",),
+    "PDL-LIVE": ("e2e/personal-data-live-cases.md",),
     "PD": ("unit/personal-data-detection-cases.md",),
     "PM": ("integration/personal-data-model-cases.md",),
     "PR": ("integration/personal-data-routing-cases.md",),

@@ -1,6 +1,6 @@
 """The Docker preview's model enroller sees only the app database folder.
 
-Cases EDM-01 to EDM-08 in enroller-database-mount-cases.md. The Compose
+Cases EDM-01 to EDM-09 in enroller-database-mount-cases.md. The Compose
 checks render compose.yaml with deploy/local/runtime.yaml through
 `docker compose config`, which reads files only and starts nothing.
 """
@@ -332,3 +332,29 @@ def test_edm06_start_up_repeats_only_this_starts_notice(monkeypatch, tmp_path):
                       "account-volume-init"]]
     monkeypatch.setattr(up, "run", lambda command, **kwargs: "chown done\n")
     assert up.earlier_database_notices({}, "2026-11-02T00:00:00Z") == []
+
+
+def test_edm09_the_detection_setting_reaches_every_guard_writer(rendered):
+    # Off unless the operator sets it; the app, the installer and the enroller
+    # always share one value, so no guard is written without the request's
+    # messages while the app expects them (Spec 005 ST20).
+    environment = dict(
+        os.environ,
+        GATEWAY_RUNTIME_KEY_HASH="synthetic",
+        GATEWAY_ADMIN_KEY_HASH="synthetic",
+        KEEPLANE_PERSONAL_DATA_DETECTION="1",
+    )
+    result = subprocess.run(
+        ["docker", "compose", "-f", "compose.yaml", "-f", "deploy/local/runtime.yaml",
+         "--profile", "*", "config", "--format", "json"],
+        cwd=ROOT, env=environment, capture_output=True, text=True, timeout=60, check=True,
+    )
+    turned_on = json.loads(result.stdout)["services"]
+    writers = ("app", "runtime-install", "model-enroller")
+    for name in writers:
+        expected = os.environ.get("KEEPLANE_PERSONAL_DATA_DETECTION") or "0"
+        assert rendered[name]["environment"]["KEEPLANE_PERSONAL_DATA_DETECTION"] == expected, name
+        assert turned_on[name]["environment"]["KEEPLANE_PERSONAL_DATA_DETECTION"] == "1", name
+    for name, service in rendered.items():
+        if name not in writers:
+            assert "KEEPLANE_PERSONAL_DATA_DETECTION" not in service.get("environment", {}), name

@@ -12,9 +12,9 @@ detection at its route (entry) check, once per request, and again at the
 selected-model check, once per backend attempt, retries included. The entry
 check records every hold. The selected-model check records a hold only for
 the reasons that can differ between the two checks (detection down, too slow
-or failed, see ``FINAL_CHECK_REASONS``): personal data and unreadable text
-give the same answer at both checks, so the entry check has already recorded
-those. A request held at the final check for an outage reason may therefore
+or failed, see ``FINAL_CHECK_REASONS``): personal data, unreadable text and a
+request too long to check give the same answer at both checks, so the entry
+check has already recorded those. A request held at the final check for an outage reason may therefore
 have a second record, from the entry check or a retry; nothing derived from
 the request is stored to tell them apart (owner decision on PR #204: a rare
 duplicate is acceptable, a missing record isn't). Each gateway mode has one
@@ -39,6 +39,7 @@ from personal_data.inspection import (
     LIMIT_SECONDS,
     NOT_SENT,
     SLOW,
+    TOO_LONG,
     UNAVAILABLE,
 )
 from projects.models import Project
@@ -54,10 +55,15 @@ REASONS = {
     UNAVAILABLE: "Detection was down",
     SLOW: f"Detection took longer than {round(LIMIT_SECONDS * 1000)} ms",
     FAILED: "Detection failed",
+    # A request too long to check within the limit (owner decision on #203:
+    # very large requests are held); recorded as a slow check.
+    TOO_LONG: f"Detection took longer than {round(LIMIT_SECONDS * 1000)} ms",
 }
 # Any other reason still records a hold: detection gave no clean answer.
 UNKNOWN_REASON = REASONS[FAILED]
 # Reasons the final check may meet even when the entry check did not hold.
+# A request too long to check is held at both checks alike, so, like personal
+# data, only the entry check records it.
 FINAL_CHECK_REASONS = frozenset({UNAVAILABLE, SLOW, FAILED})
 
 logger = logging.getLogger(__name__)
