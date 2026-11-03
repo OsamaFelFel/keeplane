@@ -438,16 +438,17 @@ def run_cases():
                 },
             )
 
-            # PCL-LIVE-06: The approved Confidential model's provider is down.
-            # The gateway retries the same model twice (Spec 004 ST16), then
-            # the request fails; nothing goes to the other Confidential model,
-            # which is up, or to the Public-only model (issue #37: no
-            # automatic switch).
+            # PCL-LIVE-06: No approved model is up. Both Confidential models'
+            # providers are down. The gateway retries each model only on that
+            # model (Spec 004 ST16), then the request fails; nothing goes to
+            # another model (issue #37: no automatic switch).
             reset_status, _ = set_class("confidential")
-            runner.set_down({upstream["conf"]})
+            runner.set_down({upstream["conf"], upstream["spare"]})
             before = runner.snapshot()
             choice = cli_choice(names["conf"], token)
             failing = guarded(names["conf"], token, project)["status"]
+            middle = runner.snapshot()
+            spare = guarded(names["spare"], token, project)["status"]
             other = guarded(names["public"], token, project)["status"]
             after = runner.snapshot()
             runner.set_down(set())
@@ -455,18 +456,27 @@ def run_cases():
                 "PCL-LIVE-06",
                 reset_status == 200
                 and choice.get("model") == names["conf"]
-                and failing >= 500
+                and 500 <= failing <= 599
+                and 500 <= spare <= 599
                 and other == 403
+                and delta(before, middle, "conf") == RETRY_ATTEMPTS + 1
+                and delta(before, middle, "spare") == 0
                 and delta(before, after, "conf") == RETRY_ATTEMPTS + 1
-                and delta(before, after, "spare") == 0
-                and delta(before, after, "public") == 0,
+                and 1 <= delta(middle, after, "spare") <= RETRY_ATTEMPTS + 1
+                and delta(before, after, "public") == 0
+                and sum(after.values()) - sum(before.values())
+                == delta(before, after, "conf") + delta(before, after, "spare"),
                 {
                     "cli_model_choice": choice,
                     "gateway_status": {
                         "down_confidential": failing,
+                        "down_second_confidential": spare,
                         "public": other,
                     },
                     "upstream_calls": {k: delta(before, after, k) for k in upstream},
+                    "upstream_calls_for_first_request": {
+                        k: delta(before, middle, k) for k in upstream
+                    },
                 },
             )
         finally:

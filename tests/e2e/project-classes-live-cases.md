@@ -37,7 +37,7 @@ those ports are not available. It is part of the `docker` regression group.
 | PCL-LIVE-03 | The developer names the Public-only model directly, again with forged class, account and operator headers, and an admin tries the same model for the project. | The gateway refuses every request with 403, the CLI's model choice is refused with 403, and the runner receives nothing. |
 | PCL-LIVE-04 | The repository's own settings name the Public-only model, or the provider's own model name. | The CLI's model list for the project doesn't include it and its model choice is refused. The gateway refuses both names, and the runner receives nothing. |
 | PCL-LIVE-05 | The admin sets the class to None, then the developer uses both models. | The project's model list includes every set-up model, the CLI keeps the Public-only model, and both models answer through the gateway. |
-| PCL-LIVE-06 | The class is Confidential again and the Confidential model's provider is down. The developer uses it, then names the Public-only model. | The CLI keeps the Confidential model: Keeplane doesn't move the task. The gateway tries that model three times (the first attempt and two retries), then returns an error. The other Confidential model, which is up, and the Public-only model receive nothing, and the Public-only model is refused with 403. |
+| PCL-LIVE-06 | No approved model is up: the class is Confidential again and both Confidential models' providers are down. The developer uses the first, then the second, then names the Public-only model. | The CLI keeps the first model: Keeplane doesn't move the task. Each request fails with a 5xx. The first model is contacted three times (the first attempt and two retries) and the second model nothing during that request. The second model's own request reaches only that model, at most three times. The Public-only model is refused with 403 and receives nothing, and the runner sees no other request. |
 
 ## Restoring the preview
 
@@ -54,7 +54,7 @@ PCL-LIVE-06 used to need a Confidential model that was set up but not enrolled,
 so the CLI would say "… is approved for this project but can't be used right
 now, so nothing was sent." The model enroller (ADR 027) now enrols every usable
 set-up model within seconds, so the live preview no longer has that state. The
-case now makes the model unusable by taking its provider down (Spec 004 ST16;
+case now takes the providers of both approved models down (Spec 004 ST16;
 issue #37, no automatic switch). The "set up but not enrolled" refusal and its
 CLI wording stay covered by the integration tests in the
 [project cases](../integration/project-cases.md) and
