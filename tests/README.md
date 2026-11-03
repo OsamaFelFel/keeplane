@@ -22,8 +22,11 @@ CI runs the unit and integration checks as parallel shards listed in
 The separate `live-preview.yml` workflow starts the protected Docker preview
 with `deploy/local/up.py` on a hosted runner and runs the live gateway cases
 that need it: the [project classes](e2e/project-classes-live-cases.md) and the
-[down-model retry](integration/native-runtime-outage-cases.md) cases. A case
-that is skipped or never runs fails that job.
+[down-model retry](integration/native-runtime-outage-cases.md) cases. A second
+job in the same workflow builds the `detection` app image, starts the preview
+the same way and runs the [personal-data detection](e2e/personal-data-live-cases.md)
+cases with `KEEPLANE_PERSONAL_DATA_DETECTION=1`. A case that is skipped or
+never runs fails its job.
 In-process tests hash passwords with the application's PBKDF2 algorithm at a
 lower round count (`tests/support/password_hashing.py`); processes started
 with the application settings keep the full count.

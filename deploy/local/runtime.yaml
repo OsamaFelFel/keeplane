@@ -27,6 +27,11 @@ services:
       RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
       GATEWAY_FILE_CONFIG: /installed/gateway.json
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
+      # Spec 005 ST20: off unless the operator starts the guarded preview with
+      # KEEPLANE_PERSONAL_DATA_DETECTION=1 and a detection image. The installer
+      # and the enroller get the same value, so every guard they write sends
+      # each request's messages to Keeplane's check.
+      KEEPLANE_PERSONAL_DATA_DETECTION: ${KEEPLANE_PERSONAL_DATA_DETECTION:-0}
     volumes:
       - runtime-installation:/installed:ro
 
@@ -48,6 +53,7 @@ services:
       GATEWAY_MODE: managed
       KEEPLANE_CLI_OAUTH_ENABLED: ${KEEPLANE_RUNTIME_OAUTH_ENABLED:-0}
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
+      KEEPLANE_PERSONAL_DATA_DETECTION: ${KEEPLANE_PERSONAL_DATA_DETECTION:-0}
     volumes:
       - ./components/control-plane:/app:ro
       - runtime-installation:/installed
@@ -79,6 +85,7 @@ services:
       GATEWAY_MODE: managed
       KEEPLANE_DATABASE_READ_ONLY: "1"
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
+      KEEPLANE_PERSONAL_DATA_DETECTION: ${KEEPLANE_PERSONAL_DATA_DETECTION:-0}
     volumes:
       - ./components/control-plane:/app:ro
       - runtime-installation:/installed

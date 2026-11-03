@@ -38,13 +38,17 @@ RELOAD_AFTER_SECONDS = 60
 START_WAIT_SECONDS = 300
 
 # Why a request was or was not held. Never includes any request text.
-FOUND, CLEAN, NOT_SENT, UNAVAILABLE, SLOW, FAILED = (
+# TOO_LONG is a request over MAX_CHECK_CHARS, held without a check: like SLOW
+# it can't be checked within the limit, but it gives the same answer at every
+# check of the same request, so it is told apart from a timing result.
+FOUND, CLEAN, NOT_SENT, UNAVAILABLE, SLOW, FAILED, TOO_LONG = (
     "personal_data",
     "clean",
     "not_sent",
     "detector_unavailable",
     "detector_slow",
     "detector_failed",
+    "too_long",
 )
 
 
@@ -163,7 +167,7 @@ class Inspector:
         if not isinstance(text, str):
             return Verdict(True, NOT_SENT)
         if len(text) > MAX_CHECK_CHARS:
-            return Verdict(True, SLOW)
+            return Verdict(True, TOO_LONG)
         detector = self.detector()
         if detector is None:
             return Verdict(True, UNAVAILABLE)
