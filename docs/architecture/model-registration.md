@@ -113,4 +113,7 @@ can't use it, but Keeplane can't check every gateway copy …".
 Only the changed model is read and written. Other models keep their
 definitions, approvals and access whatever a copy answers. The
 [copy cases](../../tests/unit/gateway-copy-cases.md) cover these rules with
-fake copies that lag, stay stale, hang or are down.
+fake copies that lag, stay stale, hang or are down. On a kind cluster with two
+managed copies, CI stops one copy and checks the narrowing, removal, add and
+widening rules above against the real gateway (K8S-19 to K8S-21 in the
+[local Kubernetes cases](../../tests/e2e/kubernetes-cases.md)).

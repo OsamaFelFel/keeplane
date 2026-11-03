@@ -28,9 +28,10 @@ jobs:
       HELM_VERSION: v3.19.0
       HELM_SHA256: a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496
       # The live test files this job runs, in order: test_local registers the
-      # model test_kind uses. tests/unit/test_self_hosting_scenario_map.py reads
+      # model test_kind uses; test_gateway_copy_stop stops a gateway copy and
+      # restores it, so it runs last. tests/unit/test_self_hosting_scenario_map.py reads
       # this line to know which cases CI runs on the current revision.
-      LIVE_TESTS: tests/e2e/test_local.py tests/e2e/test_kind.py tests/e2e/test_gateway_secret_rotation.py tests/e2e/test_existing_gateway_preflight.py tests/e2e/test_gateway_down.py
+      LIVE_TESTS: tests/e2e/test_local.py tests/e2e/test_kind.py tests/e2e/test_gateway_secret_rotation.py tests/e2e/test_existing_gateway_preflight.py tests/e2e/test_gateway_down.py tests/e2e/test_gateway_copy_stop.py
       KEEPLANE_KIND_QWEN: "off"
       # The runner's Docker saves the digest-pinned fixture images in a form
       # kind's containerd refuses ("failed to check if this is a checkpoint

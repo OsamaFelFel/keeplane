@@ -4,8 +4,9 @@ Run `test_local.py` against port 13000 first, then `test_kind.py`. The replica
 tests use `second-local`; `test_kind.py` registers it through Keeplane when it is
 absent (`test_local.py` removes the setups it added). The **Kubernetes live
 checks** CI workflow runs both, then `test_gateway_secret_rotation.py`,
-`test_existing_gateway_preflight.py` and `test_gateway_down.py`, on a kind
-cluster for every pull request (see [Tests](../README.md)). K8S-START-01 and
+`test_existing_gateway_preflight.py`, `test_gateway_down.py` and, last,
+`test_gateway_copy_stop.py`, on a kind cluster for every pull request (see
+[Tests](../README.md)). K8S-START-01 and
 K8S-14 to K8S-16 run in the unit and integration checks. `test_kind.py` deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
 The managed kind preview and the customer-run gateway app require first-admin
@@ -22,8 +23,12 @@ the supplied gateway.
 | K8S-START-01 | Start local setup with a required tool missing, an unsupported Node.js version or Docker unavailable. | A short prerequisite error stops setup before credentials, dependency installation, builds or cluster changes. The unit startup controls use isolated command stubs. |
 | K8S-01 | Install Keeplane with its managed gateway and inspect the gateway copies (StatefulSet) pods. | Two gateway copy pods are running and ready. |
 | K8S-02 | Register `second-local` through Keeplane, then request the model list from each gateway copy directly without a key and with the app's runtime key. | Both copies refuse the anonymous request and list `second-local` only for the app key; registration is shared. |
-| K8S-03 | Delete one gateway pod, observe the Service remove it as a ready endpoint, then send ten new questions to `second-local`. | All ten return the fixed answer. A call aimed at the stopped pod during endpoint propagation, including an active stream, may fail visibly and be retried. |
+| K8S-03 | Delete one gateway pod, observe the Service remove it as a ready endpoint, then send ten new questions to `second-local`. | All ten return the fixed answer. A call aimed at the stopped pod during endpoint propagation may fail visibly and be retried; K8S-18 checks a reply already streaming. |
 | K8S-04 | Wait for the gateway copies (StatefulSet) to recover. | Two copies are ready again. |
+| K8S-18 | With every gateway copy ready, stream a slow fixture answer (30 pieces, half a second apart) from the last copy directly, using the app's runtime key from inside the app pod. After two pieces arrive, stop that copy: scale the copies down by one and force-delete its pod so it cannot finish the reply. Once the gateway Service no longer offers it, send the same request again through the gateway Service. | The interrupted stream ends with a transport error or without `[DONE]`; what arrived is only the start of the answer, never a shorter reply marked complete. The retry is served while the surviving copies are the Service's only ready endpoints and returns the whole answer with `finish_reason` `stop` and `[DONE]`. |
+| K8S-19 | With every copy up, add two fixture models through Keeplane, one on two data classes and one on one (data classes are turned on for the check). Stop one copy as in K8S-18, then set the first model up with only one class and remove the second. | Narrowing answers 200 and the model keeps only the one class. The removal stands: it answers 503 with exactly the "[Model] was removed" message from `model_registry/copy_messages.py` (`removed_but_listed`, [N] of [M] with the stopped copy unconfirmed) and the model is no longer set up. Withdrawing access never waits for the stopped copy. |
+| K8S-20 | While that copy is still stopped, add a new fixture model with one class, then set the first model up with both classes again. | Both answer 503. The add returns exactly `not_added` with "Nothing was saved." ("[Model] wasn't added", "Not every gateway copy confirmed it: [N] of [M] did. Nothing was saved. Check the gateway and try again.") and the model is not listed. The widening returns exactly `not_changed` ("[Model] wasn't changed", "Not every gateway copy confirmed the change: …") and the model keeps its one class. |
+| K8S-21 | Scale the copies back up and wait until every copy is ready, then repeat the add and the widening. Afterwards remove the check's models and put data classes back as they were. | Every copy is ready; the add answers 200 and the model is set up on its class; the widening answers 200 and the model has both classes. |
 | K8S-05 | Install Keeplane in existing-gateway mode against a separately installed agentgateway; sign in, set up `customer-managed` through Keeplane, and ask it a question. | Keeplane's namespace contains its app Deployment, Service and local trial PVCs but no gateway Deployment. The app points to the supplied gateway, registers and approves the model there, and returns the fixture answer. |
 | K8S-17 | Ask the existing-gateway app for models anonymously, then sign in as the first admin and open Users, Data Classes and Audit APIs. | The anonymous request is refused; the protected account and admin APIs work through the customer-run gateway installation. |
 | K8S-06 | Compare the supplied gateway's model catalog with Keeplane's managed gateway catalog using the app key, and try both without a key. | Anonymous lists are refused. The supplied gateway keeps its pre-existing `customer-fixture` and gains `customer-managed`; neither appears in the managed gateway. The managed gateway's `second-local` does not appear in the supplied gateway. Both are Ready. |
@@ -46,5 +51,11 @@ These cases test local transport, shared registration, a pod failure and a
 separate supplied gateway. The supplied gateway is an independently installed
 upstream chart with its own disposable PostgreSQL in the same kind cluster,
 not an actual customer's installation.
-The cases do not prove behavior when a Kubernetes node or PostgreSQL fails, a
-stream is interrupted, or an external model endpoint is used.
+K8S-18 to K8S-21 stop a copy abruptly (force-deleted, so it cannot drain) and
+keep it stopped until the test scales it back; a rolling restart, where a copy
+gets its 30-second shutdown, is not checked separately. The streamed reply
+goes straight to a gateway copy's model port with the app's runtime key; the
+protected runtime port that developers' tools reach with the model enroller is
+not installed in this trial.
+The cases do not prove behavior when a Kubernetes node or PostgreSQL fails, or
+an external model endpoint is used.

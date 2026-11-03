@@ -6,14 +6,44 @@ standard library and sends no outbound requests.
 
 import argparse
 import json
+import time
 from threading import Lock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# A streamed request whose messages contain this marker gets a slow reply:
+# SLOW_STREAM_CHUNKS content pieces, one every SLOW_STREAM_DELAY seconds, sent
+# as they are written. It lets a live check stop a gateway copy while the
+# reply is still streaming through it.
+SLOW_STREAM_MARKER = "keeplane-slow-stream"
+SLOW_STREAM_CHUNKS = 30
+SLOW_STREAM_DELAY = 0.5
+
+
+def slow_stream_pieces(count=SLOW_STREAM_CHUNKS):
+    return [f"part{index:02d} " for index in range(1, count + 1)]
+
+
+def slow_stream_text(count=SLOW_STREAM_CHUNKS):
+    """The whole answer a slow stream sends when nothing interrupts it."""
+    return "".join(slow_stream_pieces(count))
+
+
+def wants_slow_stream(request):
+    messages = request.get("messages")
+    return isinstance(messages, list) and any(
+        isinstance(message, dict)
+        and isinstance(message.get("content"), str)
+        and SLOW_STREAM_MARKER in message["content"]
+        for message in messages
+    )
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     calls = []
     calls_lock = Lock()
+    slow_stream_chunks = SLOW_STREAM_CHUNKS
+    slow_stream_delay = SLOW_STREAM_DELAY
 
     def do_GET(self):
         if self.path == "/health":
@@ -50,6 +80,9 @@ class Handler(BaseHTTPRequestHandler):
             self.calls.append({"model": model})
         if model == "__keeplane_no_answer_trial__":
             self.reply(503, {"error": "intentional no-answer registration test"})
+            return
+        if request.get("stream") and wants_slow_stream(request):
+            self.slow_stream(model)
             return
         if request.get("stream"):
             chunks = [
@@ -129,6 +162,45 @@ class Handler(BaseHTTPRequestHandler):
                 },
             },
         )
+
+    def slow_stream(self, model):
+        """Send each piece as its own HTTP chunk, pausing between pieces."""
+
+        def event(delta, finish_reason=None):
+            chunk = {
+                "id": "mock-slow",
+                "object": "chat.completion.chunk",
+                "model": model,
+                "choices": [
+                    {"index": 0, "delta": delta, "finish_reason": finish_reason}
+                ],
+            }
+            return b"data: " + json.dumps(chunk).encode() + b"\n\n"
+
+        def send(data):
+            self.wfile.write(b"%x\r\n%s\r\n" % (len(data), data))
+            self.wfile.flush()
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+        try:
+            for index, piece in enumerate(slow_stream_pieces(self.slow_stream_chunks)):
+                if index:
+                    time.sleep(self.slow_stream_delay)
+                delta = {"content": piece}
+                if not index:
+                    delta["role"] = "assistant"
+                send(event(delta))
+            send(event({}, "stop"))
+            send(b"data: [DONE]\n\n")
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            # The caller went away mid-reply, as when a gateway copy stops.
+            self.close_connection = True
 
     def reply(self, status, data):
         payload = json.dumps(data).encode()

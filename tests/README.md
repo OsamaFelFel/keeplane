@@ -47,8 +47,10 @@ image and installs the chart twice on one kind cluster: with its managed gateway
 (two copies and the installer-made key Secret) and against a separately
 installed gateway. It then runs the test files on the workflow's `LIVE_TESTS`
 line: `e2e/test_local.py`, `e2e/test_kind.py`,
-`e2e/test_gateway_secret_rotation.py`, `e2e/test_existing_gateway_preflight.py`
-and `e2e/test_gateway_down.py`. The job fails if any of them is skipped,
+`e2e/test_gateway_secret_rotation.py`, `e2e/test_existing_gateway_preflight.py`,
+`e2e/test_gateway_down.py` and `e2e/test_gateway_copy_stop.py`, which stops one
+managed gateway copy mid-stream and during admin model changes, then brings it
+back. The job fails if any of them is skipped,
 fails or reports an incomplete case set. Reports, the JUnit file and the
 cluster's state and logs are uploaded as the `kubernetes-live-<commit>`
 artifact.
