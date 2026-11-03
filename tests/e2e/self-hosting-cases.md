@@ -25,6 +25,7 @@ catalog:
   FULL the [full chart cases](full-product-edge-cases.md), EXEDGE the
   [customer-run gateway edge cases](full-existing-edge-cases.md) and EXIST the
   [customer-run gateway trial cases](existing-gateway-cases.md).
+- The isolated network: ISO the [isolated-network cases](kubernetes-isolated-cases.md).
 
 A render check runs `helm template`. When Helm refuses values there, `helm install`
 refuses the same values, because both evaluate the templates before anything
@@ -37,7 +38,10 @@ The **Kubernetes live checks** workflow (`.github/workflows/kubernetes-live.yml`
 installs the chart on a kind cluster on every revision and runs the test files on
 its `LIVE_TESTS` line; their K8S cases (K8S-01 to K8S-13 and K8S-17) count as CI
 checks. That cluster can reach the internet, has no ingress controller and does
-not enforce NetworkPolicy. The other K8S cases, FULL, EXEDGE, EXIST and GW-KEY
+not enforce NetworkPolicy. The **Kubernetes isolated network** workflow
+(`.github/workflows/kubernetes-isolated.yml`) does the same for its ISO cases on
+a kind cluster that enforces NetworkPolicy, behind an ingress controller, with
+outside access closed except one model provider. The other K8S cases, FULL, EXEDGE, EXIST and GW-KEY
 are not run in CI. The live trials ran on a local kind cluster or Docker with
 outside access, not on an isolated network, and a trial recorded on an earlier
 chart revision is named as the closest evidence, not as proof.
@@ -47,9 +51,9 @@ here, or a case named here has no row in its own catalog or no test.
 
 | Story | Scenario | Checked by |
 | --- | --- | --- |
-| ST1 | Install on the isolated network | Not proven yet: no install has run on an isolated network (task 002-03). FULL-01 and FULL-02 install the chart on a local kind cluster that can reach the internet and open sign-in over HTTPS; SHAPE-01 shows every PostgreSQL install image is pinned by digest. |
-| ST2 | The install may pull from the registry | Not proven yet: no install has run through temporary registry access that was then closed (task 002-03). SHAPE-01 shows every image and the gateway chart are pinned, so the registry is the only source the chart names. |
-| ST2 | Runs where only the models are reachable | Not proven yet: no install has run with only model endpoints reachable, and browser and device sign-in, the real coding runtime binary and the gateway image have not run under the outbound guard (task 002-03). EGR-01, EGR-02, EGR-11, EGR-12, EGR-15 and EGR-18 show the server and CLI contact only declared places; NETPOL-04, NETPOL-05 and NETPOL-10 render egress limited to DNS, databases and listed model endpoints. |
+| ST1 | Install on the isolated network | ISO-01, ISO-02, ISO-03, ISO-04, ISO-09. The chart is installed with every network policy on, outside access is then closed except one model provider, and the web UI opens through the ingress controller from the runner and from a pod inside the network, also after every pod and the node restart. FULL-01 and FULL-02 install the PostgreSQL chart on a kind cluster with outside access; SHAPE-01 shows every PostgreSQL install image is pinned by digest. |
+| ST2 | The install may pull from the registry | ISO-01, ISO-02, ISO-03, ISO-09. The install pulls its pinned images while the registry is reachable; once it is closed, a pull fails, and every Keeplane pod, the ingress controller and the node restart from the images already on the node. SHAPE-01 shows every image and the gateway chart are pinned, so the registry is the only source the chart names. |
+| ST2 | Runs where only the models are reachable | Not proven yet: only part of release 1 has run with only model endpoints reachable. On the isolated kind network an admin signs in, adds a cloud model with a shared key and asks it, and asks the managed gateway's model inside the cluster, and the app and gateway reach nothing else (ISO-05, ISO-06, ISO-07, ISO-08, ISO-09). Still missing there: the PostgreSQL install, the developers' protected model path and CLI, browser and device sign-in, the coding runtime, detection, held records, audit and the other admin screens (task 002-03). EGR-01, EGR-02, EGR-11, EGR-12, EGR-15 and EGR-18 show the server and CLI contact only declared places; NETPOL-04, NETPOL-05 and NETPOL-10 render egress limited to DNS, databases and listed model endpoints. |
 | ST2 | The web UI loads from inside | OFF-01, OFF-02, OFF-03, OFF-04, OFF-05, OFF-06, OFF-UI-01, OFF-UI-02 |
 | ST3 | A local model works like a cloud one | Not proven yet: no run has asked an in-cluster model through Keeplane's gateway on an isolated network, so nothing shows the work stays inside it (task 002-03). On the current revision CI asks an in-cluster fixture model through the managed gateway on a kind cluster that can reach the internet: K8S-02 and K8S-03. The earlier kind trials FULL-07 and EXEDGE-03 ran on older chart revisions; EGR-12 shows in CI that the gateway adapter reaches only the address it is given. |
 | ST3 | The managed gateway always requires keys | SHAPE-08, PKG-04 (Helm refuses the install without the key Secret, run in CI; the owner's rule from governance issue #47), SHAPE-07 (the rendered gateway checks a key for model calls and management). Supporting, not run in CI: GW-KEY-01, GW-KEY-02, GW-KEY-03 (the pinned gateway image refuses calls without the right key, using a hand-written strict-keys configuration, not the chart's). |

@@ -414,6 +414,7 @@ def run_cases():
         listed = {m["id"]: m for m in listing.get("models", [])}
         return (
             add_status == 200
+            and list_status == 200
             and ask_status == 200
             and answer.get("answer") == "mock cloud answer"
             and after > before

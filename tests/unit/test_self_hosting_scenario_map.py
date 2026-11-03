@@ -32,11 +32,10 @@ SCENARIOS = {
 # Scenarios not proven yet. Only a check that CI runs on the current
 # revision proves a scenario; a live trial recorded on an earlier chart
 # revision is closest evidence. ST4 and ST5 are proven by the K8S cases the
-# Kubernetes live workflow runs on kind. The reason lives in the table only: its cell
+# Kubernetes live workflow runs on kind, ST1 and ST2's registry scenario by
+# the ISO cases the isolated network workflow runs. The reason lives in the table only: its cell
 # starts "Not proven yet:" and says which run is missing before naming cases.
 NOT_PROVEN = {
-    ("ST1", "Install on the isolated network"),
-    ("ST2", "The install may pull from the registry"),
     ("ST2", "Runs where only the models are reachable"),
     ("ST3", "A local model works like a cloud one"),
 }
@@ -121,7 +120,7 @@ def live_ci_cases():
 
     files = []
     for workflow in LIVE_WORKFLOWS:
-        line = re.search(r"^\s*LIVE_TESTS:\s*(.+)$", workflow.read_text(), re.M)
+        line = re.search(r"^\s*LIVE_TESTS:\s*(.+)$", workflow.read_text(), re.MULTILINE)
         assert line, f"{workflow.name} names no LIVE_TESTS"
         assert line.group(1).split(), workflow.name
         files += line.group(1).split()
