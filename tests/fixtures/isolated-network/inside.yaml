@@ -1,0 +1,52 @@
+# Two pods of a team's own on the isolated network, in namespace "inside",
+# with no NetworkPolicy of their own: "service" answers HTTP on 8080 (a
+# destination not on Keeplane's egress list) and "visitor" makes the calls
+# the cases need. Both use the pinned Python image the chart's fixtures use.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: service
+  labels:
+    app: inside-service
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: service
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["python", "-m", "http.server", "8080", "--directory", "/tmp"]
+      readinessProbe:
+        tcpSocket:
+          port: 8080
+        periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service
+spec:
+  selector:
+    app: inside-service
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: visitor
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: visitor
+      image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "infinity"]
+      volumeMounts:
+        - name: ca
+          mountPath: /ca
+          readOnly: true
+  volumes:
+    - name: ca
+      configMap:
+        name: keeplane-isolated-ca
