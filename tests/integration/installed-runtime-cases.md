@@ -31,9 +31,15 @@ native policy. The returned metadata contains no key, filename or fingerprint.
 | Eviction, endpoint membership, capacity, destination, guard or auth changes | Deny even alongside valid measurement changes. |
 | Operator enrolls a newer revision but the selected overlay still carries the old fingerprint | Entry may succeed; the old selected overlay denies. |
 | Shared key disappears, changes content/name or becomes a symbolic link | Deny; do not return the key. |
+| Shared key file can no longer be read (mode 0 as a non-root user, or a forced read denial) | Deny; do not return the key. |
 | Project class changes or the developer signs out | Apply the new policy on the next request. |
 | Client adds prompt, authority fields or a forged fingerprint header | Refuse unexpected metadata; ignore the header. |
 | The manifest uses the old applied signature | Deny until the operator explicitly reenrolls. |
+
+The mode-0 case needs a non-root user, because root reads a file whatever its
+mode; under root it is reported as skipped with a reason that names root. The
+forced case runs for every user: the file-open call refuses that one key file
+with the same permission error, so the same refusal is proven either way.
 
 This bounded gate does not accept personal provider keys or publish configuration.
 The actual managed installation must prove applied guards before enabling its
