@@ -19,6 +19,11 @@ skipped with a reason that names `KEEPLANE_HELM_BIN`; a wrong
 CI runs the unit and integration checks as parallel shards listed in
 `tests/support/shards.py`; every test file belongs to exactly one, and
 `pytest tests/unit tests/integration --shard <name>` runs one shard locally.
+The separate `live-preview.yml` workflow starts the protected Docker preview
+with `deploy/local/up.py` on a hosted runner and runs the live gateway cases
+that need it: the [project classes](e2e/project-classes-live-cases.md) and the
+[down-model retry](integration/native-runtime-outage-cases.md) cases. A case
+that is skipped or never runs fails that job.
 In-process tests hash passwords with the application's PBKDF2 algorithm at a
 lower round count (`tests/support/password_hashing.py`); processes started
 with the application settings keep the full count.

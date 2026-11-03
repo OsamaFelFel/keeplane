@@ -23,6 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 import pytest
+from integrations.gateway.runtime_config import RETRY_ATTEMPTS
 
 from components.cli import coding, server_connection
 from tests.fixtures.class_runner import ClassRunner
@@ -37,9 +38,6 @@ RUNNER_ADDRESS = f"http://host.docker.internal:{RUNNER_PORT}"
 RUNTIME_PORT = int(os.environ.get("KEEPLANE_RUNTIME_PORT", "5000"))
 GUARDED = f"http://127.0.0.1:{RUNTIME_PORT}/v1/chat/completions"
 DIRECT = build_opener(ProxyHandler({}))
-UNAVAILABLE_START = (
-    "{} is approved for this project but can't be used right now, so nothing was sent."
-)
 
 
 def load(name, path):
@@ -58,9 +56,14 @@ def environment():
     return {**os.environ, **values}
 
 
-def compose(*arguments, timeout=180):
+def compose(*arguments, timeout=180, runtime=False):
+    files = (
+        ["-f", str(REPO / "compose.yaml"), "-f", str(REPO / "deploy/local/runtime.yaml")]
+        if runtime
+        else []
+    )
     return subprocess.run(
-        ["docker", "compose", "--env-file", str(RUNTIME / ".env"), *arguments],
+        ["docker", "compose", "--env-file", str(RUNTIME / ".env"), *files, *arguments],
         cwd=REPO,
         env=environment(),
         capture_output=True,
@@ -183,7 +186,13 @@ def run_cases():
     developer_name = "class-live-" + suffix
     developer_password = uuid.uuid4().hex + uuid.uuid4().hex
     cases, created, cleanup_failures = [], [], []
-    state = {"mode": None, "developer": None, "enrolled": False, "volume_existed": True}
+    state = {
+        "mode": None,
+        "developer": None,
+        "enrolled": False,
+        "volume_existed": True,
+        "settled": False,
+    }
     admin = Browser()
 
     def record(identifier, passed, observed):
@@ -271,6 +280,11 @@ def run_cases():
                 env=environment(),
                 wait_ready=lambda: launcher.wait_preview(BASE),
             )
+            # The model enroller (ADR 027) then enrols every usable set-up
+            # model, so the spare Confidential model is enrolled as well.
+            state["settled"] = enroller_settled(3)
+            if not state["settled"]:
+                raise RuntimeError("The model enroller did not settle after enrolment")
             admin = Browser()
             assert admin.login("first-admin", password)[0] == 200
             admin_token = bearer(admin)
@@ -424,42 +438,52 @@ def run_cases():
                 },
             )
 
-            # PCL-LIVE-06: No approved model is up. The enrolled Confidential
-            # model's provider fails; the other Confidential model is set up
-            # but not enrolled on the guarded gateway.
+            # PCL-LIVE-06: No approved model is up. Both Confidential models'
+            # providers are down. The gateway retries each model only on that
+            # model (Spec 004 ST16), then the request fails; nothing goes to
+            # another model (issue #37: no automatic switch).
             reset_status, _ = set_class("confidential")
-            runner.set_down({upstream["conf"]})
+            runner.set_down({upstream["conf"], upstream["spare"]})
             before = runner.snapshot()
-            spare_choice = cli_choice(names["spare"], token)
-            spare = guarded(names["spare"], token, project)["status"]
+            choice = cli_choice(names["conf"], token)
             failing = guarded(names["conf"], token, project)["status"]
+            middle = runner.snapshot()
+            spare = guarded(names["spare"], token, project)["status"]
             other = guarded(names["public"], token, project)["status"]
             after = runner.snapshot()
             runner.set_down(set())
             record(
                 "PCL-LIVE-06",
                 reset_status == 200
-                and spare_choice.get("status") == 503
-                and spare_choice.get("error", "").startswith(
-                    UNAVAILABLE_START.format(names["spare"])
-                )
-                and not 200 <= spare < 300
-                and failing >= 500
+                and choice.get("model") == names["conf"]
+                and 500 <= failing <= 599
+                and 500 <= spare <= 599
                 and other == 403
-                and delta(before, after, "conf") >= 1
-                and delta(before, after, "spare") == 0
-                and delta(before, after, "public") == 0,
+                and delta(before, middle, "conf") == RETRY_ATTEMPTS + 1
+                and delta(before, middle, "spare") == 0
+                and delta(before, after, "conf") == RETRY_ATTEMPTS + 1
+                and 1 <= delta(middle, after, "spare") <= RETRY_ATTEMPTS + 1
+                and delta(before, after, "public") == 0
+                and sum(after.values()) - sum(before.values())
+                == delta(before, after, "conf") + delta(before, after, "spare"),
                 {
-                    "cli_model_choice": spare_choice,
+                    "cli_model_choice": choice,
                     "gateway_status": {
-                        "not_enrolled_confidential": spare,
-                        "failing_confidential": failing,
+                        "down_confidential": failing,
+                        "down_second_confidential": spare,
                         "public": other,
                     },
                     "upstream_calls": {k: delta(before, after, k) for k in upstream},
+                    "upstream_calls_for_first_request": {
+                        k: delta(before, middle, k) for k in upstream
+                    },
                 },
             )
         finally:
+            if state["enrolled"] and (
+                not state["settled"] or any(c["verdict"] != "pass" for c in cases)
+            ):
+                enroller_diagnostics(list(names.values()))
             restore(admin, password, project, created, state, cleanup_failures)
     cleanup = "complete" if not cleanup_failures else "; ".join(cleanup_failures)
     report = {
@@ -479,9 +503,85 @@ def run_cases():
     return int(bool(report["failed"]) or cleanup != "complete")
 
 
+PROBE = """
+import json, sys, time, urllib.request
+names = sys.argv[1:]
+manifest = json.load(open('/installed/manifest.json'))
+written = open('/installed/gateway.json').read()
+dump = urllib.request.urlopen('http://127.0.0.1:15000/config_dump', timeout=5).read().decode()
+print(json.dumps({
+    'enabled': manifest.get('enabled'),
+    'declared': sorted(manifest.get('models') or {}),
+    'gateway_json_mtime_age': round(time.time() - __import__('os').path.getmtime('/installed/gateway.json'), 1),
+    'in_written_config': {n: n in written for n in names},
+    'in_applied_config': {n: n in dump for n in names},
+    'files': sorted(__import__('os').listdir('/installed')),
+}))
+"""
+
+
+def enroller_settled(count, timeout=90):
+    """Wait for the model enroller's first pass over the new installation.
+
+    It reports when the guard matches the saved models; until then a pass may
+    be replacing the guard, which refuses every protected call meanwhile.
+    """
+    expected = (
+        f"Protected access is up to date: {count} models are enrolled.",
+        f"Protected access is ready: {count} models are enrolled.",
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        logs = compose(
+            "--profile", "runtime", "logs", "--no-color", "--no-log-prefix",
+            "model-enroller", runtime=True, timeout=60,
+        )
+        lines = [line.strip() for line in logs.stdout.splitlines() if line.strip()]
+        if lines and lines[-1] in expected:
+            return True
+        time.sleep(1)
+    return False
+
+
+def enroller_diagnostics(names):
+    """Print the guarded gateway's enrolment state before restore removes it."""
+    # Let a pass under way finish (its applied-state wait is 15 seconds).
+    time.sleep(20)
+    state = compose(
+        "--profile", "runtime", "exec", "-T", "model-enroller", "python", "-c",
+        PROBE, *names, runtime=True, timeout=60,
+    )
+    print("Guard state:", (state.stdout or state.stderr).strip())
+    enroller = compose(
+        "--profile", "runtime", "logs", "--no-color", "model-enroller",
+        runtime=True, timeout=60,
+    )
+    print("Enroller messages:")
+    print((enroller.stdout + enroller.stderr)[-6000:])
+    gateway = compose(
+        "--profile", "runtime", "logs", "--no-color", "gateway",
+        runtime=True, timeout=60,
+    )
+    print("Gateway messages other than requests:")
+    lines = [
+        line
+        for line in gateway.stdout.splitlines()
+        if "request gateway=" not in line
+    ]
+    print("\n".join(lines[-80:]))
+
+
 def restore(admin, password, project, created, state, failures):
     """Return the preview to its ordinary gateway and remove this run's records."""
     if state["enrolled"]:
+        # The model enroller shares the guarded gateway's network and keeps the
+        # installation volume in use; the ordinary preview has no enroller.
+        stopped = compose(
+            "--profile", "runtime", "rm", "--stop", "--force", "model-enroller",
+            runtime=True,
+        )
+        if stopped.returncode:
+            failures.append("the model enroller was not removed")
         result = compose(
             "up",
             "-d",
@@ -506,12 +606,14 @@ def restore(admin, password, project, created, state, failures):
                     pass
                 time.sleep(1)
         if not state["volume_existed"]:
-            subprocess.run(
+            removed = subprocess.run(
                 ["docker", "volume", "rm", "keeplane-local_runtime-installation"],
                 capture_output=True,
                 check=False,
                 timeout=60,
             )
+            if removed.returncode:
+                failures.append("the guarded installation volume was not removed")
         if listening(RUNTIME_PORT):
             failures.append(f"guarded port {RUNTIME_PORT} still answers")
     try:

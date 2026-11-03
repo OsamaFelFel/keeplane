@@ -18,7 +18,7 @@ allowed for the project's class and up, so any switch would be visible.
 | OUT-06 | 503, then an answer, while streaming | 200 stream after two contacts: no byte had been sent. |
 | OUT-07 | No headers within the attempt timeout, three times | 504 after three contacts with Private only. |
 | OUT-08 | A context-length refusal (400) | 400 at once, one contact, no retry. |
-| OUT-09 | A stream fails after its first event | The client sees the partial, incomplete stream; one contact, nothing sent again. |
+| OUT-09 | A stream fails after its first event | The client sees the partial answer, never shown as finished: the stream breaks or ends with no final event. One contact, nothing sent again. |
 | OUT-10 | Private's address refuses connections | A 5xx after three selected-model checks for Private; no provider answers and Public receives nothing. |
 
 Every case runs in managed and existing-gateway modes. The fixture labels each
@@ -34,6 +34,11 @@ then run:
 ```sh
 python -m pytest tests/integration/test_native_runtime_outage.py -m live -q
 ```
+
+For OUT-09, the pinned gateway ends the client's stream cleanly after the
+provider drops it, without breaking the connection. A stream with no final
+event (no `[DONE]` and no `finish_reason`) therefore counts as incomplete,
+as in the protocol cases.
 
 Whether the pinned gateway retries its own per-attempt timeout (OUT-07) is a
 native behaviour this case checks; the owner's rule counts a timeout as down.

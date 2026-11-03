@@ -7,6 +7,7 @@ import subprocess
 import uuid
 from pathlib import Path
 
+from tests.support.client import RUNTIME
 from tests.support.reporting import report_path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -70,7 +71,7 @@ def app_exec(*args):
             "docker",
             "compose",
             "--env-file",
-            "/private/tmp/keeplane-accounts-trial/.env",
+            str(RUNTIME / ".env"),
             "exec",
             "-T",
             "app",

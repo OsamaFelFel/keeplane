@@ -24,8 +24,9 @@ those ports are not available. It is part of the `docker` regression group.
   every request it receives for each one.
 - Three temporary models from that runner: a Confidential model, a second
   Confidential model and a Public-only model. The first and the Public-only
-  model are enrolled on a fresh guarded gateway; the second is set up but not
-  enrolled, so it can't be used.
+  model are enrolled on a fresh guarded gateway with `up.py`'s installer. The
+  model enroller (ADR 027) then enrols every usable set-up model, the second
+  Confidential model too; the cases start once it reports all three.
 - One temporary developer and one new project registered by that developer's
   first use.
 
@@ -36,17 +37,28 @@ those ports are not available. It is part of the `docker` regression group.
 | PCL-LIVE-03 | The developer names the Public-only model directly, again with forged class, account and operator headers, and an admin tries the same model for the project. | The gateway refuses every request with 403, the CLI's model choice is refused with 403, and the runner receives nothing. |
 | PCL-LIVE-04 | The repository's own settings name the Public-only model, or the provider's own model name. | The CLI's model list for the project doesn't include it and its model choice is refused. The gateway refuses both names, and the runner receives nothing. |
 | PCL-LIVE-05 | The admin sets the class to None, then the developer uses both models. | The project's model list includes every set-up model, the CLI keeps the Public-only model, and both models answer through the gateway. |
-| PCL-LIVE-06 | The class is Confidential again. The enrolled Confidential model's provider is down, and the other Confidential model can't be used. | The CLI stops with "… is approved for this project but can't be used right now, so nothing was sent." The gateway refuses the model that isn't enrolled and returns an error for the failing one. The runner sees requests only for the failing model; the Public-only model is refused and nothing reaches it. |
+| PCL-LIVE-06 | No approved model is up: the class is Confidential again and both Confidential models' providers are down. The developer uses the first, then the second, then names the Public-only model. | The CLI keeps the first model: Keeplane doesn't move the task. Each request fails with a 5xx. The first model is contacted three times (the first attempt and two retries) and the second model nothing during that request. The second model's own request reaches only that model, at most three times. The Public-only model is refused with 403 and receives nothing, and the runner sees no other request. |
 
 ## Restoring the preview
 
-Afterwards the suite recreates the gateway and app from `compose.yaml` alone,
+Afterwards the suite removes the model enroller and recreates the gateway and
+app from `compose.yaml` alone,
 so the guarded endpoint is gone and the ordinary gateway configuration is back.
 It removes the guarded installation volume if the run created it. It clears
 the project's class, removes the three models from Keeplane and the gateway,
 removes the developer, and restores the data-class mode. Keeplane has no way to
 remove a project, so the project record stays with no class. A restore step
 that can't be confirmed fails the run.
+
+PCL-LIVE-06 used to need a Confidential model that was set up but not enrolled,
+so the CLI would say "… is approved for this project but can't be used right
+now, so nothing was sent." The model enroller (ADR 027) now enrols every usable
+set-up model within seconds, so the live preview no longer has that state. The
+case now takes the providers of both approved models down (Spec 004 ST16;
+issue #37, no automatic switch). The "set up but not enrolled" refusal and its
+CLI wording stay covered by the integration tests in the
+[project cases](../integration/project-cases.md) and
+[model-choice cases](../integration/model-choice-cases.md).
 
 The provider failure in PCL-LIVE-06 is shown at the gateway. A real coding run
 reports it through the coding runtime, which this suite doesn't start.
