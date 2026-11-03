@@ -1,11 +1,14 @@
 """Managed-path checks never follow resource-provided paths outside key storage."""
 
+import errno
 import os
 import uuid
 from pathlib import Path
 
 import pytest
 from model_registry.provider_keys import managed_key_available
+
+from tests.support.read_denial import deny_read, skip_as_root
 
 
 @pytest.fixture
@@ -94,6 +97,7 @@ def test_untrusted_resource_cannot_escape_managed_storage(key, tmp_path, kind):
     assert not managed_key_available(str(root), str(target))
 
 
+@skip_as_root
 def test_unreadable_key_is_unavailable(key):
     root, path = key
     path.chmod(0)
@@ -101,3 +105,28 @@ def test_unreadable_key_is_unavailable(key):
         assert not managed_key_available(str(root), str(path))
     finally:
         path.chmod(0o600)
+
+
+def test_read_denied_key_is_unavailable(key, monkeypatch):
+    root, path = key
+    assert managed_key_available(str(root), str(path))
+    deny_read(monkeypatch, path)
+    assert not managed_key_available(str(root), str(path))
+
+
+def test_forced_read_denial_refuses_only_that_file(key, monkeypatch):
+    root, path = key
+    other = root / ("key-" + uuid.uuid4().hex)
+    other.write_text("synthetic-other-provider-key")
+    other.chmod(0o600)
+    deny_read(monkeypatch, path)
+    for name, directory in ((str(path), None), (path.name, str(root))):
+        fd = os.open(directory, os.O_RDONLY) if directory else None
+        try:
+            with pytest.raises(PermissionError) as denied:
+                os.open(name, os.O_RDONLY, dir_fd=fd)
+        finally:
+            if fd is not None:
+                os.close(fd)
+        assert denied.value.errno == errno.EACCES
+    assert managed_key_available(str(root), str(other))
