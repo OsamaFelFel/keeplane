@@ -158,11 +158,43 @@ def collect(events, until, deadline):
     return chunks, end
 
 
+def stop_probe(process):
+    """Kill a probe that is still running, so no kubectl exec outlives the test."""
+    if process is not None and process.poll() is None:
+        process.kill()
+        process.wait(timeout=10)
+
+
 def stream_once(host, model, timeout=90):
     process, events = start_probe(host, model)
-    _, end = collect(events, lambda c, e: e is not None, time.monotonic() + timeout)
-    process.wait(timeout=30)
+    try:
+        _, end = collect(
+            events, lambda c, e: e is not None, time.monotonic() + timeout
+        )
+        process.wait(timeout=30)
+    finally:
+        stop_probe(process)
     return end
+
+
+COPY_MODELS = """import json,pathlib,sys,urllib.request
+key=pathlib.Path("/run/gateway-keys/runtime-key").read_text().strip()
+request=urllib.request.Request(sys.argv[1]+"/v1/models",headers={"Authorization":"Bearer "+key})
+with urllib.request.urlopen(request,timeout=15) as response:
+ print(json.dumps([item["id"] for item in json.load(response)["data"]]))"""
+
+
+def copy_models(host):
+    """The model ids one copy lists to the app's runtime key."""
+    return json.loads(
+        kubectl("exec", APP, "--", "python", "-c", COPY_MODELS, f"http://{host}:4000")
+    )
+
+
+def timed(call, *args):
+    started = time.monotonic()
+    answer = call(*args)
+    return answer, round(time.monotonic() - started, 1)
 
 
 def wait_until(check, timeout, message):
@@ -241,6 +273,8 @@ def run_cases():
     original_mode = None
     added_classes = []
     scaled_down = False
+    process = None
+    cleanup_errors = []
     try:
         # Data classes on, with two classes, so access can narrow and widen.
         status, data_classes, _ = browser.fetch("/api/data-classes")
@@ -301,7 +335,9 @@ def run_cases():
         try:
             process.wait(timeout=30)
         except subprocess.TimeoutExpired:
-            process.kill()
+            pass
+        stop_probe(process)
+        process = None
         wait_until(
             lambda: stopped not in copy_pods(), 90, "The stopped copy's pod stayed"
         )
@@ -351,9 +387,10 @@ def run_cases():
             },
         )
 
-        # K8S-19: withdrawing access is saved while the copy is down.
-        narrow_status, _ = set_up(WITHDRAW, [first])
-        remove_status, removed = remove(REMOVE)
+        # K8S-19: withdrawing access is saved while the copy is down, without
+        # waiting on it (the copy readback gives up within about 5 seconds).
+        (narrow_status, _), narrow_seconds = timed(set_up, WITHDRAW, [first])
+        (remove_status, removed), remove_seconds = timed(remove, REMOVE)
         models = listing()
         expected_removal = removed_but_listed(REMOVE, readback)
         check(
@@ -363,13 +400,17 @@ def run_cases():
             and models[WITHDRAW]["approved_classes"] == [first]
             and remove_status == 503
             and removed == expected_removal
-            and not models.get(REMOVE, {}).get("approved"),
+            and not models.get(REMOVE, {}).get("approved")
+            and narrow_seconds < 10
+            and remove_seconds < 10,
             {
                 "narrow_status": narrow_status,
+                "narrow_seconds": narrow_seconds,
                 "classes_after_narrowing": models.get(WITHDRAW, {}).get(
                     "approved_classes"
                 ),
                 "remove_status": remove_status,
+                "remove_seconds": remove_seconds,
                 "remove_message": removed,
                 "removed_still_set_up": bool(models.get(REMOVE, {}).get("approved")),
             },
@@ -379,11 +420,22 @@ def run_cases():
         add_status, add_body = add(ADD, [first])
         widen_status, widen_body = set_up(WITHDRAW, [first, second])
         models = listing()
+        # Nothing was saved: the surviving first copy does not list the model
+        # either (allowing it a moment to drop the undone registration).
+        survivor = f"{COPIES}-0"
+        survivor_ip = copy_pods()[survivor]["status"]["podIP"]
+        survivor_lists_add = True
+        deadline = time.monotonic() + 30
+        while survivor_lists_add and time.monotonic() < deadline:
+            survivor_lists_add = ADD in copy_models(survivor_ip)
+            if survivor_lists_add:
+                time.sleep(1)
         check(
             "K8S-20",
             add_status == 503
             and add_body == not_added(ADD, readback, True)
             and ADD not in models
+            and not survivor_lists_add
             and widen_status == 503
             and widen_body == not_changed(WITHDRAW, readback)
             and models.get(WITHDRAW, {}).get("approved_classes") == [first],
@@ -391,6 +443,8 @@ def run_cases():
                 "add_status": add_status,
                 "add_message": add_body,
                 "added_model_listed": ADD in models,
+                "surviving_copy": survivor,
+                "added_model_on_surviving_copy": survivor_lists_add,
                 "widen_status": widen_status,
                 "widen_message": widen_body,
                 "classes_after_refused_widening": models.get(WITHDRAW, {}).get(
@@ -443,9 +497,27 @@ def run_cases():
             },
         )
     finally:
+        # Each step runs on its own, so a failing step neither skips the rest
+        # nor replaces the error that ended the cases.
+        def attempt(step, call, *args, **kwargs):
+            try:
+                call(*args, **kwargs)
+            except Exception as error:
+                cleanup_errors.append(f"{step}: {error!r}")
+                print(f"Cleanup step failed: {step}: {error!r}", file=sys.stderr)
+
+        attempt("stop the stream probe", stop_probe, process)
         if scaled_down:
-            kubectl("scale", "statefulset/" + COPIES, f"--replicas={total}")
-            subprocess.run(
+            attempt(
+                "scale the gateway copies back",
+                kubectl,
+                "scale",
+                "statefulset/" + COPIES,
+                f"--replicas={total}",
+            )
+            attempt(
+                "wait for the gateway copies",
+                subprocess.run,
                 [
                     "kubectl",
                     "--kubeconfig",
@@ -460,14 +532,28 @@ def run_cases():
                 check=False,
                 stdout=subprocess.DEVNULL,
             )
-        present = listing()
+        # Remove every check model, set up or not: a refused or half-done
+        # change can leave one registered without an approval.
         for name in (WITHDRAW, REMOVE, ADD):
-            if present.get(name, {}).get("approved"):
-                remove(name)
+            attempt(f"remove {name}", remove, name)
         for identifier in added_classes:
-            browser.fetch(f"/api/data-classes/{identifier}", {}, method="DELETE")
+            attempt(
+                f"remove data class {identifier}",
+                browser.fetch,
+                f"/api/data-classes/{identifier}",
+                {},
+                method="DELETE",
+            )
         if original_mode is False:
-            browser.fetch("/api/data-classes/mode", {"enabled": False}, method="PUT")
+            attempt(
+                "turn data classes back off",
+                browser.fetch,
+                "/api/data-classes/mode",
+                {"enabled": False},
+                method="PUT",
+            )
+    if cleanup_errors:
+        raise RuntimeError("Cleanup failed: " + "; ".join(cleanup_errors))
 
     print(
         json.dumps(
