@@ -13,6 +13,7 @@ from model_registry.installed_runtime import digest
 from model_registry.models import ModelApproval
 from model_registry.provider_keys import managed_key_digest
 
+from tests.support.read_denial import deny_read, skip_as_root
 from tests.unit.test_applied_gateway import dump
 
 pytest_plugins = ("tests.integration.test_runtime_callback",)
@@ -311,9 +312,19 @@ def test_keyless_explicit_null_or_empty_object_remains_supported(installed, auth
 
 @pytest.mark.parametrize(
     "change",
-    ["missing", "replacement", "invalid", "unreadable", "link", "resource-name"],
+    [
+        "missing",
+        "replacement",
+        "invalid",
+        pytest.param("unreadable", marks=skip_as_root),
+        "read-denied",
+        "link",
+        "resource-name",
+    ],
 )
-def test_shared_key_is_bound_to_immutable_name_and_content(installed, change):
+def test_shared_key_is_bound_to_immutable_name_and_content(
+    installed, change, monkeypatch
+):
     path = installed.key_directory / ("key-" + "a" * 32)
     path.write_text("synthetic-managed-provider-key")
     installed.resources[0]["value"]["auth"] = {"key": {"value": {"file": str(path)}}}
@@ -329,6 +340,8 @@ def test_shared_key_is_bound_to_immutable_name_and_content(installed, change):
         path.write_text("invalid-provider-key\n")
     elif change == "unreadable":
         path.chmod(0)
+    elif change == "read-denied":
+        deny_read(monkeypatch, path)
     elif change == "link":
         target = path.with_suffix(".other")
         path.rename(target)
