@@ -39,7 +39,8 @@ DCA cases are the [data class admin cases](../integration/data-class-admin-cases
 DC-UI the [browser cases](../browser/data-classes-cases.md) (DC-UI-01 to
 DC-UI-03) and the [React UI cases](../unit/ui/cases.md) (DC-UI-05 onwards);
 PRJ-UI the [Projects browser cases](../browser/projects-cases.md); PCL-LIVE the
-[live project-class cases](project-classes-live-cases.md); MC the
+[live project-class cases](project-classes-live-cases.md); PDL-LIVE the
+[live detection cases](personal-data-live-cases.md); MC the
 [model choice cases](../integration/model-choice-cases.md); RT the
 [task routing cases](../integration/task-routing-cases.md); CLI-CLASS the
 [signed-in coding cases](../unit/cli-signed-in-coding-cases.md); PR the
@@ -61,11 +62,11 @@ or a case named here has no row in its own catalog or no test.
 | ST19 | The repo can't change it | CLI-CLASS-02, MC-20, PCL-LIVE-04 |
 | ST19 | No approved model is up | MC-18, MC-19, CLI-CLASS-01, PCL-LIVE-06 |
 | ST19 | No class | MC-21, PCL-LIVE-05 |
-| ST20 | Off by default | PR-01, DCA-02, DC-UI-05 |
-| ST20 | What detection finds | PD-14, PD-01, PD-05, PM-01, PM-03 |
-| ST20 | Code isn't personal data | PD-02, PD-03, PD-04, PM-04 |
-| ST20 | Detection holds a request | PR-02, PR-03 |
-| ST20 | Detection fails | PR-04, PR-12, PD-06 |
+| ST20 | Off by default | PR-01, DCA-02, DC-UI-05, PDL-LIVE-01, PDL-LIVE-08 |
+| ST20 | What detection finds | PD-14, PD-01, PD-05, PM-01, PM-03, PDL-LIVE-02 |
+| ST20 | Code isn't personal data | PD-02, PD-03, PD-04, PM-04, PDL-LIVE-03 |
+| ST20 | Detection holds a request | PR-02, PR-03, PDL-LIVE-02, PDL-LIVE-04 |
+| ST20 | Detection fails | PR-04, PR-12, PD-06, PDL-LIVE-05, PDL-LIVE-06 |
 | ST20 | Choose the class | PR-05, PR-11, DC-UI-06 |
 
 The ST20 rows follow the owner's decisions in governance issues #40, #51 and
@@ -74,12 +75,14 @@ a request detection can't read or check within 200 ms is held; a held request
 needs a model approved for both the detection class and the project's class
 (PR-03); and a class detection uses can't be removed (PR-10).
 
-The CLASS and PCL-LIVE cases need the running Docker preview. They haven't
-passed against a running preview of the current code: CI's preview job doesn't
-run them, and the environment Spec 005 was built in refuses the image pulls the
-preview needs. The CLASS cases' last pass, on 10 October 2026, predates later
-changes to the runner and the app.
-Until they pass, the scenarios they prove rest on the other cases in their row.
+The CLASS, PCL-LIVE and PDL-LIVE cases need the running Docker preview. CI's
+**Live preview gateway checks** workflow runs the PCL-LIVE cases, and, in a
+separate job with the `detection` app image and
+`KEEPLANE_PERSONAL_DATA_DETECTION=1`, the PDL-LIVE cases, on every pull request
+and on `main`; each job fails if a case is skipped or doesn't run. The
+CLASS cases aren't run in CI; their last pass, on 10 October 2026, predates
+later changes to the runner and the app, so the scenarios they prove rest on
+the other cases in their row.
 The browser cases (DC-UI-01 to DC-UI-03, PRJ-UI) run against the preview in
 CI's preview job, except DC-UI-01, whose screenshot baselines are macOS-only.
 PM cases need the optional detector and are marked `optional`, so no backend

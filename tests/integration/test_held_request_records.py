@@ -21,6 +21,7 @@ from personal_data.inspection import (
     FOUND,
     NOT_SENT,
     SLOW,
+    TOO_LONG,
     UNAVAILABLE,
     Verdict,
 )
@@ -511,6 +512,25 @@ def test_hr_14_the_final_check_never_repeats_a_steady_reason(managed):
     assert selected(f).status_code == 200
     assert selected(f).status_code == 200
     assert len(held(f)) == 5
+
+
+@pytest.mark.parametrize("mode", ["managed", "customer_run"])
+def test_hr_18_a_request_too_long_to_check_is_recorded_once(request, mode):
+    # Too long to check is the same answer at every check of the request, so
+    # only the entry (route) check records it, as for personal data.
+    f = request.getfixturevalue(mode)
+    if mode == "managed":
+        first, final = entry, selected
+    else:
+        first, final = shared, lambda f: shared(f, final=True)
+    switch_on(f)
+    f.fake.verdict = Verdict(True, TOO_LONG)
+    assert first(f).status_code == 200
+    for _ in range(3):
+        assert final(f).status_code == 200
+    [row] = held(f)
+    assert "(Detection took longer than 200 ms)" in row["what"]
+    assert "approved model private" in row["what"]
 
 
 def test_hr_15_customer_run_final_check_records_outage_holds(customer_run):

@@ -16,6 +16,7 @@ launcher's notice and earlier-preview clean-up steps with Docker substituted.
 | EDM-06 | The launcher reads the volume step's log after starting. | It asks only for this start's log, repeats each notice line once and prints nothing when there is none. |
 | EDM-07 | Run the preview's own migration step (from the rendered `app-migrate` command) on a volume that holds earlier `accounts.sqlite3` and `model-approvals.sqlite3`. | The step doesn't run `import_preview`; the new database has only the first admin and no approved models, and the earlier files are unchanged. |
 | EDM-08 | The launcher finds the earlier port 3001 preview's containers (Compose project `keeplane-accounts-trial`), with Docker substituted. | It lists them running or stopped and removes them all, so none holds the shared account volume; with none, it removes nothing. |
+| EDM-09 | Render the guarded preview as is, then with `KEEPLANE_PERSONAL_DATA_DETECTION=1` set for Compose. | The app, the runtime installer and the model enroller get the same detection setting: `0` by default and `1` when it is set, so the guards they write send each request's messages only when the app checks them (Spec 005 ST20). No other service gets it. |
 
 Not proven here: the mounts inside running containers. The guarded preview's
 live run (`tests/integration/test_managed_runtime_orchestration.py`) checks the
