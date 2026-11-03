@@ -17,6 +17,7 @@ import http.cookiejar
 import json
 import os
 from pathlib import Path
+import socket
 import ssl
 import subprocess
 import sys
@@ -57,8 +58,9 @@ CLOSE = ROOT / "tests/fixtures/isolated-network/close-network.sh"
 ABSENT_IMAGE = "registry.k8s.io/e2e-test-images/agnhost:2.53"
 
 # Runs in a pod: try each target and report "open", "open:<HTTP status>" or
-# "blocked:<error>". A dropped connection times out.
-PROBE = """import json,socket,sys,urllib.error,urllib.request
+# "blocked:<error>", unwrapping urllib's URLError to the socket error under it
+# and naming a plain OSError by its errno. A dropped connection times out.
+PROBE = """import errno,json,socket,sys,urllib.error,urllib.request
 out={}
 for t in json.loads(sys.argv[1]):
  try:
@@ -71,7 +73,12 @@ for t in json.loads(sys.argv[1]):
  except urllib.error.HTTPError as e:
   out[t["name"]]="open:%d"%e.code
  except Exception as e:
-  out[t["name"]]="blocked:"+type(e).__name__
+  if isinstance(e,urllib.error.URLError) and isinstance(e.reason,BaseException):
+   e=e.reason
+  n=type(e).__name__
+  if n=="OSError" and e.errno:
+   n+=":"+errno.errorcode.get(e.errno,str(e.errno))
+  out[t["name"]]="blocked:"+n
 print(json.dumps(out))"""
 
 # Runs in the visitor pod: open the web UI through the ingress controller's
@@ -98,9 +105,21 @@ for hop in range(5):
   break
 print(head[0], path, b'id="root"' in d)"""
 
+# What a NetworkPolicy or a closed firewall does to a connection: drop it (a
+# timeout), reset or refuse it, or answer "administratively prohibited"
+# (EHOSTUNREACH). A failed name lookup or any other error is not a block.
+BLOCKED_BY = {
+    "TimeoutError",
+    "timeout",
+    "ConnectionResetError",
+    "ConnectionRefusedError",
+    "OSError:EHOSTUNREACH",
+}
+
 MODEL = {"name": "model", "host": PROVIDER, "port": PROVIDER_PORT, "path": "/health"}
+# Outside places by IP address, so a probe never depends on a name lookup.
 INTERNET = {"name": "internet", "host": "1.1.1.1", "port": 443}
-REGISTRY = {"name": "registry", "host": "registry.k8s.io", "port": 443}
+REGISTRY_HOST = "registry.k8s.io"
 INSIDE = {
     "name": "inside_service",
     "host": "service.inside.svc.cluster.local",
@@ -120,7 +139,12 @@ IN_CLUSTER_MODEL = {
     "port": 18080,
     "path": "/health",
 }
-OUTSIDE = (INTERNET, REGISTRY)
+
+
+def registry_target():
+    """The registry by an IPv4 address the runner resolves for it."""
+    address = socket.getaddrinfo(REGISTRY_HOST, 443, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+    return {"name": "registry", "host": address, "port": 443}
 
 
 def run(*command, timeout=300, check=True):
@@ -181,7 +205,12 @@ def probe_gateway(targets):
 
 
 def blocked(observed, *names):
-    return all(observed.get(name, "").startswith("blocked:") for name in names)
+    """Every named target was blocked by the network, not by a lookup or bug."""
+    return all(
+        observed.get(name, "").startswith("blocked:")
+        and observed[name].split(":", 1)[1] in BLOCKED_BY
+        for name in names
+    )
 
 
 def tls_context():
@@ -316,39 +345,73 @@ def run_cases():
             "@sha256:" in image or (image == APP_IMAGE and policy == "Never")
             for image, policy in images.items()
         )
-        visitor = probe("visitor", [INTERNET])
+        # While the runner still forwards everything, only the egress
+        # policy can stop the app and gateway reaching outside addresses:
+        # pods with no policy reach the same addresses.
+        outside = [INTERNET, state.setdefault("registry", registry_target())]
+        visitor = probe("visitor", outside)
+        control = probe("model", outside)
+        app = probe("app", outside)
+        gateway = probe_gateway(outside)
         return (
             reaches
             and keeplane
             and all(ready(pod) for pod in keeplane)
             and pinned
-            and visitor["internet"] == "open",
+            and all(visitor[t["name"]] == "open" for t in outside)
+            and all(control[t["name"]] == "open" for t in outside)
+            and blocked(app, "internet", "registry")
+            and blocked(gateway, "internet", "registry"),
             {
                 "node_registry_status": code,
                 "pods_ready": {p["metadata"]["name"]: ready(p) for p in keeplane},
                 "images": images,
-                "visitor_internet_before_closing": visitor["internet"],
+                "registry_address": outside[1]["host"],
+                "before_closing": {
+                    "visitor": visitor,
+                    "unrestricted_pod_in_keeplane": control,
+                    "app": app,
+                    "gateway_copy_0": gateway,
+                },
             },
         )
 
+    def node(*command, timeout=150):
+        return run("docker", "exec", NODE, *command, check=False, timeout=timeout)
+
     def iso_02():
+        # Control: before closing, the node pulls the same reference, then
+        # forgets it, so the pull after closing can fail only for want of
+        # the registry, not because the reference is wrong.
+        absent_before = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
+        control_pull = node("timeout", "120", "crictl", "pull", ABSENT_IMAGE, timeout=180)
+        node("crictl", "rmi", ABSENT_IMAGE, timeout=60)
+        forgotten = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
         closed = run("sudo", str(CLOSE), timeout=60)
         reaches, code = node_reaches_registry()
-        pull = run(
-            "docker", "exec", NODE, "timeout", "90", "crictl", "pull", ABSENT_IMAGE,
-            check=False, timeout=150,
+        pull = node("timeout", "90", "crictl", "pull", ABSENT_IMAGE)
+        error = (pull.stderr.strip() or pull.stdout.strip())[-300:]
+        reference_rejected = any(
+            text in error.lower() for text in ("not found", "manifest unknown", "unauthorized", "denied")
         )
-        visitor = probe("visitor", [MODEL, *OUTSIDE])
+        visitor = probe("visitor", [MODEL, INTERNET, state.setdefault("registry", registry_target())])
         return (
-            not reaches
+            absent_before
+            and control_pull.returncode == 0
+            and forgotten
+            and not reaches
             and pull.returncode != 0
+            and not reference_rejected
             and blocked(visitor, "internet", "registry")
             and visitor["model"] == "open:200",
             {
+                "image_absent_before": absent_before,
+                "control_pull_exit_before_closing": control_pull.returncode,
+                "image_removed_after_control": forgotten,
                 "rules": closed.stdout.strip().splitlines(),
                 "node_registry_status": code,
                 "node_pull_exit": pull.returncode,
-                "node_pull_error": pull.stderr.strip()[-200:],
+                "node_pull_error": error,
                 "visitor": visitor,
             },
         )
@@ -473,7 +536,7 @@ def run_cases():
         )
 
     def iso_07():
-        targets = [MODEL, INSIDE, *OUTSIDE]
+        targets = [MODEL, INSIDE, INTERNET, state.setdefault("registry", registry_target())]
         app = probe("app", targets)
         gateway = probe_gateway(targets)
         control = probe("model", [INSIDE])
@@ -519,7 +582,7 @@ def run_cases():
         cloud_status, cloud = ask(opener, "outside-cloud")
         local_status, local = ask(opener, "local-fixture", "fixture")
         reaches, code = node_reaches_registry()
-        app = probe("app", [MODEL, *OUTSIDE])
+        app = probe("app", [MODEL, INTERNET, state.setdefault("registry", registry_target())])
         return (
             status == 200
             and b'id="root"' in page

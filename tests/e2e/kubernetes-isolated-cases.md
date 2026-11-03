@@ -50,15 +50,20 @@ Kubernetes live checks. Neither component ships with Keeplane.
 
 ## Cases
 
+A connection counts as blocked only when it times out, is reset or refused, or
+is answered "host unreachable", the ways a policy or the closed firewall stops
+it. Outside places are probed by IP address, so a failed name lookup never
+counts as a block.
+
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
-| ISO-01 | Before closing the network, check the node can reach the container registry, every Keeplane pod is ready, and read every image the Keeplane pods run. | The node reaches the registry (the install pulled the gateway, PostgreSQL and fixture images by digest during the install). Every image is pinned by digest, except the app image, which was loaded into the node and is never pulled. A pod with no policy can still reach an internet address. |
-| ISO-02 | Close the network. From the node, contact the registry and pull an image it never had; from the `visitor` pod, connect to an internet address, the registry and the model provider. | The registry can't be reached and the pull fails. The visitor can't reach the internet or the registry, and still reaches the model provider. |
+| ISO-01 | Before closing the network, check the node can reach the container registry, every Keeplane pod is ready, and read every image the Keeplane pods run. Then, while the runner still forwards everything, connect to an internet address (1.1.1.1:443) and the registry, both by IP address, from the `visitor` pod and the fixture model's pod (no policy on either), from the app pod and from gateway copy 0. | The node reaches the registry (the install pulled the gateway, PostgreSQL and fixture images by digest during the install). Every image is pinned by digest, except the app image, which was loaded into the node and is never pulled. Both pods with no policy reach the internet address and the registry, while the app and the gateway copy can't: their egress policy alone stops them. |
+| ISO-02 | Before closing, check the node lacks an image, pull it from the registry and remove it again. Close the network. From the node, contact the registry and pull the same image again; from the `visitor` pod, connect to the internet address, the registry by IP address and the model provider. | The image pulls before closing, so the reference is good. After closing the registry can't be reached and the pull fails, without the registry rejecting the reference. The visitor can't reach the internet or the registry, and still reaches the model provider. |
 | ISO-03 | Delete every pod in the Keeplane namespace (app, both gateway copies, gateway database, fixture model) and the ingress controller pod, and wait for them to come back. | All come back ready as new pods, with no image pull attempted: every image was already on the node. |
 | ISO-04 | Open the web UI at `https://keeplane.isolated.test` from the runner, trusting only the run's CA, and from the `visitor` pod through the ingress controller's Service. | The page, health check and a bundled font load from the runner with the certificate verified, and the visitor gets the page too. |
 | ISO-05 | Sign in as the first admin, add a cloud model on the model provider outside the cluster with a shared provider key, and ask it a question. | The model is added and listed as a cloud model, the answer comes back, and the provider counts the call. |
 | ISO-06 | Set up the fixture model inside the cluster and ask it a question. | The answer comes back through the managed gateway. |
-| ISO-07 | From the app pod and from gateway copy 0 (through a pinned Python container joined to its Pod, since the gateway image has no shell), contact the model provider, the `service` pod in `inside`, an internet address and the registry. From the fixture model's pod, which has no policy, contact `service`. | The app and the gateway copy reach the model provider and nothing else: `service` is blocked by the egress policy even though the unrestricted pod reaches it, and the internet and registry are blocked. |
+| ISO-07 | From the app pod and from gateway copy 0 (through a pinned Python container joined to its Pod, since the gateway image has no shell), contact the model provider, the `service` pod in `inside`, the internet address and the registry by IP address. From the fixture model's pod, which has no policy, contact `service`. | The app and the gateway copy reach the model provider and nothing else: `service` is blocked by the egress policy even though the unrestricted pod reaches it, and the internet and registry are blocked (ISO-01 showed the policy blocks them before the network closed). |
 | ISO-08 | From the `visitor` pod and from the fixture model's pod in Keeplane's own namespace, call the app on port 3000 and the gateway on port 4000 directly, and call the fixture model. | Both direct calls are blocked from both pods, while the fixture model answers the visitor: only the ingress controller reaches the app, and only the app reaches the gateway. |
 | ISO-09 | Restart the cluster's node with the network still closed, wait for it and every pod to be ready, then open the web UI, sign in again and ask both models. | The node starts from the images it holds, the page opens, both models answer, and the node and app still can't reach the registry or the internet. |
 
@@ -70,7 +75,8 @@ Kubernetes live checks. Neither component ships with Keeplane.
 - The PostgreSQL install of the app, a customer-run gateway, browser and device
   sign-in, the coding runtime on developer machines and external identity
   providers on the isolated network.
-- A multi-node cluster, a production ingress controller and network plugin, and
-  an internal registry mirror. The install here pulls from the public
-  registries while they are reachable; an isolated site would pull from its own
-  mirror the same way.
+- A fresh node starting with the registry closed, and an internal registry
+  mirror (ADR 009, task 002-03). The install here pulls from the public
+  registries while they are reachable, and every restart reuses the images
+  cached on the same node.
+- A multi-node cluster and a production ingress controller and network plugin.
