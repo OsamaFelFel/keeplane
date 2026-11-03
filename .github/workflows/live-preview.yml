@@ -4,7 +4,10 @@ name: Live preview gateway checks
 # locked gateway, Python and llama.cpp images, and runs the live gateway cases
 # that need them: Spec 005 ST19 project classes through the guarded endpoint
 # (task 005-02) and Spec 004 ST16 retry of a model that is down (task 004-04).
-# An unrun case is not a pass: the job fails if any case is skipped or missing.
+# A second job, in parallel, builds the `detection` app image and runs Spec 005
+# ST20 personal-data detection and Spec 006 ST21 held-back request records
+# through the same guarded endpoint (tasks 005-03 and 006-02).
+# An unrun case is not a pass: each job fails if any case is skipped or missing.
 
 on:
   push:
@@ -104,6 +107,98 @@ jobs:
         with:
           name: live-preview-${{ github.sha }}
           path: test-results/live-preview/
+          retention-days: 30
+      - name: Stop the disposable application
+        if: always()
+        run: |
+          if [ -f "$KEEPLANE_RUNTIME_DIR/.env" ]; then
+            docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" -f compose.yaml -f deploy/local/runtime.yaml \
+              --profile qwen --profile runtime down
+          fi
+
+  live-detection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      KEEPLANE_RUNTIME_DIR: ${{ github.workspace }}/.keeplane/local
+      KEEPLANE_PREVIEW_DETECTION_IMAGE: keeplane-preview:detection-local
+      RESULTS: ${{ github.workspace }}/test-results/live-detection
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/package-lock.json
+      - name: Build the app image with personal-data detection
+        run: |
+          mkdir -p "$RESULTS"
+          docker build --target detection -t "$KEEPLANE_PREVIEW_DETECTION_IMAGE" -f components/control-plane/Dockerfile .
+      - name: Start the Docker preview with the documented command
+        run: |
+          set -o pipefail
+          python3 deploy/local/up.py | tee "$RESULTS/startup.log"
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+      - name: List the live cases that must run
+        run: |
+          .venv/bin/python -m pytest tests/e2e/test_personal_data_live.py \
+            -m live --collect-only -q | grep '::' > "$RESULTS/expected-cases.txt"
+          cat "$RESULTS/expected-cases.txt"
+      - name: Personal-data detection and held-back records through the guarded preview gateway (Spec 005 ST20, Spec 006 ST21)
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-detection/detection-cases
+        run: .venv/bin/python -m pytest tests/e2e/test_personal_data_live.py -m live -rs --junitxml="$RESULTS/detection-junit.xml"
+      - name: Fail if a live detection case was skipped or did not run
+        if: ${{ !cancelled() }}
+        run: |
+          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/detection-junit.xml" <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          expected = set(Path(sys.argv[1]).read_text().split())
+          ran, skipped = set(), set()
+          for report in sys.argv[2:]:
+              if not Path(report).is_file():
+                  print(f"No report: {report}", file=sys.stderr)
+                  continue
+              for case in ET.parse(report).iter("testcase"):
+                  module = case.get("classname", "").replace(".", "/") + ".py"
+                  node = f"{module}::{case.get('name')}"
+                  ran.add(node)
+                  if case.find("skipped") is not None:
+                      skipped.add(node)
+          missing = sorted(expected - ran)
+          for node in missing:
+              print(f"Live case did not run: {node}", file=sys.stderr)
+          for node in sorted(skipped):
+              print(f"Live case was skipped: {node}", file=sys.stderr)
+          print(f"{len(expected)} live cases expected, {len(ran - skipped)} ran")
+          sys.exit(1 if missing or skipped or not expected else 0)
+          EOF
+      - name: Collect container diagnostics
+        if: failure()
+        run: |
+          docker ps --all > "$RESULTS/containers.txt" 2>&1 || true
+          docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" -f compose.yaml -f deploy/local/runtime.yaml \
+            --profile qwen --profile runtime logs --no-color > "$RESULTS/containers.log" 2>&1 || true
+          # The disposable preview's own messages, so a failure can be read from the job log.
+          for service in model-enroller gateway app; do
+            echo "::group::$service (last 150 lines)"
+            docker compose --env-file "$KEEPLANE_RUNTIME_DIR/.env" -f compose.yaml -f deploy/local/runtime.yaml \
+              --profile runtime logs --no-color --tail 150 "$service" 2>&1 || true
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: live-detection-${{ github.sha }}
+          path: test-results/live-detection/
           retention-days: 30
       - name: Stop the disposable application
         if: always()

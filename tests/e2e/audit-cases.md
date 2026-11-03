@@ -45,7 +45,8 @@ Each scenario in Spec 006 and the cases that prove it. BGS cases are the
 the [settings-change cases](../integration/settings-change-record-cases.md),
 CL-INT the [complexity level cases](../integration/complexity-level-cases.md),
 MA the [model answer cases](../integration/model-answer-record-cases.md), HR
-the [held-back request cases](../integration/held-request-record-cases.md), AS
+the [held-back request cases](../integration/held-request-record-cases.md),
+PDL-LIVE the [live detection cases](personal-data-live-cases.md), AS
 the [persistence cases](../integration/audit-persistence-cases.md) and AU-UI
 the [browser cases](../browser/audit-cases.md). AUD and BG cases are above.
 `tests/unit/test_audit_scenario_map.py` fails if a scenario is missing here or
@@ -55,7 +56,7 @@ a case named here has no catalog row or no test.
 | --- | --- | --- |
 | ST21 | After install | BGS-01, SC-01, MA-01, HR-01, BG-01, AU-UI-01, AUD-01 |
 | ST21 | Settings changes | SC-02, SC-07, SC-12, CL-INT-03, AUD-02, AUD-03 |
-| ST21 | Held-back requests | HR-02, HR-03, HR-06, HR-08, HR-10, HR-12, HR-13, HR-15, HR-16, HR-17 |
+| ST21 | Held-back requests | HR-02, HR-03, HR-06, HR-08, HR-10, HR-12, HR-13, HR-15, HR-16, HR-17, HR-18, PDL-LIVE-02, PDL-LIVE-04, PDL-LIVE-05, PDL-LIVE-06, PDL-LIVE-07 |
 | ST21 | Model answers | MA-02, MA-06, MA-11, MA-14, MA-17 |
 | ST21 | Break-glass sign-ins | BGS-01, BGS-02, BGS-03, BGS-04, BGS-05, BGS-06, BG-07, BG-08, BG-09 |
 | ST21 | One kind only | SC-03, MA-03, HR-07, AU-UI-02, AUD-02 |
@@ -64,3 +65,8 @@ a case named here has no catalog row or no test.
 "Model answers" follows the owner's decision on governance issue #36: a record
 is written when Keeplane lets a request through to a model, so "a request that
 later fails" keeps the record written when it was sent (MA-17).
+
+"Held-back requests" follows keeplane #204: every hold is recorded, and a
+duplicate is accepted only during a detection outage (PDL-LIVE-06, HR-14). The
+PDL-LIVE cases run through the real gateway and detector in CI's **Live preview
+gateway checks** workflow.

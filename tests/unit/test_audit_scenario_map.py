@@ -36,6 +36,7 @@ CATALOGS = {
     "CL-INT": "integration/complexity-level-cases.md",
     "HR": "integration/held-request-record-cases.md",
     "MA": "integration/model-answer-record-cases.md",
+    "PDL-LIVE": "e2e/personal-data-live-cases.md",
     "SC": "integration/settings-change-record-cases.md",
 }
 

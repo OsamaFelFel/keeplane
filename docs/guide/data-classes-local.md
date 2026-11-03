@@ -103,6 +103,16 @@ service and never stored or logged.
    values instead; see
    [the installation reference](kubernetes-installation-reference.md#personal-data-detection).
 
+   In the Docker preview, give both to the guarded runtime install
+   ([guarded runtime](guarded-runtime.md)); the app, the runtime installer
+   and the model enroller then all use the setting:
+
+   ```sh
+   KEEPLANE_RUNTIME_APP_IMAGE=keeplane-app:detection \
+   KEEPLANE_PERSONAL_DATA_DETECTION=1 \
+     python3 deploy/local/up.py --runtime-model MODEL_ID
+   ```
+
 Without this setting the gateway's checks carry only the project and model, as
 they always have, and detection can't be turned on. With it, the app loads the
 language model (about 750 MiB) as it starts, whether or not detection is on, and reports ready
@@ -110,4 +120,5 @@ only once the model has loaded (at most 300 seconds); if the image has no
 detector, the app's start-up log says so. Licences, notices and the
 source offer for the detector are in
 [the detection notices](../../components/control-plane/licenses/personal-data-detection.md).
-Held requests are not yet recorded in Audit.
+With the Audit **Held-back requests** switch on, each held request is
+recorded; see [Audit](audit-local.md).
