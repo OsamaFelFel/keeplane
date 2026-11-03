@@ -97,9 +97,10 @@ shows; `[N] of [M]` counts the copies.
 - **Removing a model Keeplane added**: the approval is removed first, so every
   copy's checks refuse the model before the admin is answered, and the shared
   key file is deleted. Keeplane then waits for every copy to stop listing the
-  model. If one still lists it, the removal stands: "[Model] was removed",
-  "Developers can't use it, but [N] of [M] gateway copies still list it. Check
-  the gateway." This also holds when the database reports a failed commit
+  model. If one still lists it or doesn't answer, the removal stands:
+  "[Model] was removed", "Developers can't use it, but Keeplane couldn't
+  confirm it's gone from [N] of [M] gateway copies. Check the gateway." This
+  also holds when the database reports a failed commit
   that was in fact kept. Removing a model added outside Keeplane reads no copy.
 
 An unusable `GATEWAY_COPY_URLS` (any bad entry) is logged as a warning when

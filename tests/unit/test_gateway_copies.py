@@ -589,8 +589,8 @@ def test_gc_21_a_copy_still_listing_the_model_is_reported_and_the_model_stays_wi
     assert status == 503
     assert body == {
         "title": "gone was removed",
-        "error": "Developers can't use it, but 1 of 2 gateway copies still list "
-        "it. Check the gateway.",
+        "error": "Developers can't use it, but Keeplane couldn't confirm it's "
+        "gone from 1 of 2 gateway copies. Check the gateway.",
     }
     # The withdrawal is kept: no approval and no key for the stale copy to use.
     assert catalog.get("gone") is None
