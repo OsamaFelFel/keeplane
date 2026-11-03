@@ -27,7 +27,7 @@ The rules are in [every gateway copy](../../docs/architecture/model-registration
 | GC-17 | Move an unchanged model from no key to each developer's own key while a copy is down. | Saved; no copy is read. |
 | GC-18 | Use an invalid copy list: add a model, narrow classes, widen classes, remove a model. | A warning is logged; the add and the widening are refused with the copy-list message and nothing saved; narrowing is saved; the removal stands with "Developers can't use it, but Keeplane can't check every gateway copy …". |
 | GC-20 | Remove a model Keeplane added; one copy lags. | Removed and acknowledged once no copy lists it. |
-| GC-21 | Remove a model with a shared key; one copy still lists it. | 503 "gone was removed", "Developers can't use it, but 1 of 2 gateway copies still list it. Check the gateway."; approval and key file are gone; other models stay. |
+| GC-21 | Remove a model with a shared key; one copy still lists it. | 503 "gone was removed", "Developers can't use it, but Keeplane couldn't confirm it's gone from 1 of 2 gateway copies. Check the gateway."; approval and key file are gone; other models stay. |
 | GC-22 | Remove setup for a model added outside Keeplane. | No copy is read; the gateway model is kept. |
 | GC-23 | Add and remove with no copies listed. | Works as before, confirmed by the gateway address alone. |
 | GC-24 | The database reports a failed commit that was kept, while one copy still lists the model; then again with every copy caught up. | First 503 "was removed" with the approval gone; then 200. |

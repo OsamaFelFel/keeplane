@@ -18,6 +18,7 @@ EXPECTED_CASES = {
     "test_data_classes": "CLASS-00 CLASS-10 CLASS-01 CLASS-09 CLASS-02 CLASS-03 CLASS-04 CLASS-05 CLASS-06 CLASS-08 CLASS-07",
     "test_existing_gateway_live": "EXIST-01 EXIST-02 EXIST-03 EXIST-04",
     "test_existing_gateway_preflight": "K8S-10 K8S-11 K8S-12 K8S-13",
+    "test_gateway_copy_stop": "K8S-18 K8S-19 K8S-20 K8S-21",
     "test_gateway_down": "K8S-08 K8S-09",
     "test_gateway_preflight_read_retry": "K8S-14 K8S-15 K8S-16",
     "test_gateway_secret_rotation": "GSECRET-05 GSECRET-06 GSECRET-07 GSECRET-08 GSECRET-09",
