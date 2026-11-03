@@ -25,6 +25,7 @@ EXPECTED_CASES = {
     "test_integrated_demo": "DEMO-01 DEMO-02 DEMO-03 DEMO-04 DEMO-05 DEMO-06",
     "test_key_rotation": "ROT-01 ROT-02 ROT-03 ROT-04 ROT-05",
     "test_kind": "K8S-01 K8S-02 K8S-03 K8S-04 K8S-07 K8S-05 K8S-17 K8S-06",
+    "test_kubernetes_isolated": "ISO-01 ISO-02 ISO-03 ISO-04 ISO-05 ISO-06 ISO-07 ISO-08 ISO-09",
     "test_local": "LOCAL-01 LOCAL-02 LOCAL-03 LOCAL-04 LOCAL-05 LOCAL-08 LOCAL-11",
     "test_management_retry": "MGMT-01 MGMT-02 MGMT-03",
     "test_model_add": "ADD-01 ADD-02 ADD-03 ADD-04 ADD-05 ADD-06 ADD-07 ADD-08",

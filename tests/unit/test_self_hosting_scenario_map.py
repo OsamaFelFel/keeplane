@@ -9,9 +9,13 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parents[1]
 MAP = TESTS / "e2e/self-hosting-cases.md"
-# The CI workflow that installs the chart on a kind cluster and runs live
-# test files on every revision. Its LIVE_TESTS line names those files.
-LIVE_WORKFLOW = TESTS.parent / ".github/workflows/kubernetes-live.yml"
+# The CI workflows that install the chart on a kind cluster and run live
+# test files on every revision: the Kubernetes live checks and the isolated
+# network run. Each one's LIVE_TESTS line names its files.
+LIVE_WORKFLOWS = (
+    TESTS.parent / ".github/workflows/kubernetes-live.yml",
+    TESTS.parent / ".github/workflows/kubernetes-isolated.yml",
+)
 HEADING = "## Spec 002 scenarios (ST1–ST5)"
 
 # The scenario names in Spec 002 (product/specs/002-self-hosting.md).
@@ -28,11 +32,10 @@ SCENARIOS = {
 # Scenarios not proven yet. Only a check that CI runs on the current
 # revision proves a scenario; a live trial recorded on an earlier chart
 # revision is closest evidence. ST4 and ST5 are proven by the K8S cases the
-# Kubernetes live workflow runs on kind. The reason lives in the table only: its cell
+# Kubernetes live workflow runs on kind, ST1 and ST2's registry scenario by
+# the ISO cases the isolated network workflow runs. The reason lives in the table only: its cell
 # starts "Not proven yet:" and says which run is missing before naming cases.
 NOT_PROVEN = {
-    ("ST1", "Install on the isolated network"),
-    ("ST2", "The install may pull from the registry"),
     ("ST2", "Runs where only the models are reachable"),
     ("ST3", "A local model works like a cloud one"),
 }
@@ -42,7 +45,7 @@ RENDER_ONLY = {"SHAPE", "NETPOL", "PKG"}
 # Catalogs whose checks need a cluster, Docker fixtures or the pinned gateway
 # image. They can support a scenario but never prove one alone, except the
 # cases of a test file the Kubernetes live workflow runs (live_ci_cases).
-NOT_IN_CI = {"K8S", "FULL", "EXEDGE", "EXIST", "GW-KEY"}
+NOT_IN_CI = {"K8S", "ISO", "FULL", "EXEDGE", "EXIST", "GW-KEY"}
 # Owner decision on governance issue #47: the managed gateway refuses to
 # install without the installer's key Secret. Helm evaluates the templates
 # before anything reaches the cluster, so a refusal under `helm template` in
@@ -64,6 +67,7 @@ CATALOGS = {
     "OFF": "unit/ui-offline-assets-cases.md",
     "OFF-UI": "browser/offline-assets-cases.md",
     "K8S": "e2e/kubernetes-cases.md",
+    "ISO": "e2e/kubernetes-isolated-cases.md",
     "FULL": "e2e/full-product-edge-cases.md",
     "EXEDGE": "e2e/full-existing-edge-cases.md",
     "EXIST": "e2e/existing-gateway-cases.md",
@@ -107,17 +111,19 @@ def prefix_of(case):
 
 
 def live_ci_cases():
-    """Cases of every test file the Kubernetes live workflow runs.
+    """Cases of every test file the Kubernetes live workflows run.
 
-    That job fails unless each file runs without a skip and reports exactly
+    Each job fails unless each file runs without a skip and reports exactly
     its declared cases, all passing (tests/support/cases.py).
     """
     from tests.support.cases import EXPECTED_CASES
 
-    line = re.search(r"^\s*LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.M)
-    assert line, "The Kubernetes live workflow names no LIVE_TESTS"
-    files = line.group(1).split()
-    assert files
+    files = []
+    for workflow in LIVE_WORKFLOWS:
+        line = re.search(r"^\s*LIVE_TESTS:\s*(.+)$", workflow.read_text(), re.MULTILINE)
+        assert line, f"{workflow.name} names no LIVE_TESTS"
+        assert line.group(1).split(), workflow.name
+        files += line.group(1).split()
     for name in files:
         assert re.fullmatch(r"tests/e2e/test_\w+\.py", name), name
         assert (TESTS.parent / name).is_file(), f"{name} does not exist"
@@ -204,6 +210,8 @@ def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     # The simulated preflight retries (K8S-14 to K8S-16) are in another test
     # file this workflow does not run, so they never count through it.
     assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
+    # The isolated-network cases, from the isolated network workflow.
+    assert {f"ISO-{n:02d}" for n in range(1, 10)} <= cases
 
 
 # Each clause of a proven scenario whose proof is a separate case: the

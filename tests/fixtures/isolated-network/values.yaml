@@ -1,0 +1,94 @@
+# Chart values for the isolated-network kind run
+# (tests/e2e/kubernetes-isolated-cases.md). The cluster's only outside
+# destination is the model provider fixture on the runner, 172.30.0.1:18082,
+# the gateway address of the fixed "kind" Docker network the workflow creates.
+app:
+  image: keeplane-preview:kind-local
+  # The app image is loaded into the node; it is never pulled.
+  pullPolicy: Never
+  localTrial:
+    enabled: true
+    firstAdminSecret: keeplane-first-admin
+    publicOrigin: https://keeplane.isolated.test
+    openAIBaseUrl: http://172.30.0.1:18082/v1
+    anthropicBaseUrl: http://172.30.0.1:18082/v1
+  service:
+    type: ClusterIP
+
+gateway:
+  mode: managed
+  install: true
+  keysSecret: keeplane-gateway-keys
+  extraVolumes:
+    - name: provider-keys
+      persistentVolumeClaim:
+        claimName: keeplane-provider-keys
+  extraVolumeMounts:
+    - name: provider-keys
+      mountPath: /provider-keys
+      readOnly: true
+
+agentgateway-standalone:
+  extraEnv:
+    - name: KEEPLANE_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-db
+          key: password
+    - name: GATEWAY_RUNTIME_KEY_HASH
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-keys
+          key: runtime-key-hash
+    - name: GATEWAY_ADMIN_KEY_HASH
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-keys
+          key: admin-key-hash
+  podSecurityContext:
+    fsGroup: null
+  database:
+    postgres:
+      url: postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@postgres:5432/keeplane
+  config:
+    llm:
+      models:
+        - name: local-fixture
+          provider:
+            custom:
+              formats:
+                - type: completions
+          params:
+            model: mock-local
+            baseUrl: http://model:18080/v1
+
+# Every opt-in policy is on.
+networkPolicy:
+  gatewayIngressEnabled: true
+  appIngressEnabled: true
+  publicEntry:
+    namespaceSelector:
+      kubernetes.io/metadata.name: ingress-nginx
+    podSelector:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/component: controller
+  egressEnabled: true
+  egress:
+    modelEndpoints:
+      # The model provider outside the cluster.
+      - cidr: 172.30.0.1/32
+        ports: [18082]
+      # The model inside the cluster.
+      - podSelector:
+          app: model
+        ports: [18080]
+    gatewayDatabase:
+      - podSelector:
+          app: postgres
+        ports: [5432]
+
+ingress:
+  enabled: true
+  className: nginx
+  host: keeplane.isolated.test
+  tlsSecretName: keeplane-tls

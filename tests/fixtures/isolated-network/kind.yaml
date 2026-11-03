@@ -1,0 +1,21 @@
+# The isolated-network kind cluster (tests/e2e/kubernetes-isolated-cases.md).
+# Calico replaces kindnet so NetworkPolicy is enforced; the ingress controller
+# listens on the node's ports 80 and 443, published only on the runner's
+# loopback address.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  # A fixed API port, so the kubeconfig still works after the node restarts.
+  apiServerAddress: 127.0.0.1
+  apiServerPort: 16443
+  disableDefaultCNI: true
+  podSubnet: 192.168.0.0/16
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        listenAddress: 127.0.0.1
+      - containerPort: 443
+        hostPort: 443
+        listenAddress: 127.0.0.1
