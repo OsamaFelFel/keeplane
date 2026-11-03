@@ -75,18 +75,28 @@ for t in json.loads(sys.argv[1]):
 print(json.dumps(out))"""
 
 # Runs in the visitor pod: open the web UI through the ingress controller's
-# Service with the run's CA, as a browser inside the network would.
+# Service with the run's CA, as a browser inside the network would, following
+# the app's redirects on the same host (to its sign-in page).
 INSIDE_UI = """import socket,ssl
 c=ssl.create_default_context(cafile="/ca/ca.crt")
-s=c.wrap_socket(socket.create_connection(("ingress-nginx-controller.ingress-nginx.svc.cluster.local",443),timeout=10),server_hostname="keeplane.isolated.test")
-s.sendall(b"GET / HTTP/1.1\\r\\nHost: keeplane.isolated.test\\r\\nConnection: close\\r\\n\\r\\n")
-d=b""
-while True:
- b=s.recv(65536)
- if not b:
+path="/"
+for hop in range(5):
+ s=c.wrap_socket(socket.create_connection(("ingress-nginx-controller.ingress-nginx.svc.cluster.local",443),timeout=10),server_hostname="keeplane.isolated.test")
+ s.sendall(("GET %s HTTP/1.1\\r\\nHost: keeplane.isolated.test\\r\\nConnection: close\\r\\n\\r\\n"%path).encode())
+ d=b""
+ while True:
+  b=s.recv(65536)
+  if not b:
+   break
+  d+=b
+ head=d.split(b"\\r\\n\\r\\n",1)[0].decode(errors="replace").split("\\r\\n")
+ location=[h.split(":",1)[1].strip() for h in head[1:] if h.lower().startswith("location:")]
+ if not head[0].split()[1].startswith("3") or not location:
   break
- d+=b
-print(d.split(b"\\r\\n",1)[0].decode(), b'id="root"' in d)"""
+ path=location[0].replace("https://keeplane.isolated.test","",1)
+ if not path.startswith("/"):
+  break
+print(head[0], path, b'id="root"' in d)"""
 
 MODEL = {"name": "model", "host": PROVIDER, "port": PROVIDER_PORT, "path": "/health"}
 INTERNET = {"name": "internet", "host": "1.1.1.1", "port": 443}
