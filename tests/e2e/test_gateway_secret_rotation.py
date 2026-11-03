@@ -6,7 +6,6 @@ import argparse
 import base64
 import hashlib
 import json
-import os
 from pathlib import Path
 import secrets
 import subprocess
@@ -17,12 +16,11 @@ import uuid
 
 from tests.support.gateway_database_fixture import database_secret
 from tests.support.helm import require_helm
+from tests.support.kind_trial import kind_kubeconfig
 
 
 ROOT = Path(__file__).resolve().parents[2]
-KUBECONFIG = os.environ.get(
-    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
-)
+KUBECONFIG = kind_kubeconfig()
 HELM = require_helm()
 NAMESPACE = "keeplane-db-" + uuid.uuid4().hex[:8]
 RELEASE = "db-trial"
@@ -76,8 +74,13 @@ def wait_for(check, timeout=60):
         time.sleep(0.5)
 
 
+# The managed gateway copies run as a StatefulSet (keeplane #180); the bundled
+# chart's own gateway Deployment stays at zero replicas.
+GATEWAY = "statefulset/" + RELEASE + "-gateway"
+
+
 def rollout(name):
-    kube("rollout", "status", "deployment/" + name, "--timeout=150s")
+    kube("rollout", "status", name, "--timeout=150s")
 
 
 def keys_secret():
@@ -293,9 +296,9 @@ def run_cases():
             },
         )
         original_password = database_secret(KUBECONFIG, NAMESPACE)
-        rollout("postgres")
-        rollout("model")
-        rollout(RELEASE)
+        rollout("deployment/postgres")
+        rollout("deployment/model")
+        rollout(GATEWAY)
         config = json.loads(
             kube("get", "configmap", RELEASE + "-config", "-o", "json").stdout
         )
@@ -358,8 +361,8 @@ def run_cases():
             input_text="ALTER ROLE keeplane PASSWORD '" + replacement_password + "';\n",
         )
         database_secret(KUBECONFIG, NAMESPACE, replacement_password)
-        kube("rollout", "restart", "deployment/" + RELEASE)
-        rollout(RELEASE)
+        kube("rollout", "restart", GATEWAY)
+        rollout(GATEWAY)
         after = wait_for(converged_models)
         replaced = not {row["pod_uid"] for row in before} & {
             row["pod_uid"] for row in after
@@ -378,7 +381,7 @@ def run_cases():
                 "replicas": after,
             },
         )
-        kube("scale", "deployment/" + RELEASE, "--replicas=0")
+        kube("scale", GATEWAY, "--replicas=0")
         wait_for(lambda: not pods())
         backup = kube(
             "exec",
@@ -396,7 +399,7 @@ def run_cases():
             kube("get", "pods", "-l", "app=postgres", "-o", "json").stdout
         )["items"][0]["metadata"]["uid"]
         kube("rollout", "restart", "deployment/postgres")
-        rollout("postgres")
+        rollout("deployment/postgres")
         kube(
             "exec",
             "-i",
@@ -414,8 +417,8 @@ def run_cases():
         new_db = json.loads(
             kube("get", "pods", "-l", "app=postgres", "-o", "json").stdout
         )["items"][0]["metadata"]["uid"]
-        kube("scale", "deployment/" + RELEASE, "--replicas=2")
-        rollout(RELEASE)
+        kube("scale", GATEWAY, "--replicas=2")
+        rollout(GATEWAY)
         recovered = wait_for(converged_models)
         record(
             "GSECRET-09",

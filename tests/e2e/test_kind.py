@@ -16,11 +16,10 @@ from urllib.request import Request, urlopen
 from tests.support.kind_port_forward import existing_app
 from tests.support.protected_preview import login_if_protected
 from tests.support.client import Browser, RUNTIME
+from tests.support.kind_trial import kind_kubeconfig
 
 
-KUBECONFIG = os.environ.get(
-    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
-)
+KUBECONFIG = kind_kubeconfig()
 BASE = os.environ.get("KEEPLANE_BASE_URL", "http://127.0.0.1:13000")
 
 
@@ -89,6 +88,17 @@ def run_cases():
     with urlopen(BASE + "/api/models", timeout=15) as response:
         catalog = json.load(response)["models"]
     second = next((model for model in catalog if model["id"] == "second-local"), None)
+    if second is None:
+        # K8S-02 registers second-local through Keeplane when an earlier run
+        # (test_local removes the setups it added) left it absent.
+        status, body = register_existing()
+        if status != 200 or body.get("name") != "second-local":
+            raise RuntimeError("Could not register the gateway failover fixture")
+        with urlopen(BASE + "/api/models", timeout=15) as response:
+            catalog = json.load(response)["models"]
+        second = next(
+            (model for model in catalog if model["id"] == "second-local"), None
+        )
     if second and not second["approved"]:
         setup = Request(
             BASE + "/api/models/second-local/setup",

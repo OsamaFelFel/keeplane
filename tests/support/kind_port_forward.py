@@ -1,17 +1,16 @@
 """Open a short-lived loopback path to the isolated existing-gateway app."""
 
 from contextlib import contextmanager
-import os
 import subprocess
 import time
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from tests.support.kind_trial import kind_kubeconfig
+
 
 BASE = "http://127.0.0.1:13001"
-KUBECONFIG = os.environ.get(
-    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
-)
+KUBECONFIG = kind_kubeconfig()
 
 
 @contextmanager

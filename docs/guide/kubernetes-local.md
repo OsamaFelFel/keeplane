@@ -7,9 +7,10 @@ Production installation and recovery remain in progress.
 ## Before you start
 
 - Install Python 3.9 or later, Node.js 22.12 or later with npm, Docker, kind,
-  kubectl, Helm and ripgrep (`rg`). Keep Docker running.
+  kubectl and Helm. Keep Docker running.
 - Start [the Docker preview](local-preview.md) once. Its launcher downloads the
-  pinned Qwen demo file into `models/`; the Kubernetes setup requires that file.
+  pinned Qwen demo file into `models/`; the Kubernetes setup requires that file
+  unless you set `KEEPLANE_KIND_QWEN=off`, which skips the Qwen runner.
 - Allow internet access for initial image and dependency downloads, and leave
   ports 13000 and 13001 free. Docker uses its own configured port.
 
@@ -21,10 +22,21 @@ deploy/local/kind-up.sh
 
 The script builds the UI and app, loads images into kind, and starts the models
 and gateways. It checks tools, Node.js and Docker before creating credentials or
-building. Run it again after changing the app or chart. It uses
-`/private/tmp/keeplane-kind-kubeconfig` rather than your default Kubernetes
-context. Set `KEEPLANE_KUBECONFIG` to use another kubeconfig file, or
-`KEEPLANE_HELM_BIN` if Helm is outside `PATH`.
+building. Run it again after changing the app or chart. It uses its own
+kubeconfig rather than your default Kubernetes context:
+`/private/tmp/keeplane-kind-kubeconfig` on macOS and
+`/tmp/keeplane-kind-kubeconfig` on Linux. The commands below show the macOS
+path. Set `KEEPLANE_KUBECONFIG` to use another kubeconfig file, or
+`KEEPLANE_HELM_BIN` if Helm is outside `PATH`. Credentials such as the
+first-admin password go to `/private/tmp/keeplane-accounts-trial` on macOS and
+`.keeplane/local` on Linux; set `KEEPLANE_RUNTIME_DIR` to choose another folder,
+and use the same setting when you run the tests. If pods report "failed to
+check if this is a checkpoint image", set `KEEPLANE_KIND_LOAD_IMAGES=off`: the
+script then loads only the app image and the cluster pulls the pinned public
+images itself.
+
+The **Kubernetes live checks** CI workflow runs this same script on a GitHub
+runner for every pull request; see [Tests](../../tests/README.md).
 
 ## Know which component set you install
 

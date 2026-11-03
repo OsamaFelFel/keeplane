@@ -9,6 +9,9 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parents[1]
 MAP = TESTS / "e2e/self-hosting-cases.md"
+# The CI workflow that installs the chart on a kind cluster and runs live
+# test files on every revision. Its LIVE_TESTS line names those files.
+LIVE_WORKFLOW = TESTS.parent / ".github/workflows/kubernetes-live.yml"
 HEADING = "## Spec 002 scenarios (ST1–ST5)"
 
 # The scenario names in Spec 002 (product/specs/002-self-hosting.md).
@@ -24,22 +27,21 @@ SCENARIOS = {
 }
 # Scenarios not proven yet. Only a check that CI runs on the current
 # revision proves a scenario; a live trial recorded on an earlier chart
-# revision is closest evidence. The reason lives in the table only: its cell
+# revision is closest evidence. ST4 and ST5 are proven by the K8S cases the
+# Kubernetes live workflow runs on kind. The reason lives in the table only: its cell
 # starts "Not proven yet:" and says which run is missing before naming cases.
 NOT_PROVEN = {
     ("ST1", "Install on the isolated network"),
     ("ST2", "The install may pull from the registry"),
     ("ST2", "Runs where only the models are reachable"),
     ("ST3", "A local model works like a cloud one"),
-    ("ST4", "One gateway copy stops"),
-    ("ST5", "We already run the gateway"),
 }
 # Catalogs whose cases only render the chart. They can support a scenario but
 # never prove one alone.
 RENDER_ONLY = {"SHAPE", "NETPOL", "PKG"}
-# Catalogs CI does not run: live, kubernetes or optional checks that need a
-# cluster, Docker fixtures or the pinned gateway image. They can support a
-# scenario but never prove one alone.
+# Catalogs whose checks need a cluster, Docker fixtures or the pinned gateway
+# image. They can support a scenario but never prove one alone, except the
+# cases of a test file the Kubernetes live workflow runs (live_ci_cases).
 NOT_IN_CI = {"K8S", "FULL", "EXEDGE", "EXIST", "GW-KEY"}
 # Owner decision on governance issue #47: the managed gateway refuses to
 # install without the installer's key Secret. Helm evaluates the templates
@@ -104,6 +106,24 @@ def prefix_of(case):
     return case.rsplit("-", 1)[0]
 
 
+def live_ci_cases():
+    """Cases of every test file the Kubernetes live workflow runs.
+
+    That job fails unless each file runs without a skip and reports exactly
+    its declared cases, all passing (tests/support/cases.py).
+    """
+    from tests.support.cases import EXPECTED_CASES
+
+    line = re.search(r"^\s*LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.M)
+    assert line, "The Kubernetes live workflow names no LIVE_TESTS"
+    files = line.group(1).split()
+    assert files
+    for name in files:
+        assert re.fullmatch(r"tests/e2e/test_\w+\.py", name), name
+        assert (TESTS.parent / name).is_file(), f"{name} does not exist"
+    return {case for name in files for case in EXPECTED_CASES[Path(name).stem].split()}
+
+
 def test_shm_01_every_spec_scenario_is_listed_once():
     assert set(scenario_rows()) == SCENARIOS
     assert set(NOT_PROVEN) <= SCENARIOS
@@ -136,7 +156,7 @@ def test_shm_03_a_proven_scenario_rests_on_a_check_ci_runs():
             case
             for case in named
             if prefix_of(case) not in RENDER_ONLY | NOT_IN_CI
-        }
+        } | (named & live_ci_cases())
         refusals = named & REFUSAL_PROOF.get(scenario, set())
         assert in_ci or refusals, (
             f"{scenario} is proven only by rendering or by checks CI does not run"
@@ -172,3 +192,12 @@ def test_shm_05_the_map_links_every_catalog_it_names():
         assert (TESTS / CATALOGS[prefix]).resolve() in links, (
             f"{CATALOGS[prefix]} is not linked"
         )
+
+
+def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
+    cases = live_ci_cases()
+    # The replica, customer-run gateway, preflight and gateway-down cases.
+    assert {f"K8S-{n:02d}" for n in range(1, 14)} | {"K8S-17"} <= cases
+    # The simulated preflight retries (K8S-14 to K8S-16) are in another test
+    # file this workflow does not run, so they never count through it.
+    assert not {"K8S-14", "K8S-15", "K8S-16"} & cases

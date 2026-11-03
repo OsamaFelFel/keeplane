@@ -8,15 +8,15 @@ from pathlib import Path
 import subprocess
 import sys
 from tests.support.helm import require_helm
+from tests.support.client import RUNTIME
+from tests.support.kind_trial import kind_kubeconfig
 
 
 ROOT = Path(__file__).resolve().parents[2]
-KUBECONFIG = os.environ.get(
-    "KEEPLANE_KUBECONFIG", "/private/tmp/keeplane-kind-kubeconfig"
-)
+KUBECONFIG = kind_kubeconfig()
 HELM = require_helm()
 URL = "http://supplied-gateway.supplied-gateway.svc.cluster.local:4000"
-KEY_DIR = Path("/private/tmp/keeplane-accounts-trial")
+KEY_DIR = RUNTIME
 
 
 def run(*args):

@@ -1,7 +1,12 @@
 # Local Kubernetes integration cases
 
-Run `test_local.py` against port 13000 first. It registers `second-local`, which
-the replica tests use. Then run `test_kind.py`. The latter deletes one gateway
+Run `test_local.py` against port 13000 first, then `test_kind.py`. The replica
+tests use `second-local`; `test_kind.py` registers it through Keeplane when it is
+absent (`test_local.py` removes the setups it added). The **Kubernetes live
+checks** CI workflow runs both, then `test_gateway_secret_rotation.py`,
+`test_existing_gateway_preflight.py` and `test_gateway_down.py`, on a kind
+cluster for every pull request (see [Tests](../README.md)). K8S-START-01 and
+K8S-14 to K8S-16 run in the unit and integration checks. `test_kind.py` deletes one gateway
 pod in the **kind-keeplane** cluster and refuses any other Kubernetes context.
 The managed kind preview and the customer-run gateway app require first-admin
 sign-in; the test helpers use the local password file and never print its value.
@@ -15,7 +20,7 @@ the supplied gateway.
 | ID | What to do | Expected result |
 | --- | --- | --- |
 | K8S-START-01 | Start local setup with a required tool missing, an unsupported Node.js version or Docker unavailable. | A short prerequisite error stops setup before credentials, dependency installation, builds or cluster changes. The unit startup controls use isolated command stubs. |
-| K8S-01 | Install Keeplane with its managed gateway and inspect the gateway Deployment. | Two gateway copies are ready. |
+| K8S-01 | Install Keeplane with its managed gateway and inspect the gateway copies (StatefulSet) pods. | Two gateway copy pods are running and ready. |
 | K8S-02 | Register `second-local` through Keeplane, then request the model list from each gateway copy directly without a key and with the app's runtime key. | Both copies refuse the anonymous request and list `second-local` only for the app key; registration is shared. |
 | K8S-03 | Delete one gateway pod, observe the Service remove it as a ready endpoint, then send ten new questions to `second-local`. | All ten return the fixed answer. A call aimed at the stopped pod during endpoint propagation, including an active stream, may fail visibly and be retried. |
 | K8S-04 | Wait for the gateway copies (StatefulSet) to recover. | Two copies are ready again. |
