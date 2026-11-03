@@ -35,6 +35,11 @@ then run:
 python -m pytest tests/integration/test_native_runtime_outage.py -m live -q
 ```
 
+For OUT-09, the pinned gateway ends the client's stream cleanly after the
+provider drops it, without breaking the connection. A stream with no final
+event (no `[DONE]` and no `finish_reason`) therefore counts as incomplete,
+as in the protocol cases.
+
 Whether the pinned gateway retries its own per-attempt timeout (OUT-07) is a
 native behaviour this case checks; the owner's rule counts a timeout as down.
 The installed runtime's compiled route is checked by the managed installer's

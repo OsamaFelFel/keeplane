@@ -23,6 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 import pytest
+from integrations.gateway.runtime_config import RETRY_ATTEMPTS
 
 from components.cli import coding, server_connection
 from tests.fixtures.class_runner import ClassRunner
@@ -37,9 +38,6 @@ RUNNER_ADDRESS = f"http://host.docker.internal:{RUNNER_PORT}"
 RUNTIME_PORT = int(os.environ.get("KEEPLANE_RUNTIME_PORT", "5000"))
 GUARDED = f"http://127.0.0.1:{RUNTIME_PORT}/v1/chat/completions"
 DIRECT = build_opener(ProxyHandler({}))
-UNAVAILABLE_START = (
-    "{} is approved for this project but can't be used right now, so nothing was sent."
-)
 
 
 def load(name, path):
@@ -440,14 +438,15 @@ def run_cases():
                 },
             )
 
-            # PCL-LIVE-06: No approved model is up. The enrolled Confidential
-            # model's provider fails; the other Confidential model is set up
-            # but not enrolled on the guarded gateway.
+            # PCL-LIVE-06: The approved Confidential model's provider is down.
+            # The gateway retries the same model twice (Spec 004 ST16), then
+            # the request fails; nothing goes to the other Confidential model,
+            # which is up, or to the Public-only model (issue #37: no
+            # automatic switch).
             reset_status, _ = set_class("confidential")
             runner.set_down({upstream["conf"]})
             before = runner.snapshot()
-            spare_choice = cli_choice(names["spare"], token)
-            spare = guarded(names["spare"], token, project)["status"]
+            choice = cli_choice(names["conf"], token)
             failing = guarded(names["conf"], token, project)["status"]
             other = guarded(names["public"], token, project)["status"]
             after = runner.snapshot()
@@ -455,21 +454,16 @@ def run_cases():
             record(
                 "PCL-LIVE-06",
                 reset_status == 200
-                and spare_choice.get("status") == 503
-                and spare_choice.get("error", "").startswith(
-                    UNAVAILABLE_START.format(names["spare"])
-                )
-                and not 200 <= spare < 300
+                and choice.get("model") == names["conf"]
                 and failing >= 500
                 and other == 403
-                and delta(before, after, "conf") >= 1
+                and delta(before, after, "conf") == RETRY_ATTEMPTS + 1
                 and delta(before, after, "spare") == 0
                 and delta(before, after, "public") == 0,
                 {
-                    "cli_model_choice": spare_choice,
+                    "cli_model_choice": choice,
                     "gateway_status": {
-                        "not_enrolled_confidential": spare,
-                        "failing_confidential": failing,
+                        "down_confidential": failing,
                         "public": other,
                     },
                     "upstream_calls": {k: delta(before, after, k) for k in upstream},
