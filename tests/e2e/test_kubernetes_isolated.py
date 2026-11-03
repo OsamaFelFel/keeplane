@@ -374,7 +374,17 @@ def run_cases():
         status, page = fetch("/", attempts=40)
         health, _ = fetch("/health", attempts=5)
         font_status, font = fetch("/fonts/IBMPlexSans-Regular.woff2", attempts=5)
-        inside = kubectl("-n", "inside", "exec", "visitor", "--", "python", "-c", INSIDE_UI).strip()
+        # The controller was just restarted (ISO-03): its Service can refuse
+        # for a moment after the pod reports ready, so retry for a minute.
+        for _ in range(20):
+            visit = run(
+                "kubectl", "--kubeconfig", KUBECONFIG, "-n", "inside", "exec", "visitor",
+                "--", "python", "-c", INSIDE_UI, check=False, timeout=60,
+            )
+            inside = visit.stdout.strip() or "".join(visit.stderr.strip().splitlines()[-1:])
+            if visit.returncode == 0:
+                break
+            time.sleep(3)
         return (
             status == 200
             and b'id="root"' in page
