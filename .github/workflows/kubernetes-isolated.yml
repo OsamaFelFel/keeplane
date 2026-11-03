@@ -162,8 +162,18 @@ jobs:
           kubectl -n kube-system rollout status deployment/calico-kube-controllers --timeout=300s
           kubectl -n kube-system rollout status deployment/coredns --timeout=180s
           kubectl apply -f "$RUNNER_TEMP/ingress-nginx.yaml"
-          kubectl -n ingress-nginx wait --for=condition=complete job --all --timeout=240s
+          # The admission jobs delete themselves once done, so wait for their
+          # result instead: the controller starts once its certificate exists,
+          # and the webhook is usable once its CA bundle is patched in.
           kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=240s
+          for attempt in $(seq 1 60); do
+            bundle=$(kubectl get validatingwebhookconfiguration ingress-nginx-admission \
+              -o jsonpath='{.webhooks[0].clientConfig.caBundle}')
+            [ -n "$bundle" ] && exit 0
+            sleep 3
+          done
+          echo "The ingress controller's admission webhook never got its CA bundle" >&2
+          exit 1
       - name: Install Keeplane while the registry is reachable
         run: |
           export KUBECONFIG="$KEEPLANE_ISOLATED_KUBECONFIG"
