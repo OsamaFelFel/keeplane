@@ -50,6 +50,13 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: TEMPORARY resolve digests
+        run: |
+          for name in calico node third-party-cni-plugins; do
+            printf 'DIGEST %s ' "$name"
+            docker buildx imagetools inspect "quay.io/calico/$name:$CALICO_VERSION" --format '{{json .Manifest}}' | jq -r .digest
+          done
+          exit 1
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22.22.2
@@ -83,10 +90,6 @@ jobs:
           echo "$CALICO_SHA256  calico.yaml" | sha256sum --check
           curl --fail --location -sS --output ingress-nginx.yaml "https://raw.githubusercontent.com/kubernetes/ingress-nginx/$INGRESS_NGINX_VERSION/deploy/static/provider/kind/deploy.yaml"
           echo "$INGRESS_NGINX_SHA256  ingress-nginx.yaml" | sha256sum --check
-          for name in calico node third-party-cni-plugins; do
-            printf '%s ' "quay.io/calico/$name:$CALICO_VERSION"
-            docker buildx imagetools inspect "quay.io/calico/$name:$CALICO_VERSION" --format '{{json .Manifest}}' | jq -r .digest
-          done
           sed -i \
             -e "s|quay.io/calico/calico:$CALICO_VERSION\$|quay.io/calico/calico:$CALICO_VERSION@$CALICO_DIGEST_CALICO|" \
             -e "s|quay.io/calico/node:$CALICO_VERSION\$|quay.io/calico/node:$CALICO_VERSION@$CALICO_DIGEST_NODE|" \

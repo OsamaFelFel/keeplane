@@ -58,6 +58,18 @@ NetworkPolicy, and no ingress controller; the app is reached through kind's
 NodePort mapping and a port-forward. The network policy, ingress, full chart
 (FULL, EXEDGE), browser and Qwen cases are not run there.
 
+The **Kubernetes isolated network** workflow
+(`.github/workflows/kubernetes-isolated.yml`) runs on every pull request and on
+`main` too. It creates its own kind cluster with Calico (which enforces
+NetworkPolicy) and ingress-nginx, both pinned by manifest checksum and image
+digest, installs the chart in managed mode with every network policy on, and
+runs `e2e/test_kubernetes_isolated.py`. That test closes the cluster's outside
+access on the runner except one model provider, restarts every Keeplane pod
+and then the node, and runs the [isolated-network cases](e2e/kubernetes-isolated-cases.md)
+(ISO). It refuses any context other than `kind-keeplane-isolated` and changes
+the runner's firewall, so run it only there. The job fails on any skipped or
+missing case and uploads the `kubernetes-isolated-<commit>` artifact.
+
 The kind tests take their kubeconfig from `KEEPLANE_KUBECONFIG` (default
 `/private/tmp/keeplane-kind-kubeconfig` on macOS, `/tmp/keeplane-kind-kubeconfig`
 elsewhere) and the trial's first-admin password from `KEEPLANE_RUNTIME_DIR`

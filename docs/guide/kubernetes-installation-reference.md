@@ -29,6 +29,17 @@ dependency is pinned to an exact version and vendored under `charts/`; the
 [component manifest](../architecture/component-manifest.md) records the tested set.
 Copy every image to your internal registry before closing registry access.
 
+Once the images are on your nodes, Keeplane needs no registry to run: the
+gateway pull policy is `IfNotPresent` and every pinned image is named by
+digest, so a pod that restarts, or a node that restarts, starts from the
+images it already holds. Keep `app.pullPolicy` at `IfNotPresent` (or `Never`
+for an image you load onto the nodes yourself); `Always` contacts the
+registry on every start. A node that has never held an image still needs to
+pull it from your internal registry. CI checks this on every revision: the
+[isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md) install
+the chart while the registry is reachable, close every outside connection but
+one model provider, then restart every Keeplane pod and the node.
+
 ## Secrets
 
 The chart creates no Secret objects. Create these in the release namespace and
@@ -333,6 +344,16 @@ pods they select. They do not prove that your cluster enforces them.** After
 installing, check from a pod that should be refused, for example with a call
 that must time out. The [network policy cases](../../tests/integration/chart-network-policies-cases.md)
 list what the render checks cover.
+
+CI also installs the chart with every policy on, in managed mode, on a kind
+cluster with Calico and ingress-nginx, and checks they are enforced: only the
+ingress controller reaches the app, only the app reaches the gateway copies,
+and the app and gateway copies reach the listed model endpoints and nothing
+else (the [isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md),
+ISO-07 and ISO-08). That is one network plugin and one controller; check
+yours the same way. Set `publicEntry` to both your controller's namespace and
+its pod labels, as that run does, so other pods in the controller's namespace
+are not admitted.
 
 | Setting | Policy | Pods selected | Allows only |
 | --- | --- | --- | --- |
