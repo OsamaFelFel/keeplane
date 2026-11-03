@@ -196,8 +196,20 @@ def test_shm_05_the_map_links_every_catalog_it_names():
 
 def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     cases = live_ci_cases()
-    # The replica, customer-run gateway, preflight and gateway-down cases.
+    # The replica, customer-run gateway, preflight and gateway-down cases,
+    # and the copy-stops cases (mid-stream and during admin changes).
     assert {f"K8S-{n:02d}" for n in range(1, 14)} | {"K8S-17"} <= cases
+    assert {f"K8S-{n}" for n in range(18, 24)} <= cases
     # The simulated preflight retries (K8S-14 to K8S-16) are in another test
     # file this workflow does not run, so they never count through it.
     assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
+
+
+def test_shm_07_st4_s_streaming_clause_rests_on_the_live_mid_stream_cases():
+    # "A reply already streaming from that copy may fail visibly and can be
+    # retried" is proven only by the mid-stream stop and its retry, which
+    # the Kubernetes live workflow runs on kind.
+    cell = scenario_rows()[("ST4", "One gateway copy stops")]
+    assert {"K8S-18", "K8S-19"} <= set(CASE.findall(cell))
+    assert {"K8S-18", "K8S-19"} <= live_ci_cases()
+    assert "not exercised" not in cell

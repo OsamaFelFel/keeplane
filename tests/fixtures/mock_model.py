@@ -6,14 +6,67 @@ standard library and sends no outbound requests.
 
 import argparse
 import json
+import time
 from threading import Lock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# A streamed request whose last message is exactly this prompt gets a paced
+# reply: SLOW_STREAM_CHUNKS word chunks, one every SLOW_STREAM_PAUSE seconds,
+# then the final chunk and [DONE]. The live Kubernetes cases stop a gateway
+# copy while such a reply is still streaming through it.
+SLOW_STREAM_PROMPT = "keeplane slow stream"
+SLOW_STREAM_CHUNKS = 40
+SLOW_STREAM_PAUSE = 0.25
+
+
+def chunk(model, delta, finish_reason=None):
+    return {
+        "id": "mock-1",
+        "object": "chat.completion.chunk",
+        "model": model,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+    }
+
+
+def slow_stream_text():
+    return " ".join(f"word{n}" for n in range(1, SLOW_STREAM_CHUNKS + 1))
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     calls = []
     calls_lock = Lock()
+    pause = SLOW_STREAM_PAUSE
+
+    def slow_stream(self, model):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+        events = [
+            chunk(
+                model,
+                {"role": "assistant", "content": word}
+                if n == 0
+                else {"content": " " + word},
+            )
+            for n, word in enumerate(slow_stream_text().split(" "))
+        ] + [chunk(model, {}, "stop")]
+        try:
+            for index, event in enumerate(events):
+                if index:
+                    time.sleep(self.pause)
+                self.write_chunk(b"data: " + json.dumps(event).encode() + b"\n\n")
+            self.write_chunk(b"data: [DONE]\n\n")
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            # The caller (a gateway copy) stopped mid-stream.
+            self.close_connection = True
+
+    def write_chunk(self, data):
+        self.wfile.write(f"{len(data):x}\r\n".encode() + data + b"\r\n")
+        self.wfile.flush()
 
     def do_GET(self):
         if self.path == "/health":
@@ -51,38 +104,20 @@ class Handler(BaseHTTPRequestHandler):
         if model == "__keeplane_no_answer_trial__":
             self.reply(503, {"error": "intentional no-answer registration test"})
             return
+        messages = request.get("messages")
+        last = messages[-1] if isinstance(messages, list) and messages else {}
+        if (
+            request.get("stream")
+            and isinstance(last, dict)
+            and last.get("content") == SLOW_STREAM_PROMPT
+        ):
+            self.slow_stream(model)
+            return
         if request.get("stream"):
             chunks = [
-                {
-                    "id": "mock-1",
-                    "object": "chat.completion.chunk",
-                    "model": model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {"role": "assistant", "content": "mock "},
-                            "finish_reason": None,
-                        }
-                    ],
-                },
-                {
-                    "id": "mock-1",
-                    "object": "chat.completion.chunk",
-                    "model": model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {"content": "answer"},
-                            "finish_reason": None,
-                        }
-                    ],
-                },
-                {
-                    "id": "mock-1",
-                    "object": "chat.completion.chunk",
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-                },
+                chunk(model, {"role": "assistant", "content": "mock "}),
+                chunk(model, {"content": "answer"}),
+                chunk(model, {}, "stop"),
             ]
             data = (
                 b"".join(b"data: " + json.dumps(c).encode() + b"\n\n" for c in chunks)

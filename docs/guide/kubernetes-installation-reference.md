@@ -507,6 +507,17 @@ so the gateway Service and the gateway NetworkPolicy cover them unchanged. A
 copy that is not ready has no address yet; until it is ready, changes that add
 or widen access are not confirmed.
 
+**When a copy stops.** Once the gateway Service drops a stopped copy, new model
+calls go to the copies still running. A reply that was streaming through the
+stopped copy ends early, without its final chunk; the caller sees an incomplete
+reply and can send the request again. While a copy is down, an admin's add or
+widening is refused with "Not every gateway copy confirmed it: [N] of [M] did.
+Nothing was saved." (or "…confirmed the change…" for an edit), and a withdrawal
+is saved at once. This also holds if you scale StatefulSet `<release>-gateway`
+below `gateway.copies` by hand: the app still lists every copy, so change the
+number with `gateway.copies` instead. The Kubernetes live checks prove this on
+kind for every revision (K8S-18 to K8S-23).
+
 Each copy's Pod name is also its name in the gateway guard-status table, which
 the private model enroller for that copy writes; see
 [model enroller](#model-enroller).
