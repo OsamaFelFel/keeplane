@@ -2,22 +2,26 @@
 
 Keeplane has one React admin application and one Django/DRF API served by
 Gunicorn. The gateway registers models and carries model traffic. Django owns
-accounts, approvals, data-class settings and Audit.
+accounts, approvals, data-class settings, Audit and each developer's own
+[usage totals](developer-usage.md).
 
 ```mermaid
 flowchart LR
   Browser[Admin browser] --> App[Gunicorn and Django]
+  CLI[Developer CLI] --> App
   App --> UI[React application and local assets]
   App --> Accounts[Accounts and database sessions]
   App --> Models[Model setup and approvals]
   App --> Classes[Data classes]
   App --> Audit[Audit]
+  App --> Usage[Developer usage totals]
   Accounts --> DB[(Django database)]
   Models --> DB
   Eligibility[Internal project model eligibility] --> DB
   Eligibility --> Adapter
   Classes --> DB
   Audit --> DB
+  Usage --> DB
   Models --> Adapter[Gateway adapter]
   Adapter --> Gateway[Managed or customer-run gateway]
   Gateway --> Cloud[Cloud provider]
@@ -29,7 +33,7 @@ flowchart LR
 - `components/admin-ui/src/app/`: shell and API client.
 - `components/admin-ui/src/features/`: screens and dialogs grouped by feature.
 - `components/control-plane/config/`: Django settings, URLs and WSGI/ASGI entry points.
-- `accounts/`, `model_registry/`, `data_classes/`, `audit/`: each area's models,
+- `accounts/`, `model_registry/`, `data_classes/`, `audit/`, `usage/`: each area's models,
   migrations, services, views and URLs.
 - `common/`: shared request protection, storage errors and application assembly.
 - `integrations/`: gateway and runner adapters. HTTP views call use cases;
