@@ -167,6 +167,7 @@ def signed_in_cli(
     try:
         with override_settings(PUBLIC_ORIGIN=server, OAUTH2_PROVIDER=configured):
             thread.start()
+            monkeypatch.setattr(cli.browser_login, "no_browser", lambda: None)
             monkeypatch.setattr(cli.browser_login.webbrowser, "open", cli_browser_driver or browser)
 
             def command(action, *arguments, expected=0):

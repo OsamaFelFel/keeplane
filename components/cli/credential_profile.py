@@ -19,6 +19,10 @@ else:
     from server_connection import ConnectionError, gateway_endpoint, origin
 
 
+SERVER_FILE = "server.json"
+SERVER_FORMAT = "keeplane-server-v1"
+
+
 class ProfileError(Exception):
     pass
 
@@ -138,6 +142,43 @@ class Profile:
         data = encode(credential)
         if decode(data) != credential:
             raise ProfileError("Credential profile is invalid.")
+        self._write("credential.json", data)
+
+    def load_server(self):
+        """The server address kept after sign-out, or None (Spec 009 ST29)."""
+        try:
+            descriptor = os.open(
+                SERVER_FILE,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                dir_fd=self.directory,
+            )
+        except FileNotFoundError:
+            return None
+        with os.fdopen(descriptor, "rb") as source:
+            if not private_file(os.fstat(source.fileno())):
+                raise ProfileError(
+                    "Credential file must be private and owned by this user."
+                )
+            raw = source.read(4097)
+        try:
+            data = json.loads(raw, object_pairs_hook=unique)
+            if (
+                len(raw) > 4096
+                or not isinstance(data, dict)
+                or set(data) != {"format", "server"}
+                or data["format"] != SERVER_FORMAT
+                or data["server"] != origin(data["server"])
+            ):
+                raise ValueError
+        except (ValueError, TypeError, RecursionError, ConnectionError):
+            raise ProfileError("Credential profile is invalid.") from None
+        return data["server"]
+
+    def save_server(self, server):
+        """Keep only the non-secret server address, with no account or token."""
+        self._write(SERVER_FILE, {"format": SERVER_FORMAT, "server": origin(server)})
+
+    def _write(self, target, data):
         payload = json.dumps(data).encode()
         if len(payload) > 4096:
             raise ProfileError("Credential profile is invalid.")
@@ -149,13 +190,13 @@ class Profile:
             dir_fd=self.directory,
         )
         try:
-            with os.fdopen(descriptor, "wb") as target:
-                target.write(payload)
-                target.flush()
-                os.fsync(target.fileno())
+            with os.fdopen(descriptor, "wb") as destination:
+                destination.write(payload)
+                destination.flush()
+                os.fsync(destination.fileno())
             os.replace(
                 name,
-                "credential.json",
+                target,
                 src_dir_fd=self.directory,
                 dst_dir_fd=self.directory,
             )
@@ -167,7 +208,13 @@ class Profile:
                 pass
 
     def forget(self):
-        self.load()  # Refuse to remove foreign or malformed state.
+        """Remove the tokens, gateway and account; keep the server address.
+
+        Spec 009 ST29 "Sign out": a plain `keeplane login` later signs in to
+        the same server.
+        """
+        credential = self.load()  # Refuse to remove foreign or malformed state.
+        self.save_server(credential.issuer)
         os.unlink("credential.json", dir_fd=self.directory)
         os.fsync(self.directory)
 
@@ -189,7 +236,7 @@ def opened(path, *, create=False):
             raise ProfileError(
                 "Credential directory must be private and owned by this user."
             )
-        if set(os.listdir(directory)) - {"credential.json", "lock"}:
+        if set(os.listdir(directory)) - {"credential.json", SERVER_FILE, "lock"}:
             raise ProfileError("Refusing foreign or incomplete credential state.")
         for name in os.listdir(directory):
             if not private_file(os.stat(name, dir_fd=directory, follow_symlinks=False)):
@@ -216,3 +263,11 @@ def opened(path, *, create=False):
             os.close(lock)
         if directory is not None:
             os.close(directory)
+
+
+def saved_server(path):
+    """The server address this profile kept after sign-out, or None."""
+    if not (Path(path).expanduser() / SERVER_FILE).exists():
+        return None
+    with opened(path) as profile:
+        return profile.load_server()

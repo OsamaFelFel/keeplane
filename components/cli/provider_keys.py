@@ -60,55 +60,114 @@ def unique(pairs):
     return result
 
 
-def list_keys(profile_path, project_id):
+def project_id_of(project_id):
     try:
-        project_id = str(uuid.UUID(str(project_id)))
+        return str(uuid.UUID(str(project_id)))
     except (ValueError, TypeError, AttributeError):
         raise ConnectionError("Use a valid project UUID.") from None
+
+
+def key_rows(issuer, access_token, project_id):
+    """The project's allowed models and this account's key states; no provider call."""
+    body = request(
+        issuer,
+        "/api/runtime/projects/" + project_id + "/provider-keys",
+        access_token,
+    )
+    try:
+        data = json.loads(body, object_pairs_hook=unique)
+        if (
+            not isinstance(data, dict)
+            or set(data) != {"project_id", "models"}
+            or data["project_id"] != project_id
+            or not isinstance(data["models"], list)
+        ):
+            raise ValueError
+        ids = []
+        for row in data["models"]:
+            if (
+                not isinstance(row, dict)
+                or set(row) != {"id", "own_key_required", "status"}
+                or not isinstance(row["id"], str)
+                or not 0 < len(row["id"]) <= 256
+                or any(ord(c) < 32 or ord(c) == 127 for c in row["id"])
+                or type(row["own_key_required"]) is not bool
+                or (
+                    row["own_key_required"]
+                    and row["status"] not in {"added", "missing", "refused"}
+                )
+                or (not row["own_key_required"] and row["status"] is not None)
+            ):
+                raise ValueError
+            ids.append(row["id"])
+        if ids != sorted(set(ids)):
+            raise ValueError
+    except (ValueError, TypeError, RecursionError):
+        raise ConnectionError("Keeplane returned an invalid key list.") from None
+    return data
+
+
+def list_keys(profile_path, project_id):
+    project_id = project_id_of(project_id)
     with opened(profile_path) as profile:
         credential = profile.load()
         actor = account(credential.issuer, credential.access_token)
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
-        body = request(
-            credential.issuer,
-            "/api/runtime/projects/" + project_id + "/provider-keys",
-            credential.access_token,
-        )
-        try:
-            data = json.loads(body, object_pairs_hook=unique)
-            if (
-                not isinstance(data, dict)
-                or set(data) != {"project_id", "models"}
-                or data["project_id"] != project_id
-                or not isinstance(data["models"], list)
-            ):
-                raise ValueError
-            ids = []
-            for row in data["models"]:
-                if (
-                    not isinstance(row, dict)
-                    or set(row) != {"id", "own_key_required", "status"}
-                    or not isinstance(row["id"], str)
-                    or not 0 < len(row["id"]) <= 256
-                    or any(ord(c) < 32 or ord(c) == 127 for c in row["id"])
-                    or type(row["own_key_required"]) is not bool
-                    or (
-                        row["own_key_required"]
-                        and row["status"] not in {"added", "missing", "refused"}
-                    )
-                    or (not row["own_key_required"] and row["status"] is not None)
-                ):
-                    raise ValueError
-                ids.append(row["id"])
-            if ids != sorted(set(ids)):
-                raise ValueError
-        except (ValueError, TypeError, RecursionError):
-            raise ConnectionError("Keeplane returned an invalid key list.") from None
+        data = key_rows(credential.issuer, credential.access_token, project_id)
         output = json.dumps(data, indent=2)
         for secret in (credential.access_token, credential.refresh_token):
             output = output.replace(secret, "[redacted]")
         return output
+
+
+def key_status(body, model_id, action):
+    try:
+        data = json.loads(body, object_pairs_hook=unique)
+        if (
+            len(body) > 4096
+            or not isinstance(data, dict)
+            or set(data) != {"model_id", "status", "cleanup_pending"}
+            or data["model_id"] != model_id
+            or data["status"] not in {"added", "missing", "refused"}
+            or type(data["cleanup_pending"]) is not bool
+            or (action == "set" and data["status"] != "added")
+            or (action == "remove" and data["status"] != "missing")
+        ):
+            raise ValueError
+    except (ValueError, TypeError, RecursionError):
+        raise ConnectionError("Keeplane returned invalid key status.") from None
+    return data
+
+
+def refused_after_failure(issuer, access_token, project_id, model_id):
+    """Spec 004 ST11 (ADR 030): did a task's 401 or 403 come from a refused own key?
+
+    Called after a coding task failed with a 401 or 403. The key list (no
+    provider call) says whether ``model_id`` uses the developer's own key and
+    whether one is saved; only then does the server recheck that saved key with
+    the provider and record its verdict, which ``keys list`` then shows. True
+    when the server now records the key as refused. Any other answer, including
+    an expired sign-in or an older server, is False: the task's own error stands.
+    """
+    try:
+        project_id = project_id_of(project_id)
+        rows = key_rows(issuer, access_token, project_id)["models"]
+        row = next((row for row in rows if row["id"] == model_id), None)
+        if row is None or not row["own_key_required"] or row["status"] == "missing":
+            return False
+        if row["status"] == "refused":
+            return True
+        body = request(
+            issuer,
+            "/api/runtime/provider-keys/check",
+            access_token,
+            method="POST",
+            payload={"model_id": model_id},
+        )
+        return key_status(body, model_id, "check")["status"] == "refused"
+    except ConnectionError:
+        return False
 
 
 def run(action, profile_path, model_id, *, key_stdin=False):
@@ -145,21 +204,7 @@ def run(action, profile_path, model_id, *, key_stdin=False):
                 },
                 query={"model_id": model_id} if action == "status" else None,
             )
-            try:
-                data = json.loads(body, object_pairs_hook=unique)
-                if (
-                    len(body) > 4096
-                    or not isinstance(data, dict)
-                    or set(data) != {"model_id", "status", "cleanup_pending"}
-                    or data["model_id"] != model_id
-                    or data["status"] not in {"added", "missing", "refused"}
-                    or type(data["cleanup_pending"]) is not bool
-                    or (action == "set" and data["status"] != "added")
-                    or (action == "remove" and data["status"] != "missing")
-                ):
-                    raise ValueError
-            except (ValueError, TypeError, RecursionError):
-                raise ConnectionError("Keeplane returned invalid key status.") from None
+            data = key_status(body, model_id, action)
         except ConnectionError as error:
             if action in {"set", "remove"} and error.status not in {400, 401, 403, 413, 415}:
                 raise ConnectionError(

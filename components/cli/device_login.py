@@ -1,4 +1,7 @@
-"""Explicit device fallback; approval codes stay in memory until token exchange."""
+"""Device-code sign-in, with ``--device`` or when no browser can open (ST29).
+
+Approval codes stay in memory until the token exchange.
+"""
 
 import json
 import math

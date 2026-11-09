@@ -16,4 +16,6 @@ Run `python -m pytest tests/integration/test_developer_key_recheck.py tests/inte
 | KR-01 CLI check/list/status | No key prompt or local key copy; check sends only the model ID, once. Listing makes no provider call. |
 
 This adds an explicit check, not automatic observation of every native provider
-response. Unverified gateway errors never become trusted key-refusal verdicts.
+response. Unverified gateway errors never become trusted key-refusal verdicts:
+when a coding task fails with a 401 or 403, the CLI asks for this same check
+([refused key cases](cli-refused-key-cases.md)), and only its result is recorded.

@@ -5,7 +5,12 @@ import uuid
 
 import pytest
 
-from components.cli.credential_profile import Credential, ProfileError, opened
+from components.cli.credential_profile import (
+    Credential,
+    ProfileError,
+    opened,
+    saved_server,
+)
 
 
 @pytest.fixture
@@ -110,3 +115,65 @@ def test_failed_replace_preserves_old_credential_and_cleans_pending(saved, monke
         json.loads((path / "credential.json").read_text())["access_token"]
         == credential.access_token
     )
+
+
+# Spec 009 ST29 "Sign out": only the non-secret server address is kept.
+def test_forget_keeps_only_the_server_address_privately(saved):
+    path, credential = saved
+    with opened(path) as profile:
+        assert profile.load_server() is None
+        profile.forget()
+    assert {item.name for item in path.iterdir()} == {"lock", "server.json"}
+    assert stat.S_IMODE((path / "server.json").stat().st_mode) == 0o600
+    raw = (path / "server.json").read_text()
+    assert json.loads(raw) == {
+        "format": "keeplane-server-v1",
+        "server": "https://keeplane.example",
+    }
+    for secret in (
+        credential.access_token,
+        credential.refresh_token,
+        credential.actor_id,
+    ):
+        assert secret not in raw
+    assert saved_server(path) == "https://keeplane.example"
+    with opened(path) as profile, pytest.raises(FileNotFoundError):
+        profile.load()
+
+
+def test_saved_server_is_none_without_a_profile_or_a_kept_address(tmp_path, saved):
+    assert saved_server(tmp_path / "missing") is None
+    assert saved_server(saved[0]) is None
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        b'{"format": "keeplane-server-v1", "server": "https://a.example/path"}',
+        b'{"format": "keeplane-server-v1", "server": "https://a.example", "x": 1}',
+        b'{"format": "keeplane-server-v2", "server": "https://a.example"}',
+        b'{"format": "keeplane-server-v1", "server": 7}',
+        (
+            b'{"format": "keeplane-server-v1", "server": "https://a.example",'
+            b' "server": "https://b.example"}'
+        ),
+        b"[]",
+        b"x" * 4097,
+    ],
+)
+def test_an_unusable_server_address_is_refused(saved, content):
+    path, _ = saved
+    with opened(path) as profile:
+        profile.forget()
+    (path / "server.json").write_bytes(content)
+    with pytest.raises(ProfileError, match="invalid"):
+        saved_server(path)
+
+
+def test_an_unsafe_server_file_is_refused(saved):
+    path, _ = saved
+    with opened(path) as profile:
+        profile.forget()
+    (path / "server.json").chmod(0o644)
+    with pytest.raises(ProfileError):
+        saved_server(path)
