@@ -1,6 +1,6 @@
 """A developer's own usage over HTTP, on the test SQLite database.
 
-Spec 009 ST31 (D191, ADR 029). Cases DU-01 to DU-14 in developer-usage-cases.md;
+Spec 009 ST31 (D191, ADR 029). Cases DU-01 to DU-18 in developer-usage-cases.md;
 the separate-process SQLite and PostgreSQL cases are in
 test_developer_usage_storage.py.
 """
@@ -15,6 +15,7 @@ import pytest
 from accounts import authentication
 from accounts.models import User
 from django.apps import apps
+from django.db import DatabaseError
 from django.test import Client, override_settings
 from django.urls import URLResolver, get_resolver
 from model_registry import runtime_views
@@ -58,7 +59,8 @@ def usage(domain_services, monkeypatch):
         runtime_views, "model_policy", lambda: DjangoModelPolicy(gateway)
     )
     clock = SimpleNamespace(now=NOW)
-    monkeypatch.setattr(totals.timezone, "now", lambda: clock.now)
+    # Only the usage clock moves; sign-in expiry keeps the real time.
+    monkeypatch.setattr(totals, "timezone", SimpleNamespace(now=lambda: clock.now))
     with override_settings(ALLOWED_HOSTS=["testserver"]):
         yield SimpleNamespace(
             client=Client(enforce_csrf_checks=True),
@@ -327,6 +329,73 @@ def test_du_11_days_and_months_follow_the_requested_time_zone(usage):
     assert tokyo["today"] == "2026-11-10"
     assert tokyo["models"][0]["today"]["input_tokens"] == 1
     assert tokyo["models"][0]["this_month"]["input_tokens"] == 1111
+
+
+def test_du_16_a_day_starts_at_the_utc_hour_nearest_local_midnight(usage):
+    def total(hour, tokens):
+        UsageTotal.objects.create(
+            user_id=usage.developer.id,
+            model_id="coder",
+            hour=hour,
+            input_tokens=tokens,
+            requests=1,
+        )
+
+    # Kathmandu is UTC+5:45: 9 November starts at 8 November 18:15 UTC, so the
+    # 18:00 UTC hour (23:45 local) is counted as 9 November.
+    total(datetime(2026, 11, 8, 18, tzinfo=dt_timezone.utc), 1)
+    total(datetime(2026, 11, 8, 17, tzinfo=dt_timezone.utc), 10)
+    # 1 November starts at 31 October 18:15 UTC, so the 18:00 hour is November.
+    total(datetime(2026, 10, 31, 18, tzinfo=dt_timezone.utc), 100)
+    total(datetime(2026, 10, 31, 17, tzinfo=dt_timezone.utc), 1000)
+    kathmandu = get(usage, "?tz=Asia/Kathmandu").json()
+    assert kathmandu["today"] == "2026-11-09"
+    assert kathmandu["models"][0]["today"]["input_tokens"] == 1
+    assert kathmandu["models"][0]["this_month"]["input_tokens"] == 111
+    # India (UTC+5:30) is a tie between 18:00 and 19:00; the earlier hour is used.
+    india = get(usage, "?tz=Asia/Kolkata").json()["models"][0]
+    assert india["today"]["input_tokens"] == 1
+    assert india["this_month"]["input_tokens"] == 111
+
+
+def test_du_17_just_after_a_utc_month_change_the_previous_month_is_kept(usage):
+    def total(hour):
+        return UsageTotal.objects.create(
+            user_id=usage.other.id, model_id="coder", hour=hour, requests=1
+        )
+
+    # At 1 December 03:00 UTC it is still November in New York, so October is
+    # its previous month and must be kept whole.
+    usage.clock.now = datetime(2026, 12, 1, 3, tzinfo=dt_timezone.utc)
+    october = [
+        total(datetime(2026, 10, day, hour, tzinfo=dt_timezone.utc))
+        for day, hour in ((1, 0), (1, 4), (15, 12), (31, 23))
+    ]
+    september = total(datetime(2026, 9, 30, 9, tzinfo=dt_timezone.utc))
+    assert post(usage, report()).status_code == 204
+    left = set(UsageTotal.objects.values_list("pk", flat=True))
+    assert {row.pk for row in october} <= left and september.pk not in left
+    new_york = get(usage, "?tz=America/New_York", token=usage.other.token).json()
+    assert new_york["month"] == "2026-11" and new_york["models"] == []
+
+
+@pytest.mark.parametrize("step", ["access", "add", "read"])
+def test_du_18_a_storage_outage_is_reported_as_unavailable(usage, monkeypatch, step):
+    from usage import views
+
+    def unavailable(*args, **kwargs):
+        raise DatabaseError("database is down")
+
+    if step == "access":
+        monkeypatch.setattr(views, "organization_project_access", unavailable)
+    elif step == "add":
+        monkeypatch.setattr(totals, "add", unavailable)
+    else:
+        monkeypatch.setattr(totals, "own_usage", unavailable)
+    response = get(usage) if step == "read" else post(usage, report())
+    assert response.status_code == 503
+    assert response.json() == {"error": "Usage storage is unavailable"}
+    assert "no-store" in response["Cache-Control"]
 
 
 def test_du_12_without_a_time_zone_utc_is_used_and_bad_zones_are_refused(usage):

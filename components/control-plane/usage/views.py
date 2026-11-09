@@ -8,7 +8,7 @@ import uuid
 
 from accounts.authentication import RuntimeSessionAuthentication, runtime_bearer_only
 from common.errors import StorageUnavailable
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.views.decorators.cache import never_cache
 from model_registry import runtime_views
 from model_registry.policy import ModelPolicyUnavailable
@@ -22,6 +22,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from . import totals
+
+STORAGE = (DatabaseError, StorageUnavailable)
+
+
+def storage_unavailable():
+    return Response({"error": "Usage storage is unavailable"}, status=503)
 
 
 def record(request):
@@ -40,7 +46,11 @@ def record(request):
         counts = totals.capped(body)
     except totals.UsageError as error:
         return Response({"error": error.message}, status=400)
-    if not organization_project_access(str(request.user.pk), project_id):
+    try:
+        allowed = organization_project_access(str(request.user.pk), project_id)
+    except STORAGE:
+        return storage_unavailable()
+    if not allowed:
         return Response({"error": "This project is unavailable"}, status=403)
     try:
         eligible = runtime_views.model_policy().eligible_model_ids(project_id)
@@ -50,7 +60,10 @@ def record(request):
         return Response(
             {"error": "This model is not eligible for the project"}, status=403
         )
-    totals.add(request.user.pk, model_id, counts)
+    try:
+        totals.add(request.user.pk, model_id, counts)
+    except STORAGE:
+        return storage_unavailable()
     return Response(status=204)
 
 
@@ -61,9 +74,13 @@ def read(request):
         zone = totals.time_zone(request.query_params.get("tz"))
     except totals.UsageError as error:
         return Response({"error": error.message}, status=400)
-    with transaction.atomic():
-        totals.delete_old_totals()
-        return Response(totals.own_usage(request.user.pk, zone))
+    try:
+        with transaction.atomic():
+            totals.delete_old_totals()
+            usage = totals.own_usage(request.user.pk, zone)
+    except STORAGE:
+        return storage_unavailable()
+    return Response(usage)
 
 
 @never_cache

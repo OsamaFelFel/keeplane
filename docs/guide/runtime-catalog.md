@@ -95,7 +95,9 @@ Authorization: Bearer <credential>
 
 The answer lists each model you used this month with `input_tokens`,
 `output_tokens`, `requests` and `requests_without_usage` for `today` and
-`this_month`. Without `tz` it uses UTC. An unknown zone or any other parameter
+`this_month`. Without `tz` it uses UTC. Totals are hourly, so a day or month
+starts at the UTC hour nearest your local midnight, at most 30 minutes away. A
+storage failure returns 503. An unknown zone or any other parameter
 returns 400. You only ever see your own usage; admins have no route to read it.
 Totals older than the previous calendar month are deleted. Usage can undercount
 when a report is lost and is never billing evidence. See

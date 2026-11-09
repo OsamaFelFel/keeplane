@@ -7,7 +7,7 @@ Source has the whole feature; Enterprise adds nothing.
 ```mermaid
 flowchart LR
   Runtime[Coding runtime] -->|usage in each model answer| CLI[Developer CLI]
-  CLI -->|POST /api/runtime/usage<br/>one report per model per turn| Auth[Bearer sign-in]
+  CLI -->|POST /api/runtime/usage<br/>one report per model per turn| Auth[Sign-in token<br/>sent as a bearer]
   Auth --> Check[Project access and<br/>models eligible for the project]
   Check --> Caps[Caps]
   Caps --> Totals[(Hourly totals per<br/>developer and model)]
@@ -36,10 +36,9 @@ usage can undercount and is never billing evidence.
 
 The server:
 
-1. takes the developer from the CLI's bearer sign-in (the same
-   `RuntimeSessionAuthentication` as the model catalog: a Django session or a
-   CLI OAuth access token). Cookies, account IDs or role headers never
-   authenticate, and any other field in the report, such as an account ID, a
+1. takes the developer from a Keeplane sign-in token sent as a bearer
+   (`Authorization: Bearer`), checked the same way as for the model catalog.
+   Cookies, account IDs or role headers never authenticate, and any other field in the report, such as an account ID, a
    prompt or a path, is ignored and never stored;
 2. checks that the developer may use the project and that the model is
    currently eligible for it, using the same project access and model policy as
@@ -80,18 +79,24 @@ Models are listed by ID and only if used this month. Task 009-09 adds an
 estimated cost to each period from the shipped price list; the counts stay as
 they are.
 
-An hourly total counts in the local day and month in which its UTC hour
-starts. In a zone with a half-hour or 45-minute offset (India, Nepal, parts of
-Australia) the day therefore turns at the first whole UTC hour after local
-midnight: up to 45 minutes of usage just after midnight counts in the day
-before.
+Totals are hourly, so a day or a month starts at the UTC hour nearest local
+midnight, at most 30 minutes away. In a zone with a 45-minute offset the
+nearest hour is clear: in Nepal (UTC+5:45) the day starts at 18:00 UTC, 15
+minutes before midnight. In a zone with a half-hour offset (India, Newfoundland,
+parts of Australia) both hours are 30 minutes away and the earlier one is used:
+in India (UTC+5:30) the day starts at 18:00 UTC, so the last half hour before
+midnight counts in the next day. Usage in that boundary hour shows in whichever
+day is "today" when it is read.
 
 ## Retention
 
 Totals older than the previous calendar month are deleted on every report and
-every read. The cut-off is the start of the previous month at UTC+14, the zone
-furthest ahead, so the previous month stays whole for every developer. Nobody
+every read. The zone furthest behind UTC (UTC-12) is the last to leave a month,
+so the cut-off takes the current month there, steps back one month, and uses
+that month's start at UTC+14, the zone furthest ahead. The previous month stays
+whole for every developer: at 1 December 03:00 UTC it is still November in New
+York, so all of October is kept. Nobody
 can change this, and there is no "last month" view.
 
-[Cases DU-01 to DU-15 and DU-S1 to DU-S6](../../tests/integration/developer-usage-cases.md)
+[Cases DU-01 to DU-18 and DU-S1 to DU-S6](../../tests/integration/developer-usage-cases.md)
 and [report rules](../../tests/unit/usage-totals-cases.md) cover this design.

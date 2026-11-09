@@ -2,9 +2,10 @@
 
 The caller passes the account established by authentication; nothing here
 takes an account from a report. Days and months follow the time zone the
-developer asks for. A total counts in the local day and month in which its
-UTC hour starts, so in a zone with a half-hour offset the boundary falls on the
-nearest hour after local midnight.
+developer asks for. Totals are hourly, so a day or month starts at the UTC
+hour nearest local midnight, at most 30 minutes away. In a zone with a
+half-hour offset the two hours are equally near and the earlier one is used:
+in India (UTC+5:30) the day starts at 18:00 UTC, half an hour before midnight.
 """
 
 import re
@@ -25,8 +26,9 @@ MAX_REQUESTS = 10_000
 MAX_TOKENS_PER_REQUEST = 10_000_000
 # No hourly total grows past this, however many reports arrive.
 MAX_TOTAL = 10**15
-# The zone furthest ahead of UTC (UTC+14) starts its month this much earlier.
-EARLIEST_OFFSET = timedelta(hours=14)
+# The zones furthest ahead of (UTC+14) and behind (UTC-12) UTC.
+AHEAD = timedelta(hours=14)
+BEHIND = timedelta(hours=12)
 ZONE_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+){0,2}")
 
 
@@ -65,13 +67,15 @@ def current_hour(now=None):
 def retention_cutoff(now=None):
     """Totals whose hour starts before this are older than the previous month.
 
-    It is the start of the previous calendar month in the zone furthest ahead
-    of UTC, so every developer's previous month is kept whole.
+    The zone furthest behind UTC is the last to leave a month, so its current
+    month decides which month is "previous" for someone. That previous month
+    starts earliest in the zone furthest ahead of UTC, so the cut-off is its
+    start there: every developer's previous month is kept whole.
     """
-    now = (now or timezone.now()).astimezone(dt_timezone.utc)
-    first = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    previous = (first - timedelta(days=1)).replace(day=1)
-    return previous - EARLIEST_OFFSET
+    behind = (now or timezone.now()).astimezone(dt_timezone.utc) - BEHIND
+    months = behind.year * 12 + behind.month - 2  # the month before, counted from 0
+    year, month = divmod(months, 12)
+    return datetime(year, month + 1, 1, tzinfo=dt_timezone.utc) - AHEAD
 
 
 def delete_old_totals(now=None):
@@ -107,12 +111,19 @@ def time_zone(name):
         raise UsageError("Send a time zone such as Europe/Berlin") from None
 
 
+def nearest_hour(moment):
+    """The UTC hour nearest a moment; a moment exactly on the half hour rounds down."""
+    moment = moment.astimezone(dt_timezone.utc)
+    hour = moment.replace(minute=0, second=0, microsecond=0)
+    return hour + timedelta(hours=1) if moment - hour > timedelta(minutes=30) else hour
+
+
 def periods(zone, now=None):
-    """Return the UTC starts of today and this month in the developer's zone."""
+    """Return the UTC hours that start today and this month in the developer's zone."""
     local = (now or timezone.now()).astimezone(zone)
     day = datetime(local.year, local.month, local.day, tzinfo=zone)
     month = datetime(local.year, local.month, 1, tzinfo=zone)
-    return local, day.astimezone(dt_timezone.utc), month.astimezone(dt_timezone.utc)
+    return local, nearest_hour(day), nearest_hour(month)
 
 
 def own_usage(user_id, zone, now=None):

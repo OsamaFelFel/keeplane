@@ -69,7 +69,17 @@ def test_du_u3_numbers_are_lowered_to_the_caps():
     "now, cutoff",
     [
         (datetime(2026, 11, 9, 15, tzinfo=UTC), datetime(2026, 9, 30, 10, tzinfo=UTC)),
-        (datetime(2026, 1, 1, 0, tzinfo=UTC), datetime(2025, 11, 30, 10, tzinfo=UTC)),
+        # Just after a UTC month change, New York is still in November, so all
+        # of October is its previous month and is kept.
+        (datetime(2026, 12, 1, 3, tzinfo=UTC), datetime(2026, 9, 30, 10, tzinfo=UTC)),
+        # UTC-12 is still in November until 1 December 12:00 UTC.
+        (
+            datetime(2026, 12, 1, 11, 59, tzinfo=UTC),
+            datetime(2026, 9, 30, 10, tzinfo=UTC),
+        ),
+        (datetime(2026, 12, 1, 12, tzinfo=UTC), datetime(2026, 10, 31, 10, tzinfo=UTC)),
+        (datetime(2026, 1, 1, 0, tzinfo=UTC), datetime(2025, 10, 31, 10, tzinfo=UTC)),
+        (datetime(2026, 1, 1, 12, tzinfo=UTC), datetime(2025, 11, 30, 10, tzinfo=UTC)),
         (datetime(2026, 3, 31, 23, tzinfo=UTC), datetime(2026, 1, 31, 10, tzinfo=UTC)),
     ],
 )
@@ -97,13 +107,39 @@ def test_du_u4_retention_keeps_this_and_the_previous_month_in_every_zone(now, cu
             datetime(2026, 10, 31, 10, tzinfo=UTC),
             datetime(2026, 10, 31, 10, tzinfo=UTC),
         ),
-        # Half-hour offset: the local day starts at 18:30 UTC.
+        # Half-hour offset: local midnight is 18:30 UTC, equally near 18:00 and
+        # 19:00; the earlier hour is used.
         (
             "Asia/Kolkata",
             datetime(2026, 11, 9, 20, tzinfo=UTC),
             "2026-11-10",
-            datetime(2026, 11, 9, 18, 30, tzinfo=UTC),
-            datetime(2026, 10, 31, 18, 30, tzinfo=UTC),
+            datetime(2026, 11, 9, 18, tzinfo=UTC),
+            datetime(2026, 10, 31, 18, tzinfo=UTC),
+        ),
+        # UTC+5:45: local midnight is 18:15 UTC, nearest 18:00.
+        (
+            "Asia/Kathmandu",
+            datetime(2026, 11, 9, 20, tzinfo=UTC),
+            "2026-11-10",
+            datetime(2026, 11, 9, 18, tzinfo=UTC),
+            datetime(2026, 10, 31, 18, tzinfo=UTC),
+        ),
+        # UTC+13:45 in summer: local midnight is 10:15 UTC, nearest 10:00.
+        (
+            "Pacific/Chatham",
+            datetime(2026, 11, 9, 20, tzinfo=UTC),
+            "2026-11-10",
+            datetime(2026, 11, 9, 10, tzinfo=UTC),
+            datetime(2026, 10, 31, 10, tzinfo=UTC),
+        ),
+        # Newfoundland: UTC-3:30, so midnight is 03:30 UTC and the day starts at
+        # 03:00. 1 November began in summer time (UTC-2:30): 02:30, so 02:00.
+        (
+            "America/St_Johns",
+            datetime(2026, 11, 9, 20, tzinfo=UTC),
+            "2026-11-09",
+            datetime(2026, 11, 9, 3, tzinfo=UTC),
+            datetime(2026, 11, 1, 2, tzinfo=UTC),
         ),
         # The day summer time ends in Europe is 25 hours long.
         (

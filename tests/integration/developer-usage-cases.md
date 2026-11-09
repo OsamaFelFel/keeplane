@@ -25,7 +25,10 @@ skipped elsewhere. DU-15 needs the separately pinned CLI sign-in packages.
 | DU-12 | Usage is read with no time zone, or with an unknown or path-like zone. | No zone means UTC. Unknown or path-like zones are refused with 400. |
 | DU-13 | Totals from two months ago exist, including one that is already the previous month at UTC+14; then a report is sent, and later a read. | Totals older than the previous calendar month (in the zone furthest ahead of UTC) are deleted on each report and each read; the previous month is kept whole for every zone. |
 | DU-14 | A developer's account is removed. | Their totals are removed with it. |
-| DU-15 | A developer signed in through the CLI's OAuth sign-in reports and reads. | The same bearer sign-in works; the total is theirs alone. |
+| DU-15 | A developer signed in through the CLI's OAuth sign-in reports and reads. | The same sign-in token sent as a bearer works; the total is theirs alone. |
+| DU-16 | Totals just before and after local midnight are read in Kathmandu (UTC+5:45) and India (UTC+5:30). | Kathmandu's day and month start at the nearest UTC hour, 18:00, so 23:45 local counts in the next day. India's half-hour tie uses the earlier hour, 18:00, too. |
+| DU-17 | At 1 December 03:00 UTC, totals across October and one from 30 September exist, then a report is sent. | All of October is kept, because New York is still in November; the September total is deleted. |
+| DU-18 | The database fails while checking project access, adding a report or reading usage. | Each answers 503 "Usage storage is unavailable", not cached. |
 
 ## Separate app processes on SQLite and PostgreSQL (`test_developer_usage_storage.py`)
 
