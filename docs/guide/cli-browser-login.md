@@ -22,6 +22,8 @@ keeplane whoami --profile /absolute/private/keeplane-account
 Sign in and approve the request in your normal browser. Keeplane checks the
 returned credential against the current account before saving it. An existing
 signed-in profile is refused; explicitly log out or forget it before switching.
+A profile whose sign-in has expired is the exception: once the server refuses
+it, `login` removes it and signs you in again.
 The [profile guide](cli-account-profile.md) covers storage and logout recovery.
 
 Each attempt uses fresh state and an S256 PKCE verifier. The temporary listener

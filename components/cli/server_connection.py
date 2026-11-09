@@ -6,11 +6,10 @@ import json
 import os
 import re
 import sys
+import uuid
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
-import uuid
-
 
 LIMIT = 1024 * 1024
 
@@ -19,6 +18,26 @@ class ConnectionError(Exception):
     def __init__(self, message, status=None):
         super().__init__(message)
         self.status = status
+
+
+# Spec 009 ST29 (D190, ADR 028), wording decided by the associate product owner.
+EXPIRED = "Your Keeplane sign-in has expired, so nothing was sent."
+EXPIRED_MORE = "Your Keeplane sign-in has expired, so nothing more was sent."
+SIGN_IN_AGAIN = "Run `keeplane login` to sign in again."
+
+
+class SignInExpired(ConnectionError):
+    """A 401 from the server or the gateway: the sign-in has expired (ADR 028).
+
+    ``more`` says that earlier steps of the same task already went out; ``result``
+    keeps a coding turn's output from before the gateway refused it.
+    """
+
+    def __init__(self, *, more=False, result=None):
+        self.more = more
+        self.notice = EXPIRED_MORE if more else EXPIRED
+        super().__init__(self.notice + " " + SIGN_IN_AGAIN, 401)
+        self.result = result
 
 
 class NoRedirects(HTTPRedirectHandler):
@@ -70,8 +89,9 @@ def request(server, path, credential, *, method="GET", expected=200, payload=Non
             body = response.read(LIMIT + 1)
     except HTTPError as error:
         error.close()
+        if error.code == 401:
+            raise SignInExpired() from None
         messages = {400: "The server refused these request details.",
-                    401: "The Keeplane session is unavailable or expired.",
                     403: "The requested action is unavailable.", 503: "Keeplane is temporarily unavailable; retry later."}
         raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code) from None
     except (URLError, OSError, ValueError):

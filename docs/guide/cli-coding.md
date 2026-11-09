@@ -58,6 +58,108 @@ context the CLI asks for; it does not prove where repository contents came
 from. The gateway makes the final decision, including changes made after the
 CLI's initial checks.
 
+### When your sign-in has expired
+
+A sign-in lasts 8 hours. When the Keeplane server or the gateway says it has
+expired, `code` sends nothing more. The server is checked before the runtime
+starts, so usually nothing has been sent at all. In a terminal it offers to sign
+you in again:
+
+```text
+Your Keeplane sign-in has expired, so nothing was sent. Sign in again now? [Y/n]
+```
+
+Press Enter (or type `y` or `yes`) to sign in again with the same server, the
+same way as last time: through the browser, or with a code if you used
+`login --device`. The old sign-in is removed first, so if you cancel or the new
+sign-in fails, you are signed out. If only the gateway refused it and the server
+still accepted it, the server is asked to end it before you sign in again.
+Then `code` asks before it starts the task:
+
+```text
+Signed in. Start the task now? [Y/n]
+```
+
+If the gateway refused the sign-in part-way through a task, the steps that had
+already run stay on screen and the message says "so nothing more was sent". Saying
+yes then starts the task again from the beginning, so review any edits first.
+Any other answer is no, and so is no answer at all. Answering no to the first
+question stops with:
+
+```text
+Run `keeplane login` to sign in again.
+```
+
+Answering no to the second leaves you signed in and exits with status 1:
+
+```text
+You're signed in. The task wasn't started, so nothing was sent. Run it again when you're ready.
+```
+
+or, if earlier steps had already gone out:
+
+```text
+You're signed in. The task wasn't continued, so nothing more was sent. Run it again when you're ready.
+```
+
+In a script, or whenever the CLI isn't talking to a terminal, there is no
+question. `code` exits with status 1 and prints:
+
+```text
+Your Keeplane sign-in has expired, so nothing was sent. Run `keeplane login` to sign in again.
+```
+
+It says "so nothing more was sent" when earlier steps had already gone out.
+
+Only `code` offers to sign in again. The other commands exit 1. `whoami`,
+`models` and the key commands that only read (`keys list`, `status`, `check`)
+print:
+
+```text
+Your Keeplane sign-in has expired. Run `keeplane login` to sign in again.
+```
+
+`keys set` and `keys remove` print:
+
+```text
+Your Keeplane sign-in has expired. Nothing was saved. Run `keeplane login` to sign in again.
+```
+
+`register-project` prints the same message as `code` in a script.
+`keeplane login` replaces the expired sign-in.
+
+### When you're signed out
+
+After `keeplane logout`, or before you have ever signed in, commands send
+nothing. `code`, `models`, `keys` and `register-project` exit 1 with:
+
+```text
+You're signed out of Keeplane, so nothing was sent. Run `keeplane login` to sign in.
+```
+
+`whoami` and `refresh` exit 1 with:
+
+```text
+You're signed out of Keeplane. Run `keeplane login` to sign in.
+```
+
+`logout` prints `You're already signed out of Keeplane.` and succeeds. There is
+no offer to sign in here; run `keeplane login` when you want to.
+
+```mermaid
+flowchart LR
+  Code[keeplane code] --> Saved{Signed in?}
+  Saved -->|no| Out[Signed out; nothing sent]
+  Saved -->|yes| Server[Server checks the sign-in]
+  Server -->|401| Expired[Expired; nothing sent]
+  Server -->|ok| Runtime[Runtime and gateway]
+  Runtime -->|gateway 401| Expired2[Expired; nothing more sent]
+  Expired --> Terminal{Terminal?}
+  Expired2 --> Terminal
+  Terminal -->|no| Exit[Exit 1: run keeplane login]
+  Terminal -->|yes| Offer[Remove old sign-in, sign in again, then ask to start]
+```
+
 ### The coding runtime
 
 `code` runs OpenCode V2 **2.0.27** and refuses any other version. It looks for
@@ -189,7 +291,8 @@ safe resume of an unfinished turn are not guaranteed. Review file edits before
 retrying: cancellation does not undo them. Finish or cancel the active command
 before using its account profile elsewhere.
 Sign out with `keeplane logout`; the gateway must reject
-that credential on subsequent requests. Already authorized work is not recalled.
+that credential on subsequent requests, and the CLI then [sends
+nothing](#when-youre-signed-out) until you sign in again. Already authorized work is not recalled.
 
 Use explicit [refresh](cli-account-profile.md) before a turn when needed;
 [device sign-in](cli-device-login.md) is available when this machine has no browser.

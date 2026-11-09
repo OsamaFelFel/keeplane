@@ -45,8 +45,9 @@
   issue #57).
 - An older server (404), an unavailable server (503) or a malformed list: the
   reason still shows and points to `keeplane models`; no list is printed.
-- A 400, 401 or 403 error, an error without a status, or a successful turn asks
-  for no alternatives and prints nothing extra.
+- A 400 or 403 error, an error without a status, or a successful turn asks
+  for no alternatives and prints nothing extra. A 401 means the sign-in has
+  expired; see the [expired sign-in cases](cli-sign-in-again-cases.md).
 - Private history records the issuer, account and project without credentials.
   Fresh credentials for the same account work; another account or project cannot
   reuse that history. Legacy unbound history is also refused.

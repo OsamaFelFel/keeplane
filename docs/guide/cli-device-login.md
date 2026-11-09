@@ -18,7 +18,8 @@ python3 components/cli/keeplane.py login --device \
 Open the printed Keeplane address in your browser, enter the short code, sign in
 and choose Continue. The terminal waits for approval, checks your current account
 and saves the private profile. An existing signed-in profile is refused before
-starting another attempt. Then use the usual `whoami`, project, key, coding and
+starting another attempt, unless the server says its sign-in has expired: then
+`login` removes it and signs you in again. Then use the usual `whoami`, project, key, coding and
 `logout` commands. [Profile storage and recovery](cli-account-profile.md) apply.
 
 The client waits the server's polling interval before every exchange and adds
