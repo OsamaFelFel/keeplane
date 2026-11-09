@@ -4,9 +4,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
+from tests.support.client import BASE, RUNTIME, Browser
 from tests.support.reporting import report_path
-from tests.support.client import BASE, Browser, RUNTIME
-
 
 MODEL = "demo-qwen"
 RUNNER = "http://qwen:8080"
@@ -50,6 +49,12 @@ def run_cases():
         {"react_application_served": 'id="root"' in page},
     )
 
+    # Data classes are off by default (Spec 005, ADR 013). The admin turns
+    # them on, as a person would in Data classes, before choosing approvals.
+    # Turning them on again is harmless, so a repeat run also passes.
+    mode_status, mode_result, _ = admin.fetch(
+        "/api/data-classes/mode", {"enabled": True}, method="PUT"
+    )
     class_status, class_list, _ = admin.fetch("/api/data-classes")
     classes = {item["name"] for item in class_list.get("classes", [])}
     runner_status, discovery, _ = admin.fetch(
@@ -57,12 +62,17 @@ def run_cases():
     )
     record(
         "DEMO-03",
-        class_status == 200
+        mode_status == 200
+        and class_status == 200
+        and class_list.get("enabled") is True
         and {"Public", "Internal"} <= classes
         and runner_status == 200
         and UPSTREAM in discovery.get("models", []),
         {
+            "mode_status": mode_status,
+            "mode_error": None if mode_status == 200 else mode_result,
             "class_status": class_status,
+            "enabled": class_list.get("enabled"),
             "classes": sorted(classes),
             "runner_status": runner_status,
             "models": discovery.get("models", []),
@@ -85,7 +95,16 @@ def run_cases():
         (entry for entry in listing.get("models", []) if entry["id"] == MODEL), {}
     )
     setup_status = None
-    if register_status == 200 and item and not item.get("approved"):
+    # A repeat run, or a model added while data classes were off, finds the
+    # model already registered; the admin then uses Set up on its row.
+    if (
+        register_status == 200
+        and item
+        and (
+            not item.get("approved")
+            or set(item.get("approved_classes", [])) != {"Public", "Internal"}
+        )
+    ):
         setup_status, _, _ = admin.fetch(
             f"/api/models/{MODEL}/setup",
             {"key_choice": "none", "approved_classes": ["Public", "Internal"]},
