@@ -15,7 +15,7 @@ allowed for the project's class and up, so any switch would be visible.
 | OUT-03 | 429 three times | 429 after three contacts with Private only. |
 | OUT-04 | 503, 503, then an answer | 200 after three contacts. |
 | OUT-05 | 429, then an answer | 200 after two contacts. |
-| OUT-06 | 503, then an answer, while streaming | 200 stream after two contacts: no byte had been sent. |
+| OUT-06 | 503, then an answer, while streaming | 200 stream after two contacts: no byte had been sent. The answer arrives whole, with its final event. |
 | OUT-07 | No headers within the attempt timeout, three times | 504 after three contacts with Private only. |
 | OUT-08 | A context-length refusal (400) | 400 at once, one contact, no retry. |
 | OUT-09 | A stream fails after its first event | The client sees the partial answer, never shown as finished: the stream breaks or ends with no final event. One contact, nothing sent again. |
@@ -39,6 +39,11 @@ For OUT-09, the pinned gateway ends the client's stream cleanly after the
 provider drops it, without breaking the connection. A stream with no final
 event (no `[DONE]` and no `finish_reason`) therefore counts as incomplete,
 as in the protocol cases.
+
+A streamed request that the mock provider answers gets a whole event stream,
+as a real provider sends. A plain JSON answer to a streamed request breaks the
+gateway's stream, and the gateway may then count it as a failed contact and
+retry it.
 
 Whether the pinned gateway retries its own per-attempt timeout (OUT-07) is a
 native behaviour this case checks; the owner's rule counts a timeout as down.
