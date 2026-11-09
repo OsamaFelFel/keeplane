@@ -88,8 +88,10 @@ keeplane code \
   'Fix the addition function and check the result.'
 ```
 
-`code` names the model Keeplane picked for the task before it starts; add
-`--model MODEL` to choose another from `keeplane models`.
+`code` names the model for the task before it starts and, once the turn has
+finished, the model that answered. To switch this repo to another model from
+`keeplane models`, run `keeplane use <model>`; `keeplane use --auto` goes back to
+Keeplane's pick. `--model MODEL` chooses one for a single turn.
 
 Review the edits and run your project's tests. The runtime prints JSON events
 containing `sessionID`. To continue, repeat that command with a new prompt and

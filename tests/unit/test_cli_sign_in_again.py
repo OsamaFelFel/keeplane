@@ -162,7 +162,12 @@ def test_exp_02_yes_signs_in_with_the_saved_server_then_asks_before_starting(
     terminal("", "y")
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
     output = capsys.readouterr()
-    assert output.err == OFFER + "Opening Keeplane sign-in in your browser.\n" + START
+    assert output.err == (
+        OFFER
+        + "Opening Keeplane sign-in in your browser.\n"
+        + START
+        + "Answered by coder.\n"
+    )
     assert output.out == "Coding finished.\n"
     assert sign_ins == [("browser", connected.issuer, str(connected.path), 120)]
     assert len(runtime[1]) == 1  # The task starts only after the second yes.

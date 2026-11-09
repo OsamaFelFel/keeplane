@@ -6,6 +6,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from types import SimpleNamespace
+from urllib.parse import parse_qs
 
 import pytest
 
@@ -15,7 +16,9 @@ from components.cli.session_state import managed
 
 
 @pytest.fixture
-def connected(tmp_path):
+def connected(tmp_path, monkeypatch):
+    # The CLI settings file (a `keeplane use` switch) stays inside the test.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     state = SimpleNamespace(
         actor=str(uuid.uuid4()),
         calls=[],
@@ -29,6 +32,7 @@ def connected(tmp_path):
         alternatives_status=200,
         task_model="coder",
         task_model_status=200,
+        task_model_reply=None,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -54,13 +58,17 @@ def connected(tmp_path):
                     **(state.choice or {}),
                 }
                 status = state.choice_status
-            elif self.path.endswith("/task-model"):
+            elif "/task-model" in self.path:
+                route, _, query = self.path.partition("?")
+                switch = parse_qs(query).get("model_id", [None])[0]
                 value = {
-                    "project_id": self.path.split("/")[-2],
-                    "requested_model_id": None, "persona": None, "level": None,
-                    "model_id": state.task_model,
-                    "chosen_by": "first_allowed" if state.task_model else None,
+                    "project_id": route.split("/")[-2],
+                    "requested_model_id": switch, "persona": None, "level": None,
+                    "model_id": switch or state.task_model,
+                    "chosen_by": ("developer" if switch else
+                                  "first_allowed" if state.task_model else None),
                     "reason": None,
+                    **(state.task_model_reply or {}),
                 }
                 status = state.task_model_status
             elif "/model-alternatives?" in self.path:
@@ -144,7 +152,9 @@ def test_one_entry_point_account_registration_catalog_and_logout(
         "name": "Server original",
     }
     assert command(monkeypatch, connected, "models", "--project", project) == 0
-    assert json.loads(capsys.readouterr().out)["models"] == [{"id": "coder"}]
+    assert json.loads(capsys.readouterr().out)["models"] == [
+        {"id": "coder", "current": True}
+    ]
     assert command(monkeypatch, connected, "logout") == 0
     assert (
         "removed" in capsys.readouterr().out
@@ -156,6 +166,7 @@ def test_one_entry_point_account_registration_catalog_and_logout(
         ("POST", "/api/runtime/projects"),
         ("GET", "/api/runtime/session"),
         ("GET", f"/api/runtime/projects/{project}/models"),
+        ("GET", f"/api/runtime/projects/{project}/task-model"),
         ("DELETE", "/api/runtime/session"),
     ]
     assert connected.calls[2][3] == {"project_id": project, "name": "Requested"}
@@ -375,7 +386,7 @@ def test_usable_key_keeps_the_requested_model_without_a_notice(
     connected.model_ids = ["coder", "general"]
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
     assert native_model(runtime) == "keeplane/coder"
-    assert capsys.readouterr().err == ""
+    assert capsys.readouterr().err == "Answered by coder.\n"
 
 
 def test_no_other_allowed_model_fails_with_the_missing_key_message(
