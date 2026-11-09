@@ -196,17 +196,18 @@ def check_settings(config, gateway, instruction_plugin=None):
 def turn_usage(stdout):
     """Token usage the runtime reported for one turn, or None (ADR 029).
 
-    Each model request of the turn is a step: it starts with a step_start
-    event and, when the runtime prints it, ends with a step_finish event whose
-    tokens come from the gateway's answer. Input is the runtime's non-cached
-    input plus cache reads and writes; output is its visible output plus
-    reasoning. OpenCode 2.0.27 does not print the step_finish of a turn's last
-    step, so that request, and any whose answer carried no usage, counts in
-    requests_without_usage and its tokens are missing. Requests of child
+    Each model request of the turn is a step: step_start, its text, reasoning
+    and tool_use events, then step_finish with the tokens from the gateway's
+    answer. Input is the runtime's non-cached input plus cache reads and
+    writes; output is its visible output plus reasoning. OpenCode 2.0.27
+    prints neither step_start nor step_finish for a turn's last step, only its
+    text, so answer events outside a printed step count as one more request.
+    That request, and any whose answer carried no usage, counts in
+    requests_without_usage, and its tokens are missing. Requests of child
     sessions (subagents) are not in the runtime's output, so they are not
     counted.
     """
-    starts, finishes, used = 0, 0, 0
+    requests, used, open_step = 0, 0, False
     totals = {"input_tokens": 0, "output_tokens": 0}
 
     def count(value):
@@ -219,12 +220,17 @@ def turn_usage(stdout):
             continue
         if not isinstance(event, dict):
             continue
-        if event.get("type") == "step_start":
-            starts += 1
+        kind = event.get("type")
+        if kind in ("step_start", "text", "reasoning", "tool_use"):
+            # A step_start, or an answer event outside a printed step, begins
+            # a request.
+            requests += kind == "step_start" or not open_step
+            open_step = True
             continue
-        if event.get("type") != "step_finish":
+        if kind != "step_finish":
             continue
-        finishes += 1
+        requests += not open_step
+        open_step = False
         part = event.get("part")
         tokens = part.get("tokens") if isinstance(part, dict) else None
         tokens = tokens if isinstance(tokens, dict) else {}
@@ -234,7 +240,6 @@ def turn_usage(stdout):
         used += bool(used_in + used_out)
         totals["input_tokens"] += used_in
         totals["output_tokens"] += used_out
-    requests = max(starts, finishes)
     if not requests:
         return None
     return {**totals, "requests": requests, "requests_without_usage": requests - used}

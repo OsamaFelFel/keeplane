@@ -44,8 +44,8 @@
   The fixture sends usage only when asked, with cached and reasoning tokens
   (10 input with 4 cached, 5 output with 2 reasoning). The turn has 3 requests,
   and its totals must be exactly 10 input and 5 output tokens for each printed
-  `step_finish`, so counting either detail twice fails. The runtime prints no
-  `step_finish` for the last step, so that request counts without usage.
+  `step_finish`, so counting either detail twice fails. The runtime prints only the
+  text of the last step, so that request counts without usage.
   The unit cases KEY-01 to KEY-08 are in
   [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
 
