@@ -212,7 +212,7 @@ def run(monkeypatch, capsys, profile, *arguments):
     return status, capsys.readouterr()
 
 
-def sign_in(server, who, how, monkeypatch, capsys, profile):
+def sign_in(server, who, how, monkeypatch, capsys, profile, *, named=True):
     """`keeplane login` with a browser, or on a machine with none (DEV-06)."""
     if how == "browser":
         monkeypatch.setattr(browser_login, "no_browser", lambda: None)
@@ -231,15 +231,10 @@ def sign_in(server, who, how, monkeypatch, capsys, profile):
                 *args, **{**kwargs, "announce": who.approve}
             ),
         )
+    # Without --server, login uses the server kept at sign-out.
+    named_server = ["--server", server.address] if named else []
     status, output = run(
-        monkeypatch,
-        capsys,
-        profile,
-        "login",
-        "--server",
-        server.address,
-        "--timeout",
-        "20",
+        monkeypatch, capsys, profile, "login", *named_server, "--timeout", "20"
     )
     assert status == 0, output.err
     assert output.out.endswith("Signed in to Keeplane.\n")
@@ -354,6 +349,11 @@ def test_adm_int_05_after_sign_out_nothing_more_is_sent_until_signing_in_again(
     status, output = run(monkeypatch, capsys, profile, "logout")
     assert status == 0, output.err
     assert server.flow.identity.session(credential.access_token) is None
+    # Only the non-secret server address is kept.
+    assert {item.name for item in profile.iterdir()} == {"lock", "server.json"}
+    assert json.loads((profile / "server.json").read_text())["server"] == (
+        server.address
+    )
 
     address, seen = gateway
     directory = tmp_path / "repository"
@@ -366,10 +366,23 @@ def test_adm_int_05_after_sign_out_nothing_more_is_sent_until_signing_in_again(
     for command in (("models", "--project", project), ("usage",)):
         status, output = run(monkeypatch, capsys, profile, *command)
         assert status == 1 and output.err == SIGNED_OUT
+    for command in ("whoami", "refresh"):
+        status, output = run(monkeypatch, capsys, profile, command)
+        assert status == 1 and output.err == (
+            "You're signed out of Keeplane. Run `keeplane login` to sign in.\n"
+        )
     assert server.observations == [] and seen == [] and not runtime[1].exists()
 
     # Signing in again (from a fresh browser) lets the same command through.
-    sign_in(server, person(server, "developer"), how, monkeypatch, capsys, profile)
+    sign_in(
+        server,
+        person(server, "developer"),
+        how,
+        monkeypatch,
+        capsys,
+        profile,
+        named=False,
+    )
     status, output = code(
         monkeypatch, capsys, profile, project, "coder", runtime, address, directory
     )

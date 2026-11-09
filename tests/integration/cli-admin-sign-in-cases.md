@@ -19,10 +19,13 @@ One model, `coder`, is approved.
   - `code --model elsewhere` is refused and the runtime never starts;
   - `code --model coder` runs one turn.
 - **ADM-INT-05 and 06 Sign out.** After a browser or a device sign-in,
-  `keeplane logout` revokes the sign-in at the server. Then `code`, `models` and
-  `usage` each exit 1 with "You're signed out of Keeplane, so nothing was sent.
+  `keeplane logout` revokes the sign-in at the server and keeps only the server
+  address in the profile. Then `code`, `models` and `usage` each exit 1 with
+  "You're signed out of Keeplane, so nothing was sent. Run `keeplane login` to
+  sign in."; `whoami` and `refresh` exit 1 with "You're signed out of Keeplane.
   Run `keeplane login` to sign in." Neither the server nor the gateway gets any
-  request and the runtime never starts. After signing in again, `code` runs.
+  request and the runtime never starts. A plain `keeplane login`, with no
+  `--server`, signs in to the kept server, and then `code` runs.
 
 Run with the CLI sign-in packages installed (see
 [CLI sign-in](cli-oauth-identity-cases.md)):

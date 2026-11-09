@@ -27,8 +27,17 @@ run the same fallback against the real server.
   no-browser line.
 - **NB-07 No `--server`.** `login` uses the server of the profile's expired
   sign-in.
-- **NB-08 No server known.** With no `--server` and no saved sign-in, `login`
-  exits 1 with "Name your Keeplane server: run `keeplane login --server
-  <address>`." and sends nothing.
+- **NB-08 No server known.** With no `--server`, no saved sign-in and no kept
+  server, `login` exits 1 with "Keeplane doesn't know your server yet. Run
+  `keeplane login --server <address>`." and sends nothing.
 - **NB-09 Signing in again with no browser.** After an expired sign-in, answering
   yes signs in with the device code when no browser can open.
+- **NB-10 After sign-out.** `logout` keeps only the server address; a plain
+  `keeplane login` then signs in to that server.
+- **NB-11 `--server` overrides.** With a kept server, `--server` signs in to the
+  server it names instead.
+- **NB-12 The browser opened but didn't finish.** When the browser sign-in times
+  out or is refused, `login` exits 1 with "The sign-in in your browser didn't
+  finish, so you aren't signed in. Run `keeplane login` to try again, or
+  `keeplane login --device` to sign in from another device." No device code is
+  asked for and nothing is saved.

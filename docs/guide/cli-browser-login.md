@@ -69,8 +69,15 @@ It prints "No browser can open here, so sign in from another device.", then the
 address and code of [device sign-in](cli-device-login.md). A `BROWSER` command you
 set is tried first, except over SSH.
 
-Without `--server`, `login` uses the server of this profile's expired sign-in. With
-no saved sign-in, name the server with `--server`.
+Without `--server`, `login` uses the server you last signed in to: the one of this
+profile's expired sign-in, or the one kept when you signed out. `--server` always
+overrides it. When Keeplane knows no server yet, `login` says "Keeplane doesn't
+know your server yet. Run `keeplane login --server <address>`." and exits 1.
+
+Once the browser has opened, the CLI does not switch to a code. If the sign-in in
+the browser times out or is refused, `login` says "The sign-in in your browser
+didn't finish, so you aren't signed in. Run `keeplane login` to try again, or
+`keeplane login --device` to sign in from another device." and exits 1.
 
 Use the [coding command](cli-coding.md) for account-bound turns and resume.
 Use explicit [refresh](cli-account-profile.md) when needed; refresh is not

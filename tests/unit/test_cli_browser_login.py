@@ -391,10 +391,11 @@ def test_timeout_closes_drip_fed_callback_and_does_not_exchange(issuer, tmp_path
         closed.set()
 
     issuer.before_callback = stall
-    with pytest.raises(ConnectionError, match="timed out"):
+    with pytest.raises(ConnectionError, match="didn't finish") as error:
         browser_login.login(
             issuer.url, tmp_path / "profile", timeout=1, browser=issuer.browser
         )
+    assert str(error.value) == browser_login.UNFINISHED
     assert closed.wait(2) and not issuer.exchanges
     address = urlsplit(issuer.callback)
     with pytest.raises(OSError):
@@ -450,7 +451,7 @@ def test_matching_state_consent_refusal_never_exchanges_or_exports_details(
             pass
 
     issuer.before_callback = refuse
-    with pytest.raises(ConnectionError, match="sign-in was refused") as error:
+    with pytest.raises(ConnectionError, match="didn't finish") as error:
         browser_login.login(issuer.url, tmp_path / "profile", browser=issuer.browser)
     assert issuer.access not in str(error.value) and not issuer.exchanges
 

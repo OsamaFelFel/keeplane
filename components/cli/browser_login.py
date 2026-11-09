@@ -32,7 +32,14 @@ else:
 
 BROWSER = "Opening Keeplane sign-in in your browser."
 NO_BROWSER = "No browser can open here, so sign in from another device."
-NO_SERVER = "Name your Keeplane server: run `keeplane login --server <address>`."
+NO_SERVER = (
+    "Keeplane doesn't know your server yet. Run `keeplane login --server <address>`."
+)
+UNFINISHED = (
+    "The sign-in in your browser didn't finish, so you aren't signed in. "
+    "Run `keeplane login` to try again, "
+    "or `keeplane login --device` to sign in from another device."
+)
 
 
 class BrowserUnavailable(ConnectionError):
@@ -177,12 +184,9 @@ def authorization_code(server, *, timeout, browser):
             if launch and not launch[0]:
                 raise BrowserUnavailable("The browser could not open.")
             listener.handle_request()
-        if not result:
-            raise ConnectionError("Browser sign-in timed out; no credential was saved.")
-        if result[0] is None:
-            raise ConnectionError(
-                "Browser sign-in was refused; no credential was saved."
-            )
+        # A browser that opened but timed out or was refused doesn't fall back.
+        if not result or result[0] is None:
+            raise ConnectionError(UNFINISHED)
         return {
             "grant_type": "authorization_code",
             "client_id": "keeplane-cli",

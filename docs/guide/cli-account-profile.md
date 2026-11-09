@@ -57,7 +57,8 @@ python3 components/cli/account_session.py forget --profile /private/keeplane-acc
 
 This last command does not revoke server access. Keep the profile outside Git
 and runtime history. The parent directory must exist and be controlled by you.
-The profile directory is owned by your OS user with mode 0700; its credential
+The profile directory is owned by your OS user with mode 0700; its credential,
+kept server address (`server.json`, written at sign-out, with no token or account)
 and stable lock files use 0600. Writes are atomic and serialized. Symlinks,
 hardlinks, special files, foreign files and unsafe permissions are refused.
 An interrupted write may leave a pending file; inspect the private directory

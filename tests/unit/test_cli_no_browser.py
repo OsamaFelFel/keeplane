@@ -213,7 +213,10 @@ def test_nb_08_login_with_no_server_known_names_the_option_and_sends_nothing(
     capsys,
 ):
     assert login(monkeypatch, tmp_path / "profile") == 1
-    assert capsys.readouterr().err == browser_login.NO_SERVER + "\n"
+    assert capsys.readouterr().err == (
+        "Keeplane doesn't know your server yet. "
+        "Run `keeplane login --server <address>`.\n"
+    )
     assert issuer.device_starts == 0 and not issuer.authorizations
 
 
@@ -236,3 +239,86 @@ def test_nb_09_signing_in_again_with_no_browser_uses_the_device_code(
     assert said == [browser_login.NO_BROWSER, CODE_LINE.format(url=issuer.url)]
     with opened(path) as profile:
         assert profile.load().client_id == device_login.CLIENT_ID
+
+
+# NB-10
+def test_nb_10_after_logout_a_plain_login_reuses_the_kept_server(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    path = tmp_path / "profile"
+    assert login(monkeypatch, path, "--server", issuer.url) == 0
+    monkeypatch.setattr("sys.argv", ["keeplane", "logout", "--profile", str(path)])
+    assert keeplane.main() == 0
+    assert issuer.revocations == 1
+    assert {item.name for item in path.iterdir()} == {"lock", "server.json"}
+    capsys.readouterr()
+    assert login(monkeypatch, path) == 0
+    assert capsys.readouterr().out.endswith("Signed in to Keeplane.\n")
+    assert issuer.device_starts == 2
+    with opened(path) as profile:
+        assert profile.load().issuer == issuer.url
+
+
+# NB-11
+def test_nb_11_server_overrides_the_kept_server(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    path = tmp_path / "profile"
+    with opened(path, create=True) as profile:
+        profile.save_server("http://127.0.0.1:1")
+    assert login(monkeypatch, path, "--server", issuer.url) == 0
+    with opened(path) as profile:
+        assert profile.load().issuer == issuer.url
+    assert issuer.device_starts == 1
+
+
+# NB-12
+@pytest.mark.parametrize("how", ["timed out", "refused"])
+def test_nb_12_a_browser_that_opened_but_did_not_finish_does_not_fall_back(
+    issuer,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+    capsys,
+    how,
+):
+    monkeypatch.setattr(browser_login, "no_browser", lambda: None)
+    if how == "refused":
+        issuer.callback_extra = {"error": "access_denied"}
+
+        def browser(url):
+            # The issuer's callback carries both a code and the error, so turn
+            # it into a plain refusal with the matching state.
+            from urllib.parse import parse_qs, urlencode, urlsplit
+
+            target = urlsplit(url)
+            state = parse_qs(target.query)["state"][0]
+            redirect = parse_qs(target.query)["redirect_uri"][0]
+            from urllib.request import ProxyHandler, build_opener
+
+            with build_opener(ProxyHandler({})).open(
+                redirect + "?" + urlencode({"state": state, "error": "access_denied"}),
+                timeout=3,
+            ):
+                pass
+            return True
+    else:
+
+        def browser(url):
+            return True
+
+    monkeypatch.setattr(browser_login.webbrowser, "open", browser)
+    path = tmp_path / "profile"
+    assert login(monkeypatch, path, "--server", issuer.url, "--timeout", "1") == 1
+    output = capsys.readouterr()
+    assert output.err == browser_login.UNFINISHED + "\n"
+    assert browser_login.NO_BROWSER not in output.out
+    assert issuer.device_starts == 0 and not issuer.exchanges
+    assert not (path / "credential.json").exists()
