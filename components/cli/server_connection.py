@@ -119,7 +119,10 @@ def gateway_endpoint(value):
         raise ConnectionError("Use the operator's protected gateway URL ending in /v1.") from None
     if url.path.rstrip("/") != "/v1" or url.query or url.fragment:
         raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
-    return origin(value[:len(value) - len(url.path)]) + "/v1"
+    try:
+        return origin(value[:len(value) - len(url.path)]) + "/v1"
+    except ValueError:  # Such as a port out of range.
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.") from None
 
 
 def session_data(server, credential):

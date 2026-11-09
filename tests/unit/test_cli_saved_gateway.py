@@ -111,6 +111,7 @@ def test_sg_03_no_address_saves_none_and_keeps_the_older_format(
         "https://keeplane.example/v1/chat/completions",
         "https://keeplane.example/v1?team=a",
         "https://user:secret@keeplane.example/v1",
+        "https://keeplane.example:99999/v1",
         5,
     ],
 )

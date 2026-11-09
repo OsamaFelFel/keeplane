@@ -25,8 +25,10 @@ only the server address. When you sign in, the server gives the CLI the
 protected gateway's `/v1` address its installer set, and the CLI saves it in
 your profile for `keeplane code`; an ordinary unprotected model listener is
 insufficient. If `code` says Keeplane doesn't know your gateway address yet,
-the server gave none when you signed in: ask the operator for it and pass it
-as `--gateway`, which also overrides the saved one. With `--state-dir`, the
+the server gave none when you signed in. If you signed in with an older CLI
+version, run `keeplane refresh` to save the server's address; otherwise ask
+the operator for it and pass it as `--gateway`, which also overrides the saved
+one. With `--state-dir`, the
 session history records the gateway address, and a later turn on that history,
 such as a resumed session, must use the same one. On a Kubernetes installation
 with the chart's Ingress, both are on Keeplane's one address:
