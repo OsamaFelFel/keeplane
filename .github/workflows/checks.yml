@@ -458,6 +458,7 @@ jobs:
                 tests/integration/test_cli_oauth_journey.py \
                 tests/integration/test_cli_oauth_key_journey.py \
                 tests/integration/test_cli_device_journey.py \
+                tests/integration/test_cli_admin_sign_in.py \
                 tests/integration/test_cli_sign_in_again.py \
                 tests/integration/test_cli_sign_in_readiness.py \
                 tests/integration/test_developer_usage.py \
