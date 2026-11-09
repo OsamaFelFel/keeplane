@@ -228,6 +228,7 @@ def test_actual_command_pkce_current_actor_private_profile_and_no_secret_output(
 ):
     path = tmp_path / "profile"
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setattr(browser_login, "no_browser", lambda: None)
     monkeypatch.setattr(browser_login.webbrowser, "open", issuer.browser)
     prefix = ["keeplane", "login"] if unified else ["browser_login"]
     monkeypatch.setattr(
@@ -390,20 +391,43 @@ def test_timeout_closes_drip_fed_callback_and_does_not_exchange(issuer, tmp_path
         closed.set()
 
     issuer.before_callback = stall
-    with pytest.raises(ConnectionError, match="timed out"):
+    with pytest.raises(ConnectionError, match="didn't finish") as error:
         browser_login.login(
             issuer.url, tmp_path / "profile", timeout=1, browser=issuer.browser
         )
+    assert str(error.value) == browser_login.UNFINISHED
     assert closed.wait(2) and not issuer.exchanges
     address = urlsplit(issuer.callback)
     with pytest.raises(OSError):
         socket.create_connection((address.hostname, address.port), timeout=1)
 
 
-def test_browser_failure_closes_listener_without_token_exchange(issuer, tmp_path):
-    with pytest.raises(ConnectionError, match="browser could not open"):
-        browser_login.login(issuer.url, tmp_path / "profile", browser=lambda _: False)
+def test_browser_failure_closes_listener_and_signs_in_with_the_device_code(
+    issuer, tmp_path, monkeypatch
+):
+    # ST29 "No browser on the machine": a browser that fails to start falls back.
+    from components.cli import device_login
+
+    monkeypatch.setattr(device_login, "sleep", lambda seconds: None)
+    said = []
+    assert (
+        browser_login.login(
+            issuer.url,
+            tmp_path / "profile",
+            browser=lambda _: False,
+            announce=said.append,
+        )
+        == "device"
+    )
     assert not issuer.authorizations and not issuer.exchanges
+    assert issuer.device_starts == 1
+    assert said == [
+        browser_login.BROWSER,
+        browser_login.NO_BROWSER,
+        "Open " + issuer.url + "/oauth/confirm-device/ and enter code ABCD1234.",
+    ]
+    with opened(tmp_path / "profile") as profile:
+        assert profile.load().client_id == "keeplane-cli-device"
 
 
 def test_matching_state_consent_refusal_never_exchanges_or_exports_details(
@@ -427,7 +451,7 @@ def test_matching_state_consent_refusal_never_exchanges_or_exports_details(
             pass
 
     issuer.before_callback = refuse
-    with pytest.raises(ConnectionError, match="sign-in was refused") as error:
+    with pytest.raises(ConnectionError, match="didn't finish") as error:
         browser_login.login(issuer.url, tmp_path / "profile", browser=issuer.browser)
     assert issuer.access not in str(error.value) and not issuer.exchanges
 

@@ -10,5 +10,6 @@
 | Logout 204 or 401 | Local credential removed after server success or confirmed withdrawal. |
 | Logout outage/redirect | Credential retained; no success claim or redirect follow. |
 | Explicit local forget | Local credential removed without any server request or server-revocation claim. |
+| Sign-out keeps the server | Logout and forget leave only `server.json` (format and server address, 0600, atomic) and the lock; no token, account or gateway. A malformed, oversized, duplicate-key or unsafe `server.json` is refused. |
 
 These tests use a controlled localhost HTTP server, not the actual OAuth issuer.

@@ -89,6 +89,8 @@ def sign_ins(connected, monkeypatch):  # noqa: F811
     def login(kind):
         def run(server, path, *, timeout=120, **options):
             calls.append((kind, server, str(path), timeout))
+            if kind == "browser" and "announce" in options:
+                options["announce"](browser_login.BROWSER)
             assert not (connected.path / "credential.json").exists()
             with opened(path) as profile:
                 profile.save(
@@ -381,6 +383,7 @@ def test_exp_11_login_still_refuses_a_sign_in_the_server_accepts(
     capsys,
 ):
     opened_browser = []
+    monkeypatch.setattr(browser_login, "no_browser", lambda: None)
     monkeypatch.setattr(browser_login.webbrowser, "open", opened_browser.append)
     assert command(monkeypatch, connected, "login", "--server", connected.issuer) == 1
     assert "This profile is signed in" in capsys.readouterr().err
@@ -490,6 +493,13 @@ def test_exp_12_an_unreachable_server_keeps_the_saved_sign_in(connected):  # noq
         (["register-project"], SIGNED_OUT),
         (["whoami"], SIGNED_OUT_SHORT),
         (["refresh"], SIGNED_OUT_SHORT),
+        (
+            ["use", "coder"],
+            (
+                "You're signed out of Keeplane, so nothing was saved. "
+                "Run `keeplane login` to sign in.\n"
+            ),
+        ),
     ],
     ids=[
         "code",
@@ -500,6 +510,7 @@ def test_exp_12_an_unreachable_server_keeps_the_saved_sign_in(connected):  # noq
         "register",
         "whoami",
         "refresh",
+        "use",
     ],
 )
 def test_out_01_signed_out_sends_nothing_and_says_how_to_sign_in(
@@ -511,6 +522,8 @@ def test_out_01_signed_out_sends_nothing_and_says_how_to_sign_in(
     expected,
 ):
     assert command(monkeypatch, connected, "logout") == 0
+    # Only the server address is kept (Spec 009 ST29 "Sign out").
+    assert {item.name for item in connected.path.iterdir()} == {"lock", "server.json"}
     capsys.readouterr()
     connected.calls.clear()
     monkeypatch.setattr(
