@@ -44,7 +44,8 @@ catalog:
   [gateway copy cases](gateway-copy-cases.md), PR the
   [persona rule unit cases](persona-rule-cases.md), CODE the
   [signed-in coding cases](cli-signed-in-coding-cases.md), KC the
-  [CLI provider-key cases](cli-provider-key-command-cases.md) and RETRY the
+  [CLI provider-key cases](cli-provider-key-command-cases.md), REQ the
+  [request settings cases](cli-request-settings-cases.md) and RETRY the
   [managed runtime configuration cases](runtime-config-cases.md).
 - CL and CL-INT the [complexity level cases](../integration/complexity-level-cases.md),
   PR-INT the [persona rule cases](../integration/persona-rule-cases.md), RT the
@@ -119,7 +120,7 @@ or a case named here has no row in its own catalog or no test.
 | ST25 | Loading | MOD-UI-04 |
 | ST25 | The gateway isn't answering | MOD-UI-05 |
 | ST25 | No gateway name | MOD-UI-06 |
-| ST26 | Request settings pass through | PROTO-01, CODE-02 |
+| ST26 | Request settings pass through | PROTO-01, CODE-02, REQ-01, REQ-02, REQ-07 |
 | ST26 | The runner is left alone | MRS-10 |
 | ST27 | Key count | DK-COUNT-01, DK-COUNT-02, DK-COUNT-03, MOD-UI-01 |
 

@@ -53,6 +53,13 @@
   refused request counts nothing.
   The unit cases KEY-01 to KEY-08 are in
   [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
+- **REQ-08:** Request settings reach the gateway (Spec 004 ST26). The developer's
+  CLI settings file saves temperature 0.37, top_p 0.81, max_tokens 777 and
+  reasoning_effort `low` for the fixture model. The pinned real runtime reads and
+  edits the file, and every request the gateway fixture receives, through the
+  usage relay, carries exactly those four values. The fixture prints what it
+  received in the CI log. The unit cases REQ-01 to REQ-07 are in
+  [`cli-request-settings-cases.md`](../unit/cli-request-settings-cases.md).
 
 Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.
 For CLI-01, install the exact runtime separately and set

@@ -1,6 +1,7 @@
 """Optional exact-binary check; no live model or developer credentials."""
 
 import hashlib
+import io
 import json
 import os
 import re
@@ -20,7 +21,7 @@ if __name__ != "__main__":
     import pytest
     pytestmark = pytest.mark.optional
 
-from components.cli import usage_relay
+from components.cli import settings_file, usage_relay
 from components.cli.opencode_adapter import run
 from tests.fixtures.cli_coding_provider import Handler, start
 
@@ -295,6 +296,63 @@ def native_api_keys_only(binary):
             trap.shutdown()
             trap.server_close()
             trap_thread.join(timeout=5)
+
+
+# Spec 004 ST26: what a developer saves for a model reaches the gateway.
+REQUEST_SETTINGS = {"temperature": 0.37, "top_p": 0.81, "max_tokens": 777,
+                    "reasoning_effort": "low"}
+
+
+class EchoingHandler(Handler):
+    """The coding fixture, also keeping the request settings each request carried."""
+
+    received: ClassVar[list] = []
+
+    def do_POST(self):
+        raw = self.rfile.read(int(self.headers["Content-Length"]))
+        body = json.loads(raw)
+        type(self).received.append({name: body.get(name) for name in (
+            *REQUEST_SETTINGS, "max_completion_tokens")})
+        self.rfile = io.BytesIO(raw)
+        super().do_POST()
+
+
+def native_request_settings(binary):
+    with tempfile.TemporaryDirectory(prefix="keeplane-cli-settings-") as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        project.mkdir()
+        target = project / "math.py"
+        target.write_text("def add(a, b):\n    return a - b\n")
+        EchoingHandler.received = []
+        server = start(target, handler=EchoingHandler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            # The developer's settings file, read by the CLI, never by the runtime.
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(root / "config")}):
+                settings_file.set_request_settings("fixture-coder", REQUEST_SETTINGS)
+                result = run(binary, project, f"http://127.0.0.1:{server.server_port}/v1",
+                             "fixture-coder", "Fix the addition function in math.py.",
+                             Handler.grant, 60)
+            assert result.returncode == 0, (result.stdout, result.stderr)
+            assert target.read_text() == "def add(a, b):\n    return a + b\n"
+            print("REQ-08 received", json.dumps(EchoingHandler.received))
+            assert len(EchoingHandler.received) >= 3
+            for row in EchoingHandler.received:
+                assert {name: row[name] for name in REQUEST_SETTINGS} == REQUEST_SETTINGS, row
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+
+def test_native_request_settings():
+    import pytest
+    binary = os.environ.get("KEEPLANE_OPENCODE_V2_BIN")
+    if not binary:
+        pytest.skip("Set KEEPLANE_OPENCODE_V2_BIN to the pinned local runtime.")
+    native_request_settings(binary)
 
 
 def test_native_api_keys_only():

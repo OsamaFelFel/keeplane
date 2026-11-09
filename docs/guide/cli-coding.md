@@ -270,7 +270,9 @@ To keep the runtime somewhere other than your `PATH`, save its full path there:
 the repo's project ID; use the command rather than editing it by hand.
 
 Only you may be able to change the file (for example `chmod 600`), because
-`code` runs the program it names. Keys Keeplane doesn't know are ignored.
+`code` runs the program it names. Keys Keeplane doesn't know are ignored,
+except inside a model's [request settings](#request-settings-for-a-model),
+which are checked.
 Server and gateway addresses are not kept here; they stay in your profile.
 
 If your organization has not added any model yet, or none is approved for the
@@ -294,6 +296,42 @@ not loaded, so they cannot send a task to a model outside the class.
 
 Settings your runtime sends with each request, such as temperature, reach the
 model unchanged: Keeplane adds none of its own.
+
+### Request settings for a model
+
+To send your own temperature, top-p, maximum output tokens or reasoning
+effort with every request to a model, save them in your
+[settings file](#the-settings-file) under `"models"` and the model ID that
+`keeplane models` lists:
+
+```json
+{"models": {"coder": {"temperature": 0.2, "top_p": 0.9,
+                      "max_tokens": 4096, "reasoning_effort": "low"}}}
+```
+
+`code` gives them to the runtime for that model only, and they reach the
+gateway, and the model, with the same names and values. Each is optional:
+
+| Setting | Allowed values |
+| --- | --- |
+| `temperature` | A number from 0 to 2 |
+| `top_p` | A number from 0 to 1 |
+| `max_tokens` | A whole number from 1 to 1,000,000 |
+| `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high` or `xhigh` |
+
+Whether a model uses a setting is up to the model and its server; Keeplane
+doesn't change or drop it.
+
+Nothing else is allowed in a model's request settings. A turn always goes to
+your Keeplane gateway, so a provider, address, key or plugin setting is refused
+before the runtime starts, and nothing is sent:
+
+```text
+Keeplane's settings file /home/dev/.config/keeplane/settings.json has request settings for "coder" that set "baseURL", an address setting. Keeplane always sends requests to its gateway, so provider, address, key and plugin settings aren't allowed.
+```
+
+Any other setting, or a value out of range, is refused the same way, with the
+settings or values you can use.
 
 `keeplane code` has no web search and no web fetch: the model cannot search
 the web or open a web page during a turn, even if your shell holds a search
