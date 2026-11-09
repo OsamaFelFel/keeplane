@@ -214,7 +214,8 @@ def test_real_client_sign_in_profile_registration_catalog_and_logout(signed_in_c
     assert json.loads(command("register-project", "--project", journey.project,
                               "--name", "Real CLI journey"))["project_id"] == journey.project
     assert ProjectUse.objects.get(project_id=journey.project).user_id == flow.owner.pk
-    assert json.loads(command("models", "--project", journey.project))["models"] == [{"id": journey.model_id}]
+    listed = json.loads(command("models", "--project", journey.project))["models"]
+    assert [row["id"] for row in listed] == [journey.model_id]
     assert "removed" in command("logout")
     assert not (journey.profile / "credential.json").exists()
     assert flow.identity.session(journey.credential.access_token) is None

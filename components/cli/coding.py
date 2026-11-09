@@ -52,8 +52,9 @@ STOPPED = {
     "too_big": "This task is too big for {model}'s context, so it stopped. ",
 }
 SWITCH = {
-    "down": "Wait and try again, or run it with another model allowed for this project",
-    "too_big": "Run it with another model allowed for this project",
+    "down": "Wait and try again, or run `keeplane use MODEL` with another model allowed "
+            "for this project",
+    "too_big": "Run `keeplane use MODEL` with another model allowed for this project",
 }
 # Owner decision on governance issue #52: the task was sent and failed, so the
 # ST12 "nothing was sent" message is not used when no other model is allowed.
@@ -80,8 +81,20 @@ NO_GATEWAY = ("Keeplane doesn't know your gateway address yet, so nothing was se
               "Pass --gateway with the address your admin gave you, ending in /v1.")
 
 NO_ROUTED_MODEL = ("None of the models allowed for this project can be used right now, "
-                   "so nothing was sent. Choose one with --model; `keeplane models` "
-                   "lists them.")
+                   "so nothing was sent. Choose one with `keeplane use MODEL`; "
+                   "`keeplane models` lists them.")
+
+# Spec 004 ST17 (D105, D150): which model a task uses, and which one answered.
+USING_PICK = ("Using {model} for this task, chosen by Keeplane. "
+              "Run `keeplane use MODEL` to choose another.")
+USING_SWITCH = ("Using {model} for this task, as you chose with `keeplane use`. "
+                "Run `keeplane use --auto` to let Keeplane choose.")
+ANSWERED_BY = "Answered by {model}."
+# A developer can't switch to a model the project doesn't allow (keeplane #178).
+SWITCH_NOT_ALLOWED = ("You switched this repo to {model}, but it isn't allowed for this "
+                      "project now, so nothing was sent. Run `keeplane use MODEL` with a "
+                      "model `keeplane models` lists, or `keeplane use --auto` to let "
+                      "Keeplane choose.")
 
 NO_RUNTIME = ("Keeplane can't find OpenCode V2 " + opencode_adapter.VERSION + ". Install "
               "it, then put `opencode` on your PATH, pass --runtime PATH, or set "
@@ -92,8 +105,12 @@ WRONG_RUNTIME = ("Keeplane needs OpenCode V2 " + opencode_adapter.VERSION + ", a
                  + ", then put it on your PATH, pass --runtime PATH, or set \"runtime\" in your "
                  "Keeplane settings file.")
 
+NOT_ALLOWED = "This model is not currently allowed for the project."
+
 TASK_MODEL_FIELDS = {"project_id", "requested_model_id", "persona", "level",
                      "model_id", "chosen_by", "reason"}
+CHOSEN_BY = {None, "developer", "persona_rule", "complexity_level", "first_allowed"}
+KEY_REASONS = {"missing", "refused", "outdated"}
 
 
 def find_runtime(given=None):
@@ -115,23 +132,48 @@ def find_runtime(given=None):
     return found
 
 
-def task_model(issuer, project_id, credential):
-    """Ask the server which allowed model a task with no --model goes to."""
+def task_model(issuer, project_id, credential, switch=None, *, persona=None, level=None):
+    """Ask the server which allowed model a task with no --model goes to.
+
+    The developer's saved switch is sent as ``model_id``: the server puts it
+    before persona rules and levels, refuses it with 403 when the project
+    doesn't allow it, and moves the task in its routing order only when the
+    developer's own key for it can't be used (``reason``). The CLI names no
+    persona or level yet; judging a task's level is task 004-03.
+    """
+    query = {name: value for name, value in
+             (("model_id", switch), ("persona", persona), ("level", level))
+             if value is not None} or None
     body = request(issuer, "/api/runtime/projects/" + project_id + "/task-model",
-                   credential)
+                   credential, query=query)
     try:
         data = json.loads(body)
         if (not isinstance(data, dict) or set(data) != TASK_MODEL_FIELDS
                 or data["project_id"] != project_id
-                or data["requested_model_id"] is not None
+                or data["requested_model_id"] != switch
+                or data["persona"] != persona or data["level"] != level
+                or data["chosen_by"] not in CHOSEN_BY
+                or (data["model_id"] is None) != (data["chosen_by"] is None)
                 or (data["model_id"] is not None and (
                     not isinstance(data["model_id"], str)
                     or not 0 < len(data["model_id"]) <= 256
                     or any(ord(c) < 32 or ord(c) == 127 for c in data["model_id"])))):
             raise ValueError
-    except (ValueError, UnicodeError, RecursionError):
+        reason = data["reason"]
+        if switch is None:
+            valid = reason is None and data["chosen_by"] != "developer"
+        elif reason is None:
+            valid = data["model_id"] == switch and data["chosen_by"] == "developer"
+        elif reason == "unavailable":
+            valid = data["model_id"] is None
+        else:
+            valid = (reason in KEY_REASONS and data["model_id"] != switch
+                     and data["chosen_by"] != "developer")
+        if not valid:
+            raise ValueError
+    except (ValueError, UnicodeError, RecursionError, TypeError):
         raise ConnectionError("The server returned an invalid model choice.") from None
-    return data["model_id"]
+    return data
 
 
 def chosen_model(issuer, project_id, model, credential, notify):
@@ -142,20 +184,81 @@ def chosen_model(issuer, project_id, model, credential, notify):
         if error.status == 404:
             return model  # An older server has no choice route; the gateway still checks.
         raise
-    if choice["reason"] is None:
+    return moved_for_key(model, choice["reason"], choice["model_id"], notify)
+
+
+def moved_for_key(model, reason, other, notify):
+    """The model to use after the server's answer for a requested model."""
+    if reason is None:
         return model
-    if choice["reason"] == "unavailable":
+    if reason == "unavailable":
         raise ConnectionError(UNAVAILABLE.format(requested=model), 503)
-    why = REASONS[choice["reason"]].format(requested=model)
+    why = REASONS[reason].format(requested=model)
     fix = "keeplane keys set --model " + model
-    action = "Add one" if choice["reason"] == "missing" else "Replace it"
-    if choice["model_id"] is None:
+    action = "Add one" if reason == "missing" else "Replace it"
+    if other is None:
         raise ConnectionError(
             "Add or replace your provider key: " + why
             + ", and no other allowed model is available for this project. Run `"
             + fix + "`.", 403)
-    notify(why + "; using " + choice["model_id"] + " instead. " + action + " with `" + fix + "`.")
-    return choice["model_id"]
+    notify(why + "; using " + other + " instead. " + action + " with `" + fix + "`.")
+    return other
+
+
+def saved_switch(project_id):
+    """The developer's `keeplane use` switch for this project, or None."""
+    try:
+        return settings_file.project_model(project_id)
+    except settings_file.SettingsError as error:
+        raise ConnectionError(str(error)) from None
+
+
+def routed_model(issuer, project_id, credential, allowed, notify):
+    """The model for a turn with no --model: the switch, else Keeplane's pick."""
+    switch = saved_switch(project_id)
+    if switch is not None and switch not in allowed:
+        raise ConnectionError(SWITCH_NOT_ALLOWED.format(model=switch), 403)
+    try:
+        routed = task_model(issuer, project_id, credential, switch)
+    except SignInExpired:
+        raise
+    except ConnectionError as error:
+        if error.status == 404 and switch is None:  # An older server: no task-model route.
+            raise ConnectionError(NO_ROUTED_MODEL, 404) from None
+        if error.status == 403 and switch is not None:
+            raise ConnectionError(SWITCH_NOT_ALLOWED.format(model=switch), 403) from None
+        if error.status != 404:
+            raise
+        routed = None
+    if switch is None:
+        if routed["model_id"] is None:
+            raise ConnectionError(NO_ROUTED_MODEL)
+        if routed["model_id"] not in allowed:
+            raise ConnectionError(NOT_ALLOWED)
+        notify(USING_PICK.format(model=routed["model_id"]))
+        return routed["model_id"]
+    if routed is None:
+        # An older server: the switch goes through the model-choice route.
+        model = chosen_model(issuer, project_id, switch, credential, notify)
+    else:
+        model = moved_for_key(switch, routed["reason"], routed["model_id"], notify)
+    if model == switch:
+        notify(USING_SWITCH.format(model=switch))
+    return model
+
+
+def current_choice(issuer, project_id, credential, allowed):
+    """(model, "you" or "keeplane"), or (None, None), for `keeplane models`."""
+    switch = saved_switch(project_id)
+    if switch is not None:
+        return (switch, "you") if switch in allowed else (None, None)
+    try:
+        model = task_model(issuer, project_id, credential)["model_id"]
+    except SignInExpired:
+        raise
+    except ConnectionError:
+        return None, None  # The listing still shows; only the mark is missing.
+    return (model, "keeplane") if model in allowed else (None, None)
 
 
 def _walk(value, depth=0):
@@ -225,11 +328,10 @@ def problem_message(problem, model, alternatives):
     """Tell the developer what happened and which allowed models they may choose."""
     message = STOPPED[problem].format(model=model)
     if alternatives is None:
-        return (message + SWITCH[problem]
-                + " using --model; `keeplane models` lists them.")
+        return message + SWITCH[problem] + "; `keeplane models` lists them."
     if not alternatives:
         return NO_OTHER_MODEL[problem].format(model=model)
-    return message + SWITCH[problem] + " using --model: " + ", ".join(alternatives) + "."
+    return message + SWITCH[problem] + ": " + ", ".join(alternatives) + "."
 
 
 def gateway_endpoint(value):
@@ -245,8 +347,9 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
     """One coding turn. Only the profile and prompt are needed (Spec 009 ST30).
 
     The project comes from the repo, the gateway from the profile, the model
-    from the server's task-model route and the runtime from the settings file
-    or PATH; each given value overrides.
+    from the developer's `keeplane use` switch or the server's task-model
+    route, and the runtime from the settings file or PATH; each given value
+    overrides.
     """
     if gateway is not None:
         gateway = gateway_endpoint(gateway)
@@ -281,25 +384,18 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
                 notify(message)
 
         if model is None:
-            try:
-                model = task_model(credential.issuer, project_id, credential.access_token)
-            except ConnectionError as error:
-                if error.status == 404:  # An older server has no task-model route.
-                    raise ConnectionError(NO_ROUTED_MODEL, 404) from None
-                raise
-            if model is None:
-                raise ConnectionError(NO_ROUTED_MODEL)
+            # The developer's `keeplane use` switch, else Keeplane's pick (ST17).
+            model = routed_model(credential.issuer, project_id,
+                                 credential.access_token, allowed, report)
             if model not in allowed:
-                raise ConnectionError("This model is not currently allowed for the project.")
-            report("Using " + model + " for this task, chosen by Keeplane. "
-                   "Pass --model to choose another.")
+                raise ConnectionError(NOT_ALLOWED)
         else:
             if model not in allowed:
-                raise ConnectionError("This model is not currently allowed for the project.")
+                raise ConnectionError(NOT_ALLOWED)
             model = chosen_model(credential.issuer, project_id, model,
                                  credential.access_token, report)
             if model not in allowed:
-                raise ConnectionError("This model is not currently allowed for the project.")
+                raise ConnectionError(NOT_ALLOWED)
         try:
             result = opencode_adapter.run(
                 binary, directory, gateway, model, prompt, credential.access_token,
@@ -331,6 +427,8 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             except ConnectionError:
                 alternatives = None  # An older server: the developer still gets the reason.
             result.stderr += problem_message(problem, model, alternatives) + "\n"
+        elif not result.returncode:
+            result.stderr += ANSWERED_BY.format(model=model) + "\n"
         for secret in secrets:
             result.stdout = result.stdout.replace(secret, "[redacted]")
             result.stderr = result.stderr.replace(secret, "[redacted]")

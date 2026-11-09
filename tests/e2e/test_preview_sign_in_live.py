@@ -270,7 +270,12 @@ def empty_catalog(listed, project):
         catalog = json.loads(out)
     except ValueError:
         return False
-    return code == 0 and err == "" and catalog == {"project_id": project, "models": []}
+    # With nothing to list, nothing is marked as the current choice (Spec 004 ST17).
+    return (
+        code == 0
+        and err == ""
+        and catalog == {"project_id": project, "models": [], "chosen_by": None}
+    )
 
 
 def access_token(profile):

@@ -251,9 +251,8 @@ def test_real_device_client_profile_registration_catalog_and_logout(
                 == project
             )
             assert ProjectUse.objects.get(project_id=project).user_id == flow.owner.pk
-            assert json.loads(command("models", "--project", project))["models"] == [
-                {"id": "coder"}
-            ]
+            listed = json.loads(command("models", "--project", project))["models"]
+            assert [row["id"] for row in listed] == ["coder"]
             old = credential
             assert "refreshed" in command("refresh")
             with cli.opened(profile) as store:

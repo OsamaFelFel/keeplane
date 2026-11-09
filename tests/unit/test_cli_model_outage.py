@@ -52,7 +52,7 @@ def test_code_03_a_model_still_down_after_the_retries_names_the_alternatives(
     output = capsys.readouterr()
     assert output.err.endswith(
         "coder is unavailable right now, so this task stopped. Wait and try again, "
-        "or run it with another model allowed for this project using --model: "
+        "or run `keeplane use MODEL` with another model allowed for this project: "
         "general, local.\n"
     )
     assert json.loads(output.out)["type"] == "error"  # The native error still shows.
@@ -111,8 +111,8 @@ def test_code_05_a_task_too_big_for_the_model_names_the_problem_and_alternatives
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert len(runtime[1]) == 1 and native_model(runtime) == "keeplane/coder"
     assert capsys.readouterr().err.endswith(
-        "This task is too big for coder's context, so it stopped. Run it with another "
-        "model allowed for this project using --model: large.\n"
+        "This task is too big for coder's context, so it stopped. Run `keeplane use "
+        "MODEL` with another model allowed for this project: large.\n"
     )
 
 
@@ -137,7 +137,7 @@ def test_an_older_or_unavailable_server_still_gets_the_reason(
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert capsys.readouterr().err.endswith(
         "coder is unavailable right now, so this task stopped. Wait and try again, or "
-        "run it with another model allowed for this project using --model; "
+        "run `keeplane use MODEL` with another model allowed for this project; "
         "`keeplane models` lists them.\n"
     )
 
@@ -170,8 +170,9 @@ def test_other_failures_keep_their_own_output(  # A 401: test_cli_sign_in_again.
     connected, runtime, monkeypatch, tmp_path, capsys, event  # noqa: F811
 ):
     failed_turn(monkeypatch, runtime, event)
-    code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path)
-    assert capsys.readouterr().err == ""
+    returncode = code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path)
+    # Only a turn that finished says which model answered it (ST17).
+    assert capsys.readouterr().err == ("" if returncode else "Answered by coder.\n")
     assert all("/model-alternatives" not in row[1] for row in connected.calls)
 
 
@@ -180,7 +181,7 @@ def test_a_successful_turn_asks_for_no_alternatives(
 ):
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
     assert all("/model-alternatives" not in row[1] for row in connected.calls)
-    assert capsys.readouterr().err == ""
+    assert capsys.readouterr().err == "Answered by coder.\n"
 
 
 def test_classification_reads_only_error_events():
