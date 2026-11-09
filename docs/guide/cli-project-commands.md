@@ -24,8 +24,9 @@ Every command uses the private profile `~/.config/keeplane/account` (or
 [device sign-in](cli-device-login.md) for prerequisites and cancellation behavior.
 
 `models` lists the models this repo's project may use now; an empty list is
-valid. `register-project` records that your account uses the project and
-returns the name the server keeps for it. `keeplane code` does both for you on
+valid, for example on a new installation before an admin approves a model.
+`register-project` records that your account uses the project and returns the
+name the server keeps for it. `keeplane code` does both for you on
 every turn, so you rarely need them. Pass `--project ID` (and, for
 `register-project`, `--name NAME`) to use another project.
 
