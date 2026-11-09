@@ -101,8 +101,11 @@ another installation: this launcher manages one Compose project and its volumes.
 3. Enter `http://qwen:8080`, choose **Find models**, select
    `qwen2.5-coder:0.5b`, then add it. That address is the runner inside Docker.
    If the model already exists, use **Set up** on its row instead.
-4. Data classes start off on a fresh installation. If you enable them in
-   **Data classes**, return to the model and choose its approved classes.
+4. Data classes start off on a fresh installation. To choose which data the
+   model may receive, open **Data classes** and turn them on. Public, Internal
+   and Confidential are listed. Then return to the model and approve Public and
+   Internal. If the automated demo has already run, data classes are on and
+   `demo-qwen` already has these approvals.
 5. Open **Audit** to see the infrastructure admin's sign-ins, then sign out.
 
 There is no chat panel. For opt-in signed-in CLI model access, follow the
