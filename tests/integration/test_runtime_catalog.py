@@ -12,9 +12,10 @@ from django.utils import timezone
 
 from accounts import authentication
 from accounts.models import User
-from data_classes.models import ProjectClass
+from data_classes.models import DataClass, ProjectClass, Settings
 from model_registry import runtime_views
 from model_registry.fingerprints import fingerprint
+from model_registry.models import ModelApproval
 from model_registry.policy import DjangoModelPolicy
 from projects.models import ProjectUse
 from projects.services import DjangoProjectStore
@@ -135,6 +136,32 @@ def test_cat_01_no_registered_models_is_an_empty_catalog_not_an_error(catalog, c
     response = get(catalog)
     assert response.status_code == 200
     assert response.json() == {"project_id": catalog.project, "models": []}
+
+
+def fresh_installation():
+    """No admin has saved a data-class or model setting yet (issue #249)."""
+    ModelApproval.objects.all().delete()
+    ProjectClass.objects.all().delete()
+    Settings.objects.all().delete()
+    DataClass.objects.all().delete()
+
+
+def test_cat_02_fresh_installation_is_an_empty_catalog_not_an_error(catalog):
+    fresh_installation()
+    response = get(catalog)
+    assert response.status_code == 200
+    assert response.json() == {"project_id": catalog.project, "models": []}
+    assert not Settings.objects.exists()
+
+
+def test_cat_02_fresh_installation_storage_failure_is_unavailable(catalog, monkeypatch):
+    fresh_installation()
+
+    def unavailable(*args, **kwargs):
+        raise DatabaseError("Unavailable database")
+
+    monkeypatch.setattr(Settings.objects, "select_for_update", unavailable)
+    assert get(catalog).status_code == 503
 
 
 @pytest.mark.parametrize("context", ["not-a-uuid", str(uuid.uuid4())])

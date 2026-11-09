@@ -116,6 +116,10 @@ so partial failures and uncertain outcomes must remain visible.
 mode and model approvals on each query. It includes a model only while its
 current gateway definition matches the approved definition. Class and approval
 reads share the existing settings-writer lock; incomplete policy fails closed.
+Before an admin first saves a data-class or model setting there is no settings
+row to lock. The query then reads the defaults (data classes off) and, since
+every approval is written after that row, permits no model; it never writes the
+row. Approvals without the row are lost policy and fail closed.
 The caller must first authenticate the developer and authorize project access.
 There is no runtime endpoint yet, and this query does not verify provider keys
 or enforce the final routed destination. [Isolated cases](../../tests/integration/model-policy-cases.md) cover its behavior.
