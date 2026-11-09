@@ -49,13 +49,14 @@ Without `--model`, `code` asks the server which allowed model the task goes to
 and prints, for example:
 
 ```text
-Using coder for this task, chosen by Keeplane. Run `keeplane use MODEL` to choose another.
+Using coder for this task, chosen by Keeplane. Run `keeplane use <model>` to choose another.
 ```
 
 If none of the project's models can be used right now, it sends nothing and
-says so. After a turn that finished, it prints which model answered, for
-example `Answered by coder.`, even when your provider key moved the task to
-another model. `code` checks the current account, records
+says so. After a turn that finished, it prints every model that answered in
+it, for example `Answered by coder.` (or `Answered by coder and general.`),
+even when your provider key moved the task to another model. A turn that
+failed shows why instead. `code` checks the current account, records
 that you use the project, and checks the allowed model list before starting the
 runtime. Until an admin sets the repo's data class on the Projects page, the
 repo can use every model your organization has approved. If the model needs
@@ -81,12 +82,13 @@ This repo's next tasks use general. Run `keeplane use --auto` to let Keeplane ch
 ```
 
 `keeplane models` lists only the models allowed for this repo's project and
-marks the current one with `"current": true`; `"chosen_by"` says whether you
-chose it (`you`) or Keeplane did (`keeplane`). `use` accepts only a listed
+marks the one your next task uses with `"current": true`; `"chosen_by"` says
+whether you chose it (`you`) or Keeplane did (`keeplane`). If Keeplane can't
+pick one right now, nothing is marked. `use` accepts only a listed
 model. Any other is refused and nothing is saved:
 
 ```text
-outside isn't allowed for this project, so nothing was saved. Choose one that `keeplane models` lists.
+outside isn't allowed for this project. Nothing was saved. Choose one that `keeplane models` lists.
 ```
 
 The choice is saved in your [settings file](#the-settings-file) under the
@@ -110,12 +112,27 @@ If an admin later stops allowing the model you chose, `code` sends nothing,
 and Keeplane doesn't pick another one for you:
 
 ```text
-You switched this repo to general, but it isn't allowed for this project now, so nothing was sent. Run `keeplane use MODEL` with a model `keeplane models` lists, or `keeplane use --auto` to let Keeplane choose.
+You switched this repo to general, but it isn't allowed for this project any more, so nothing was sent. Run `keeplane use <model>` with a model `keeplane models` lists, or `keeplane use --auto` to let Keeplane choose.
 ```
 
+`keeplane models` prints the same message without ", so nothing was sent". A
+refusal that isn't about the model, such as `This project is unavailable.`,
+is shown as the server gives it.
+
 If the model you chose needs your own provider key and yours is missing or
-refused, the task goes to the model Keeplane would pick next and says why, as
-with `--model`. Your choice stays saved, so the next task tries it again.
+refused, the task goes to the model Keeplane would pick next and says why:
+
+```text
+Your own key for general is missing, so this task uses coder. Run `keeplane keys list` to see your keys.
+```
+
+It says "is refused" when the provider refused the key. Your choice stays
+saved, so the next task tries it again. `keeplane models` then marks the model
+the next task really uses, chosen by Keeplane, and says why on stderr.
+
+If your settings file can't be read, `keeplane models` still lists the models
+but marks none and says so; `code` stops, because the same file names the
+runtime it runs.
 
 ### When your sign-in has expired
 
@@ -178,7 +195,7 @@ print:
 Your Keeplane sign-in has expired. Run `keeplane login` to sign in again.
 ```
 
-`keys set`, `keys remove` and `use MODEL` print:
+`keys set`, `keys remove` and `use <model>` print:
 
 ```text
 Your Keeplane sign-in has expired. Nothing was saved. Run `keeplane login` to sign in again.
@@ -196,7 +213,7 @@ nothing. `code`, `models`, `keys` and `register-project` exit 1 with:
 You're signed out of Keeplane, so nothing was sent. Run `keeplane login` to sign in.
 ```
 
-`use MODEL` exits 1 with "You're signed out of Keeplane, so nothing was saved.
+`use <model>` exits 1 with "You're signed out of Keeplane, so nothing was saved.
 Run `keeplane login` to sign in." (`use --auto` works signed out.)
 
 `whoami` and `refresh` exit 1 with:
@@ -316,11 +333,11 @@ model on its own. If the model is still down, the turn stops and `code` prints
 the runtime's error followed by:
 
 ```text
-coder is unavailable right now, so this task stopped. Wait and try again, or run `keeplane use MODEL` with another model allowed for this project: general, local.
+coder is unavailable right now, so this task stopped. Wait and try again, or run `keeplane use <model>` with another model allowed for this project: general, local.
 ```
 
 Run the same `code` command again later, or switch to one of the listed models
-with `keeplane use MODEL` (or pass it in `--model` for one turn). The list is checked for you: only models set up in Keeplane, allowed
+with `keeplane use <model>` (or pass it in `--model` for one turn). The list is checked for you: only models set up in Keeplane, allowed
 for the project's class and with a usable key. If no other model is allowed
 for the project, `code` prints instead:
 
@@ -332,7 +349,7 @@ When the model refuses a task as too big for its context, nothing is retried
 and `code` prints:
 
 ```text
-This task is too big for coder's context, so it stopped. Run `keeplane use MODEL` with another model allowed for this project: large.
+This task is too big for coder's context, so it stopped. Make the task smaller, or run `keeplane use <model>` with another model allowed for this project: large.
 ```
 
 If no other model is allowed for the project, it prints instead:
@@ -360,7 +377,7 @@ flowchart LR
   Choice --> Local[Local coding runtime and tools]
   Local --> Gateway[Protected gateway checks every request]
   Gateway --> Model[Allowed model]
-  Model -->|turn finished| Answered[Answered by MODEL]
+  Model -->|turn finished| Answered[Answered by each model that answered]
   Model -->|5xx, timeout or 429 before the answer starts| Retry[Same model, up to two more tries]
   Retry -->|still down| Tell[Stop: wait, or keeplane use a listed model]
   Model -->|too big for its context| Tell

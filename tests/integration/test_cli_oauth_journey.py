@@ -68,6 +68,9 @@ def signed_in_cli(
 ):
     from accounts import views
     from common import api
+
+    # The CLI settings file (a `keeplane use` switch) stays inside the test.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     from model_registry import runtime_views
 
     source = Path(
@@ -214,8 +217,14 @@ def test_real_client_sign_in_profile_registration_catalog_and_logout(signed_in_c
     assert json.loads(command("register-project", "--project", journey.project,
                               "--name", "Real CLI journey"))["project_id"] == journey.project
     assert ProjectUse.objects.get(project_id=journey.project).user_id == flow.owner.pk
-    listed = json.loads(command("models", "--project", journey.project))["models"]
-    assert [row["id"] for row in listed] == [journey.model_id]
+    # Spec 004 ST17: only the model the next task uses is marked. This server
+    # lists the model but has no gateway that can take it now, so Keeplane
+    # picks none and nothing is marked (CSW-05 covers a pick).
+    assert json.loads(command("models", "--project", journey.project)) == {
+        "project_id": journey.project,
+        "models": [{"id": journey.model_id, "current": False}],
+        "chosen_by": None,
+    }
     assert "removed" in command("logout")
     assert not (journey.profile / "credential.json").exists()
     assert flow.identity.session(journey.credential.access_token) is None

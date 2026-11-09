@@ -46,23 +46,21 @@ SWITCHED = ("This repo's next tasks use {model}. "
             "Run `keeplane use --auto` to let Keeplane choose again.")
 AUTO = "This repo's next tasks use the model Keeplane chooses."
 # A developer can't switch to a model the project doesn't allow (keeplane #178).
-NOT_ALLOWED = ("{model} isn't allowed for this project, so nothing was saved. "
+# Wording decided by the associate product owner for task 009-07.
+NOT_ALLOWED = ("{model} isn't allowed for this project. Nothing was saved. "
                "Choose one that `keeplane models` lists.")
 SIGNED_OUT_USE = ("You're signed out of Keeplane, so nothing was saved. "
                   "Run `keeplane login` to sign in.")
-STALE_SWITCH = ("You switched this repo to {model}, but it isn't allowed for this "
-                "project now. Run `keeplane use MODEL` with a model listed here, or "
-                "`keeplane use --auto` to let Keeplane choose.")
 
 
 def marked(issuer, project_id, credential, notify):
-    """The allowed models, with the current choice marked (ST17)."""
+    """The allowed models, marking the one the next task uses (ST17)."""
     result = models(issuer, project_id, credential)
     allowed = {row["id"] for row in result["models"]}
-    current, chosen_by = coding.current_choice(issuer, project_id, credential, allowed)
-    switch = coding.saved_switch(project_id)
-    if switch is not None and current is None:
-        notify(STALE_SWITCH.format(model=switch))
+    current, chosen_by, notices = coding.current_choice(
+        issuer, project_id, credential, allowed)
+    for notice in notices:
+        notify(notice)
     for row in result["models"]:
         row["current"] = row["id"] == current
     result["chosen_by"] = chosen_by

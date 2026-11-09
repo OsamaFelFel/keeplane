@@ -16,7 +16,7 @@ Start with the installed `keeplane` command:
    [a device code](../../docs/guide/cli-device-login.md). Check your account with
    `keeplane whoami`.
 4. [List the models for the repo you are in](../../docs/guide/cli-project-commands.md)
-   with `keeplane models`, and switch with `keeplane use MODEL`. Any Git repo
+   with `keeplane models`, and switch with `keeplane use <model>`. Any Git repo
    works with no setup: the project comes from its `origin` remote.
 5. [Run a coding turn and resume it](../../docs/guide/cli-coding.md) with
    `keeplane code`. Select reviewed instruction files explicitly and keep history

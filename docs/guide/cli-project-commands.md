@@ -14,7 +14,7 @@ cd /path/to/repository
 keeplane login --server https://keeplane.example
 keeplane whoami
 keeplane models
-keeplane use MODEL
+keeplane use <model>
 keeplane register-project
 keeplane logout
 ```
@@ -25,7 +25,8 @@ Every command uses the private profile `~/.config/keeplane/account` (or
 [device sign-in](cli-device-login.md) for prerequisites and cancellation behavior.
 
 `models` lists the models this repo's project may use now; an empty list is
-valid. It marks the model your next task uses with `"current": true`, and
+valid. It marks the model your next task uses with `"current": true` (none when
+Keeplane can't pick one right now), and
 `"chosen_by"` says whether you chose it with `keeplane use` (`you`) or Keeplane
 picked it (`keeplane`):
 
@@ -37,7 +38,7 @@ picked it (`keeplane`):
 }
 ```
 
-`use MODEL` switches this repo's next tasks to one of those models, and
+`use <model>` switches this repo's next tasks to one of those models, and
 `use --auto` goes back to Keeplane's pick; see
 [choose the model](cli-coding.md#choose-the-model). `register-project` records that your account uses the project and
 returns the name the server keeps for it. `keeplane code` does both for you on

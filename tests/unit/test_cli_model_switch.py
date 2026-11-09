@@ -71,7 +71,7 @@ def test_sw_02_a_model_the_project_doesnt_allow_is_refused_and_nothing_saved(
 ):
     assert run(monkeypatch, "use", "outside") == 1
     assert capsys.readouterr().err.strip() == (
-        "outside isn't allowed for this project, so nothing was saved. "
+        "outside isn't allowed for this project. Nothing was saved. "
         "Choose one that `keeplane models` lists."
     )
     assert settings_file.project_model(PROJECT) is None
@@ -124,7 +124,7 @@ def test_sw_04_use_auto_clears_the_switch_without_signing_in(
     assert run(monkeypatch, "code", "Fix it") == 0
     assert capsys.readouterr().err == (
         "Using coder for this task, chosen by Keeplane. "
-        "Run `keeplane use MODEL` to choose another.\n"
+        "Run `keeplane use <model>` to choose another.\n"
         "Answered by coder.\n"
     )
     assert task_model_queries(allowed.server) == [{}]
@@ -146,8 +146,9 @@ def test_sw_05_models_marks_the_current_choice(allowed, monkeypatch, capsys):
     listing = json.loads(capsys.readouterr().out)
     assert [row["current"] for row in listing["models"]] == [False, True]
     assert listing["chosen_by"] == "you"
-    # With a switch, Keeplane's pick isn't asked.
-    assert task_model_queries(allowed.server) == [{}]
+    # With a switch, the route is asked about the switch itself, so the mark
+    # shows what the next task really uses.
+    assert task_model_queries(allowed.server) == [{}, {"model_id": ["general"]}]
 
 
 def test_sw_05_a_switch_the_project_no_longer_allows_is_named(
@@ -161,9 +162,93 @@ def test_sw_05_a_switch_the_project_no_longer_allows_is_named(
     assert listing["chosen_by"] is None
     assert output.err.strip() == (
         "You switched this repo to retired, but it isn't allowed for this project "
-        "now. Run `keeplane use MODEL` with a model listed here, or "
-        "`keeplane use --auto` to let Keeplane choose."
+        "any more. Run `keeplane use <model>` with a model `keeplane models` lists, "
+        "or `keeplane use --auto` to let Keeplane choose."
     )
+    # The server's own refusal of the switch reads the same.
+    settings_file.set_project_model(PROJECT, "general")
+    allowed.server.task_model_status = 403
+    allowed.server.task_model_reply = {"error": coding.MODEL_REFUSED}
+    assert run(monkeypatch, "models") == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out)["chosen_by"] is None
+    assert output.err.strip() == coding.SWITCH_NOT_ALLOWED.format(
+        model="general", sent=""
+    )
+
+
+@pytest.mark.parametrize(
+    "reason, state", [("missing", "is missing"), ("refused", "is refused")]
+)
+def test_sw_05_the_mark_follows_the_task_when_the_own_key_cant_be_used(
+    allowed, monkeypatch, capsys, reason, state
+):
+    settings_file.set_project_model(PROJECT, "general")
+    allowed.server.task_model_reply = {
+        "model_id": "coder",
+        "chosen_by": "first_allowed",
+        "reason": reason,
+    }
+    assert run(monkeypatch, "models") == 0
+    output = capsys.readouterr()
+    listing = json.loads(output.out)
+    assert [row["current"] for row in listing["models"]] == [True, False]
+    assert listing["chosen_by"] == "keeplane"
+    assert output.err.strip() == (
+        f"Your own key for general {state}, so your next task uses coder. "
+        "Run `keeplane keys list` to see your keys."
+    )
+    assert task_model_queries(allowed.server) == [{"model_id": ["general"]}]
+
+
+@pytest.mark.parametrize(
+    "reply, notice",
+    [
+        (
+            {"model_id": None, "chosen_by": None, "reason": "unavailable"},
+            "general is approved for this project but can't be used right now.",
+        ),
+        (
+            {"model_id": None, "chosen_by": None, "reason": "missing"},
+            (
+                "Your own key for general is missing, and no other allowed model is "
+                "available for this project. Run `keeplane keys list` to see your keys."
+            ),
+        ),
+    ],
+    ids=["unavailable", "no-other-model"],
+)
+def test_sw_05_a_switch_no_task_can_use_marks_nothing_and_says_why(
+    allowed, monkeypatch, capsys, reply, notice
+):
+    settings_file.set_project_model(PROJECT, "general")
+    allowed.server.task_model_reply = reply
+    assert run(monkeypatch, "models") == 0
+    output = capsys.readouterr()
+    listing = json.loads(output.out)
+    assert not any(row["current"] for row in listing["models"])
+    assert listing["chosen_by"] is None
+    assert output.err.strip() == notice
+
+
+def test_sw_05_a_broken_settings_file_loses_only_the_mark(
+    allowed, fake_runtime, saved_gateway, monkeypatch, capsys
+):
+    settings_file.set_project_model(PROJECT, "general")
+    settings_file.path().write_text("{not json")
+    assert run(monkeypatch, "models") == 0
+    output = capsys.readouterr()
+    listing = json.loads(output.out)
+    assert [row["id"] for row in listing["models"]] == ["coder", "general"]
+    assert listing["chosen_by"] is None
+    assert output.err.strip() == (
+        f"Keeplane's settings file {settings_file.path()} isn't valid JSON. "
+        "Your `keeplane use` choice isn't marked until the file is fixed."
+    )
+    # A turn still stops: the same file names the runtime the CLI runs.
+    assert run(monkeypatch, "code", "Fix it") == 1
+    assert "isn't valid JSON" in capsys.readouterr().err
+    assert fake_runtime[1] == []
 
 
 @pytest.mark.parametrize("status", [404, 503])
@@ -187,29 +272,43 @@ def test_sw_06_code_with_a_switch_the_project_doesnt_allow_sends_nothing(
 ):
     settings_file.set_project_model(PROJECT, "retired")
     assert run(monkeypatch, "code", "Fix it") == 1
-    assert capsys.readouterr().err.strip() == coding.SWITCH_NOT_ALLOWED.format(
-        model="retired"
+    assert capsys.readouterr().err.strip() == (
+        "You switched this repo to retired, but it isn't allowed for this project "
+        "any more, so nothing was sent. Run `keeplane use <model>` with a model "
+        "`keeplane models` lists, or `keeplane use --auto` to let Keeplane choose."
     )
-    assert "so nothing was sent" in coding.SWITCH_NOT_ALLOWED
     assert fake_runtime[1] == [] and task_model_queries(allowed.server) == []
-    # The server's own refusal (keeplane #178) reads the same.
+    # The server's own refusal of the model (keeplane #178) reads the same.
     settings_file.set_project_model(PROJECT, "general")
     allowed.server.task_model_status = 403
+    allowed.server.task_model_reply = {"error": coding.MODEL_REFUSED}
     assert run(monkeypatch, "code", "Fix it") == 1
     assert capsys.readouterr().err.strip() == coding.SWITCH_NOT_ALLOWED.format(
-        model="general"
+        model="general", sent=coding.NOTHING_SENT
     )
     assert fake_runtime[1] == []
+
+
+def test_sw_06_another_refusal_keeps_the_servers_own_reason(
+    allowed, fake_runtime, saved_gateway, monkeypatch, capsys
+):
+    settings_file.set_project_model(PROJECT, "general")
+    allowed.server.task_model_status = 403
+    allowed.server.task_model_reply = {"error": "This project is unavailable"}
+    assert run(monkeypatch, "code", "Fix it") == 1
+    assert capsys.readouterr().err.strip() == "This project is unavailable."
+    assert fake_runtime[1] == []
+    # A reason that isn't short plain text isn't shown.
+    allowed.server.task_model_reply = {"error": "Bad\x1b[31m"}
+    assert run(monkeypatch, "code", "Fix it") == 1
+    assert capsys.readouterr().err.strip() == "The requested action is unavailable."
 
 
 @pytest.mark.parametrize(
     "reason, text",
     [
-        (
-            "missing",
-            "No provider key is added for general; using coder instead. Add one",
-        ),
-        ("refused", "The provider refused your key for general; using coder instead."),
+        ("missing", "Your own key for general is missing, so this task uses coder."),
+        ("refused", "Your own key for general is refused, so this task uses coder."),
     ],
 )
 def test_sw_07_without_a_usable_own_key_the_server_moves_the_task_and_says_so(
@@ -229,8 +328,9 @@ def test_sw_07_without_a_usable_own_key_the_server_moves_the_task_and_says_so(
     }
     assert run(monkeypatch, "code", "Fix it") == 0
     error = capsys.readouterr().err
-    assert text in error and "`keeplane keys set --model general`" in error
-    assert error.endswith("Answered by coder.\n")
+    assert error == (
+        text + " Run `keeplane keys list` to see your keys.\nAnswered by coder.\n"
+    )
     assert "as you chose" not in error
     assert native_model(fake_runtime) == "keeplane/coder"
     # The switch itself stays; the next task tries it again.
@@ -357,7 +457,24 @@ def test_sw_11_answers_that_dont_match_the_question_are_refused(
 
 
 def test_sw_12_only_a_finished_turn_says_which_model_answered():
-    assert coding.ANSWERED_BY.format(model="coder") == "Answered by coder."
+    assert coding.answered_by("", "coder", {"coder"}) == "Answered by coder."
+    events = "\n".join(
+        json.dumps(event)
+        for event in (
+            {"type": "step_start", "part": {"modelID": "keeplane/coder"}},
+            {"type": "text", "part": {"model": "general"}},
+            {"type": "step_start", "part": {"modelID": "coder"}},
+            {"type": "text", "part": {"model": "not-allowed"}},
+        )
+    )
+    assert (
+        coding.answered_by(events, "coder", {"coder", "general"})
+        == "Answered by coder and general."
+    )
+    assert (
+        coding.answered_by(events, "coder", {"coder", "general", "not-allowed"})
+        == "Answered by coder, general and not-allowed."
+    )
     # The decided ST16 sentences (issues #52 and #57) are unchanged.
     assert coding.NO_OTHER_MODEL["down"].format(model="coder") == (
         "coder is unavailable right now and no other model is allowed for this "

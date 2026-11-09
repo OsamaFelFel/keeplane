@@ -91,6 +91,8 @@ def test_real_device_client_profile_registration_catalog_and_logout(
     tmp_path,
     capsys,
 ):
+    # The CLI settings file (a `keeplane use` switch) stays inside the test.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     from accounts import views
     from common import api
     from model_registry import runtime_views
@@ -251,8 +253,14 @@ def test_real_device_client_profile_registration_catalog_and_logout(
                 == project
             )
             assert ProjectUse.objects.get(project_id=project).user_id == flow.owner.pk
-            listed = json.loads(command("models", "--project", project))["models"]
-            assert [row["id"] for row in listed] == ["coder"]
+            # Spec 004 ST17: only the model the next task uses is marked. This
+            # server lists coder but has no gateway that can take it now, so
+            # Keeplane picks none and nothing is marked (CSW-05 covers a pick).
+            assert json.loads(command("models", "--project", project)) == {
+                "project_id": project,
+                "models": [{"id": "coder", "current": False}],
+                "chosen_by": None,
+            }
             old = credential
             assert "refreshed" in command("refresh")
             with cli.opened(profile) as store:

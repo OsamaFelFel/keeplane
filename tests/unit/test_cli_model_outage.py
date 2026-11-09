@@ -52,7 +52,7 @@ def test_code_03_a_model_still_down_after_the_retries_names_the_alternatives(
     output = capsys.readouterr()
     assert output.err.endswith(
         "coder is unavailable right now, so this task stopped. Wait and try again, "
-        "or run `keeplane use MODEL` with another model allowed for this project: "
+        "or run `keeplane use <model>` with another model allowed for this project: "
         "general, local.\n"
     )
     assert json.loads(output.out)["type"] == "error"  # The native error still shows.
@@ -111,8 +111,9 @@ def test_code_05_a_task_too_big_for_the_model_names_the_problem_and_alternatives
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert len(runtime[1]) == 1 and native_model(runtime) == "keeplane/coder"
     assert capsys.readouterr().err.endswith(
-        "This task is too big for coder's context, so it stopped. Run `keeplane use "
-        "MODEL` with another model allowed for this project: large.\n"
+        "This task is too big for coder's context, so it stopped. Make the task "
+        "smaller, or run `keeplane use <model>` with another model allowed for this "
+        "project: large.\n"
     )
 
 
@@ -137,7 +138,7 @@ def test_an_older_or_unavailable_server_still_gets_the_reason(
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert capsys.readouterr().err.endswith(
         "coder is unavailable right now, so this task stopped. Wait and try again, or "
-        "run `keeplane use MODEL` with another model allowed for this project; "
+        "run `keeplane use <model>` with another model allowed for this project; "
         "`keeplane models` lists them.\n"
     )
 

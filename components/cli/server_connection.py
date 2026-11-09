@@ -15,9 +15,27 @@ LIMIT = 1024 * 1024
 
 
 class ConnectionError(Exception):
-    def __init__(self, message, status=None):
+    """``detail`` is the server's own short refusal reason, when it gave one."""
+
+    def __init__(self, message, status=None, detail=None):
         super().__init__(message)
         self.status = status
+        self.detail = detail
+
+
+def refusal_reason(error):
+    """The server's ``{"error": "..."}`` text from a refusal: short and plain, or None."""
+    try:
+        if error.headers.get_content_type() != "application/json":
+            return None
+        data = json.loads(error.read(4097))
+        reason = data.get("error") if isinstance(data, dict) else None
+    except (ValueError, UnicodeError, RecursionError, OSError, AttributeError):
+        return None
+    if (not isinstance(reason, str) or not 0 < len(reason) <= 200
+            or any(ord(c) < 32 or ord(c) > 126 for c in reason)):
+        return None
+    return reason
 
 
 # Spec 009 ST29 (D190, ADR 028), wording decided by the associate product owner.
@@ -88,12 +106,16 @@ def request(server, path, credential, *, method="GET", expected=200, payload=Non
                 raise ConnectionError("The server returned an unexpected response.")
             body = response.read(LIMIT + 1)
     except HTTPError as error:
-        error.close()
-        if error.code == 401:
-            raise SignInExpired() from None
+        try:
+            if error.code == 401:
+                raise SignInExpired() from None
+            detail = refusal_reason(error) if error.code == 403 else None
+        finally:
+            error.close()
         messages = {400: "The server refused these request details.",
                     403: "The requested action is unavailable.", 503: "Keeplane is temporarily unavailable; retry later."}
-        raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code) from None
+        raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code,
+                              detail) from None
     except (URLError, OSError, ValueError):
         raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
     if len(body) > LIMIT:

@@ -51,10 +51,12 @@ STOPPED = {
     "down": "{model} is unavailable right now, so this task stopped. ",
     "too_big": "This task is too big for {model}'s context, so it stopped. ",
 }
+# Wording decided by the associate product owner for task 009-07.
 SWITCH = {
-    "down": "Wait and try again, or run `keeplane use MODEL` with another model allowed "
-            "for this project",
-    "too_big": "Run `keeplane use MODEL` with another model allowed for this project",
+    "down": "Wait and try again, or run `keeplane use <model>` with another model "
+            "allowed for this project",
+    "too_big": "Make the task smaller, or run `keeplane use <model>` with another "
+               "model allowed for this project",
 }
 # Owner decision on governance issue #52: the task was sent and failed, so the
 # ST12 "nothing was sent" message is not used when no other model is allowed.
@@ -81,20 +83,37 @@ NO_GATEWAY = ("Keeplane doesn't know your gateway address yet, so nothing was se
               "Pass --gateway with the address your admin gave you, ending in /v1.")
 
 NO_ROUTED_MODEL = ("None of the models allowed for this project can be used right now, "
-                   "so nothing was sent. Choose one with `keeplane use MODEL`; "
+                   "so nothing was sent. Choose one with `keeplane use <model>`; "
                    "`keeplane models` lists them.")
 
 # Spec 004 ST17 (D105, D150): which model a task uses, and which one answered.
+# Wording decided by the associate product owner for task 009-07.
 USING_PICK = ("Using {model} for this task, chosen by Keeplane. "
-              "Run `keeplane use MODEL` to choose another.")
+              "Run `keeplane use <model>` to choose another.")
 USING_SWITCH = ("Using {model} for this task, as you chose with `keeplane use`. "
                 "Run `keeplane use --auto` to let Keeplane choose.")
-ANSWERED_BY = "Answered by {model}."
+ANSWERED_BY = "Answered by {models}."
 # A developer can't switch to a model the project doesn't allow (keeplane #178).
 SWITCH_NOT_ALLOWED = ("You switched this repo to {model}, but it isn't allowed for this "
-                      "project now, so nothing was sent. Run `keeplane use MODEL` with a "
-                      "model `keeplane models` lists, or `keeplane use --auto` to let "
+                      "project any more{sent}. Run `keeplane use <model>` with a model "
+                      "`keeplane models` lists, or `keeplane use --auto` to let "
                       "Keeplane choose.")
+NOTHING_SENT = ", so nothing was sent"
+# The server's refusal of a model the project doesn't allow, as opposed to,
+# for example, "This project is unavailable".
+MODEL_REFUSED = "This model is not eligible for the project"
+# The switch stays saved when the developer's own key can't be used for it.
+OWN_KEY = {
+    "missing": "is missing",
+    "refused": "is refused",
+    "outdated": "is out of date",
+}
+OWN_KEY_NO_OTHER = ("Your own key for {model} {state}, and no other allowed model is "
+                    "available for this project. Run `keeplane keys list` to see your keys.")
+SWITCH_UNAVAILABLE = "{model} is approved for this project but can't be used right now."
+UNMARKED = "Your `keeplane use` choice isn't marked until the file is fixed."
+OWN_KEY_MOVED = ("Your own key for {model} {state}, so {task} uses {other}. "
+                 "Run `keeplane keys list` to see your keys.")
 
 NO_RUNTIME = ("Keeplane can't find OpenCode V2 " + opencode_adapter.VERSION + ". Install "
               "it, then put `opencode` on your PATH, pass --runtime PATH, or set "
@@ -176,7 +195,7 @@ def task_model(issuer, project_id, credential, switch=None, *, persona=None, lev
     return data
 
 
-def chosen_model(issuer, project_id, model, credential, notify):
+def chosen_model(issuer, project_id, model, credential, notify, *, switched=False):
     """Use another allowed model when the requested one needs the developer's key."""
     try:
         choice = model_choice(issuer, project_id, model, credential)
@@ -184,11 +203,16 @@ def chosen_model(issuer, project_id, model, credential, notify):
         if error.status == 404:
             return model  # An older server has no choice route; the gateway still checks.
         raise
-    return moved_for_key(model, choice["reason"], choice["model_id"], notify)
+    return moved_for_key(model, choice["reason"], choice["model_id"], notify,
+                         switched=switched)
 
 
-def moved_for_key(model, reason, other, notify):
-    """The model to use after the server's answer for a requested model."""
+def moved_for_key(model, reason, other, notify, *, switched=False):
+    """The model to use after the server's answer for a requested model.
+
+    For the developer's saved switch the task moves and the switch stays; the
+    notice says why (associate product owner, task 009-07).
+    """
     if reason is None:
         return model
     if reason == "unavailable":
@@ -201,36 +225,61 @@ def moved_for_key(model, reason, other, notify):
             "Add or replace your provider key: " + why
             + ", and no other allowed model is available for this project. Run `"
             + fix + "`.", 403)
-    notify(why + "; using " + other + " instead. " + action + " with `" + fix + "`.")
+    if switched:
+        notify(OWN_KEY_MOVED.format(model=model, state=OWN_KEY[reason],
+                                    task="this task", other=other))
+    else:
+        notify(why + "; using " + other + " instead. " + action + " with `" + fix + "`.")
     return other
 
 
 def saved_switch(project_id):
-    """The developer's `keeplane use` switch for this project, or None."""
+    """The developer's `keeplane use` switch for this project, or None.
+
+    A settings file the CLI can't trust stops a turn: it also names the
+    runtime the CLI runs.
+    """
     try:
         return settings_file.project_model(project_id)
     except settings_file.SettingsError as error:
         raise ConnectionError(str(error)) from None
 
 
+class SwitchNotAllowed(ConnectionError):
+    """The server refused the saved switch: the project doesn't allow it any more."""
+
+
+def _route(issuer, project_id, credential, switch):
+    """The task-model answer, or None from an older server without the route.
+
+    A 403 for the switch itself means the project doesn't allow it any more;
+    any other refusal keeps the server's own reason.
+    """
+    try:
+        return task_model(issuer, project_id, credential, switch)
+    except SignInExpired:
+        raise
+    except ConnectionError as error:
+        if error.status == 404:
+            return None
+        if error.status == 403 and switch is not None and error.detail == MODEL_REFUSED:
+            raise SwitchNotAllowed(
+                SWITCH_NOT_ALLOWED.format(model=switch, sent=NOTHING_SENT), 403) from None
+        if error.status == 403 and error.detail:
+            raise ConnectionError(error.detail.rstrip(".") + ".", 403) from None
+        raise
+
+
 def routed_model(issuer, project_id, credential, allowed, notify):
     """The model for a turn with no --model: the switch, else Keeplane's pick."""
     switch = saved_switch(project_id)
     if switch is not None and switch not in allowed:
-        raise ConnectionError(SWITCH_NOT_ALLOWED.format(model=switch), 403)
-    try:
-        routed = task_model(issuer, project_id, credential, switch)
-    except SignInExpired:
-        raise
-    except ConnectionError as error:
-        if error.status == 404 and switch is None:  # An older server: no task-model route.
-            raise ConnectionError(NO_ROUTED_MODEL, 404) from None
-        if error.status == 403 and switch is not None:
-            raise ConnectionError(SWITCH_NOT_ALLOWED.format(model=switch), 403) from None
-        if error.status != 404:
-            raise
-        routed = None
+        raise ConnectionError(
+            SWITCH_NOT_ALLOWED.format(model=switch, sent=NOTHING_SENT), 403)
+    routed = _route(issuer, project_id, credential, switch)
     if switch is None:
+        if routed is None:  # An older server: no task-model route.
+            raise ConnectionError(NO_ROUTED_MODEL, 404)
         if routed["model_id"] is None:
             raise ConnectionError(NO_ROUTED_MODEL)
         if routed["model_id"] not in allowed:
@@ -239,26 +288,64 @@ def routed_model(issuer, project_id, credential, allowed, notify):
         return routed["model_id"]
     if routed is None:
         # An older server: the switch goes through the model-choice route.
-        model = chosen_model(issuer, project_id, switch, credential, notify)
+        model = chosen_model(issuer, project_id, switch, credential, notify,
+                             switched=True)
     else:
-        model = moved_for_key(switch, routed["reason"], routed["model_id"], notify)
+        model = moved_for_key(switch, routed["reason"], routed["model_id"], notify,
+                              switched=True)
     if model == switch:
         notify(USING_SWITCH.format(model=switch))
     return model
 
 
 def current_choice(issuer, project_id, credential, allowed):
-    """(model, "you" or "keeplane"), or (None, None), for `keeplane models`."""
-    switch = saved_switch(project_id)
-    if switch is not None:
-        return (switch, "you") if switch in allowed else (None, None)
+    """What the next task uses, for `keeplane models`.
+
+    Returns (model or None, "you", "keeplane" or None, notices). Only the mark
+    is lost when the choice can't be worked out; the list still shows.
+    """
     try:
-        model = task_model(issuer, project_id, credential)["model_id"]
+        switch = settings_file.project_model(project_id)
+    except settings_file.SettingsError as error:
+        return None, None, [str(error) + " " + UNMARKED]
+    if switch is not None and switch not in allowed:
+        return None, None, [SWITCH_NOT_ALLOWED.format(model=switch, sent="")]
+    try:
+        routed = _route(issuer, project_id, credential, switch)
+    except SwitchNotAllowed:
+        return None, None, [SWITCH_NOT_ALLOWED.format(model=switch, sent="")]
     except SignInExpired:
         raise
     except ConnectionError:
-        return None, None  # The listing still shows; only the mark is missing.
-    return (model, "keeplane") if model in allowed else (None, None)
+        routed = False  # The server can't say now; only the mark may be missing.
+    if switch is None:
+        model = routed["model_id"] if routed else None
+        return (model, "keeplane", []) if model in allowed else (None, None, [])
+    if not routed or routed["reason"] is None:
+        return switch, "you", []  # An older or unavailable server: the switch stands.
+    if routed["reason"] == "unavailable":
+        return None, None, [SWITCH_UNAVAILABLE.format(model=switch)]
+    other = routed["model_id"]
+    if other is None or other not in allowed:
+        return None, None, [OWN_KEY_NO_OTHER.format(
+            model=switch, state=OWN_KEY[routed["reason"]])]
+    return other, "keeplane", [OWN_KEY_MOVED.format(
+        model=switch, state=OWN_KEY[routed["reason"]], task="your next task",
+        other=other)]
+
+
+def answered_by(stdout, model, allowed):
+    """Every allowed model the runtime's events name, in order; else the one sent."""
+    names = []
+    for event in _events(stdout):
+        for key, value in _walk(event):
+            if key in ("modelID", "model_id", "model") and isinstance(value, str):
+                value = value.removeprefix(opencode_adapter.PROVIDER + "/")
+                if value in allowed and value not in names:
+                    names.append(value)
+    names = names or [model]
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    return ANSWERED_BY.format(models=listed)
 
 
 def _walk(value, depth=0):
@@ -428,7 +515,7 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
                 alternatives = None  # An older server: the developer still gets the reason.
             result.stderr += problem_message(problem, model, alternatives) + "\n"
         elif not result.returncode:
-            result.stderr += ANSWERED_BY.format(model=model) + "\n"
+            result.stderr += answered_by(result.stdout, model, allowed) + "\n"
         for secret in secrets:
             result.stdout = result.stdout.replace(secret, "[redacted]")
             result.stderr = result.stderr.replace(secret, "[redacted]")

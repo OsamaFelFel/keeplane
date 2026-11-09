@@ -42,8 +42,12 @@ def test_rendered_react_sign_in_returns_to_consent_and_cli(signed_in_cli):  # no
     assert json.loads(journey.command("whoami"))["id"] == journey.credential.actor_id
     assert json.loads(journey.command("register-project", "--project", journey.project,
                                      "--name", "Rendered browser journey"))["project_id"] == journey.project
-    listed = json.loads(journey.command("models", "--project", journey.project))["models"]
-    assert [row["id"] for row in listed] == [journey.model_id]
+    # As in the OAuth journey: listed, but no gateway can take it, so unmarked.
+    assert json.loads(journey.command("models", "--project", journey.project)) == {
+        "project_id": journey.project,
+        "models": [{"id": journey.model_id, "current": False}],
+        "chosen_by": None,
+    }
     assert "removed" in journey.command("logout")
     assert journey.flow.identity.session(journey.credential.access_token) is None
     assert journey.flow.refresh(journey.credential.refresh_token).status_code == 400

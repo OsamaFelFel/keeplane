@@ -86,7 +86,7 @@ keeplane code --gateway "$KP_GATEWAY" \
 
 `code` names the model for the task before it starts and, once the turn has
 finished, the model that answered. To switch this repo to another model from
-`keeplane models`, run `keeplane use MODEL`; `keeplane use --auto` goes back to
+`keeplane models`, run `keeplane use <model>`; `keeplane use --auto` goes back to
 Keeplane's pick. `--model MODEL` chooses one for a single turn.
 
 Review the edits and run your project's tests. The runtime prints JSON events
