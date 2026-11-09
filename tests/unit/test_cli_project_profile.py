@@ -511,9 +511,15 @@ def test_code_02_keeplane_sets_no_request_settings_of_its_own(
     provider = config["providers"]["keeplane"]
     assert set(provider) == {"package", "env", "settings", "models", "headers"}
     assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
-    assert provider["models"] == {"coder": {"name": "coder"}}
-    # "websearch" and "plugins" only turn the runtime's web tools off (EGR-17).
+    # The only model entry besides its name asks for usage on streamed answers
+    # (ADR 029); it sets no temperature, top-p, token limit or effort.
+    assert provider["models"] == {"coder": {
+        "name": "coder", "compatibility": {"supportsUsageInStreaming": True}}}
+    # "websearch" and "plugins" only turn the runtime's web tools and provider
+    # sign-ins off (EGR-17); "experimental" holds only the gateway-only
+    # provider policy (KEY-01).
     assert set(config) == {"providers", "model", "share", "snapshots", "websearch",
-                           "plugins"}
+                           "plugins", "experimental"}
+    assert set(config["experimental"]) == {"policies"}
     assert config["websearch"] is False
     assert all(isinstance(row, str) and row.startswith("-") for row in config["plugins"])

@@ -145,8 +145,15 @@ off everything the runtime would otherwise reach on its own:
   and the TLS certificate settings from the developer's shell. A proxy,
   provider keys and other runtime settings in the shell are not passed on.
 - Its only provider is the Keeplane gateway, through a provider built into the
-  runtime, so no package is downloaded. Sharing is off. Keeplane's instruction
-  plugin is a local folder with no dependencies.
+  runtime, so no package is downloaded. A provider policy removes every other
+  provider the runtime knows. Sharing is off. Keeplane's instruction plugin is
+  a local folder with no dependencies.
+- No provider sign-in. The runtime's built-in provider plugins are turned off
+  (`-opencode.provider.*`): they would offer ChatGPT, OpenAI, GitHub Copilot,
+  GitLab and other sign-ins (each with its own OAuth listener and sign-in
+  service), look for local model runners on loopback ports, and install
+  packages for other providers. Cloud models are reached only with API keys
+  held by Keeplane, through the gateway.
 
 - No web search and no web fetch. The runtime has built-in tools that search
   the web through hosted services (some work without any key) and fetch any

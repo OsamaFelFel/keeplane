@@ -420,3 +420,56 @@ jobs:
           name: detection-image-${{ github.sha }}
           path: test-results/detection-image/
           retention-days: 30
+
+  coding-runtime:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # The binary the ADR 007 trials recorded: OpenCode V2 2.0.27, linux x64
+      # baseline musl build, from npm.
+      RUNTIME_ARCHIVE_URL: https://registry.npmjs.org/@opencode/cli-linux-x64-baseline-musl/-/cli-linux-x64-baseline-musl-2.0.27.tgz
+      RUNTIME_ARCHIVE_SHA256: 19883929aff7834d777af1618a811d4d1352a46c02df3ba11aad8cafc2faf93e
+      RUNTIME_BINARY_SHA256: a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Download and check the pinned coding runtime
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/runtime.tgz" "$RUNTIME_ARCHIVE_URL"
+          echo "$RUNTIME_ARCHIVE_SHA256  $RUNNER_TEMP/runtime.tgz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/runtime"
+          tar -xzf "$RUNNER_TEMP/runtime.tgz" -C "$RUNNER_TEMP/runtime"
+          echo "$RUNTIME_BINARY_SHA256  $RUNNER_TEMP/runtime/package/bin/opencode" | sha256sum --check
+      - name: Run the coding-runtime checks with the real binary
+        # The binary is built for musl, so it runs in Alpine with libstdc++.
+        # strace records every address the runtime contacts (KEY-09).
+        run: |
+          mkdir -p test-results/coding-runtime
+          docker run --rm \
+            -v "$PWD:/src" \
+            -v "$RUNNER_TEMP/runtime/package/bin:/opt/runtime:ro" \
+            -w /src \
+            -e KEEPLANE_OPENCODE_V2_BIN=/opt/runtime/opencode \
+            python:3.12.13-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 \
+            sh -euc '
+              apk add --no-cache libstdc++ strace >/dev/null
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet -r tests/requirements.txt
+              /tmp/venv/bin/python -m pytest tests/e2e/test_cli_runtime.py -m optional \
+                -p no:cacheprovider -s -rs -v --junitxml=test-results/coding-runtime/junit.xml
+            '
+      - name: Fail if a coding-runtime case was skipped
+        run: |
+          if grep -q '<skipped' test-results/coding-runtime/junit.xml; then
+            echo "A coding-runtime case was skipped" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: coding-runtime-${{ github.sha }}
+          path: test-results/coding-runtime/
+          retention-days: 30

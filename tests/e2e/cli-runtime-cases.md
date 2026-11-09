@@ -31,12 +31,35 @@
   reset makes the old session unavailable without another provider call.
   Current instruction text/hash replaces the earlier rule without discarding
   ordinary tool history. Unknown or differently scoped sessions fail before launch.
+- **KEY-09:** API keys only (Spec 009 ST30, D185; journey DEV-03). The developer's
+  home already holds OpenCode sign-ins (an OpenAI subscription sign-in, a Copilot
+  sign-in, an Anthropic key), settings that point OpenAI and Anthropic at a trap
+  server and turn the provider plugins on, and a shell with provider keys, base
+  URLs and proxies set to the trap. The pinned real runtime runs under `strace`,
+  which records every address it connects or sends to. It still reads and edits
+  the file, and every recorded address, on any host or port (DNS included), is
+  the gateway fixture or a loopback port the runtime bound and listened on itself
+  (its own local server). The trap is never contacted, no saved secret is printed,
+  and every streamed request asks for usage (`stream_options.include_usage`).
+  The fixture sends usage only when asked, with cached and reasoning tokens
+  (10 input with 4 cached, 5 output with 2 reasoning). The turn has 3 requests,
+  and its totals must be exactly 10 input and 5 output tokens for each printed
+  `step_finish`, so counting either detail twice fails. The runtime prints only the
+  text of the last step, so that request counts without usage.
+  The unit cases KEY-01 to KEY-08 are in
+  [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
 
 Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.
 For CLI-01, install the exact runtime separately and set
 `KEEPLANE_OPENCODE_V2_BIN=/absolute/path/to/opencode-v2`, then run
-`python -m pytest tests/e2e/test_cli_runtime.py -m live`.
+`python -m pytest tests/e2e/test_cli_runtime.py -m optional`.
 The same file includes CLI-04. The fixture sends no outbound requests and uses only a synthetic credential.
+CI runs this file in the `coding-runtime` job of `checks.yml`. That job uses
+`@opencode/cli-linux-x64-baseline-musl` 2.0.27 from npm, with archive SHA-256
+`19883929aff7834d777af1618a811d4d1352a46c02df3ba11aad8cafc2faf93e` and binary
+SHA-256 `a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d`
+(the binary the ADR 007 trials recorded). It is a musl build, so it runs in
+an Alpine container with `libstdc++` and `strace`.
 Use the same binary with `tests/e2e/test_cli_cancellation_native.py` for CLI-03.
 Its temporary PID recorder needs an executable temporary directory; a Docker
 check can use disposable `--tmpfs /tmp:mode=1777,exec` with a read-only root and
