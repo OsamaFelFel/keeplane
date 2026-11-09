@@ -12,8 +12,7 @@ First [sign in](cli-browser-login.md). Then go to any Git repo and run:
 
 ```sh
 cd /path/to/repository
-keeplane code --gateway https://gateway.example.com/v1 \
-  'Fix the addition function and check the result.'
+keeplane code 'Fix the addition function and check the result.'
 ```
 
 The repo needs no setup in Keeplane. `code` works out everything else:
@@ -27,17 +26,20 @@ The repo needs no setup in Keeplane. `code` works out everything else:
 | Gateway | The address saved in your profile when you signed in | `--gateway URL` |
 | Folder | The folder you run it in | `--directory PATH` |
 
-The server gives a signed-in CLI the gateway address its installer set, but
-this CLI version doesn't save it yet, so pass `--gateway` with the address
-your admin gave you. Without it, `code` sends
-nothing and says:
+When you sign in, the server gives the CLI the gateway address its installer
+set, and the CLI saves it in your profile; `keeplane refresh` saves the
+server's current address again. The CLI checks it the same way as `--gateway`
+and refuses the sign-in if the server gives one it can't use. `--gateway`
+overrides the saved address for one turn. If the server has no address (an
+older server, or one whose installer didn't set it), nothing is saved and,
+without `--gateway`, `code` sends nothing and says:
 
 ```text
 Keeplane doesn't know your gateway address yet, so nothing was sent. Pass --gateway with the address your admin gave you, ending in /v1.
 ```
 
-Once your Keeplane server gives the address at sign-in, sign in again and
-`keeplane code 'task'` needs no options at all.
+A profile saved by an earlier CLI version has no address either: once your
+server gives one, run `keeplane refresh` to save it.
 
 On a Kubernetes installation with the chart's Ingress, the gateway URL is
 Keeplane's own address followed by `/v1`, such as

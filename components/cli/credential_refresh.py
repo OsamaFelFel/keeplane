@@ -3,11 +3,11 @@
 if __package__:
     from .browser_login import exchange
     from .credential_profile import Credential, ProfileError, opened
-    from .server_connection import ConnectionError, account, logout
+    from .server_connection import ConnectionError, logout, session
 else:
     from browser_login import exchange
     from credential_profile import Credential, ProfileError, opened
-    from server_connection import ConnectionError, account, logout
+    from server_connection import ConnectionError, logout, session
 
 
 def refresh(path):
@@ -30,11 +30,14 @@ def refresh(path):
         try:
             if access == old.access_token or renewal == old.refresh_token:
                 raise ProfileError("The server did not rotate the credential pair.")
-            actor = account(old.issuer, access)
+            actor, gateway = session(old.issuer, access)
             if actor["id"] != old.actor_id:
                 raise ProfileError("The server account changed; sign in again.")
+            # The server's current gateway address replaces the saved one.
             profile.save(
-                Credential(old.issuer, old.actor_id, access, renewal, old.client_id)
+                Credential(
+                    old.issuer, old.actor_id, access, renewal, old.client_id, gateway
+                )
             )
         except BaseException:
             try:

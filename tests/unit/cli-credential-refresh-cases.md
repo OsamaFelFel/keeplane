@@ -2,7 +2,7 @@
 
 | Case | Expected result |
 | --- | --- |
-| Browser/device v2 or browser v1 profile | One fixed-client exchange, same current actor, rotated pair saved as v2. |
+| Browser/device v2 or browser v1 profile | One fixed-client exchange, same current actor, rotated pair saved as v2 (v3 with the server's gateway address; see [saved gateway cases](cli-saved-gateway-cases.md)). |
 | Unknown/missing client, v1 extra metadata or duplicate JSON | Refuse before any request. |
 | HTTP refusal or outage | Retain local state; warn rotation may already have occurred; no retry. |
 | Changed actor, unavailable account, unchanged pair, save failure or cancellation after issuance | Revoke the new pair; preserve old local state when replacement has not happened. |

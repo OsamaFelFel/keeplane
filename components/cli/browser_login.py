@@ -20,10 +20,10 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 if __package__:
     from .credential_profile import Credential, ProfileError, decode, opened
-    from .server_connection import ConnectionError, NoRedirects, account, logout, origin
+    from .server_connection import ConnectionError, NoRedirects, logout, origin, session
 else:
     from credential_profile import Credential, ProfileError, decode, opened
-    from server_connection import ConnectionError, NoRedirects, account, logout, origin
+    from server_connection import ConnectionError, NoRedirects, logout, origin, session
 
 
 class CallbackServer(HTTPServer):
@@ -256,8 +256,11 @@ def exchange(server, form, *, allow_pending=False, timeout=10):
 
 def save_login(profile, server, access, refresh, *, client_id="keeplane-cli"):
     try:
-        actor = account(server, access)
-        profile.save(Credential(server, actor["id"], access, refresh, client_id))
+        # Save the gateway address the server gives (task 009-02b); none if it has none.
+        actor, gateway = session(server, access)
+        profile.save(
+            Credential(server, actor["id"], access, refresh, client_id, gateway)
+        )
     except BaseException:
         # A later admission/storage failure must not silently leave a valid pair.
         try:

@@ -106,20 +106,61 @@ def logout(server, credential):
     request(server, "/api/runtime/session", credential, method="DELETE", expected=204)
 
 
-def account(server, credential):
+def gateway_endpoint(value):
+    """The CLI's gateway check: an origin followed by ``/v1``, returned normalized.
+
+    It holds for ``--gateway`` and for the address the server gives at sign-in.
+    """
+    if not isinstance(value, str):
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
+    try:
+        url = urlsplit(value)
+    except ValueError:
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.") from None
+    if url.path.rstrip("/") != "/v1" or url.query or url.fragment:
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
+    return origin(value[:len(value) - len(url.path)]) + "/v1"
+
+
+def session_data(server, credential):
+    """The checked ``GET /api/runtime/session`` answer, ``gateway_url`` included."""
     try:
         data = json.loads(request(server, "/api/runtime/session", credential))
-        # A server with task 009-02 also gives "gateway_url"; the CLI doesn't use it yet.
+        # A server with task 009-02 also gives "gateway_url": a string or null.
         if (not isinstance(data, dict)
                 or set(data) - {"gateway_url"} != {"id", "username", "role"}
                 or data["id"] != str(uuid.UUID(data["id"]))
                 or not isinstance(data["username"], str)
                 or not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", data["username"])
-                or data["role"] not in {"admin", "developer"}):
+                or data["role"] not in {"admin", "developer"}
+                or not isinstance(data.get("gateway_url"), (str, type(None)))):
             raise ValueError
     except (ValueError, TypeError, AttributeError, RecursionError):
         raise ConnectionError("The server returned an invalid account.") from None
+    return data
+
+
+def account(server, credential):
+    data = session_data(server, credential)
     return {"id": data["id"], "username": data["username"], "role": data["role"]}
+
+
+def session(server, credential):
+    """The signed-in account and the gateway address the server gives (009-02).
+
+    The address passes the CLI's gateway check. It is ``None`` when the server
+    doesn't know it, or is older than task 009-02 and sends no ``gateway_url``.
+    """
+    data = session_data(server, credential)
+    gateway = data.get("gateway_url")
+    if gateway is not None:
+        try:
+            gateway = gateway_endpoint(gateway)
+        except ConnectionError:
+            raise ConnectionError(
+                "The server gave a gateway address the CLI can't use. "
+                "Ask your admin to check KEEPLANE_GATEWAY_PUBLIC_URL.") from None
+    return {"id": data["id"], "username": data["username"], "role": data["role"]}, gateway
 
 
 def models(server, project_id, credential):

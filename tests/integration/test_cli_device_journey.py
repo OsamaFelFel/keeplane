@@ -312,7 +312,8 @@ def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
     profile = tmp_path / "browser-profile"
     try:
         with override_settings(
-            OAUTH2_PROVIDER=dict(settings.OAUTH2_PROVIDER, OIDC_ISS_ENDPOINT=server)
+            OAUTH2_PROVIDER=dict(settings.OAUTH2_PROVIDER, OIDC_ISS_ENDPOINT=server),
+            GATEWAY_PUBLIC_URL=None,
         ):
             thread.start()
             with cli.opened(profile, create=True) as store:
@@ -325,14 +326,17 @@ def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
             data["format"] = "keeplane-credential-v1"
             del data["client_id"]
             target.write_text(json.dumps(data))
-            assert "refreshed" in cli.credential_refresh.refresh(profile)
+            # The server now knows the gateway address; refresh saves it (009-02b).
+            with override_settings(GATEWAY_PUBLIC_URL="http://127.0.0.1:5000/v1"):
+                assert "refreshed" in cli.credential_refresh.refresh(profile)
             with cli.opened(profile) as store:
                 fresh = store.load()
             assert fresh.client_id == "keeplane-cli"
             assert fresh.actor_id == str(flow.owner.pk)
             assert fresh.access_token != tokens["access_token"]
             assert fresh.refresh_token != tokens["refresh_token"]
-            assert json.loads(target.read_text())["format"] == "keeplane-credential-v2"
+            assert fresh.gateway == "http://127.0.0.1:5000/v1"
+            assert json.loads(target.read_text())["format"] == "keeplane-credential-v3"
             assert flow.identity.session(tokens["access_token"]) is None
             assert cli.account_session.account(server, fresh.access_token)["id"] == str(
                 flow.owner.pk

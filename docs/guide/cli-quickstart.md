@@ -1,18 +1,17 @@
 # Run a coding session with Keeplane
 
 Use this guide with the installed trial CLI. The installation operator must
-provide the wheel and checksum, a sign-in server and a protected gateway
-address. Your repo needs no setup in Keeplane. Use macOS or Linux and Python
+provide the wheel and checksum, a sign-in server and a protected gateway.
+Your repo needs no setup in Keeplane. Use macOS or Linux and Python
 3.11+ for this complete sequence. Coding also needs the external OpenCode V2
 2.0.27 binary as `opencode` on your `PATH`; the wheel does not download it.
 Follow [installation](cli-install.md) first, then activate its environment so
 `keeplane --help` works.
 
-Replace these example addresses and paths with your installation's values:
+Replace this example address and path with your installation's values:
 
 ```sh
 KP_SERVER=https://keeplane.example
-KP_GATEWAY=https://gateway.example/v1
 KP_PRIVATE="$HOME/.local/share/keeplane/quickstart"
 mkdir -p "$KP_PRIVATE"
 chmod 700 "$KP_PRIVATE"
@@ -21,18 +20,21 @@ cd /absolute/path/to/repository
 
 Every command below uses your private profile in `~/.config/keeplane/account`,
 which stores plaintext credentials protected by OS file permissions; pass
-`--profile PATH` to use another. Keep history outside the repository. Use the
-server address for sign-in and the protected gateway's `/v1` address for
-coding; an ordinary unprotected model listener is insufficient. The server
-now gives a signed-in CLI the gateway address its installer set, but this CLI
-version doesn't use it yet, so pass `--gateway` to `keeplane code`. With `--state-dir`, the session history records the
-gateway address, and a later turn on that history, such as a resumed session,
-must use the same one. On a Kubernetes installation with the chart's Ingress, both are
-on Keeplane's one address: `KP_SERVER=https://<host>` and
-`KP_GATEWAY=https://<host>/v1` (see
+`--profile PATH` to use another. Keep history outside the repository. You need
+only the server address. When you sign in, the server gives the CLI the
+protected gateway's `/v1` address its installer set, and the CLI saves it in
+your profile for `keeplane code`; an ordinary unprotected model listener is
+insufficient. If `code` says Keeplane doesn't know your gateway address yet,
+the server gave none when you signed in: ask the operator for it and pass it
+as `--gateway`, which also overrides the saved one. With `--state-dir`, the
+session history records the gateway address, and a later turn on that history,
+such as a resumed session, must use the same one. On a Kubernetes installation
+with the chart's Ingress, both are on Keeplane's one address:
+`KP_SERVER=https://<host>` and the gateway `https://<host>/v1` (see
 [what to give developers](kubernetes-installation-reference.md#how-developers-reach-protected-models)).
-On the Docker preview with [guarded model access](guarded-runtime.md) it is
-`http://127.0.0.1:5000/v1` unless the launcher was given another port.
+On the Docker preview with [guarded model access](guarded-runtime.md) the
+gateway is `http://127.0.0.1:5000/v1` unless the launcher was given another
+port.
 These two addresses are the only ones the CLI and the coding runtime it starts
 need to reach, so the sequence also works on an isolated network; see
 [Developers' computers](outbound-connections.md#developers-computers).
@@ -79,7 +81,7 @@ See [migration recovery](cli-migration-preview.md) if an outcome needs review.
 ## Code, review and continue
 
 ```sh
-keeplane code --gateway "$KP_GATEWAY" \
+keeplane code \
   --instructions AGENTS.md --state-dir "$KP_PRIVATE/history" \
   'Fix the addition function and check the result.'
 ```

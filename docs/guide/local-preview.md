@@ -50,8 +50,8 @@ enrolled.`
 The app also gives that gateway address to every signed-in CLI: the account on
 `GET /api/runtime/session` carries `"gateway_url": "http://127.0.0.1:5000/v1"`,
 or the `--runtime-port` you chose, set as `KEEPLANE_GATEWAY_PUBLIC_URL` in
-`deploy/local/runtime.yaml`. This CLI version still needs it as
-`keeplane code --gateway`.
+`deploy/local/runtime.yaml`. The CLI saves it when you sign in, so
+`keeplane code` needs no `--gateway`.
 
 ```mermaid
 sequenceDiagram

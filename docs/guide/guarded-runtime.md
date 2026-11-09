@@ -11,8 +11,9 @@ name-only models are not rewritten. Developers
 keys remain on the server.
 
 Use `--runtime-port 5001` to change the host port. The coding endpoint is
-`http://127.0.0.1:5000/v1` (or the chosen port), printed at start-up; pass it as
-the coding command's `--gateway`. Sign in through
+`http://127.0.0.1:5000/v1` (or the chosen port), printed at start-up. The CLI
+saves it when you sign in, and the coding command's `--gateway` overrides it.
+Sign in through
 [the CLI browser flow](cli-browser-login.md). Provider keys remain on the
 server. The caller supplies its current credential and registered
 `X-Keeplane-Project-ID`; the project header is not proof of repository or
