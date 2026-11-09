@@ -272,7 +272,9 @@ To keep the runtime somewhere other than your `PATH`, save its full path there:
 the repo's project ID; use the command rather than editing it by hand.
 
 Only you may be able to change the file (for example `chmod 600`), because
-`code` runs the program it names. Keys Keeplane doesn't know are ignored.
+`code` runs the program it names. Keys Keeplane doesn't know are ignored,
+except inside a model's [request settings](#request-settings-for-a-model),
+which are checked.
 Server and gateway addresses are not kept here; they stay in your profile.
 
 If your organization has not added any model yet, or none is approved for the
@@ -295,7 +297,65 @@ repository's own runtime configuration, and runtime environment variables, are
 not loaded, so they cannot send a task to a model outside the class.
 
 Settings your runtime sends with each request, such as temperature, reach the
-model unchanged: Keeplane adds none of its own.
+model unchanged. Keeplane adds no request settings of its own. The runtime does
+set its own cap on output tokens (`max_completion_tokens`), unless you set
+`max_tokens` for the model, as below.
+
+### Request settings for a model
+
+To send your own temperature, top-p, maximum output tokens or reasoning
+effort with every request to a model, save them in your
+[settings file](#the-settings-file) under `"models"` and the model ID that
+`keeplane models` lists:
+
+```json
+{"models": {"coder": {"temperature": 0.2, "top_p": 0.9,
+                      "max_tokens": 4096, "reasoning_effort": "low"}}}
+```
+
+`code` gives them to the runtime for that model only, and they reach the
+gateway, and the model, with the same names and values. Each is optional:
+
+| Setting | Allowed values |
+| --- | --- |
+| `temperature` | A number from 0 to 2 |
+| `top_p` | A number from 0 to 1 |
+| `max_tokens` | A whole number from 1 to 1,000,000 |
+| `reasoning_effort` | `none`, `minimal`, `low`, `medium`, `high` or `xhigh` |
+
+Whether a model uses a setting is up to the model and its server; Keeplane
+doesn't change or drop it.
+
+With `max_tokens` set, it is the only output cap in each request: the runtime
+then writes its own cap under the same name, and your value replaces it, so
+no `max_completion_tokens` is sent beside it.
+
+Nothing else is allowed in a model's request settings. A turn always goes to
+your Keeplane gateway, so a provider, address, key or plugin setting, or any
+other setting, stops `code` before the runtime starts. It exits 1 and sends
+nothing. The setting's value is never printed:
+
+```text
+Your Keeplane settings for coder have "baseURL", which Keeplane doesn't pass on, so nothing was sent. Use temperature, top_p, max_tokens or reasoning_effort.
+```
+
+A name that isn't a plain name of up to 32 letters, digits or underscores
+isn't printed either: the message says the settings "have a setting Keeplane
+doesn't pass on".
+
+A value out of range is refused the same way:
+
+```text
+Your Keeplane settings for coder set temperature to 2.5, but it must be from 0 to 2, so nothing was sent.
+```
+
+For `max_tokens` the message says it must be a whole number from 1 to
+1,000,000. For `reasoning_effort` it says it must be one of none, minimal,
+low, medium, high or xhigh. Only a number, or for `reasoning_effort` a plain
+word of up to 16 letters, is printed. For anything else, such as text in a
+number setting, the message says you set it "to something that isn't a
+number" (or, for `reasoning_effort`, "something that isn't one of" the
+allowed words), so a key put in the wrong place never appears on screen.
 
 `keeplane code` has no web search and no web fetch: the model cannot search
 the web or open a web page during a turn, even if your shell holds a search

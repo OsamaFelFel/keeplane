@@ -53,6 +53,17 @@
   refused request counts nothing.
   The unit cases KEY-01 to KEY-08 are in
   [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
+- **REQ-08:** Request settings reach the gateway (Spec 004 ST26). The developer's
+  CLI settings file saves temperature 0.37, top_p 0.81, max_tokens 777 and
+  reasoning_effort `low` for the fixture model. The pinned real runtime reads and
+  edits the file, and every request the gateway fixture receives, through the
+  usage relay, carries exactly those four values. No request carries a
+  different `max_completion_tokens`: without the developer's max_tokens the
+  runtime sends its own (32000 on tool requests), and with it that cap is gone,
+  so max_tokens is the only one. The fixture prints what it received in the CI
+  log. The signed-in mode, through the guarded gateway on the preview, is
+  covered by the developer journey check of task 009-13 in `live-preview.yml`. The unit cases REQ-01 to REQ-07 are in
+  [`cli-request-settings-cases.md`](../unit/cli-request-settings-cases.md).
 
 Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.
 For CLI-01, install the exact runtime separately and set
