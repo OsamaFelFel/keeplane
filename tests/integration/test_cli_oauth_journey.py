@@ -1,7 +1,6 @@
 """Real CLI → Django/Toolkit HTTP; a controlled browser drives native sign-in."""
 
 import hashlib
-import importlib.util
 import io
 import json
 import os
@@ -29,6 +28,7 @@ from projects.models import ProjectUse
 
 from tests.fixtures.cli_coding_provider import Handler, start
 from tests.integration.test_cli_oauth_browser import browser_flow  # noqa: F401
+from tests.support.cli_source import load_cli
 
 pytestmark = [
     pytest.mark.optional,
@@ -73,20 +73,7 @@ def signed_in_cli(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     from model_registry import runtime_views
 
-    source = Path(
-        os.environ.get("KEEPLANE_CLI_SOURCE", Path(__file__).resolve().parents[2])
-    )
-    entry = source / "components/cli/keeplane.py"
-    if not entry.is_file():
-        if "KEEPLANE_CLI_SOURCE" in os.environ:
-            pytest.fail("The explicitly configured CLI source is unavailable")
-        pytest.skip(
-            "Compose the reviewed browser/profile CLI before this optional journey"
-        )
-    monkeypatch.syspath_prepend(str(entry.parent))
-    spec = importlib.util.spec_from_file_location("keeplane_join", entry)
-    cli = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cli)
+    cli = load_cli(monkeypatch, Path(__file__).resolve().parents[2])
 
     flow = browser_flow
     model_id = getattr(request, "param", "coder")

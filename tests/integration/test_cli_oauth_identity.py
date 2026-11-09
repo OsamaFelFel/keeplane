@@ -92,14 +92,17 @@ def test_current_account_and_hashed_storage(oauth):
     assert oauth.identity.authenticated_user(issued.raw).pk == oauth.owner.pk
     User.objects.filter(pk=oauth.owner.pk).update(role="admin")
     assert oauth.identity.session(issued.raw)["role"] == "admin"
-    response = oauth.client.get(
-        "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + issued.raw
-    )
+    # The session also gives the gateway address the CLI saves (#251, ADR 030).
+    with override_settings(GATEWAY_PUBLIC_URL="http://127.0.0.1:4000/v1"):
+        response = oauth.client.get(
+            "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + issued.raw
+        )
     assert response.status_code == 200
     assert response.json() == {
         "id": str(oauth.owner.pk),
         "username": oauth.owner.username,
         "role": "admin",
+        "gateway_url": "http://127.0.0.1:4000/v1",
     }
     assert "no-store" in response["Cache-Control"]
     oauth.client.cookies["keeplane_session"] = issued.raw

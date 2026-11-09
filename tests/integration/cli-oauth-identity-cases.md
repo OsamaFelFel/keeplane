@@ -5,6 +5,8 @@ Run `test_cli_oauth_identity.py` with the separate trial dependencies and
 
 - A bound, unexpired runtime credential resolves the current Keeplane account;
   access and refresh token columns contain no reusable token.
+  `/api/runtime/session` answers with the account's ID, username, current role
+  and the gateway address the server is set up with (`gateway_url`).
 - Account role, activity, password, expiry and current account binding are checked
   again. Unbound tokens, unknown clients, incorrect grants/scopes and plaintext
   token records are refused. Turning acceptance off refuses the next request.
