@@ -137,48 +137,60 @@ def _keys(value, depth=0):
 
 
 def check_settings(config, gateway, instruction_plugin=None):
-    """Refuse runtime settings that could use anything but the gateway (D185).
+    """Refuse runtime settings other than the reviewed gateway-only shape (D185).
 
-    The settings may name one provider, the gateway, through the built-in
-    OpenAI-compatible package, with the gateway credential from the
-    environment; no provider sign-in, stored credential, key or other plugin.
+    Exactly these keys, each with its reviewed value: one provider, `keeplane`,
+    through the built-in OpenAI-compatible package, with only the gateway
+    address, the grant from KEEPLANE_RUNTIME_GRANT and at most the project
+    header; one model entry that is exactly its name and the streamed-usage
+    flag; sharing and snapshots off; web search off; the web-tool and provider
+    plugin directives; at most Keeplane's own instruction plugin; and the
+    gateway-only provider policy. No key anywhere may name a sign-in, key or
+    credential.
     """
-    if set(config) - SETTINGS_KEYS:
-        raise ValueError("Runtime settings have an unreviewed key.")
-    providers = config.get("providers")
+    if not isinstance(config, dict) or set(config) != SETTINGS_KEYS:
+        raise ValueError("Runtime settings have a missing or unreviewed key.")
+    providers = config["providers"]
     if not isinstance(providers, dict) or list(providers) != [PROVIDER]:
         raise ValueError("Runtime settings must name only the Keeplane gateway as a provider.")
     provider = providers[PROVIDER]
-    if (set(provider) - {"package", "env", "settings", "models", "headers"}
+    if (not isinstance(provider, dict)
+            or set(provider) - {"package", "env", "settings", "models", "headers"}
             or provider.get("package") != PROVIDER_PACKAGE
             or provider.get("env") != ["KEEPLANE_RUNTIME_GRANT"]
             or provider.get("settings") != {"baseURL": gateway}):
         raise ValueError("The gateway provider may only use the gateway address and grant.")
-    if set(provider.get("headers", {})) - {"X-Keeplane-Project-ID"}:
+    headers = provider.get("headers", {})
+    if (not isinstance(headers, dict) or set(headers) - {"X-Keeplane-Project-ID"}
+            or not all(isinstance(value, str) for value in headers.values())):
         raise ValueError("The gateway provider may only send the project header.")
     models = provider.get("models")
-    if (not isinstance(models, dict) or len(models) != 1
-            or config.get("model") != PROVIDER + "/" + next(iter(models))):
+    if not isinstance(models, dict) or len(models) != 1:
         raise ValueError("Runtime settings must use one gateway model.")
-    for options in models.values():
-        if not isinstance(options, dict) or {"package", "settings", "headers"} & set(options):
-            raise ValueError("A model may not change its provider package, address or headers.")
+    [(model, options)] = models.items()
+    if config["model"] != PROVIDER + "/" + model:
+        raise ValueError("Runtime settings must use one gateway model.")
+    if options != {"name": model, "compatibility": MODEL_COMPATIBILITY}:
+        raise ValueError("The gateway model may only hold its name and the streamed-usage flag.")
+    if config["share"] != "disabled" or config["snapshots"] is not False:
+        raise ValueError("Runtime settings must keep sharing and snapshots off.")
+    if config["websearch"] is not False:
+        raise ValueError("Runtime settings must keep web search off.")
     for key in _keys(config):
         folded = str(key).lower().replace("-", "").replace("_", "")
         if any(word in folded for word in SIGN_IN_WORDS):
             raise ValueError("Runtime settings may not hold a sign-in, credential or key.")
-    if config.get("experimental") != {"policies": list(PROVIDER_POLICIES)}:
+    if config["experimental"] != {"policies": list(PROVIDER_POLICIES)}:
         raise ValueError("Runtime settings must keep the gateway-only provider policy.")
-    plugins = config.get("plugins")
+    plugins = config["plugins"]
     expected = list(DISABLED_BUILTINS) + list(DISABLED_PROVIDERS)
     if not isinstance(plugins, list) or [row for row in plugins if isinstance(row, str)] != expected:
         raise ValueError("Runtime settings must keep web tools and provider sign-ins off.")
     packages = [row for row in plugins if not isinstance(row, str)]
     allowed = [] if instruction_plugin is None else [instruction_plugin]
-    if [row.get("package") if isinstance(row, dict) else row for row in packages] != allowed:
+    if (not all(isinstance(row, dict) and set(row) == {"package", "options"} for row in packages)
+            or [row["package"] for row in packages] != allowed):
         raise ValueError("Runtime settings may only add Keeplane's instruction plugin.")
-    if config.get("websearch") is not False:
-        raise ValueError("Runtime settings must keep web search off.")
 
 
 def turn_usage(stdout):

@@ -3,6 +3,9 @@
 import hashlib
 import json
 import os
+import re
+import shlex
+import shutil
 import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -135,6 +138,41 @@ def signed_in_home(home, trap):
     }))
 
 
+INET = re.compile(
+    r"sa_family=(AF_INET6?),\s*sin6?_port=htons\((\d+)\),\s*"
+    r"(?:sin_addr=inet_addr\(\"([^\"]+)\"\)|.*?inet_pton\(AF_INET6,\s*\"([^\"]+)\")"
+)
+FAMILY = re.compile(r"sa_family=(AF_[A-Z0-9]+)")
+
+
+def traced(binary, folder):
+    """Wrap the runtime so every socket address it connects or sends to is logged."""
+    tracer = shutil.which("strace")
+    assert tracer, "KEY-09 records every connection with strace; install it."
+    log = folder / "connections.log"
+    wrapper = folder / "opencode"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        f"exec {shlex.quote(tracer)} -f -qq -A -o {shlex.quote(str(log))} "
+        "-e trace=connect,sendto,sendmsg,sendmmsg -e signal=none "
+        f"{shlex.quote(str(Path(binary).resolve()))} \"$@\"\n"
+    )
+    wrapper.chmod(0o700)
+    return wrapper, log
+
+
+def connections(log):
+    """(family, address, port) for each inet address in the trace, and other families."""
+    inet, other = set(), set()
+    for line in log.read_text().splitlines():
+        for match in INET.finditer(line):
+            family, port, v4, v6 = match.groups()
+            inet.add((family, v4 or v6, int(port)))
+        other |= {family for family in FAMILY.findall(line)
+                  if family not in ("AF_INET", "AF_INET6")}
+    return inet, other
+
+
 def native_api_keys_only(binary):
     """KEY-09: saved provider sign-ins are ignored and only the gateway is called."""
     trap = ThreadingHTTPServer(("127.0.0.1", 0), Trap)
@@ -143,12 +181,14 @@ def native_api_keys_only(binary):
     trap_thread.start()
     address = f"http://127.0.0.1:{trap.server_port}"
     with tempfile.TemporaryDirectory(prefix="keeplane-cli-home-") as home_dir, \
-            tempfile.TemporaryDirectory(prefix="keeplane-cli-project-") as temporary:
+            tempfile.TemporaryDirectory(prefix="keeplane-cli-project-") as temporary, \
+            tempfile.TemporaryDirectory(prefix="keeplane-cli-trace-") as trace_dir:
         home = Path(home_dir)
         signed_in_home(home, address)
         project = Path(temporary)
         target = project / "math.py"
         target.write_text("def add(a, b):\n    return a - b\n")
+        wrapper, log = traced(binary, Path(trace_dir))
         server = start(target)
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -162,20 +202,32 @@ def native_api_keys_only(binary):
         }
         try:
             with patch.dict(os.environ, shell):
-                result = run(binary, project, f"http://127.0.0.1:{server.server_port}/v1",
+                result = run(wrapper, project, f"http://127.0.0.1:{server.server_port}/v1",
                              "fixture-coder", "Fix the addition function in math.py.",
                              Handler.grant, 60)
             assert result.returncode == 0, (result.stdout, result.stderr)
             assert target.read_text() == "def add(a, b):\n    return a + b\n"
             assert Handler.calls == ["read", "edit"]
+            # Every address the runtime connected or sent to, on any port or
+            # host (DNS included), is the gateway fixture; the trap saw nothing.
+            inet, other = connections(log)
+            print("KEY-09 connections:", sorted(inet), "other families:", sorted(other))
+            assert inet == {("AF_INET", "127.0.0.1", server.server_port)}, inet
             assert Trap.hits == []
-            # Every streamed answer was asked to carry its token usage.
+            # Every streamed request asked for token usage.
             assert Handler.stream_options and all(
                 row == {"include_usage": True} for row in Handler.stream_options)
-            usage = turn_usage(result.stdout)
-            assert usage and usage["requests"] >= 3
-            assert usage["input_tokens"] >= 10 * usage["requests"]
-            assert usage["requests_without_usage"] == 0
+            # Exact totals: each answer is 10 input tokens (4 cached) and 5
+            # output tokens (2 reasoning), so counting cached or reasoning
+            # tokens twice fails.
+            steps = [row for row in Handler.served if row["tools"] and not row["child"]]
+            assert len(steps) == 3 and all(row["usage"] for row in steps)
+            print("KEY-09 step_finish events:", [
+                line for line in result.stdout.splitlines() if '"step_finish"' in line])
+            assert turn_usage(result.stdout) == {
+                "input_tokens": 30, "output_tokens": 15, "requests": 3,
+                "requests_without_usage": 0,
+            }
             for secret in ("synthetic-openai", "synthetic-anthropic", "synthetic-copilot"):
                 assert secret not in result.stdout + result.stderr
         finally:

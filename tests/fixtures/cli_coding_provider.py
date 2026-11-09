@@ -16,6 +16,14 @@ class Handler(BaseHTTPRequestHandler):
     turn_scoped = False
     call_prefix = "call_"
     stream_options: ClassVar[list] = []
+    served: ClassVar[list] = []
+    # Per answer: 10 prompt tokens (4 of them cached) and 5 completion tokens
+    # (2 of them reasoning), so a turn's totals show any double counting.
+    usage: ClassVar[dict] = {
+        "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+        "prompt_tokens_details": {"cached_tokens": 4},
+        "completion_tokens_details": {"reasoning_tokens": 2},
+    }
 
     def log_message(self, *args):
         pass
@@ -72,11 +80,22 @@ class Handler(BaseHTTPRequestHandler):
         if body.get("stream"):
             choice = {"index": 0, "delta": message, "finish_reason": finish}
         response = {"id": "cli-fixture", "object": "chat.completion.chunk" if body.get("stream") else "chat.completion",
-                    "model": "fixture-coder", "choices": [choice],
-                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}}
+                    "model": "fixture-coder", "choices": [choice]}
+        # Like an OpenAI-compatible gateway: a streamed answer carries usage only
+        # when the request asks for it, in a last chunk with no choices.
+        wants_usage = (body.get("stream_options") or {}).get("include_usage") is True
+        if not body.get("stream"):
+            response["usage"] = self.usage
+        type(self).served.append({"child": child, "tools": bool(tools),
+                                  "usage": bool(wants_usage or not body.get("stream"))})
         payload = json.dumps(response).encode()
         if body.get("stream"):
-            payload = b"data: " + payload + b"\n\ndata: [DONE]\n\n"
+            payload = b"data: " + payload + b"\n\n"
+            if wants_usage:
+                final = {"id": "cli-fixture", "object": "chat.completion.chunk",
+                         "model": "fixture-coder", "choices": [], "usage": self.usage}
+                payload += b"data: " + json.dumps(final).encode() + b"\n\n"
+            payload += b"data: [DONE]\n\n"
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream" if body.get("stream") else "application/json")
         self.send_header("Content-Length", str(len(payload)))
@@ -94,4 +113,5 @@ def start(target, required_instruction=None, *, handler=Handler, turn_scoped=Fal
     Handler.turn_scoped = turn_scoped
     Handler.call_prefix = "call_"
     Handler.stream_options = []
+    Handler.served = []
     return ThreadingHTTPServer(("127.0.0.1", 0), handler)

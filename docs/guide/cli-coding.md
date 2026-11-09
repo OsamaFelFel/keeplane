@@ -132,12 +132,13 @@ The runtime `code` starts can't sign in to a provider either:
 
 ### Token usage
 
-The runtime asks the gateway to include token counts in its streamed answers.
-After a turn, Keeplane reads the counts the runtime reported for each model
-call: input tokens (cached input included), output tokens (reasoning
-included), the number of calls and how many came back without counts. Calls
-made by a subagent are not in these counts. The counts hold no prompt, answer,
-file or path.
+The runtime asks the gateway to include token counts in its streamed answers,
+so each model call of a turn ends with its counts. Keeplane doesn't show or
+report them yet. Once `keeplane usage` is available, the CLI will send one
+report per model after each turn: input tokens (cached input included), output
+tokens (reasoning included), the number of calls and how many came back
+without counts. A report won't hold a prompt, an answer, a file or a path, and
+calls made by a subagent won't be counted.
 
 ### When the model is down or the task is too big
 

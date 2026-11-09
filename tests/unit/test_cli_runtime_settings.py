@@ -172,6 +172,10 @@ def provider(config):
     return config["providers"]["keeplane"]
 
 
+def model(config):
+    return provider(config)["models"]["coder"]
+
+
 def enable(plugin, config):
     config["plugins"].append(plugin)
 
@@ -228,6 +232,36 @@ TAMPERED = {
     "mcp": lambda c: c.update(mcp={"remote": {"url": "https://example.invalid"}}),
     "auth key": lambda c: c.update(auth={"openai": {"type": "oauth"}}),
     "enabled providers": lambda c: c.update(enabled_providers=["openai"]),
+    # Sharing or snapshots turned on, or a reviewed key left out.
+    "share auto": lambda c: c.update(share="auto"),
+    "share manual": lambda c: c.update(share="manual"),
+    "snapshots on": lambda c: c.update(snapshots=True),
+    "no snapshots key": lambda c: c.pop("snapshots"),
+    "no websearch key": lambda c: c.pop("websearch"),
+    # A model entry that is more, or less, than its name and the usage flag.
+    "model provider package": lambda c: model(c).update(
+        provider={"package": "@opencode/ai/providers/anthropic"}
+    ),
+    "model api url": lambda c: model(c).update(
+        api={"url": "https://api.openai.com/v1"}
+    ),
+    "model options address": lambda c: model(c).update(
+        options={"baseURL": "https://api.anthropic.com"}
+    ),
+    "model limit": lambda c: model(c).update(limit={"context": 1}),
+    "empty compatibility": lambda c: model(c).update(compatibility={}),
+    "usage off": lambda c: model(c).update(
+        compatibility={"supportsUsageInStreaming": False}
+    ),
+    "extra compatibility": lambda c: model(c)["compatibility"].update(
+        supportsStore=True
+    ),
+    "no compatibility": lambda c: model(c).pop("compatibility"),
+    "other name": lambda c: model(c).update(name="gpt-5"),
+    # Keeplane's instruction plugin given more than its options.
+    "instruction plugin extra": lambda c: c["plugins"].insert(
+        0, {"package": "/cli/instruction_plugin", "options": {}, "install": True}
+    ),
 }
 
 
@@ -248,8 +282,10 @@ def test_key_04_reviewed_settings_pass():
 def test_key_05_sign_in_paths_are_refused(name):
     config = changed(TAMPERED[name])
     assert config != good()
+    # Keeplane's own plugin is allowed, so a refusal is about the change itself.
+    plugin = "/cli/instruction_plugin" if name == "instruction plugin extra" else None
     with pytest.raises(ValueError):
-        opencode_adapter.check_settings(copy.deepcopy(config), GATEWAY)
+        opencode_adapter.check_settings(copy.deepcopy(config), GATEWAY, plugin)
 
 
 def test_key_05_refusal_stops_before_the_runtime(tmp_path, monkeypatch):

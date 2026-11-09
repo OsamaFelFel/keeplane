@@ -169,6 +169,7 @@ class WorkflowTests(unittest.TestCase):
             "local-application",
             "postgres",
             "detection-image",
+            "coding-runtime",
         ):
             self.assertIn("  " + job + ":\n    needs: scope\n    " + gate, text)
         # The backend check reports the shards' result under its own name.
