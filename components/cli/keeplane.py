@@ -69,13 +69,16 @@ def marked(issuer, project_id, credential, notify):
     return result
 
 
-def use_model(profile_path, project_id, model):
+def use_model(profile_path, project_id, model, name=None):
     """Save the switch for this repo's project, only for an allowed model."""
     with opened(profile_path) as profile:
         credential = profile.load()
         actor = account(credential.issuer, credential.access_token)
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
+        if name:
+            # Any repo works with no setup (D149): record it as `code` does.
+            register(credential.issuer, project_id, name, credential.access_token)
         catalog = models(credential.issuer, project_id, credential.access_token)
     if model not in {row["id"] for row in catalog["models"]}:
         raise ConnectionError(NOT_ALLOWED.format(model=model), 403)
@@ -102,6 +105,9 @@ def project_command(action, profile_path, project_id, name=None, notify=None):
                 credential.issuer, project_id, name, credential.access_token
             )
         elif action == "models":
+            if name:
+                # Any repo works with no setup (D149): record it as `code` does.
+                register(credential.issuer, project_id, name, credential.access_token)
             result = marked(credential.issuer, project_id, credential.access_token,
                             report)
         else:
@@ -259,17 +265,17 @@ def main():
         elif args.command == "refresh":
             output = credential_refresh.refresh(args.profile)
         elif args.command == "use":
-            project_id = repo_project(args.project)[0]
+            project_id, name = repo_project(args.project)
             if args.auto:
                 settings_file.set_project_model(project_id, None)
                 output = AUTO
             else:
-                output = use_model(args.profile, project_id, args.model)
+                output = use_model(args.profile, project_id, args.model, name)
         elif args.command == "usage":
             output = usage.show(args.profile)
         elif args.command == "keys":
             if args.key_action == "list":
-                output = provider_keys.list_keys(args.profile, repo_project(args.project)[0])
+                output = provider_keys.list_keys(args.profile, *repo_project(args.project))
             else:
                 output = provider_keys.run(args.key_action, args.profile, args.model,
                                            key_stdin=getattr(args, "key_stdin", False))

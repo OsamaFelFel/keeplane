@@ -291,6 +291,14 @@ def test_repo_10_models_and_register_use_the_repo_in_this_folder(
 ):
     assert run(monkeypatch, "models") == 0
     assert json.loads(capsys.readouterr().out)["project_id"] == PROJECT
+    # A repo nobody set up works at once (D149): `models` records it first,
+    # as `code` does, so the server can list its allowed models (DEV-02).
+    registered = [
+        row for row in sample.server.calls if row[1] == "/api/runtime/projects"
+    ]
+    assert [row[3] for row in registered] == [
+        {"project_id": PROJECT, "name": "Platform/payments-api"}
+    ]
     assert run(monkeypatch, "register-project") == 0
     assert json.loads(capsys.readouterr().out)["project_id"] == PROJECT
     assert sample.server.calls[-1][3] == {
@@ -298,16 +306,52 @@ def test_repo_10_models_and_register_use_the_repo_in_this_folder(
         "name": "Platform/payments-api",
     }
     given = str(uuid.uuid4())
+    before = len(sample.server.calls)
     assert run(monkeypatch, "models", "--project", given) == 0
     assert json.loads(capsys.readouterr().out)["project_id"] == given
+    # With --project and no name, nothing is recorded.
+    assert "/api/runtime/projects" not in [
+        row[1] for row in sample.server.calls[before:]
+    ]
     seen = []
     monkeypatch.setattr(
         keeplane.provider_keys,
         "list_keys",
-        lambda profile, project: seen.append(project) or "listed",
+        lambda profile, project, name=None: seen.append((project, name)) or "listed",
     )
     assert run(monkeypatch, "keys", "list") == 0
-    assert seen == [PROJECT]
+    assert seen == [(PROJECT, "Platform/payments-api")]
+
+
+def test_repo_10b_keys_list_records_a_repo_nobody_set_up_first(
+    sample, monkeypatch, capsys
+):
+    steps = []
+    monkeypatch.setattr(
+        keeplane.provider_keys,
+        "register",
+        lambda server, project, name, credential: steps.append(
+            ("register", project, name)
+        ),
+    )
+    monkeypatch.setattr(
+        keeplane.provider_keys,
+        "key_rows",
+        lambda server, credential, project: (
+            steps.append(("list", project)) or {"project_id": project, "models": []}
+        ),
+    )
+    assert run(monkeypatch, "keys", "list") == 0
+    assert json.loads(capsys.readouterr().out)["project_id"] == PROJECT
+    assert steps == [
+        ("register", PROJECT, "Platform/payments-api"),
+        ("list", PROJECT),
+    ]
+    # With --project alone nothing is recorded.
+    steps.clear()
+    given = str(uuid.uuid4())
+    assert run(monkeypatch, "keys", "list", "--project", given) == 0
+    assert steps == [("list", given)]
 
 
 def test_repo_11_outside_a_repo_nothing_is_sent_and_the_flags_are_named(

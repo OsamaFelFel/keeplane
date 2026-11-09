@@ -44,8 +44,9 @@ An empty list has nothing to mark: `"models": []` and `"chosen_by": null`.
 `use --auto` goes back to Keeplane's pick; see
 [choose the model](cli-coding.md#choose-the-model). `register-project` records
 that your account uses the project and returns the name the server keeps for
-it. `keeplane code` does both for you on
-every turn, so you rarely need them. Pass `--project ID` (and, for
+it. `models`, `use`, `keys list` and `keeplane code` record it for you too, so a repo nobody
+has set up works at once and shows on the admin's **Projects** page as not set
+up, with your name; you rarely need `register-project`. Pass `--project ID` (and, for
 `register-project`, `--name NAME`) to use another project.
 
 ## How a repo becomes a project

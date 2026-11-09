@@ -8,9 +8,11 @@ import warnings
 
 if __package__:
     from .credential_profile import ProfileError, opened
+    from .project_registration import register
     from .server_connection import ConnectionError, account, request
 else:
     from credential_profile import ProfileError, opened
+    from project_registration import register
     from server_connection import ConnectionError, account, request
 
 
@@ -107,13 +109,16 @@ def key_rows(issuer, access_token, project_id):
     return data
 
 
-def list_keys(profile_path, project_id):
+def list_keys(profile_path, project_id, name=None):
     project_id = project_id_of(project_id)
     with opened(profile_path) as profile:
         credential = profile.load()
         actor = account(credential.issuer, credential.access_token)
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
+        if name:
+            # Any repo works with no setup (D149): record it as `code` does.
+            register(credential.issuer, project_id, name, credential.access_token)
         data = key_rows(credential.issuer, credential.access_token, project_id)
         output = json.dumps(data, indent=2)
         for secret in (credential.access_token, credential.refresh_token):

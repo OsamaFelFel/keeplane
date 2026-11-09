@@ -11,7 +11,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
 
-
 KEY_FILE = Path(os.environ["TRIAL_KEY_FILE"])
 
 
@@ -41,7 +40,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(404, {"error": "Not found"})
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if not 1 <= size <= 65536:
+            # A coding runtime's request, with its tool definitions, can be large.
+            if not 1 <= size <= 1048576:
                 return self.reply(400, {"error": "Invalid request size"})
             body = json.loads(self.rfile.read(size))
             expected = KEY_FILE.read_text().strip()
@@ -70,6 +70,8 @@ class Handler(BaseHTTPRequestHandler):
                     "usage": {"input_tokens": 2, "output_tokens": 3},
                 },
             )
+        if body.get("stream"):
+            return self.stream(model, body)
         return self.reply(
             200,
             {
@@ -93,6 +95,47 @@ class Handler(BaseHTTPRequestHandler):
                 },
             },
         )
+
+    def stream(self, model, body):
+        """The same answer as server-sent events, with usage when asked for."""
+        head = {
+            "id": "cloud-fixture",
+            "object": "chat.completion.chunk",
+            "model": model,
+        }
+        events = [
+            {
+                **head,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": "mock cloud answer"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            }
+        ]
+        if (body.get("stream_options") or {}).get("include_usage") is True:
+            events.append(
+                {
+                    **head,
+                    "choices": [],
+                    "usage": {
+                        "prompt_tokens": 2,
+                        "completion_tokens": 3,
+                        "total_tokens": 5,
+                    },
+                }
+            )
+        payload = b"".join(
+            b"data: " + json.dumps(event).encode() + b"\n\n" for event in events
+        )
+        payload += b"data: [DONE]\n\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def log_message(self, _format, *_args):
         pass

@@ -9,7 +9,7 @@ the [integration cases](../integration/cli-model-switch-cases.md).
 
 | Case | Expected result |
 | --- | --- |
-| SW-01 Switch | `keeplane use general` with `general` allowed prints "This repo's next tasks use general. Run `keeplane use --auto` to let Keeplane choose again." It saves `general` under the repo's project ID in the private (0600) settings file, and asks only for the account and the allowed list. Another project has no switch. |
+| SW-01 Switch | `keeplane use general` with `general` allowed prints "This repo's next tasks use general. Run `keeplane use --auto` to let Keeplane choose again." It saves `general` under the repo's project ID in the private (0600) settings file, and asks only for the account, the repo's first-use record (as `code` does) and the allowed list. Another project has no switch. |
 | SW-02 Not allowed | `keeplane use outside` for a model the project doesn't allow exits 1 with "outside isn't allowed for this project. Nothing was saved. Choose one that `keeplane models` lists." No settings file is written. |
 | SW-03 Code uses the switch | `keeplane code "task"` sends the switch as the `task-model` route's `model_id`, runs that model, says "Using general for this task, as you chose with `keeplane use`. Run `keeplane use --auto` to let Keeplane choose." and, after the turn, "Answered by general." |
 | SW-04 Back to Keeplane's pick | `keeplane use --auto` clears the switch without a sign-in or any request, and says "This repo's next tasks use the model Keeplane chooses." `code` then asks the route with no model and says "Using coder for this task, chosen by Keeplane. Run `keeplane use <model>` to choose another." |
