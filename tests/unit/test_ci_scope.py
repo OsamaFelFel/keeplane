@@ -169,6 +169,7 @@ class WorkflowTests(unittest.TestCase):
             "local-application",
             "postgres",
             "detection-image",
+            "cli-sign-in",
             "coding-runtime",
         ):
             self.assertIn("  " + job + ":\n    needs: scope\n    " + gate, text)
