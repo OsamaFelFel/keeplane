@@ -1,4 +1,4 @@
-# Collect the optional sign-in trial's source and notices
+# Collect the CLI sign-in packages' source and notices
 
 With Python 3.11+ and the pinned Linux musl CPython 3.13 wheels from
 `requirements-cli-auth.txt`, create a fresh directory outside the repository:
@@ -82,4 +82,7 @@ review. Cryptography documents its
 [static wheels](https://cryptography.io/en/48.0.1/installation/#static-wheels);
 the [GCC exception](https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-14.2.0/COPYING.RUNTIME)
 does not remove that inventory work. The report always marks native closure
-incomplete. No default package or release choice changes here.
+incomplete. The default preview image includes these wheels (ADR 028); it is
+built on the user's machine. Shipping them, `jwcrypto` (LGPL-3.0-or-later)
+included, in a published image or bundle still waits for the owner's decision
+(governance issue #85, question 1); locally built previews are unaffected.

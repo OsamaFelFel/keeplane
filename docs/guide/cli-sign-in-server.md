@@ -31,6 +31,9 @@ original wheel notices stay installed and build-only Python installers are
 removed. The image is built on your computer from those wheels. The
 [source and notice obligations](../../components/control-plane/licenses/cli-auth-trial.md)
 apply before anyone redistributes an image or bundle that contains them.
+Shipping them, `jwcrypto` (LGPL) included, in a published image or bundle still
+waits for the owner's decision (governance issue #85, question 1); locally built
+previews are unaffected.
 
 ## Python development server
 

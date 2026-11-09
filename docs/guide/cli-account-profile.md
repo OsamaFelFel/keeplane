@@ -1,6 +1,6 @@
 # Manage your CLI sign-in
 
-This is the private credential storage part of the browser sign-in trial. Use
+Your CLI sign-in is kept in a private account profile. Use
 [browser sign-in](cli-browser-login.md) to create the profile; do not construct
 one by putting secrets in shell commands.
 
@@ -24,7 +24,7 @@ the pair. It can refresh an expired access token while its refresh token remains
 valid. There is no automatic retry or refresh during a coding turn. An uncertain
 exchange retains the old local profile, but the server may already have rotated
 it; recover with logout or operator withdrawal and sign in again. Do not blindly
-retry a lost rotation response: the trial server withdraws the rotated family
+retry a lost rotation response: the server withdraws the rotated family
 when a previously used refresh token is replayed.
 
 New profiles use format v2 and store only the fixed browser or device client ID.
