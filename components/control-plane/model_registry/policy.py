@@ -88,7 +88,18 @@ class DjangoModelPolicy:
             # missing policy or caching an earlier decision across requests.
             settings = Settings.objects.select_for_update().filter(pk=1).first()
             if settings is None:
-                raise ModelPolicyUnavailable("Data-class settings are missing")
+                # A fresh installation (issue #249): no admin has saved a
+                # data-class or model setting yet, so data classes are off
+                # (Spec 005 ST18) and no model is approved. Every approval is
+                # written under settings_change, which creates this row first,
+                # so with no approval there is nothing to allow.
+                if not ModelApproval.objects.exists():
+                    return frozenset(), None
+                # An approval without the row is lost policy, unless a first
+                # policy write committed since the read above.
+                settings = Settings.objects.select_for_update().filter(pk=1).first()
+                if settings is None:
+                    raise ModelPolicyUnavailable("Data-class settings are missing")
             class_name = held_class = None
             if settings.classes_enabled:
                 class_id = (
