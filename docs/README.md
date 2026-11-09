@@ -4,6 +4,7 @@
 | --- | --- |
 | Start locally, change the port or troubleshoot | [Run locally](guide/local-preview.md) |
 | Try the experimental local coding adapter | [CLI prototype](../components/cli/README.md) |
+| Get started as a developer: sign in, choose a model, code, see usage, sign out | [Get started with the CLI](guide/cli-quickstart.md) |
 | Sign in, code and resume private history | [Signed-in coding](guide/cli-coding.md) |
 | Create accounts and change roles | [Accounts](guide/accounts-local.md) |
 | Add, edit or remove a model | [Model setup](guide/model-add-local.md), [model approvals](guide/model-approval-local.md) |
