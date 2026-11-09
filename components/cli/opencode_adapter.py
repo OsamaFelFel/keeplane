@@ -29,6 +29,29 @@ DISABLED_BUILTINS = (
     "-opencode.tool.websearch",
     "-opencode.websearch.*",
 )
+# D185: cloud models only through API keys, and only through the gateway.
+# Every built-in provider plugin is turned off: they add the runtime's own
+# sign-ins (ChatGPT and OpenAI subscriptions, GitHub Copilot, GitLab and
+# others, with their OAuth listeners), local-runner discovery and package
+# installs. The gateway provider comes from these settings, not a plugin.
+DISABLED_PROVIDERS = ("-opencode.provider.*",)
+PROVIDER = "keeplane"
+PROVIDER_PACKAGE = "@opencode/ai/providers/openai-compatible"
+# Only this settings' provider may be used; the catalogue's other providers
+# (OpenAI, Anthropic and the rest) are removed before a turn starts.
+PROVIDER_POLICIES = (
+    {"action": "provider.use", "resource": "*", "effect": "deny"},
+    {"action": "provider.use", "resource": PROVIDER, "effect": "allow"},
+)
+# ADR 029: ask for token usage on streamed answers (stream_options.include_usage).
+MODEL_COMPATIBILITY = {"supportsUsageInStreaming": True}
+SETTINGS_KEYS = frozenset({"providers", "model", "share", "snapshots", "websearch",
+                           "plugins", "experimental"})
+# Words that name a sign-in, a stored credential or a key anywhere in the
+# settings. The gateway credential reaches the runtime only through
+# KEEPLANE_RUNTIME_GRANT, named in "env".
+SIGN_IN_WORDS = ("auth", "login", "apikey", "accesstoken", "refreshtoken", "bearer",
+                 "credential", "subscription", "accountid", "secret", "password")
 
 
 class Cancelled(KeyboardInterrupt):
@@ -101,6 +124,99 @@ def coding_turn(command, *, input, env, cwd, timeout, cancelled=None, pass_fds=(
             stream.close()
 
 
+def _keys(value, depth=0):
+    if depth > 32:
+        raise ValueError("Runtime settings are nested too deeply.")
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield key
+            yield from _keys(item, depth + 1)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _keys(item, depth + 1)
+
+
+def check_settings(config, gateway, instruction_plugin=None):
+    """Refuse runtime settings that could use anything but the gateway (D185).
+
+    The settings may name one provider, the gateway, through the built-in
+    OpenAI-compatible package, with the gateway credential from the
+    environment; no provider sign-in, stored credential, key or other plugin.
+    """
+    if set(config) - SETTINGS_KEYS:
+        raise ValueError("Runtime settings have an unreviewed key.")
+    providers = config.get("providers")
+    if not isinstance(providers, dict) or list(providers) != [PROVIDER]:
+        raise ValueError("Runtime settings must name only the Keeplane gateway as a provider.")
+    provider = providers[PROVIDER]
+    if (set(provider) - {"package", "env", "settings", "models", "headers"}
+            or provider.get("package") != PROVIDER_PACKAGE
+            or provider.get("env") != ["KEEPLANE_RUNTIME_GRANT"]
+            or provider.get("settings") != {"baseURL": gateway}):
+        raise ValueError("The gateway provider may only use the gateway address and grant.")
+    if set(provider.get("headers", {})) - {"X-Keeplane-Project-ID"}:
+        raise ValueError("The gateway provider may only send the project header.")
+    models = provider.get("models")
+    if (not isinstance(models, dict) or len(models) != 1
+            or config.get("model") != PROVIDER + "/" + next(iter(models))):
+        raise ValueError("Runtime settings must use one gateway model.")
+    for options in models.values():
+        if not isinstance(options, dict) or {"package", "settings", "headers"} & set(options):
+            raise ValueError("A model may not change its provider package, address or headers.")
+    for key in _keys(config):
+        folded = str(key).lower().replace("-", "").replace("_", "")
+        if any(word in folded for word in SIGN_IN_WORDS):
+            raise ValueError("Runtime settings may not hold a sign-in, credential or key.")
+    if config.get("experimental") != {"policies": list(PROVIDER_POLICIES)}:
+        raise ValueError("Runtime settings must keep the gateway-only provider policy.")
+    plugins = config.get("plugins")
+    expected = list(DISABLED_BUILTINS) + list(DISABLED_PROVIDERS)
+    if not isinstance(plugins, list) or [row for row in plugins if isinstance(row, str)] != expected:
+        raise ValueError("Runtime settings must keep web tools and provider sign-ins off.")
+    packages = [row for row in plugins if not isinstance(row, str)]
+    allowed = [] if instruction_plugin is None else [instruction_plugin]
+    if [row.get("package") if isinstance(row, dict) else row for row in packages] != allowed:
+        raise ValueError("Runtime settings may only add Keeplane's instruction plugin.")
+    if config.get("websearch") is not False:
+        raise ValueError("Runtime settings must keep web search off.")
+
+
+def turn_usage(stdout):
+    """Token usage the runtime reported for one turn, or None (ADR 029).
+
+    Each model request of the turn ends with a step_finish event whose tokens
+    come from the gateway's answer. Cached input counts as input and reasoning
+    as output. A request whose answer carried no usage reports zero tokens and
+    is counted in requests_without_usage. Requests of child sessions
+    (subagents) are not in the runtime's output, so they are not counted.
+    """
+    totals = {"input_tokens": 0, "output_tokens": 0, "requests": 0,
+              "requests_without_usage": 0}
+
+    def count(value):
+        return value if type(value) is int and value > 0 else 0
+
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "step_finish":
+            continue
+        part = event.get("part")
+        tokens = part.get("tokens") if isinstance(part, dict) else None
+        tokens = tokens if isinstance(tokens, dict) else {}
+        cache = tokens.get("cache") if isinstance(tokens.get("cache"), dict) else {}
+        used_in = count(tokens.get("input")) + count(cache.get("read")) + count(cache.get("write"))
+        used_out = count(tokens.get("output")) + count(tokens.get("reasoning"))
+        totals["requests"] += 1
+        if used_in + used_out == 0:
+            totals["requests_without_usage"] += 1
+        totals["input_tokens"] += used_in
+        totals["output_tokens"] += used_out
+    return totals if totals["requests"] else None
+
+
 def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None):
     """Use a disposable profile; the gateway remains responsible for authorization."""
     if os.name != "posix":
@@ -153,28 +269,32 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             location.mkdir(mode=0o700)
             environment[name] = str(location)
         config = {
-            "providers": {"keeplane": {
-                "package": "@opencode/ai/providers/openai-compatible",
+            "providers": {PROVIDER: {
+                "package": PROVIDER_PACKAGE,
                 "env": ["KEEPLANE_RUNTIME_GRANT"],
                 "settings": {"baseURL": gateway.rstrip("/")},
-                "models": {model: {"name": model}},
+                "models": {model: {"name": model, "compatibility": dict(MODEL_COMPATIBILITY)}},
             }},
-            "model": "keeplane/" + model,
+            "model": PROVIDER + "/" + model,
             "share": "disabled", "snapshots": False,
             # ADR 009: no built-in web search or web fetch, so a turn never sends
             # its content to a service no admin set up.
             "websearch": False,
-            "plugins": list(DISABLED_BUILTINS),
+            "plugins": list(DISABLED_BUILTINS) + list(DISABLED_PROVIDERS),
+            "experimental": {"policies": [dict(row) for row in PROVIDER_POLICIES]},
         }
         if account_context is not None:
-            config["providers"]["keeplane"]["headers"] = {
+            config["providers"][PROVIDER]["headers"] = {
                 "X-Keeplane-Project-ID": account_context["project_id"],
             }
+        instruction_plugin = None
         if instruction_snapshot:
+            instruction_plugin = str(Path(__file__).with_name("instruction_plugin").resolve())
             config["plugins"].insert(0, {
-                "package": str(Path(__file__).with_name("instruction_plugin").resolve()),
+                "package": instruction_plugin,
                 "options": instruction_snapshot,
             })
+        check_settings(config, gateway.rstrip("/"), instruction_plugin)
         configuration = json.dumps(config, ensure_ascii=False)
         if len(configuration.encode("utf-8")) > 120 * 1024:
             raise ValueError("Serialized runtime configuration exceeds 120 KiB; choose smaller instruction files.")
@@ -201,7 +321,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         )
         if version.returncode or version.stdout.strip().removeprefix("opencode ").removeprefix("v") != VERSION:
             raise ValueError("This prototype requires OpenCode V2 " + VERSION + ".")
-        command = [binary, "run", "--standalone", "--format", "json", "--model", "keeplane/" + model]
+        command = [binary, "run", "--standalone", "--format", "json", "--model", PROVIDER + "/" + model]
         if session:
             command += ["--session", session]
         result = coding_turn(

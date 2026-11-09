@@ -113,6 +113,32 @@ content to a service your admin did not set up. The only places a turn reaches
 are your Keeplane server and the gateway; see
 [Developers' computers](outbound-connections.md#developers-computers).
 
+### Cloud models use API keys
+
+Every cloud model is reached through the gateway with an API key: the
+organization's shared key, or your own key where the project asks for one
+(`keeplane keys set`). There is no sign-in with a personal subscription such
+as ChatGPT or Claude, and the CLI has no command for one.
+
+The runtime `code` starts can't sign in to a provider either:
+
+- its only provider is your Keeplane gateway, and every other provider it
+  knows (OpenAI, Anthropic and the rest) is removed before the turn starts;
+- its built-in provider plugins are off, so it offers no ChatGPT, OpenAI,
+  GitHub Copilot or other sign-in and doesn't look for local model runners;
+- it starts with a fresh, empty home folder, so a provider sign-in or key you
+  saved for OpenCode yourself (for example in
+  `~/.local/share/opencode/auth.json`) is never read.
+
+### Token usage
+
+The runtime asks the gateway to include token counts in its streamed answers.
+After a turn, Keeplane reads the counts the runtime reported for each model
+call: input tokens (cached input included), output tokens (reasoning
+included), the number of calls and how many came back without counts. Calls
+made by a subagent are not in these counts. The counts hold no prompt, answer,
+file or path.
+
 ### When the model is down or the task is too big
 
 If the model answers with a server error (5xx), cannot be reached, times out, or says it is busy

@@ -396,7 +396,7 @@ RUNTIME_INHERITED = frozenset(
 # servers, more providers, remote instructions, a catalogue address, packages
 # to install) fails EGR-17 until it is reviewed.
 RUNTIME_SETTINGS = frozenset(
-    {"providers", "model", "share", "snapshots", "websearch", "plugins"}
+    {"providers", "model", "share", "snapshots", "websearch", "plugins", "experimental"}
 )
 # Product decision (associate product owner, 2 November 2026): `keeplane code`
 # has no web search or web fetch. In the runtime, `"websearch": false` turns
@@ -408,6 +408,18 @@ RUNTIME_WEB_OFF = (
     "-opencode.tool.websearch",
     "-opencode.websearch.*",
 )
+# D185 (cloud models only through API keys): every built-in provider plugin
+# is off. They add the runtime's own sign-ins (ChatGPT and OpenAI
+# subscriptions, GitHub Copilot, GitLab and others, each with an OAuth
+# listener), local-runner discovery (Ollama, LM Studio, vLLM on loopback
+# ports) and package installs for other providers.
+RUNTIME_PROVIDERS_OFF = ("-opencode.provider.*",)
+# The runtime's provider policy: every provider is removed except the gateway,
+# so the bundled catalogue's OpenAI, Anthropic and other providers can't be used.
+RUNTIME_PROVIDER_POLICIES = [
+    {"action": "provider.use", "resource": "*", "effect": "deny"},
+    {"action": "provider.use", "resource": "keeplane", "effect": "allow"},
+]
 # Keys for hosted search providers that the runtime reads from its environment.
 RUNTIME_SEARCH_KEYS = (
     "EXA_API_KEY",

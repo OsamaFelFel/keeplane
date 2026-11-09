@@ -20,7 +20,8 @@
   no model choice and starts no runtime. A model missing from a non-empty list
   keeps “This model is not currently allowed for the project.”
 - CODE-02 Request settings (ST26): Keeplane's generated runtime configuration holds only
-  the provider package, gateway URL, project header and model name, so it adds or
+  the provider package, gateway URL, project header, model name, the request for
+  usage on streamed answers and the gateway-only provider policy, so it adds or
   replaces no request setting such as temperature. The gateway side is covered by
   the [native protocol cases](../integration/native-runtime-protocol-cases.md).
 - CODE-03 Model down after the gateway's retries (Spec 004 ST16): when the runtime's

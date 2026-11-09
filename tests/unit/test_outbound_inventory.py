@@ -26,6 +26,8 @@ from tests.support.outbound import (
     REPO,
     RUNTIME_GLOBAL_SETTINGS,
     RUNTIME_INHERITED,
+    RUNTIME_PROVIDER_POLICIES,
+    RUNTIME_PROVIDERS_OFF,
     RUNTIME_SEARCH_KEYS,
     RUNTIME_SETTINGS,
     RUNTIME_SWITCHES,
@@ -528,8 +530,9 @@ def adapter_launch(tmp_path, monkeypatch, instructions=()):
 # features off: no model catalogue download, no update check, no repository
 # settings, no proxy or provider setting from the developer's shell, only the
 # gateway as a provider, no MCP server or package to install, sharing off,
-# web search and web fetch off, and the instruction plugin is a local folder
-# with no dependency.
+# web search and web fetch off, every built-in provider plugin (with the
+# runtime's own sign-ins) off and every other provider denied, and the
+# instruction plugin is a local folder with no dependency.
 @pytest.mark.parametrize("instructions", [(), ("AGENTS.md",)])
 def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
     tmp_path, monkeypatch, instructions
@@ -560,7 +563,9 @@ def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
     # No web search or web fetch, even with search provider keys in the shell.
     assert config["websearch"] is False
     directives = [row for row in config["plugins"] if isinstance(row, str)]
-    assert directives == list(RUNTIME_WEB_OFF)
+    assert directives == list(RUNTIME_WEB_OFF) + list(RUNTIME_PROVIDERS_OFF)
+    # No provider sign-in (D185): only the gateway provider may be used.
+    assert config["experimental"] == {"policies": RUNTIME_PROVIDER_POLICIES}
     assert not set(RUNTIME_SEARCH_KEYS) & set(environment)
     plugins = [row for row in config["plugins"] if not isinstance(row, str)]
     assert len(plugins) == len(instructions)

@@ -2,6 +2,7 @@
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from typing import ClassVar
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -14,6 +15,7 @@ class Handler(BaseHTTPRequestHandler):
     forbidden_instruction = None
     turn_scoped = False
     call_prefix = "call_"
+    stream_options: ClassVar[list] = []
 
     def log_message(self, *args):
         pass
@@ -26,6 +28,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/v1/chat/completions" or body.get("model") != "fixture-coder":
             self.send_error(403)
             return
+        if body.get("stream"):
+            type(self).stream_options.append(body.get("stream_options"))
         tools = {tool["function"]["name"] for tool in body.get("tools", [])}
         child = bool(self.headers.get("x-opencode-parent-session-id"))
         if tools and self.required_instruction:
@@ -89,4 +93,5 @@ def start(target, required_instruction=None, *, handler=Handler, turn_scoped=Fal
     Handler.forbidden_instruction = None
     Handler.turn_scoped = turn_scoped
     Handler.call_prefix = "call_"
+    Handler.stream_options = []
     return ThreadingHTTPServer(("127.0.0.1", 0), handler)

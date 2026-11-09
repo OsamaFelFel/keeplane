@@ -5,15 +5,17 @@ import json
 import os
 import sys
 import tempfile
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
+from typing import ClassVar
 from unittest.mock import patch
 
 if __name__ != "__main__":
     import pytest
     pytestmark = pytest.mark.optional
 
-from components.cli.opencode_adapter import run
+from components.cli.opencode_adapter import run, turn_usage
 from tests.fixtures.cli_coding_provider import Handler, start
 
 
@@ -90,6 +92,109 @@ def native_turn(binary, instructions=False):
             thread.join(timeout=5)
 
 
+class Trap(BaseHTTPRequestHandler):
+    """Stands in for every address but the gateway: a provider, a proxy, a sign-in."""
+
+    hits: ClassVar[list] = []
+
+    def log_message(self, *args):
+        pass
+
+    def handle_one_request(self):
+        type(self).hits.append(self.client_address)
+        super().handle_one_request()
+
+    def do_GET(self):
+        self.send_error(418)
+
+    do_POST = do_CONNECT = do_GET
+
+
+def signed_in_home(home, trap):
+    """A developer home where OpenCode already holds provider sign-ins and keys."""
+    data = home / ".local" / "share" / "opencode"
+    data.mkdir(parents=True)
+    later = 4102444800000
+    (data / "auth.json").write_text(json.dumps({
+        "openai": {"type": "oauth", "refresh": "synthetic-openai-refresh",
+                   "access": "synthetic-openai-access", "expires": later,
+                   "accountId": "synthetic-account"},
+        "anthropic": {"type": "api", "key": "synthetic-anthropic-key"},
+        "github-copilot": {"type": "oauth", "refresh": "synthetic-copilot",
+                           "access": "synthetic-copilot", "expires": later},
+    }))
+    config = home / ".config" / "opencode"
+    config.mkdir(parents=True)
+    (config / "opencode.json").write_text(json.dumps({
+        "model": "anthropic/claude-sonnet-4-5",
+        "providers": {
+            "openai": {"settings": {"baseURL": trap + "/v1"}},
+            "anthropic": {"settings": {"baseURL": trap + "/v1", "apiKey": "synthetic-anthropic-key"}},
+        },
+        "plugins": ["opencode.provider.*"],
+    }))
+
+
+def native_api_keys_only(binary):
+    """KEY-09: saved provider sign-ins are ignored and only the gateway is called."""
+    trap = ThreadingHTTPServer(("127.0.0.1", 0), Trap)
+    Trap.hits = []
+    trap_thread = Thread(target=trap.serve_forever, daemon=True)
+    trap_thread.start()
+    address = f"http://127.0.0.1:{trap.server_port}"
+    with tempfile.TemporaryDirectory(prefix="keeplane-cli-home-") as home_dir, \
+            tempfile.TemporaryDirectory(prefix="keeplane-cli-project-") as temporary:
+        home = Path(home_dir)
+        signed_in_home(home, address)
+        project = Path(temporary)
+        target = project / "math.py"
+        target.write_text("def add(a, b):\n    return a - b\n")
+        server = start(target)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        shell = {
+            "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"),
+            "XDG_DATA_HOME": str(home / ".local" / "share"),
+            "OPENAI_API_KEY": "synthetic-openai-key", "ANTHROPIC_API_KEY": "synthetic-anthropic-key",
+            "OPENAI_BASE_URL": address + "/v1", "ANTHROPIC_BASE_URL": address,
+            "HTTP_PROXY": address, "HTTPS_PROXY": address, "ALL_PROXY": address,
+            "OPENCODE_CONFIG": str(home / ".config" / "opencode" / "opencode.json"),
+        }
+        try:
+            with patch.dict(os.environ, shell):
+                result = run(binary, project, f"http://127.0.0.1:{server.server_port}/v1",
+                             "fixture-coder", "Fix the addition function in math.py.",
+                             Handler.grant, 60)
+            assert result.returncode == 0, (result.stdout, result.stderr)
+            assert target.read_text() == "def add(a, b):\n    return a + b\n"
+            assert Handler.calls == ["read", "edit"]
+            assert Trap.hits == []
+            # Every streamed answer was asked to carry its token usage.
+            assert Handler.stream_options and all(
+                row == {"include_usage": True} for row in Handler.stream_options)
+            usage = turn_usage(result.stdout)
+            assert usage and usage["requests"] >= 3
+            assert usage["input_tokens"] >= 10 * usage["requests"]
+            assert usage["requests_without_usage"] == 0
+            for secret in ("synthetic-openai", "synthetic-anthropic", "synthetic-copilot"):
+                assert secret not in result.stdout + result.stderr
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+            trap.shutdown()
+            trap.server_close()
+            trap_thread.join(timeout=5)
+
+
+def test_native_api_keys_only():
+    import pytest
+    binary = os.environ.get("KEEPLANE_OPENCODE_V2_BIN")
+    if not binary:
+        pytest.skip("Set KEEPLANE_OPENCODE_V2_BIN to the pinned local runtime.")
+    native_api_keys_only(binary)
+
+
 def test_native_coding_turn():
     import pytest
     binary = os.environ.get("KEEPLANE_OPENCODE_V2_BIN")
@@ -106,4 +211,7 @@ def test_native_coding_with_explicit_instructions():
 
 
 if __name__ == "__main__":
-    native_turn(os.environ["KEEPLANE_OPENCODE_V2_BIN"], instructions=sys.argv[1:] == ["instructions"])
+    if sys.argv[1:] == ["api-keys"]:
+        native_api_keys_only(os.environ["KEEPLANE_OPENCODE_V2_BIN"])
+    else:
+        native_turn(os.environ["KEEPLANE_OPENCODE_V2_BIN"], instructions=sys.argv[1:] == ["instructions"])

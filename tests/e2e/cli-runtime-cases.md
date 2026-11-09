@@ -31,6 +31,16 @@
   reset makes the old session unavailable without another provider call.
   Current instruction text/hash replaces the earlier rule without discarding
   ordinary tool history. Unknown or differently scoped sessions fail before launch.
+- **KEY-09:** API keys only (Spec 009 ST30, D185; journey DEV-03). The developer's
+  home already holds OpenCode sign-ins (an OpenAI subscription sign-in, a Copilot
+  sign-in, an Anthropic key), settings that point OpenAI and Anthropic at a trap
+  server and turn the provider plugins on, and a shell with provider keys, base
+  URLs and proxies set to the trap. A pinned real runtime still reads and edits
+  the file through the gateway fixture only: the trap is never contacted, no saved
+  secret is printed, every streamed request asks for usage
+  (`stream_options.include_usage`), and the turn's usage counts every model call.
+  The unit cases KEY-01 to KEY-08 are in
+  [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
 
 Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.
 For CLI-01, install the exact runtime separately and set
