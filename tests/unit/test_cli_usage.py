@@ -558,6 +558,23 @@ def test_use_08_notes_and_empty_state():
     ] == ["$0.00", "$0.000012", "$0.01", "$0.999999", "$1.01", "$1,234.50"]
 
 
+# USE-08 Nothing used this month, through the command: the heading and the
+# empty-state line only, with no table and no estimate label, and exit 0.
+@pytest.mark.parametrize("zone,utc", [("Europe/Berlin", ""), (None, " (UTC)")])
+def test_use_08_nothing_used_shows_no_table(server, monkeypatch, capsys, zone, utc):
+    monkeypatch.setattr(usage, "machine_time_zone", lambda: zone)
+    server.answer = {**ANSWER, "models": []}
+    assert keeplane_usage(monkeypatch, server) == 0
+    captured = capsys.readouterr()
+    assert captured.out == (
+        "Your usage for today, 9 November 2026, and this month, November 2026"
+        + utc
+        + ".\n\nYou haven't used any models this month.\n"
+    )
+    assert "Model" not in captured.out and "Costs are estimates" not in captured.out
+    assert captured.err == ""
+
+
 # USE-09 Only my own usage: the command has no option for another developer,
 # and the request names nobody.
 def test_use_09_only_my_own_usage(server, monkeypatch, capsys):

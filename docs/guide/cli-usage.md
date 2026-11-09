@@ -48,11 +48,18 @@ cloud: some of its tokens couldn't be priced, so its cost may be low.
 
 "Today" and "this month" follow your computer's time zone (from `TZ`, or the
 system setting). If the CLI can't read it, or your Keeplane server doesn't know
-the zone, it uses UTC and the heading ends in "(UTC)". In a zone with a half-
-or quarter-hour offset, a day starts at the hour nearest your local midnight.
+the zone, it uses UTC and says so at the end of the heading:
+
+```text
+Your usage for today, 9 November 2026, and this month, November 2026 (UTC).
+```
+
+In a zone with a half- or quarter-hour offset, a day starts at the hour
+nearest your local midnight.
 
 Totals are kept for this month and last month, then deleted. There is no "last
-month" view. If you haven't used a model this month, `keeplane usage` says:
+month" view. If you haven't used a model this month, `keeplane usage` shows
+the heading, no table and no estimate label, then:
 
 ```text
 You haven't used any models this month.
@@ -106,7 +113,7 @@ When your sign-in has expired it exits 1 with:
 Your Keeplane sign-in has expired. Run `keeplane login` to sign in again.
 ```
 
-An older Keeplane server that doesn't keep usage gives:
+An older Keeplane server that doesn't keep usage exits 1 with:
 
 ```text
 This Keeplane server doesn't show usage yet. Ask your admin to update it.
