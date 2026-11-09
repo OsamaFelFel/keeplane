@@ -154,23 +154,36 @@ def traced(binary, folder):
     wrapper.write_text(
         "#!/bin/sh\n"
         f"exec {shlex.quote(tracer)} -f -qq -A -o {shlex.quote(str(log))} "
-        "-e trace=connect,sendto,sendmsg,sendmmsg -e signal=none "
+        "-e trace=connect,sendto,sendmsg,sendmmsg,bind,listen,getsockname -e signal=none "
         f"{shlex.quote(str(Path(binary).resolve()))} \"$@\"\n"
     )
     wrapper.chmod(0o700)
     return wrapper, log
 
 
+# A traced call starts as "PID name(" or, when strace splits it, resumes as
+# "PID <... name resumed>".
+CALL = r"^\d+\s+(?:<\.\.\.\s+)?({})(?:\(|\s+resumed>)"
+SENDS = re.compile(CALL.format("connect|sendto|sendmsg|sendmmsg"))
+OWNS = re.compile(CALL.format("bind|getsockname"))
+LISTENS = re.compile(CALL.format("listen"))
+
+
 def connections(log):
-    """(family, address, port) for each inet address in the trace, and other families."""
-    inet, other = set(), set()
+    """What the trace shows: addresses contacted, the runtime's own bound
+    addresses (when it listened), and any other socket families used."""
+    contacted, own, other, listened = set(), set(), set(), False
     for line in log.read_text().splitlines():
-        for match in INET.finditer(line):
-            family, port, v4, v6 = match.groups()
-            inet.add((family, v4 or v6, int(port)))
+        listened = listened or bool(LISTENS.match(line))
+        found = {(family, v4 or v6, int(port))
+                 for family, port, v4, v6 in INET.findall(line)}
+        if SENDS.match(line):
+            contacted |= found
+        elif OWNS.match(line):
+            own |= {row for row in found if row[2]}
         other |= {family for family in FAMILY.findall(line)
                   if family not in ("AF_INET", "AF_INET6")}
-    return inet, other
+    return contacted, own if listened else set(), other
 
 
 def native_api_keys_only(binary):
@@ -208,11 +221,19 @@ def native_api_keys_only(binary):
             assert result.returncode == 0, (result.stdout, result.stderr)
             assert target.read_text() == "def add(a, b):\n    return a + b\n"
             assert Handler.calls == ["read", "edit"]
-            # Every address the runtime connected or sent to, on any port or
-            # host (DNS included), is the gateway fixture; the trap saw nothing.
-            inet, other = connections(log)
-            print("KEY-09 connections:", sorted(inet), "other families:", sorted(other))
-            assert inet == {("AF_INET", "127.0.0.1", server.server_port)}, inet
+            # Every address the runtime connected or sent to, on any host or
+            # port (DNS included), is the gateway fixture or a loopback port
+            # the runtime itself bound and listened on (its own local server).
+            contacted, own, other = connections(log)
+            print("KEY-09 contacted:", sorted(contacted), "own listeners:", sorted(own),
+                  "other families:", sorted(other))
+            gateway = ("AF_INET", "127.0.0.1", server.server_port)
+            assert gateway in contacted
+            loopback = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+            for family, host, port in contacted - {gateway}:
+                assert host in loopback and any(row[2] == port for row in own), (
+                    family, host, port)
+            assert trap.server_port not in {port for _, _, port in contacted}
             assert Trap.hits == []
             # Every streamed request asked for token usage.
             assert Handler.stream_options and all(

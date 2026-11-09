@@ -38,7 +38,8 @@
   URLs and proxies set to the trap. The pinned real runtime runs under `strace`,
   which records every address it connects or sends to. It still reads and edits
   the file, and every recorded address, on any host or port (DNS included), is
-  the gateway fixture. The trap is never contacted, no saved secret is printed,
+  the gateway fixture or a loopback port the runtime bound and listened on itself
+  (its own local server). The trap is never contacted, no saved secret is printed,
   and every streamed request asks for usage (`stream_options.include_usage`).
   The fixture sends usage only when asked, with cached and reasoning tokens, so
   the turn's totals must be exactly 30 input and 15 output tokens over 3
