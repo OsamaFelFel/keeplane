@@ -207,7 +207,10 @@ def test_sw_05_the_mark_follows_the_task_when_the_own_key_cant_be_used(
     [
         (
             {"model_id": None, "chosen_by": None, "reason": "unavailable"},
-            "general is approved for this project but can't be used right now.",
+            (
+                "general is approved for this project but can't be used right now. "
+                "Try again in a few minutes."
+            ),
         ),
         (
             {"model_id": None, "chosen_by": None, "reason": "missing"},
@@ -244,7 +247,7 @@ def test_sw_05_a_broken_settings_file_loses_only_the_mark(
     assert listing["chosen_by"] is None
     assert output.err.strip() == (
         f"Keeplane's settings file {settings_file.path()} isn't valid JSON. "
-        "Your `keeplane use` choice isn't marked until the file is fixed."
+        "Your `keeplane use` choice isn't shown in this list until the file is fixed."
     )
     # A turn still stops: the same file names the runtime the CLI runs.
     assert run(monkeypatch, "code", "Fix it") == 1
@@ -297,7 +300,17 @@ def test_sw_06_another_refusal_keeps_the_servers_own_reason(
     allowed.server.task_model_status = 403
     allowed.server.task_model_reply = {"error": "This project is unavailable"}
     assert run(monkeypatch, "code", "Fix it") == 1
-    assert capsys.readouterr().err.strip() == "This project is unavailable."
+    assert (
+        capsys.readouterr().err.strip()
+        == "This project is unavailable. Nothing was sent."
+    )
+    # A reason that already ends in a full stop still gets only one.
+    allowed.server.task_model_reply = {"error": "This project is unavailable."}
+    assert run(monkeypatch, "code", "Fix it") == 1
+    assert (
+        capsys.readouterr().err.strip()
+        == "This project is unavailable. Nothing was sent."
+    )
     assert fake_runtime[1] == []
 
 
@@ -327,7 +340,7 @@ def test_sw_06_a_200_character_plain_reason_is_shown(
     allowed.server.task_model_status = 403
     allowed.server.task_model_reply = {"error": PLAIN_200}
     assert run(monkeypatch, "code", "Fix it") == 1
-    assert capsys.readouterr().err.strip() == PLAIN_200
+    assert capsys.readouterr().err.strip() == PLAIN_200 + " Nothing was sent."
 
 
 class Refusal:

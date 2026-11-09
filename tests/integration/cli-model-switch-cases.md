@@ -16,7 +16,7 @@ accounts, policy and enrollment files are those of the
 | CSW-03 Not allowed | A model the project's class doesn't allow isn't in the list `keeplane use` checks. A switch saved before the class changed is refused, by the CLI's list or by the server's 403 over HTTP, and no rule or level replaces it. |
 | CSW-04 Own key missing | A switch to `private` with the developer's key removed goes to the server's next model and says why; the switch stays saved. |
 | CSW-05 The list's marks | `keeplane models` marks Keeplane's pick, then the switch (`you`). With the own key gone it marks the model the next task really uses (`keeplane`) and says why. A switch the project no longer allows marks nothing and is named. |
-| CSW-06 Project refused | A 403 that isn't about the model keeps the server's reason: "This project is unavailable." |
+| CSW-06 Project refused | A 403 that isn't about the model keeps the server's reason: "This project is unavailable. Nothing was sent." |
 | CSW-07 Ended sign-in | The server's 401 is reported as an expired sign-in. |
 
 The OAuth, device and rendered-browser journeys keep the settings file in the

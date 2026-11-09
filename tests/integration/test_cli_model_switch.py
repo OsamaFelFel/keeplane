@@ -187,7 +187,7 @@ def test_csw_06_a_project_refusal_keeps_the_servers_reason(cli):
     cli.project = "00000000-0000-4000-8000-00000000abcd"
     with pytest.raises(ConnectionError) as refused:
         coding.routed_model(cli.issuer, cli.project, cli.token, {"public"}, print)
-    assert str(refused.value) == "This project is unavailable."
+    assert str(refused.value) == "This project is unavailable. Nothing was sent."
 
 
 def test_csw_07_an_ended_sign_in_is_reported_as_expired(cli):

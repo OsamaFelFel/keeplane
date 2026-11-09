@@ -116,8 +116,9 @@ You switched this repo to general, but it isn't allowed for this project any mor
 ```
 
 `keeplane models` prints the same message without ", so nothing was sent". A
-refusal that isn't about the model, such as `This project is unavailable.`,
-is shown as the server gives it.
+refusal that isn't about the model is shown in the server's words, and `code`
+adds that nothing was sent, for example
+`This project is unavailable. Nothing was sent.`
 
 If the model you chose needs your own provider key and yours is missing or
 refused, the task goes to the model Keeplane would pick next and says why:
@@ -131,7 +132,8 @@ saved, so the next task tries it again. `keeplane models` then marks the model
 the next task really uses, chosen by Keeplane, and says why on stderr.
 
 If your settings file can't be read, `keeplane models` still lists the models
-but marks none and says so; `code` stops, because the same file names the
+but marks none, and says "Your `keeplane use` choice isn't shown in this list
+until the file is fixed."; `code` stops, because the same file names the
 runtime it runs.
 
 ### When your sign-in has expired

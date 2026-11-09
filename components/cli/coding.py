@@ -99,6 +99,7 @@ SWITCH_NOT_ALLOWED = ("You switched this repo to {model}, but it isn't allowed f
                       "`keeplane models` lists, or `keeplane use --auto` to let "
                       "Keeplane choose.")
 NOTHING_SENT = ", so nothing was sent"
+PROJECT_REFUSED = "Nothing was sent."
 # The server's refusal of a model the project doesn't allow, as opposed to,
 # for example, "This project is unavailable".
 MODEL_REFUSED = "This model is not eligible for the project"
@@ -110,8 +111,9 @@ OWN_KEY = {
 }
 OWN_KEY_NO_OTHER = ("Your own key for {model} {state}, and no other allowed model is "
                     "available for this project. Run `keeplane keys list` to see your keys.")
-SWITCH_UNAVAILABLE = "{model} is approved for this project but can't be used right now."
-UNMARKED = "Your `keeplane use` choice isn't marked until the file is fixed."
+SWITCH_UNAVAILABLE = ("{model} is approved for this project but can't be used right now. "
+                      "Try again in a few minutes.")
+UNMARKED = "Your `keeplane use` choice isn't shown in this list until the file is fixed."
 OWN_KEY_MOVED = ("Your own key for {model} {state}, so {task} uses {other}. "
                  "Run `keeplane keys list` to see your keys.")
 
@@ -266,7 +268,10 @@ def _route(issuer, project_id, credential, switch):
             raise SwitchNotAllowed(
                 SWITCH_NOT_ALLOWED.format(model=switch, sent=NOTHING_SENT), 403) from None
         if error.status == 403 and error.detail:
-            raise ConnectionError(error.detail.rstrip(".") + ".", 403) from None
+            # Its own sentence with one full stop, then what happened (associate
+            # product owner); only `code` prints it, so nothing was sent.
+            raise ConnectionError(
+                error.detail.rstrip(". ") + ". " + PROJECT_REFUSED, 403) from None
         raise
 
 
