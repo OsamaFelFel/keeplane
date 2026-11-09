@@ -3,9 +3,9 @@
 Run against the protected Docker preview started by deploy/local/up.py. The suite
 starts its own model runner on the host's allowed runner address, adds three
 temporary models, enrolls two of them on a fresh managed gateway with the same
-installer as ``up.py --runtime-model``, and sends real requests through the
-guarded endpoint. Afterwards it puts the gateway and app back on the ordinary
-preview configuration and removes what it created. See
+installer ``up.py`` uses, and sends real requests through the
+guarded endpoint. Afterwards it starts the preview's default guarded gateway
+and app again and removes what it created. See
 project-classes-live-cases.md.
 """
 
@@ -73,12 +73,6 @@ def compose(*arguments, timeout=180, runtime=False):
     )
 
 
-def listening(port):
-    with socket.socket() as sock:
-        sock.settimeout(1)
-        return sock.connect_ex(("127.0.0.1", port)) == 0
-
-
 def free(port):
     with socket.socket() as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -113,11 +107,6 @@ def unavailable_reason():
         )
     if running.returncode or len(running.stdout.split()) != 2:
         return "The Docker preview's app and gateway containers are not both running."
-    if listening(RUNTIME_PORT):
-        return (
-            f"A guarded endpoint already answers on port {RUNTIME_PORT}. These cases "
-            "re-enroll the managed gateway and would replace that enrollment."
-        )
     if not free(RUNNER_PORT):
         return (
             f"Port {RUNNER_PORT} is in use (for example by the optional Qwen3 runner); "
@@ -190,7 +179,6 @@ def run_cases():
         "mode": None,
         "developer": None,
         "enrolled": False,
-        "volume_existed": True,
         "settled": False,
     }
     admin = Browser()
@@ -257,15 +245,6 @@ def run_cases():
                     )
                 created.append(names[key])
 
-            volume = "keeplane-local_runtime-installation"
-            state["volume_existed"] = (
-                subprocess.run(
-                    ["docker", "volume", "inspect", volume],
-                    capture_output=True,
-                    check=False,
-                ).returncode
-                == 0
-            )
             launcher = load("keeplane_up", REPO / "deploy/local/up.py")
             launcher.RUNTIME = RUNTIME
             guard = load(
@@ -572,50 +551,27 @@ def enroller_diagnostics(names):
 
 
 def restore(admin, password, project, created, state, failures):
-    """Return the preview to its ordinary gateway and remove this run's records."""
+    """Return the preview to its default start and remove this run's records."""
     if state["enrolled"]:
-        # The model enroller shares the guarded gateway's network and keeps the
-        # installation volume in use; the ordinary preview has no enroller.
-        stopped = compose(
-            "--profile", "runtime", "rm", "--stop", "--force", "model-enroller",
-            runtime=True,
+        # The default preview (ADR 028): the preview's own image and settings,
+        # a fresh guarded gateway and the model enroller, which enrols every
+        # saved model; the ones this run adds are removed below.
+        launcher = load("keeplane_up_restore", REPO / "deploy/local/up.py")
+        launcher.RUNTIME = RUNTIME
+        guard = load(
+            "keeplane_guarded_runtime_restore", REPO / "deploy/local/guarded_runtime.py"
         )
-        if stopped.returncode:
-            failures.append("the model enroller was not removed")
-        result = compose(
-            "up",
-            "-d",
-            "--no-build",
-            "--pull",
-            "never",
-            "--no-deps",
-            "--force-recreate",
-            "gateway",
-            "app",
-        )
-        if result.returncode:
-            failures.append("ordinary gateway and app were not recreated")
-        else:
-            deadline = time.monotonic() + 120
-            while time.monotonic() < deadline:
-                try:
-                    with DIRECT.open(BASE + "/health/app", timeout=3) as response:
-                        if response.status == 200:
-                            break
-                except (OSError, URLError):
-                    pass
-                time.sleep(1)
-        if not state["volume_existed"]:
-            removed = subprocess.run(
-                ["docker", "volume", "rm", "keeplane-local_runtime-installation"],
-                capture_output=True,
-                check=False,
-                timeout=60,
+        try:
+            guard.install(
+                REPO,
+                RUNTIME,
+                [],
+                RUNTIME_PORT,
+                env=environment(),
+                wait_ready=lambda: launcher.wait_preview(BASE),
             )
-            if removed.returncode:
-                failures.append("the guarded installation volume was not removed")
-        if listening(RUNTIME_PORT):
-            failures.append(f"guarded port {RUNTIME_PORT} still answers")
+        except RuntimeError:
+            failures.append("the default guarded preview was not started again")
     try:
         admin = Browser()
         if admin.login("first-admin", password)[0] != 200:

@@ -57,11 +57,11 @@ INSTALLED_APPS = [
 CLI_OAUTH_ENABLED = os.environ.get("KEEPLANE_CLI_OAUTH_ENABLED", "0") == "1"
 if find_spec("oauth2_provider"):
     if version("django-oauth-toolkit") != "3.4.1":
-        raise RuntimeError("The CLI sign-in trial requires Django OAuth Toolkit 3.4.1")
+        raise RuntimeError("CLI sign-in requires Django OAuth Toolkit 3.4.1")
     # Retain ORM cascade ownership when acceptance is switched off after migration.
     INSTALLED_APPS.append("oauth2_provider")
 elif CLI_OAUTH_ENABLED:
-    raise RuntimeError("Install the CLI sign-in trial dependencies before enabling it")
+    raise RuntimeError("Install the CLI sign-in packages before enabling it")
 
 OAUTH2_PROVIDER = {
     "SCOPES": {"runtime": "Use Keeplane from the CLI"},

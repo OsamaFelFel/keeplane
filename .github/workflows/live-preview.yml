@@ -2,8 +2,10 @@ name: Live preview gateway checks
 
 # Starts the protected Docker preview on a hosted runner, which can pull the
 # locked gateway, Python and llama.cpp images, and runs the live gateway cases
-# that need them: Spec 005 ST19 project classes through the guarded endpoint
-# (task 005-02) and Spec 004 ST16 retry of a model that is down (task 004-04).
+# that need them: Spec 009 ST29/ST30 CLI sign-in and the guarded gateway on a
+# fresh default start (task 009-01), Spec 005 ST19 project classes through the
+# guarded endpoint (task 005-02) and Spec 004 ST16 retry of a model that is
+# down (task 004-04).
 # A second job, in parallel, builds the `detection` app image and runs Spec 005
 # ST20 personal-data detection and Spec 006 ST21 held-back request records
 # through the same guarded endpoint (tasks 005-03 and 006-02).
@@ -50,9 +52,16 @@ jobs:
       - name: List the live cases that must run
         run: |
           .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py tests/e2e/test_project_classes_live.py \
+            tests/e2e/test_preview_sign_in_live.py tests/integration/test_preview_sign_in_image.py \
             -m live --collect-only -q | grep '::' > "$RESULTS/expected-cases.txt"
           cat "$RESULTS/expected-cases.txt"
+      # First, while the preview is fresh: zero approved models, then one.
+      - name: CLI sign-in and the guarded gateway on the default preview (Spec 009 ST29/ST30, task 009-01)
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/sign-in-cases
+        run: .venv/bin/python -m pytest tests/e2e/test_preview_sign_in_live.py tests/integration/test_preview_sign_in_image.py -m live -rs --junitxml="$RESULTS/sign-in-junit.xml"
       - name: Project classes through the guarded preview gateway (Spec 005 ST19, task 005-02)
+        if: ${{ !cancelled() }}
         env:
           KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/class-cases
         run: .venv/bin/python -m pytest tests/e2e/test_project_classes_live.py -m live -rs --junitxml="$RESULTS/classes-junit.xml"
@@ -64,7 +73,7 @@ jobs:
       - name: Fail if a live gateway case was skipped or did not run
         if: ${{ !cancelled() }}
         run: |
-          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/outage-junit.xml" "$RESULTS/classes-junit.xml" <<'EOF'
+          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/outage-junit.xml" "$RESULTS/classes-junit.xml" "$RESULTS/sign-in-junit.xml" <<'EOF'
           import sys
           import xml.etree.ElementTree as ET
           from pathlib import Path

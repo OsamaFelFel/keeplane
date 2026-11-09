@@ -51,7 +51,12 @@ supports one application process; shared deployments require PostgreSQL.
 
 The local launcher builds React, prepares private credentials, runs database
 migrations in a separate startup service on a fresh database (earlier preview
-data isn't imported, ADR 014), and starts Gunicorn. Kind uses an init container for the local database.
+data isn't imported, ADR 014), and starts Gunicorn. It then starts the
+protected runtime for the developer CLI (ADR 028): a fresh guarded gateway on
+loopback port 5000, CLI sign-in with the fixed browser and device clients
+registered, and the private model enroller (ADR 027), which enrols every saved
+approval. The app image carries the hash-pinned sign-in packages, built on the
+user's machine. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
 Serving workers do not migrate schemas. PostgreSQL chart installs require one
 immutable app image reference for the serving copies, migration Job and

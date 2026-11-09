@@ -31,7 +31,9 @@ that server's address. Your operator must first provide the CLI and enable CLI
 sign-in. The command keeps the private account profile outside your repository.
 Coding still requires an independently installed OpenCode V2 2.0.27 binary and
 an operator-configured protected gateway. The wheel does not select or download
-a native runtime, and the server's optional sign-in trial remains separate.
+a native runtime. The server side of sign-in is separate: the
+[local preview](local-preview.md) has CLI sign-in on, and other servers turn it
+on as [CLI sign-in on the server](cli-sign-in-server.md) describes.
 `keeplane init --preview` needs Python 3.11+ for TOML; see the
 [read-only migration preview](cli-migration-preview.md).
 

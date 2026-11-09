@@ -2,13 +2,12 @@
 
 Spec 005 ST19, task 005-02. These cases run real requests through the Docker
 preview's managed gateway, on the guarded endpoint that
-`deploy/local/up.py --runtime-model` installs. The isolated checks are in the
+`deploy/local/up.py` starts. The isolated checks are in the
 [project cases](../integration/project-cases.md) and
 [model-choice cases](../integration/model-choice-cases.md); the screen is
 covered by the [Projects browser cases](../browser/projects-cases.md).
 
-Run after `python3 deploy/local/up.py`, with no guarded endpoint already
-enrolled and host port 14424 free:
+Run after `python3 deploy/local/up.py`, with host port 14424 free:
 
 ```sh
 .venv/bin/python -m pytest tests/e2e/test_project_classes_live.py -m live
@@ -41,10 +40,9 @@ those ports are not available. It is part of the `docker` regression group.
 
 ## Restoring the preview
 
-Afterwards the suite removes the model enroller and recreates the gateway and
-app from `compose.yaml` alone,
-so the guarded endpoint is gone and the ordinary gateway configuration is back.
-It removes the guarded installation volume if the run created it. It clears
+Afterwards the suite starts the preview's default protected runtime again, as
+`up.py` does: the preview's own app image and settings, a fresh guarded gateway
+and the model enroller, which enrols every saved model. It clears
 the project's class, removes the three models from Keeplane and the gateway,
 removes the developer, and restores the data-class mode. Keeplane has no way to
 remove a project, so the project record stays with no class. A restore step

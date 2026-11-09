@@ -211,8 +211,9 @@ entry/final/provider wiring, and rechecks every enrollment before enabling the
 manifest. Operator re-enrollment starts a new gateway process: native request routing
 and backend policy reads do not share one lifetime snapshot. A failed final
 filesystem publication reports an unconfirmed state and the launcher must stop
-the gateway. The opt-in Compose launcher owns this workflow; its full host execution remains
-unverified. Ordinary preview deployment remains unchanged.
+the gateway. The Docker preview's launcher (`deploy/local/up.py`) runs this
+workflow on every start, with CLI sign-in on (ADR 028); its first enrollment is
+the model enroller's first pass over every saved approval.
 
 The internal [per-model binding reader](../../tests/unit/runtime-binding-cases.md)
 is a prerequisite for automatic model activation. It keeps complete shared

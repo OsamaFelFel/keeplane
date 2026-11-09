@@ -1,6 +1,6 @@
-# Optional ADR 022 sign-in trial; omitted from normal app image targets.
+# CLI sign-in (ADR 028): installed in the preview image's sign-in stage.
 # Install after requirements-account-api.txt with --require-hashes --no-deps.
-# Verified wheels: Linux musl CPython 3.13 and the macOS CPython 3.12 trial.
+# Verified wheels: Linux musl CPython 3.13 and macOS CPython 3.12 development.
 certifi==2026.10.23 --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
 cffi==2.1.1 --hash=sha256:c8c69575568085ba0b1b10c0249d779a214aea6f6522e949a0fc9fb0fcb449d0 --hash=sha256:e0bcb7e0f677f543555d2adff3bf19c05f66cdb4796e5ff602442ab2fe3c4ef7
 charset-normalizer==3.5.2 --hash=sha256:e243bd13217235fc7290c621941c3f5cc8b66e4872495be821d7436ba2fb838d --hash=sha256:ed2a239c0ea213acc1908150a3037257083c7c083128f1a4cec2ec4b97dca491
