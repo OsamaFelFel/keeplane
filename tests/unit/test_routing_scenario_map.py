@@ -88,6 +88,7 @@ CATALOGS = {
     "CODE": "unit/cli-signed-in-coding-cases.md",
     "KC": "unit/cli-provider-key-command-cases.md",
     "RK": "unit/cli-refused-key-cases.md",
+    "REQ": "unit/cli-request-settings-cases.md",
     "RETRY": "unit/runtime-config-cases.md",
     "CL": "integration/complexity-level-cases.md",
     "CL-INT": "integration/complexity-level-cases.md",
