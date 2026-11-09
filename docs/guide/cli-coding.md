@@ -238,7 +238,9 @@ flowchart LR
   Saved -->|yes| Server[Server checks the sign-in]
   Server -->|401| Expired[Expired; nothing sent]
   Server -->|ok| Runtime[Runtime and gateway]
-  Runtime -->|gateway 401| Expired2[Expired; nothing more sent]
+  Runtime -->|gateway 401| Recheck{Own key refused? Server rechecks}
+  Recheck -->|yes| Replace[Replace your key; exit 1]
+  Recheck -->|no| Expired2[Expired; nothing more sent]
   Expired --> Terminal{Terminal?}
   Expired2 --> Terminal
   Terminal -->|no| Exit[Exit 1: run keeplane login]
@@ -441,6 +443,27 @@ nothing is sent again. An older Keeplane server cannot list the alternatives;
 the message then points to `keeplane models` instead. The missing-key case
 above is different: there `code` does switch to another allowed model and says
 so before it starts.
+
+### When the provider refuses your own key
+
+A model set up for each developer's own key sends your saved key to the
+provider. If the provider no longer accepts it, the task fails with the
+provider's 401 or 403, which the gateway passes on. `code` then asks the
+Keeplane server to check that saved key again, the same check as
+[`keeplane keys check`](cli-provider-key-commands.md). If the server confirms the
+refusal, `code` prints the runtime's error followed by:
+
+```text
+The provider refused your own key for coder, so this task stopped. Replace it with `keeplane keys set --model coder`. Run `keeplane keys list` to see your keys.
+```
+
+and exits with status 1. The server records the refusal, so `keeplane keys list`
+shows the key as `refused` and your next task moves to another allowed model
+until you replace it. Nothing is asked for a model with a shared key or no
+key, or when you have no key saved for it. If the server can't confirm a
+refusal, the task's own error stands: a 401 is then an
+[expired sign-in](#when-your-sign-in-has-expired), and the server, which refuses
+an expired sign-in too, never contacts the provider.
 
 ```mermaid
 flowchart LR

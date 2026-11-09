@@ -40,7 +40,10 @@ there, without restarting the gateway or the app:
   setup is enrolled after about 3 minutes and 16 seconds, once every request
   that started under the old setup has finished its retries. While a change
   waits, every protected model can be refused if the gateway's own state moved;
-  the enroller's log says "A model change is waiting".
+  the enroller's log says "A model change is waiting". When the hold ends the
+  log reports the settled state, for example `Protected access is ready: 1
+  model is enrolled.` or `No model is enrolled for protected access.`, even
+  when the hold only removed models left from before.
 
 The enroller has no port, reads models through a read-only database connection
 and is the only service that writes the private installation volume after

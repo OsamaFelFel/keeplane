@@ -63,9 +63,6 @@ SCENARIOS = {
 }
 # Scenarios not yet provable, and why. The table's cell says the same.
 NOT_BUILT = {
-    # Shown as refused only after `keeplane keys check`; the owner kept
-    # automatic observation manual until Spec 009 (governance issue #63 q4).
-    ("ST11", "A refused key"),
     # Judging a task's complexity waits for task 004-03's router choice.
     ("ST14", "Route by complexity"),
     # The Developer CLI waits for Spec 009 (governance issue #28).
@@ -91,6 +88,7 @@ CATALOGS = {
     "CODE": "unit/cli-signed-in-coding-cases.md",
     "KC": "unit/cli-provider-key-command-cases.md",
     "REQ": "unit/cli-request-settings-cases.md",
+    "RK": "unit/cli-refused-key-cases.md",
     "RETRY": "unit/runtime-config-cases.md",
     "CL": "integration/complexity-level-cases.md",
     "CL-INT": "integration/complexity-level-cases.md",
@@ -105,6 +103,7 @@ CATALOGS = {
     "PK": "integration/runtime-provider-key-cases.md",
     "KR": "integration/developer-key-recheck-cases.md",
     "MP": "integration/model-policy-cases.md",
+    "RK-INT": "integration/cli-refused-key-cases.md",
     "PMR": "integration/personal-model-registration-cases.md",
     "DK-COUNT": "integration/personal-key-count-cases.md",
     "MA": "integration/model-answer-record-cases.md",
