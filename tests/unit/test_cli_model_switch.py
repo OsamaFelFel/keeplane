@@ -1,6 +1,6 @@
 """See which model answered, and switch with `keeplane use` (Spec 004 ST17).
 
-Cases: tests/unit/cli-model-switch-cases.md (SW-01 to SW-13). Journey: DEV-02,
+Cases: tests/unit/cli-model-switch-cases.md (SW-01 to SW-14). Journey: DEV-02,
 DEV-03. The signed-in server and runtime doubles come from the profile tests.
 """
 
@@ -595,3 +595,25 @@ def test_sw_13_use_needs_one_model_or_auto_and_a_sign_in(allowed, monkeypatch, c
     assert run(monkeypatch, "use", "general") == 1
     assert capsys.readouterr().err.strip() == EXPIRED_NOT_SAVED
     assert settings_file.project_model(PROJECT) is None
+
+
+@pytest.mark.parametrize("pick_status", [200, 503])
+def test_sw_14_an_empty_list_marks_nothing_as_the_preview_case_expects(
+    allowed, monkeypatch, capsys, pick_status
+):
+    # PSI-LIVE-03: a new installation lists no models, and `keeplane models`
+    # prints only the empty catalog, with nothing on stderr.
+    from tests.e2e.test_preview_sign_in_live import empty_catalog
+
+    allowed.server.model_ids = []
+    allowed.server.task_model = None
+    allowed.server.task_model_status = pick_status
+    assert run(monkeypatch, "models") == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out) == {
+        "project_id": PROJECT,
+        "models": [],
+        "chosen_by": None,
+    }
+    assert output.err == ""
+    assert empty_catalog((0, output.out, output.err), PROJECT)
