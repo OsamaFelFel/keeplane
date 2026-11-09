@@ -138,8 +138,8 @@ def repo_project(project_id, name=None, *, need_name=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    login = commands.add_parser("login", help="Sign in through the browser")
-    login.add_argument("--server", required=True)
+    login = commands.add_parser("login", help="Sign in through the browser, or with a code when none can open")
+    login.add_argument("--server", help="Default: the server of this profile's sign-in")
     login.add_argument("--profile", help="Default: ~/.config/keeplane/account")
     login.add_argument("--timeout", type=int, default=120)
     login.add_argument("--device", action="store_true", help="Sign in using a code on another browser")
@@ -245,12 +245,13 @@ def main():
             return report(args.directory)
         elif args.command == "login":
             # An expired sign-in is replaced; one the server still accepts is refused.
-            sign_in_again.clear_expired(args.profile)
-            if args.device:
-                device_login.login(args.server, args.profile, timeout=args.timeout)
-            else:
-                print("Opening Keeplane sign-in in your browser.")
-                browser_login.login(args.server, args.profile, timeout=args.timeout)
+            saved = sign_in_again.clear_expired(args.profile)
+            server = args.server or (saved and saved[0])
+            if not server:
+                raise ConnectionError(browser_login.NO_SERVER)
+            # With no browser, browser sign-in uses the device code by itself (ST29).
+            (device_login if args.device else browser_login).login(
+                server, args.profile, timeout=args.timeout)
             output = "Signed in to Keeplane."
         elif args.command in {"whoami", "logout", "forget"}:
             output = account_session.run(args.command, args.profile)

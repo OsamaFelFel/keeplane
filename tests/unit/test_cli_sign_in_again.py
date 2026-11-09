@@ -89,6 +89,8 @@ def sign_ins(connected, monkeypatch):  # noqa: F811
     def login(kind):
         def run(server, path, *, timeout=120, **options):
             calls.append((kind, server, str(path), timeout))
+            if kind == "browser" and "announce" in options:
+                options["announce"](browser_login.BROWSER)
             assert not (connected.path / "credential.json").exists()
             with opened(path) as profile:
                 profile.save(
@@ -381,6 +383,7 @@ def test_exp_11_login_still_refuses_a_sign_in_the_server_accepts(
     capsys,
 ):
     opened_browser = []
+    monkeypatch.setattr(browser_login, "no_browser", lambda: None)
     monkeypatch.setattr(browser_login.webbrowser, "open", opened_browser.append)
     assert command(monkeypatch, connected, "login", "--server", connected.issuer) == 1
     assert "This profile is signed in" in capsys.readouterr().err

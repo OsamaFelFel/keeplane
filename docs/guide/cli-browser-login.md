@@ -19,7 +19,9 @@ keeplane login --server https://keeplane.example \
 keeplane whoami --profile /absolute/private/keeplane-account
 ```
 
-Sign in and approve the request in your normal browser. Keeplane checks the
+Sign in and approve the request in your normal browser. Admins sign in the same
+way and then work in the CLI like developers: the same project and model limits
+apply to them. Keeplane checks the
 returned credential against the current account before saving it. An existing
 signed-in profile is refused; explicitly log out or forget it before switching.
 A profile whose sign-in has expired is the exception: once the server refuses
@@ -54,8 +56,23 @@ revoke the new pair. An unconfirmed-revocation error needs server-side session
 withdrawal by the installation operator. A failed durable save may leave a
 revoked local credential; use logout to remove it after confirmed withdrawal.
 
-Use [device sign-in](cli-device-login.md) when this computer cannot open your
-browser, or the [coding command](cli-coding.md) for account-bound turns and resume.
+## When no browser can open
+
+`keeplane login` signs in with a code instead, by itself, when it can't open a
+browser here:
+
+- over SSH (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` is set);
+- on Linux with no display (`DISPLAY` and `WAYLAND_DISPLAY` are both unset);
+- when no browser can be found, or the browser fails to start.
+
+It prints "No browser can open here, so sign in from another device.", then the
+address and code of [device sign-in](cli-device-login.md). A `BROWSER` command you
+set is tried first, except over SSH.
+
+Without `--server`, `login` uses the server of this profile's expired sign-in. With
+no saved sign-in, name the server with `--server`.
+
+Use the [coding command](cli-coding.md) for account-bound turns and resume.
 Use explicit [refresh](cli-account-profile.md) when needed; refresh is not
 automatic and does not happen during a coding turn. This trial does not select
 the release CLI runtime.
