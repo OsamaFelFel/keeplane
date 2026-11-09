@@ -8,11 +8,12 @@ import json
 import os
 import stat
 import uuid
+from email.message import Message
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from components.cli import coding, keeplane, settings_file
+from components.cli import coding, keeplane, server_connection, settings_file
 from components.cli.server_connection import ConnectionError
 from components.cli.sign_in_again import EXPIRED_NOT_SAVED
 from tests.unit import test_cli_project_profile as profile_tests
@@ -298,10 +299,86 @@ def test_sw_06_another_refusal_keeps_the_servers_own_reason(
     assert run(monkeypatch, "code", "Fix it") == 1
     assert capsys.readouterr().err.strip() == "This project is unavailable."
     assert fake_runtime[1] == []
-    # A reason that isn't short plain text isn't shown.
-    allowed.server.task_model_reply = {"error": "Bad\x1b[31m"}
+
+
+PLAIN_200 = "A" * 199 + "."
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ["Bad\x1b[31m", "A" * 201, "Bad\u009b31m", "Projet indisponible é", "Two\nlines"],
+    ids=["escape", "201-characters", "c1-control", "non-ascii", "newline"],
+)
+def test_sw_06_a_reason_that_isnt_short_plain_text_isnt_shown(
+    allowed, fake_runtime, saved_gateway, monkeypatch, capsys, reason
+):
+    settings_file.set_project_model(PROJECT, "general")
+    allowed.server.task_model_status = 403
+    allowed.server.task_model_reply = {"error": reason}
     assert run(monkeypatch, "code", "Fix it") == 1
     assert capsys.readouterr().err.strip() == "The requested action is unavailable."
+    assert fake_runtime[1] == []
+
+
+def test_sw_06_a_200_character_plain_reason_is_shown(
+    allowed, fake_runtime, saved_gateway, monkeypatch, capsys
+):
+    settings_file.set_project_model(PROJECT, "general")
+    allowed.server.task_model_status = 403
+    allowed.server.task_model_reply = {"error": PLAIN_200}
+    assert run(monkeypatch, "code", "Fix it") == 1
+    assert capsys.readouterr().err.strip() == PLAIN_200
+
+
+class Refusal:
+    """The parts of an HTTPError that ``refusal_reason`` reads."""
+
+    def __init__(self, body, content_type="application/json"):
+        self.headers = Message()
+        self.headers["Content-Type"] = content_type
+        self.body, self.asked = body, []
+
+    def read(self, size):
+        self.asked.append(size)
+        return self.body[:size]
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        Refusal(json.dumps({"error": "A" * 201}).encode()),
+        Refusal(json.dumps({"error": "Bad\u009b31m"}).encode()),
+        Refusal(json.dumps({"error": "Projet indisponible é"}).encode()),
+        Refusal(json.dumps({"error": "Two\nlines"}).encode()),
+        Refusal(json.dumps({"error": "Bad\x1b[31m"}).encode()),
+        Refusal(b"This project is unavailable", "text/plain"),
+        Refusal(b"<html>This project is unavailable</html>"),
+        Refusal(json.dumps({"error": "Too long", "padding": "x" * 5000}).encode()),
+        Refusal(json.dumps({"error": 403}).encode()),
+        Refusal(json.dumps(["This project is unavailable"]).encode()),
+    ],
+    ids=[
+        "201-characters",
+        "c1-control",
+        "non-ascii",
+        "newline",
+        "escape",
+        "not-json-type",
+        "not-json-body",
+        "over-4-kb",
+        "not-text",
+        "not-an-object",
+    ],
+)
+def test_sw_06_refusal_reason_keeps_only_short_plain_text(refusal):
+    assert server_connection.refusal_reason(refusal) is None
+    # At most 4 KB plus one byte is ever read.
+    assert all(size <= 4097 for size in refusal.asked)
+
+
+def test_sw_06_refusal_reason_accepts_exactly_200_printable_characters():
+    body = json.dumps({"error": PLAIN_200}).encode()
+    assert server_connection.refusal_reason(Refusal(body)) == PLAIN_200
 
 
 @pytest.mark.parametrize(
