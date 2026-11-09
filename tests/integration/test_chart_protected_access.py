@@ -348,7 +348,7 @@ def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
                    "`gateway_url` on\n`GET /api/runtime/session`", "`null`"):
         assert phrase in section, phrase
     quickstart = QUICKSTART.read_text()
-    for phrase in ("KP_SERVER=https://<host>", "the gateway `https://<host>/v1`",
+    for phrase in ("sign in with `https://<host>`", "the gateway is `https://<host>/v1`",
                    "the CLI saves it in\nyour profile for `keeplane code`",
                    "a resumed session, must use the same one"):
         assert phrase in quickstart, phrase

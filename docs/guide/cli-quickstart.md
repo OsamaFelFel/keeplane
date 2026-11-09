@@ -48,7 +48,7 @@ keeplane use <model>
 
 `models` lists only the models allowed for this repo's project and marks the
 one your next task uses. Keeplane works out the project from the repo's
-`origin` remote. `models`, `use` and `code` record the repo, so it shows
+`origin` remote. `models`, `use`, `keys list` and `code` record the repo, so it shows
 on the admin's **Projects** page as not set up, with your name
 ([how a repo becomes a project](cli-project-commands.md#how-a-repo-becomes-a-project)).
 An empty list means no model is allowed for this project yet; ask your admin.
@@ -118,7 +118,7 @@ the operator for it and pass it as `--gateway`, which also overrides the saved
 one. With `--state-dir`, the session history records the gateway address, and
 a later turn on that history, such as a resumed session, must use the same one.
 On a Kubernetes installation with the chart's Ingress, both are on Keeplane's
-one address: `KP_SERVER=https://<host>` and the gateway `https://<host>/v1`
+one address: sign in with `https://<host>`, and the gateway is `https://<host>/v1`
 (see [what to give developers](kubernetes-installation-reference.md#how-developers-reach-protected-models)).
 These two addresses are the only ones the CLI and the coding runtime it starts
 need to reach, so the steps also work on an isolated network; see
