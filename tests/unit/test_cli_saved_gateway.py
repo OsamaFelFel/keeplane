@@ -16,6 +16,11 @@ from tests.unit.test_cli_browser_login import issuer  # noqa: F401
 from tests.unit.test_cli_device_login import clock  # noqa: F401
 
 GATEWAY = "https://keeplane.example/v1"
+# Wording decided by the associate product owner.
+UNUSABLE = (
+    "The server gave a gateway address the CLI can't use, so you aren't signed in. "
+    "Ask your admin to check `KEEPLANE_GATEWAY_PUBLIC_URL`."
+)
 
 
 def credential(**changes):
@@ -112,6 +117,8 @@ def test_sg_03_no_address_saves_none_and_keeps_the_older_format(
 def test_sg_04_an_address_the_cli_refuses_saves_nothing_and_revokes(
     issuer,  # noqa: F811
     tmp_path,
+    monkeypatch,
+    capsys,
     given,
 ):
     issuer.session_extra = {"gateway_url": given}
@@ -119,14 +126,18 @@ def test_sg_04_an_address_the_cli_refuses_saves_nothing_and_revokes(
     with pytest.raises(ConnectionError) as error:
         browser_login.login(issuer.url, path, browser=issuer.browser)
     message = str(error.value)
-    assert (
-        "invalid account" in message
-        if given == 5
-        else "gateway address the CLI can't use" in message
+    assert message == (
+        "The server returned an invalid account." if given == 5 else UNUSABLE
     )
     assert not (path / "credential.json").exists()
     assert issuer.revocations == 1
     assert issuer.access not in message and str(given) not in message
+    # The real command gives that message, claims no sign-in and exits 1.
+    capsys.readouterr()
+    assert browser_sign_in(issuer, tmp_path / "again", monkeypatch) == 1
+    output = capsys.readouterr()
+    assert output.err.strip() == message and "Signed in" not in output.out
+    assert not (tmp_path / "again" / "credential.json").exists()
 
 
 # SG-05

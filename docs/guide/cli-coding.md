@@ -29,7 +29,9 @@ The repo needs no setup in Keeplane. `code` works out everything else:
 When you sign in, the server gives the CLI the gateway address its installer
 set, and the CLI saves it in your profile; `keeplane refresh` saves the
 server's current address again. The CLI checks it the same way as `--gateway`
-and refuses the sign-in if the server gives one it can't use. `--gateway`
+and, if the server gives one it can't use, `login` exits 1 with "The server
+gave a gateway address the CLI can't use, so you aren't signed in. Ask your
+admin to check `KEEPLANE_GATEWAY_PUBLIC_URL`." `--gateway`
 overrides the saved address for one turn. If the server has no address (an
 older server, or one whose installer didn't set it), nothing is saved and,
 without `--gateway`, `code` sends nothing and says:

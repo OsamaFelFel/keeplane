@@ -158,8 +158,8 @@ def session(server, credential):
             gateway = gateway_endpoint(gateway)
         except ConnectionError:
             raise ConnectionError(
-                "The server gave a gateway address the CLI can't use. "
-                "Ask your admin to check KEEPLANE_GATEWAY_PUBLIC_URL.") from None
+                "The server gave a gateway address the CLI can't use, so you aren't "
+                "signed in. Ask your admin to check `KEEPLANE_GATEWAY_PUBLIC_URL`.") from None
     return {"id": data["id"], "username": data["username"], "role": data["role"]}, gateway
 
 
