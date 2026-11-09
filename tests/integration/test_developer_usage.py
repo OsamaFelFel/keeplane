@@ -18,7 +18,7 @@ from django.apps import apps
 from django.db import DatabaseError
 from django.test import Client, override_settings
 from django.urls import URLResolver, get_resolver
-from model_registry import runtime_views
+from model_registry import prices, runtime_views
 from model_registry.fingerprints import fingerprint
 from model_registry.policy import DjangoModelPolicy
 from projects.services import DjangoProjectStore
@@ -127,15 +127,19 @@ def test_du_01_reports_add_up_in_the_hour_and_read_back(usage):
     assert UsageTotal.objects.count() == 2
     response = get(usage)
     assert response.status_code == 200 and "no-store" in response["Cache-Control"]
+    # "coder" was approved without Keeplane recording its provider, so it
+    # has no list price (task 009-09; the cost cases are DU-C1 to DU-C8).
     assert response.json() == {
         "time_zone": "UTC",
         "today": "2026-11-09",
         "month": "2026-11",
+        "price_list": {"date": prices.shipped().date.isoformat(), "currency": "USD"},
         "models": [
             {
                 "model": "coder",
-                "today": counts(2000, 500, 7, 1),
-                "this_month": counts(2000, 500, 7, 1),
+                "cost_status": "no_list_price",
+                "today": {**counts(2000, 500, 7, 1), "estimated_cost": None},
+                "this_month": {**counts(2000, 500, 7, 1), "estimated_cost": None},
             }
         ],
     }

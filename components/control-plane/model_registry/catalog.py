@@ -4,12 +4,15 @@ from common.errors import GatewayRemovalFailed
 from common.storage import settings_change, storage_service
 from data_classes.models import DataClass
 from django.db.models import Exists, OuterRef
+from django.utils import timezone
 
 from .levels import LEVEL_NAMES, LevelError, ModelInUse, describe_level_change
 from .models import (
+    CloudProvider,
     ComplexityLevelChoice,
     DeveloperProviderKey,
     ModelApproval,
+    ModelOrigin,
     PersonaRule,
     ProviderKeyChoice,
 )
@@ -106,9 +109,30 @@ class DjangoModelCatalog:
         key_choice="none",
         shared_key_replaced=False,
         context_tokens=None,
+        added_from=None,
     ):
+        """Save an approval.
+
+        ``added_from`` is given only when Keeplane adds the model:
+        ``("local", "", "")`` for a local runner, or ``("cloud", provider,
+        provider_model)``. It is recorded once, for cost estimates (ADR 029),
+        and kept from setup to setup.
+        """
         if key_choice not in ProviderKeyChoice.values:
             raise ValueError("Choose a supported provider key option")
+        if (
+            added_from is not None
+            and added_from != ("local", "", "")
+            and not (
+                isinstance(added_from, tuple)
+                and len(added_from) == 3
+                and added_from[0] == ModelOrigin.CLOUD
+                and added_from[1] in CloudProvider.values
+                and isinstance(added_from[2], str)
+                and 0 < len(added_from[2]) <= 256
+            )
+        ):
+            raise ValueError("The model's provider could not be recorded")
         if context_tokens is not None and (
             type(context_tokens) is not int or context_tokens <= 0
         ):
@@ -141,6 +165,14 @@ class DjangoModelCatalog:
             if context_tokens is not None:
                 # Kept from setup to setup; only a runner's report changes it.
                 stored["context_tokens"] = context_tokens
+            if added_from is not None:
+                origin, provider, provider_model = added_from
+                stored.update(
+                    origin=origin,
+                    provider=provider,
+                    provider_model=provider_model,
+                    origin_recorded_at=timezone.now(),
+                )
             ModelApproval.objects.update_or_create(pk=model_id, defaults=stored)
             if actor and previous != values:
                 self.audit.record_in_transaction(
@@ -309,4 +341,3 @@ class DjangoModelCatalog:
                 if status != 200:
                     raise GatewayRemovalFailed(status, result)
         return removed
-

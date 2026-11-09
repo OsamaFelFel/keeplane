@@ -18,6 +18,7 @@ from django.db.models import F, Q, Sum
 from django.db.models.functions import Least
 from django.utils import timezone
 
+from . import costs
 from .models import UsageTotal
 
 COUNTS = ("input_tokens", "output_tokens", "requests", "requests_without_usage")
@@ -127,7 +128,7 @@ def periods(zone, now=None):
 
 
 def own_usage(user_id, zone, now=None):
-    """The developer's totals per model for today and this month."""
+    """The developer's totals and estimated cost per model, today and this month."""
     local, day_start, month_start = periods(zone, now)
     today = Q(hour__gte=day_start)
     sums = {}
@@ -140,7 +141,7 @@ def own_usage(user_id, zone, now=None):
         .annotate(**sums)
         .order_by("model_id")
     )
-    return {
+    usage = {
         "time_zone": zone.key,
         "today": local.date().isoformat(),
         "month": local.strftime("%Y-%m"),
@@ -153,3 +154,4 @@ def own_usage(user_id, zone, now=None):
             for row in rows
         ],
     }
+    return costs.add_estimates(user_id, usage, day_start, month_start)

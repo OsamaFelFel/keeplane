@@ -46,6 +46,15 @@ requirement.
 A gateway write that cannot be verified may leave an unapproved model visible;
 the error names that possibility so an admin can inspect it.
 
+When Keeplane adds a model it records where it runs, so developers' usage can
+show an estimated cost: a model from a local runner is never priced, and for an
+OpenAI or Anthropic model it keeps the provider and the model ID you entered.
+Enter the provider's exact model ID, such as `gpt-4.1-mini` or
+`claude-sonnet-4-6`, for it to match a row in the shipped price list; otherwise
+its cost reads "no list price". Models set up before Keeplane recorded this, and
+models registered directly in the gateway, also show no list price. See
+[developer usage](../architecture/developer-usage.md#estimated-cost).
+
 ## Registration and request settings
 
 Keeplane registers models through the gateway's management API, confirms the

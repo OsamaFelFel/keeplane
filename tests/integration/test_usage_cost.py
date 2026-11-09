@@ -1,0 +1,304 @@
+"""Estimated cost in a developer's own usage, on the test SQLite database.
+
+Spec 009 ST31 (D186, D189), ADR 029, task 009-09. Cases DU-C1 to DU-C9 in
+developer-usage-cases.md. Models are added through Keeplane's real add flow:
+cloud models against the cloud-provider fixture, local ones from a runner,
+under a test price row.
+"""
+
+from datetime import timedelta
+from functools import partial
+from types import SimpleNamespace
+
+import pytest
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from model_registry import catalog as catalog_module
+from model_registry import prices
+from model_registry.models import ModelApproval
+from model_registry.provider_probe import provider_answers
+from model_registry.registration import ModelManagement
+from usage import totals
+
+from tests.integration.test_developer_usage import NOW, get, usage  # noqa: F401
+from tests.integration.test_personal_model_registration import (  # noqa: F401
+    provider,
+)
+from tests.unit.test_model_registration_ids import Gateway
+
+TEST_LIST = {
+    "version": 1,
+    "currency": "USD",
+    "date": "2026-10-01",
+    "note": "Test prices",
+    "prices": [
+        {
+            "provider": "openai",
+            "model": "test-gpt",
+            "input_per_million": "3",
+            "output_per_million": "15",
+            "source": "https://developers.openai.com/api/docs/pricing",
+            "checked": "2026-10-01",
+        },
+        {
+            "provider": "anthropic",
+            "model": "test-claude",
+            "input_per_million": "1",
+            "output_per_million": "5",
+            "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "checked": "2026-10-15",
+        },
+    ],
+}
+UPSTREAM = {"openai": "test-gpt", "anthropic": "test-claude"}
+
+
+@pytest.fixture
+def priced(usage, provider, monkeypatch):  # noqa: F811
+    """Keeplane's add flow, the usage clock and a test price list."""
+    monkeypatch.setattr(prices, "shipped", lambda: prices.parse(TEST_LIST))
+    # Origins are recorded on the same moving clock as the usage totals.
+    monkeypatch.setattr(
+        catalog_module, "timezone", SimpleNamespace(now=lambda: usage.clock.now)
+    )
+    registrar = ModelManagement(
+        usage.stores.catalog,
+        usage.stores.classes,
+        Gateway(),
+        None,
+        "managed",
+        None,
+        "",
+        set(),
+        {"openai": provider["url"], "anthropic": provider["url"]},
+        "",
+        provider_probe=partial(provider_answers, allow_loopback_http=True),
+    )
+    registrar.local_runner = lambda *_: (200, {})
+    registrar.runner_context = lambda *_: None
+    usage.registrar = registrar
+    return usage
+
+
+def add_cloud(priced, name, source, model):
+    status, body = priced.registrar.add(
+        {"name": name, "model": model, "source": source, "key_choice": "personal"}
+    )
+    assert status == 200, body
+
+
+def add_local(priced, name):
+    status, body = priced.registrar.add(
+        {
+            "name": name,
+            "model": "test-gpt",
+            "source": "runner",
+            "address": "http://runner.test:11434",
+        }
+    )
+    assert status == 200, body
+
+
+def used(priced, model, input_tokens, output_tokens, requests=1, at=None):
+    totals.add(
+        priced.developer.id,
+        model,
+        {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "requests": requests,
+            "requests_without_usage": 0,
+        },
+        now=at or priced.clock.now,
+    )
+
+
+def models(priced):
+    response = get(priced)
+    assert response.status_code == 200
+    return response.json(), {item["model"]: item for item in response.json()["models"]}
+
+
+@pytest.mark.parametrize("source", ["openai", "anthropic"])
+def test_du_c1_a_listed_cloud_model_shows_an_estimated_cost(priced, source):
+    add_cloud(priced, "cloud-coder", source, UPSTREAM[source])
+    approval = ModelApproval.objects.get(pk="cloud-coder")
+    assert (approval.origin, approval.provider, approval.provider_model) == (
+        "cloud",
+        source,
+        UPSTREAM[source],
+    )
+    used(priced, "cloud-coder", 1234, 567)
+    priced.clock.now = NOW + timedelta(days=1)
+    used(priced, "cloud-coder", 2_000_000, 10)
+    body, found = models(priced)
+    # The label's date is the list's (oldest row) date; costs are in US dollars.
+    assert body["price_list"] == {"date": "2026-10-01", "currency": "USD"}
+    item = found["cloud-coder"]
+    assert item["cost_status"] == "estimate"
+    if source == "openai":  # $3 in, $15 out per million
+        today, month = "6.000150", "6.012357"
+    else:  # $1 in, $5 out per million
+        today, month = "2.000050", "2.004119"
+    assert item["today"]["estimated_cost"] == today
+    assert item["this_month"]["estimated_cost"] == month
+    assert item["this_month"]["input_tokens"] == 2_001_234
+    assert item["this_month"]["output_tokens"] == 577
+
+
+def test_du_c2_a_local_model_shows_tokens_and_no_cost(priced):
+    # Its runner model name matches a listed cloud price; it is still not priced.
+    add_local(priced, "local-coder")
+    approval = ModelApproval.objects.get(pk="local-coder")
+    assert (approval.origin, approval.provider, approval.provider_model) == (
+        "local",
+        "",
+        "",
+    )
+    used(priced, "local-coder", 5000, 700, requests=2)
+    _, found = models(priced)
+    item = found["local-coder"]
+    assert item["cost_status"] == "local"
+    assert item["today"]["estimated_cost"] is None
+    assert item["this_month"]["estimated_cost"] is None
+    assert item["today"]["input_tokens"] == 5000
+    assert item["today"]["output_tokens"] == 700
+
+
+@pytest.mark.parametrize("source", ["openai", "anthropic"])
+def test_du_c3_a_cloud_model_with_no_row_shows_no_list_price(priced, source):
+    add_cloud(priced, "unlisted", source, "not-in-the-list")
+    # A listed name from the other provider must not match.
+    other = {"openai": "anthropic", "anthropic": "openai"}[source]
+    add_cloud(priced, "wrong-provider", source, UPSTREAM[other])
+    used(priced, "unlisted", 100, 10)
+    used(priced, "wrong-provider", 100, 10)
+    body, found = models(priced)
+    assert body["price_list"]["date"] == "2026-10-01"
+    for name in ("unlisted", "wrong-provider"):
+        assert found[name]["cost_status"] == "no_list_price"
+        assert found[name]["today"]["estimated_cost"] is None
+        assert found[name]["today"]["input_tokens"] == 100
+
+
+def test_du_c4_a_model_whose_provider_wasnt_recorded_is_not_priced(priced):
+    # "coder" was approved without Keeplane adding it (as before 009-09, or a
+    # model registered directly in the gateway). "removed" has no approval.
+    used(priced, "coder", 1000, 100)
+    used(priced, "removed", 1000, 100)
+    _, found = models(priced)
+    for name in ("coder", "removed"):
+        assert found[name]["cost_status"] == "no_list_price"
+        assert found[name]["this_month"]["estimated_cost"] is None
+
+
+def test_du_c5_usage_from_before_the_provider_was_recorded_is_not_priced(priced):
+    # A local model used this name earlier in the month, was removed, and a
+    # cloud model was then added under the same name.
+    used(priced, "reused", 9_000_000, 9_000_000, at=NOW - timedelta(days=2))
+    used(priced, "reused", 1_000_000, 0, at=NOW - timedelta(hours=1))
+    add_cloud(priced, "reused", "openai", "test-gpt")
+    used(priced, "reused", 1000, 1000)
+    _, found = models(priced)
+    item = found["reused"]
+    assert item["cost_status"] == "estimate"
+    assert item["this_month"]["input_tokens"] == 10_001_000
+    assert item["today"]["input_tokens"] == 1_001_000
+    # Only the 1,000 + 1,000 tokens after it was added are priced.
+    assert item["today"]["estimated_cost"] == "0.018000"
+    assert item["this_month"]["estimated_cost"] == "0.018000"
+
+
+def test_du_c6_setting_a_model_up_again_keeps_its_recorded_provider(priced):
+    add_cloud(priced, "cloud-coder", "openai", "test-gpt")
+    before = ModelApproval.objects.values(
+        "origin", "provider", "provider_model", "origin_recorded_at"
+    ).get(pk="cloud-coder")
+    priced.clock.now = NOW + timedelta(hours=3)
+    approval = ModelApproval.objects.get(pk="cloud-coder")
+    priced.stores.catalog.approve(
+        "cloud-coder", [], approval.gateway_fingerprint, key_choice="personal"
+    )
+    after = ModelApproval.objects.values(
+        "origin", "provider", "provider_model", "origin_recorded_at"
+    ).get(pk="cloud-coder")
+    assert after == before
+
+
+def test_du_c7_a_broken_shipped_list_shows_tokens_without_costs(priced, monkeypatch):
+    add_cloud(priced, "cloud-coder", "openai", "test-gpt")
+    add_local(priced, "local-coder")
+    used(priced, "cloud-coder", 100, 10)
+    used(priced, "local-coder", 100, 10)
+
+    def broken():
+        raise prices.PriceListError("broken")
+
+    monkeypatch.setattr(prices, "shipped", broken)
+    body, found = models(priced)
+    assert body["price_list"] is None
+    assert found["cloud-coder"]["cost_status"] == "no_list_price"
+    assert found["local-coder"]["cost_status"] == "local"
+    assert found["cloud-coder"]["today"]["input_tokens"] == 100
+
+
+def test_du_c8_an_origin_that_doesnt_add_up_is_refused(priced):
+    catalog = priced.stores.catalog
+    for added_from in [
+        ("cloud", "google", "test-gpt"),
+        ("cloud", "openai", ""),
+        ("cloud", "openai", "x" * 257),
+        ("local", "openai", "test-gpt"),
+        ("remote", "", ""),
+        ["local", "", ""],
+    ]:
+        with pytest.raises(ValueError, match="provider could not be recorded"):
+            catalog.approve("bad", [], "definition", added_from=added_from)
+    assert not ModelApproval.objects.filter(pk="bad").exists()
+    for fields in [
+        {"origin": "cloud", "provider": "openai", "provider_model": ""},
+        {"origin": "local", "provider": "openai", "provider_model": ""},
+        {"origin": "cloud", "provider": "openai", "provider_model": "test-gpt"},
+    ]:
+        with pytest.raises(IntegrityError), transaction.atomic():
+            ModelApproval.objects.create(
+                model_id="bad", key_choice="none", gateway_fingerprint="d", **fields
+            )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_du_c9_existing_approvals_keep_no_recorded_provider_after_the_upgrade():
+    before = [("model_registry", "0009_gateway_guard_status")]
+    after = [("model_registry", "0010_model_origin")]
+    executor = MigrationExecutor(connection)
+    latest = executor.loader.graph.leaf_nodes()
+    try:
+        executor.migrate(before)
+        old_model = executor.loader.project_state(before).apps.get_model(
+            "model_registry", "ModelApproval"
+        )
+        old_model.objects.create(
+            model_id="earlier", key_choice="shared", gateway_fingerprint="definition"
+        )
+        upgraded = MigrationExecutor(connection)
+        upgraded.migrate(after)
+        new_model = upgraded.loader.project_state(after).apps.get_model(
+            "model_registry", "ModelApproval"
+        )
+        # An app copy from before the upgrade can still save an approval.
+        old_model.objects.create(
+            model_id="older-copy", key_choice="none", gateway_fingerprint="definition"
+        )
+        rows = new_model.objects.values(
+            "origin", "provider", "provider_model", "origin_recorded_at"
+        )
+        for row in rows:
+            assert row == {
+                "origin": "",
+                "provider": "",
+                "provider_model": "",
+                "origin_recorded_at": None,
+            }
+        assert rows.count() == 2
+    finally:
+        MigrationExecutor(connection).migrate(latest)

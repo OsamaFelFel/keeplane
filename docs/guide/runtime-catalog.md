@@ -94,9 +94,22 @@ Authorization: Bearer <credential>
 ```
 
 The answer lists each model you used this month with `input_tokens`,
-`output_tokens`, `requests` and `requests_without_usage` for `today` and
-`this_month`. Without `tz` it uses UTC. Totals are hourly, so a day or month
-starts at the UTC hour nearest your local midnight, at most 30 minutes away. A
+`output_tokens`, `requests`, `requests_without_usage` and `estimated_cost` for
+`today` and `this_month`, plus the model's `cost_status`:
+
+- `estimate`: a cloud model with a list price; `estimated_cost` is in US
+  dollars, such as `"0.012345"`;
+- `local`: a model from a local runner, never priced; `estimated_cost` is
+  `null`;
+- `no_list_price`: a cloud model Keeplane has no list price for, or one whose
+  provider it didn't record; `estimated_cost` is `null`.
+
+`price_list` gives the shipped price list's `date` and `currency` (`USD`). Costs
+are estimates from each provider's public list price; discounts and negotiated
+prices are never applied.
+
+Without `tz` it uses UTC. Totals are hourly, so a day or month starts at the
+UTC hour nearest your local midnight, at most 30 minutes away. A
 storage failure returns 503. An unknown zone or any other parameter
 returns 400. You only ever see your own usage; admins have no route to read it.
 Totals older than the previous calendar month are deleted. Usage can undercount
