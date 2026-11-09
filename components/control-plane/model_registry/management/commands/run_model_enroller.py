@@ -77,6 +77,23 @@ def guard_status_recorder(databases=None):
     return copy_name, GuardStatusRecorder(copy_name)
 
 
+def changed_report(last, result):
+    """Whether the loop reports this pass after the one before it (``last``).
+
+    A pass that finds nothing new stays quiet, but the end of a hold is always
+    reported, even when it leaves the same models or none (#253): otherwise
+    the last line would still say a change is waiting.
+    """
+    if result == last:
+        return False
+    return not (
+        last is not None
+        and last.state != "held"
+        and result.state == "unchanged"
+        and result.models == last.models
+    )
+
+
 class Command(BaseCommand):
     help = "Keep the managed gateway's protected checks in step with saved models"
 
@@ -125,11 +142,7 @@ class Command(BaseCommand):
                 log.warning(FAILED)
                 last = None
             else:
-                if result != last and not (
-                    last is not None
-                    and result.state == "unchanged"
-                    and result.models == last.models
-                ):
+                if changed_report(last, result):
                     self.stdout.write(self._summary(result))
                     self.stdout.flush()
                 last = result
