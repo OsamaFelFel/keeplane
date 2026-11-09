@@ -5,6 +5,8 @@ no flags (task 009-01, ADR 028). The suite signs a temporary developer in from
 the source-tree CLI through the browser flow (the fixture browser uses the real
 sign-in and consent pages) and the device flow, then sends requests through the
 guarded gateway on port 5000 before and after one approved model is added.
+Then it sends one request the way `keeplane code` does, through the CLI's usage
+relay, reports it, and reads it back with `keeplane usage` (Spec 009 ST31).
 Afterwards it signs the CLI out and removes what it created. See
 preview-sign-in-live-cases.md.
 """
@@ -27,6 +29,7 @@ from urllib.request import HTTPCookieProcessor, ProxyHandler, Request, build_ope
 
 import pytest
 
+from components.cli import usage, usage_relay
 from tests.e2e import test_project_classes_live as classes
 from tests.fixtures.class_runner import ClassRunner
 from tests.fixtures.installed_cli_journey import HiddenFields, NoRedirects
@@ -41,7 +44,7 @@ REPORT = report_path("preview-sign-in-live.json")
 CLI = REPO / "components/cli/keeplane.py"
 GATEWAY = f"http://127.0.0.1:{classes.RUNTIME_PORT}/v1/chat/completions"
 DIRECT = build_opener(ProxyHandler({}))
-CASES = ("PSI-LIVE-01", "PSI-LIVE-02", "PSI-LIVE-03", "PSI-LIVE-04")
+CASES = ("PSI-LIVE-01", "PSI-LIVE-02", "PSI-LIVE-03", "PSI-LIVE-04", "PSI-LIVE-05")
 
 
 def enroller_reports():
@@ -106,7 +109,7 @@ def unavailable_reason():
     return None
 
 
-def guarded(token, project, model):
+def guarded(token, project, model, url=GATEWAY):
     """One request through the guarded gateway: (status or None, answer)."""
     body = json.dumps(
         {
@@ -119,7 +122,7 @@ def guarded(token, project, model):
     if token:
         headers["Authorization"] = "Bearer " + token
     try:
-        with DIRECT.open(Request(GATEWAY, body, headers), timeout=60) as response:
+        with DIRECT.open(Request(url, body, headers), timeout=60) as response:
             raw, status = response.read(8192), response.status
     except HTTPError as error:
         raw, status = error.read(8192), error.code
@@ -131,6 +134,16 @@ def guarded(token, project, model):
     except (ValueError, KeyError, IndexError, TypeError):
         answer = None
     return status, answer
+
+
+def own_usage(token, model):
+    """The developer's totals for ``model`` today and this month (zeros if none)."""
+    data, _ = usage.fetch(BASE, token, None)
+    for row in data["models"]:
+        if row["model"] == model:
+            return row
+    zero = dict.fromkeys(usage.COUNTS, 0)
+    return {"cost_status": None, "today": dict(zero), "this_month": dict(zero)}
 
 
 class Cli:
@@ -464,6 +477,74 @@ def run_cases():
                     "signed_in_upstream_calls": middle - before,
                     "anonymous_status": anonymous[0],
                     "anonymous_upstream_calls": after - middle,
+                },
+            )
+
+            # PSI-LIVE-05: a turn's request through the CLI's usage relay is
+            # reported, and `keeplane usage` shows the local model's tokens
+            # with no cost. Totals are compared before and after, so usage
+            # already recorded this month doesn't matter.
+            before_usage = own_usage(token, model)
+            base = GATEWAY.removesuffix("/chat/completions")
+            with usage_relay.Relay(base, timeout=60, grant=token) as relay:
+                relayed = guarded(
+                    token, project, model, relay.url + "/chat/completions"
+                )
+                relay.close()
+                counts = relay.usage()
+            warning = usage.report_turn(BASE, project, token, counts)
+            after_usage = own_usage(token, model)
+            added = {
+                period: {
+                    name: after_usage[period][name] - before_usage[period][name]
+                    for name in usage.COUNTS
+                }
+                for period in ("today", "this_month")
+            }
+            shown = cli.run("usage", "--profile", str(browser_profile))
+            rows = [line.split() for line in shown[1].splitlines()]
+            mine = [row for row in rows if row[:2] == [model, "Today"]]
+            following = rows[rows.index(mine[0]) + 1] if mine else []
+            record(
+                "PSI-LIVE-05",
+                "pass"
+                if relayed == (200, "class answer")
+                and counts
+                == {
+                    model: {
+                        "input_tokens": 2,
+                        "output_tokens": 2,
+                        "requests": 1,
+                        "requests_without_usage": 0,
+                    }
+                }
+                and warning == ""
+                and all(
+                    added[period]
+                    == {
+                        "input_tokens": 2,
+                        "output_tokens": 2,
+                        "requests": 1,
+                        "requests_without_usage": 0,
+                    }
+                    for period in added
+                )
+                and after_usage["cost_status"] == "local"
+                and shown[0] == 0
+                and mine
+                and mine[0][-1] == "—"
+                and following[:2] == ["This", "month"]
+                and following[-1] == "—"
+                else "fail",
+                {
+                    "relayed": relayed,
+                    "counts": counts,
+                    "added": added,
+                    "cost_status": after_usage["cost_status"],
+                    "report_warning": warning,
+                    "usage_exit": shown[0],
+                    "usage_output": shown[1].splitlines(),
+                    "usage_errors": shown[2],
                 },
             )
         finally:

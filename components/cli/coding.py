@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 if __package__:
-    from . import opencode_adapter, project_identity, settings_file
+    from . import opencode_adapter, project_identity, settings_file, usage
     from .credential_profile import ProfileError, opened
     from .project_registration import register
     from .server_connection import (
@@ -22,6 +22,7 @@ else:
     import opencode_adapter
     import project_identity
     import settings_file
+    import usage
     from credential_profile import ProfileError, opened
     from project_registration import register
     from server_connection import (
@@ -348,8 +349,7 @@ def answered_by(stdout, model, allowed):
                 if value in allowed and value not in names:
                     names.append(value)
     names = names or [model]
-    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
-    return ANSWERED_BY.format(models=listed)
+    return ANSWERED_BY.format(models=usage.joined(names))
 
 
 def _walk(value, depth=0):
@@ -513,6 +513,10 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             result.stderr += problem_message(problem, model, alternatives) + "\n"
         elif not result.returncode:
             result.stderr += answered_by(result.stdout, model, allowed) + "\n"
+        # ADR 029: one usage report per model, from the gateway's answers.
+        result.stderr += usage.report_turn(credential.issuer, project_id,
+                                           credential.access_token,
+                                           getattr(result, "usage", None))
         for secret in secrets:
             result.stdout = result.stdout.replace(secret, "[redacted]")
             result.stderr = result.stderr.replace(secret, "[redacted]")

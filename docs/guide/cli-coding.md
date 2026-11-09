@@ -300,7 +300,8 @@ the web or open a web page during a turn, even if your shell holds a search
 provider key: the runtime's built-in web
 tools and hosted search providers are turned off, so a turn never sends its
 content to a service your admin did not set up. The only places a turn reaches
-are your Keeplane server and the gateway; see
+are your Keeplane server and the gateway (through the CLI's own usage relay,
+described under [token usage](#token-usage)); see
 [Developers' computers](outbound-connections.md#developers-computers).
 
 ### Cloud models use API keys
@@ -322,13 +323,32 @@ The runtime `code` starts can't sign in to a provider either:
 
 ### Token usage
 
-The runtime asks the gateway to include token counts in its streamed answers,
-so each model call of a turn ends with its counts. Keeplane doesn't show or
-report them yet. Once `keeplane usage` is available, the CLI will send one
-report per model after each turn: input tokens (cached input included), output
-tokens (reasoning included), the number of calls and how many came back
-without counts. A report won't hold a prompt, an answer, a file or a path, and
-calls made by a subagent won't be counted.
+After each turn, `code` sends your Keeplane server one report per model the
+turn used, so [`keeplane usage`](cli-usage.md) can show your tokens and
+estimated cost. A report holds the project, the model, input tokens (cached
+input included), output tokens (reasoning included), the number of model calls
+and how many came back without token counts; never a prompt, an answer, a file
+or a path.
+
+The counts come from the gateway's answers. For each turn, `code` starts a
+small relay on `127.0.0.1`, on a port picked for that turn, and gives the
+runtime the relay's address as its only provider. The relay sends every
+request on unchanged to the gateway, and nowhere else; it adds no credential
+(the runtime's own Keeplane grant goes through as it is; a request without
+this turn's grant is refused) and reads the token
+counts in each answer, streamed or not, as it passes it back. So the turn's
+last answer and calls made by subagents are counted too. The runtime also asks
+the gateway to include token counts in streamed answers.
+
+If a report can't be sent, the turn still ends as usual, with the same output
+and exit status, and `code` adds:
+
+```text
+Keeplane couldn't record this task's usage of coder, so `keeplane usage` may show less than you used.
+```
+
+A turn that is cancelled, times out, or stops because your sign-in expired
+isn't reported.
 
 ### When the model is down or the task is too big
 

@@ -37,15 +37,20 @@
   server and turn the provider plugins on, and a shell with provider keys, base
   URLs and proxies set to the trap. The pinned real runtime runs under `strace`,
   which records every address it connects or sends to. It still reads and edits
-  the file, and every recorded address, on any host or port (DNS included), is
-  the gateway fixture or a loopback port the runtime bound and listened on itself
-  (its own local server). The trap is never contacted, no saved secret is printed,
-  and every streamed request asks for usage (`stream_options.include_usage`).
-  The fixture sends usage only when asked, with cached and reasoning tokens
-  (10 input with 4 cached, 5 output with 2 reasoning). The turn has 3 requests,
-  and its totals must be exactly 10 input and 5 output tokens for each printed
-  `step_finish`, so counting either detail twice fails. The runtime prints only the
-  text of the last step, so that request counts without usage.
+  the file. Every recorded address, on any host or port (DNS included), is the
+  CLI's usage relay on `127.0.0.1` or a loopback port the runtime bound and
+  listened on itself (its own local server); the runtime never contacts the
+  gateway fixture directly. The relay, in the CLI's own process, connects to the
+  gateway fixture and nothing else. The trap is never contacted, no saved secret
+  is printed, and every streamed request asks for usage
+  (`stream_options.include_usage`). The fixture sends usage only when asked,
+  with cached and reasoning tokens (10 input with 4 cached, 5 output with 2
+  reasoning). The turn has 3 tool steps, and the relay's totals must be exactly
+  10 input and 5 output tokens for every answer the gateway sent, the last
+  step's included (OpenCode 2.0.27 prints no step events for it), so counting
+  either detail twice, or missing an answer, fails. In CLI-01 and CLI-04 the
+  relay's totals likewise cover every answer, the subagent's included, and a
+  refused request counts nothing.
   The unit cases KEY-01 to KEY-08 are in
   [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
 

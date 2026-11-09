@@ -14,9 +14,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 if __package__:
+    from . import usage_relay
     from .instructions import snapshot
     from .session_state import account_binding, managed
 else:
+    import usage_relay
     from instructions import snapshot
     from session_state import account_binding, managed
 
@@ -136,18 +138,36 @@ def _keys(value, depth=0):
             yield from _keys(item, depth + 1)
 
 
-def check_settings(config, gateway, instruction_plugin=None):
+def relay_address(value):
+    """True for the relay's own address: plain HTTP on 127.0.0.1 and a port."""
+    if not isinstance(value, str):
+        return False
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except ValueError:
+        return False
+    return (url.scheme == "http" and url.netloc == "127.0.0.1:" + str(port)
+            and port is not None and 0 < port < 65536 and not url.query
+            and not url.fragment and not url.path.endswith("/")
+            and value == url.geturl())
+
+
+def check_settings(config, relay, instruction_plugin=None):
     """Refuse runtime settings other than the reviewed gateway-only shape (D185).
 
     Exactly these keys, each with its reviewed value: one provider, `keeplane`,
-    through the built-in OpenAI-compatible package, with only the gateway
-    address, the grant from KEEPLANE_RUNTIME_GRANT and at most the project
+    through the built-in OpenAI-compatible package, with only the address of
+    Keeplane's loopback usage relay (which sends everything on to the gateway
+    and nowhere else), the grant from KEEPLANE_RUNTIME_GRANT and at most the project
     header; one model entry that is exactly its name and the streamed-usage
     flag; sharing and snapshots off; web search off; the web-tool and provider
     plugin directives; at most Keeplane's own instruction plugin; and the
     gateway-only provider policy. No key anywhere may name a sign-in, key or
     credential.
     """
+    if not relay_address(relay):
+        raise ValueError("The gateway provider may only use Keeplane's loopback relay.")
     if not isinstance(config, dict) or set(config) != SETTINGS_KEYS:
         raise ValueError("Runtime settings have a missing or unreviewed key.")
     providers = config["providers"]
@@ -158,7 +178,7 @@ def check_settings(config, gateway, instruction_plugin=None):
             or set(provider) - {"package", "env", "settings", "models", "headers"}
             or provider.get("package") != PROVIDER_PACKAGE
             or provider.get("env") != ["KEEPLANE_RUNTIME_GRANT"]
-            or provider.get("settings") != {"baseURL": gateway}):
+            or provider.get("settings") != {"baseURL": relay}):
         raise ValueError("The gateway provider may only use the gateway address and grant.")
     headers = provider.get("headers", {})
     if (not isinstance(headers, dict) or set(headers) - {"X-Keeplane-Project-ID"}
@@ -191,58 +211,6 @@ def check_settings(config, gateway, instruction_plugin=None):
     if (not all(isinstance(row, dict) and set(row) == {"package", "options"} for row in packages)
             or [row["package"] for row in packages] != allowed):
         raise ValueError("Runtime settings may only add Keeplane's instruction plugin.")
-
-
-def turn_usage(stdout):
-    """Token usage the runtime reported for one turn, or None (ADR 029).
-
-    Each model request of the turn is a step: step_start, its text, reasoning
-    and tool_use events, then step_finish with the tokens from the gateway's
-    answer. Input is the runtime's non-cached input plus cache reads and
-    writes; output is its visible output plus reasoning. OpenCode 2.0.27
-    prints neither step_start nor step_finish for a turn's last step, only its
-    text, so answer events outside a printed step count as one more request.
-    That request, and any whose answer carried no usage, counts in
-    requests_without_usage, and its tokens are missing. Requests of child
-    sessions (subagents) are not in the runtime's output, so they are not
-    counted.
-    """
-    requests, used, open_step = 0, 0, False
-    totals = {"input_tokens": 0, "output_tokens": 0}
-
-    def count(value):
-        return value if type(value) is int and value > 0 else 0
-
-    for line in stdout.splitlines():
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(event, dict):
-            continue
-        kind = event.get("type")
-        if kind in ("step_start", "text", "reasoning", "tool_use"):
-            # A step_start, or an answer event outside a printed step, begins
-            # a request.
-            requests += kind == "step_start" or not open_step
-            open_step = True
-            continue
-        if kind != "step_finish":
-            continue
-        requests += not open_step
-        open_step = False
-        part = event.get("part")
-        tokens = part.get("tokens") if isinstance(part, dict) else None
-        tokens = tokens if isinstance(tokens, dict) else {}
-        cache = tokens.get("cache") if isinstance(tokens.get("cache"), dict) else {}
-        used_in = count(tokens.get("input")) + count(cache.get("read")) + count(cache.get("write"))
-        used_out = count(tokens.get("output")) + count(tokens.get("reasoning"))
-        used += bool(used_in + used_out)
-        totals["input_tokens"] += used_in
-        totals["output_tokens"] += used_out
-    if not requests:
-        return None
-    return {**totals, "requests": requests, "requests_without_usage": requests - used}
 
 
 def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None):
@@ -281,7 +249,11 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
     binding = {"directory": directory, "gateway": gateway, "model": model, "version": VERSION}
     if account_context is not None:
         binding.update(account_binding(account_context))
-    with managed(state_dir, binding, session) as state, tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary:
+    # ADR 029: the runtime reaches the gateway only through this turn's relay,
+    # which counts the usage in every answer, subagents' included.
+    with managed(state_dir, binding, session) as state, \
+            tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary, \
+            usage_relay.Relay(gateway, timeout, grant=grant) as relay:
         profile = Path(temporary)
         environment = {
             name: value
@@ -300,7 +272,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             "providers": {PROVIDER: {
                 "package": PROVIDER_PACKAGE,
                 "env": ["KEEPLANE_RUNTIME_GRANT"],
-                "settings": {"baseURL": gateway.rstrip("/")},
+                "settings": {"baseURL": relay.url},
                 "models": {model: {"name": model, "compatibility": dict(MODEL_COMPATIBILITY)}},
             }},
             "model": PROVIDER + "/" + model,
@@ -322,7 +294,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
                 "package": instruction_plugin,
                 "options": instruction_snapshot,
             })
-        check_settings(config, gateway.rstrip("/"), instruction_plugin)
+        check_settings(config, relay.url, instruction_plugin)
         configuration = json.dumps(config, ensure_ascii=False)
         if len(configuration.encode("utf-8")) > 120 * 1024:
             raise ValueError("Serialized runtime configuration exceeds 120 KiB; choose smaller instruction files.")
@@ -359,6 +331,10 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             cancelled=cancelled,
             pass_fds=(state.lock,) if state else (),
         )
+        # Counts per model from the gateway's answers (ADR 029), once every
+        # answer still on its way has been counted.
+        relay.close()
+        result.usage = relay.usage()
         result.stdout = result.stdout.replace(grant, "[redacted]")
         result.stderr = result.stderr.replace(grant, "[redacted]")
         # Some native failures are JSON error events despite an exit status of zero.

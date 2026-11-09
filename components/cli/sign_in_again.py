@@ -42,6 +42,7 @@ ALREADY_SIGNED_OUT = "You're already signed out of Keeplane."
 SIGNED_OUT_MESSAGES = {
     "code": SIGNED_OUT,
     "models": SIGNED_OUT,
+    "usage": SIGNED_OUT,
     "keys": SIGNED_OUT,
     "register-project": SIGNED_OUT,
     "whoami": SIGNED_OUT_SHORT,
@@ -72,7 +73,7 @@ def signed_in(path):
 
 def expired_message(expired, command, key_action=None):
     """The expired-sign-in line for a command other than ``code``."""
-    if command in {"whoami", "models"} or (
+    if command in {"whoami", "models", "usage"} or (
         command == "keys" and key_action not in KEY_CHANGES
     ):
         return EXPIRED_READ

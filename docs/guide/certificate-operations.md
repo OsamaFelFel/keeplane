@@ -127,9 +127,16 @@ export SSL_CERT_FILE="$HOME/.config/keeplane/ca-bundle.pem"
 keeplane whoami --profile "$HOME/.config/keeplane/account"
 ```
 
-The CLI passes `SSL_CERT_FILE` and `SSL_CERT_DIR` on to the coding tool it
-starts. Whether that tool honours them depends on the tool; check it with your
-private CA before rolling out. When your CA itself is replaced, give developers
+The gateway's certificate is checked the same way. During `keeplane code`
+the coding tool talks only to the CLI's own usage relay on `127.0.0.1`, and
+the CLI, not the coding tool, opens the HTTPS connection to the gateway (see
+[where the numbers come from](cli-usage.md#where-the-numbers-come-from)). So
+the gateway needs the same trust as the server calls: the operating system's
+store of the Python running `keeplane`, or `SSL_CERT_FILE` (a PEM bundle) and
+`SSL_CERT_DIR` (a folder of hashed certificates). `REQUESTS_CA_BUNDLE` and
+`NODE_EXTRA_CA_CERTS` are not used. If the gateway's certificate isn't trusted,
+the turn fails with the runtime's error "Keeplane could not reach the
+gateway." When your CA itself is replaced, give developers
 the new CA before the server switches to a certificate from it.
 
 ## Renew the PostgreSQL server certificate

@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,12 +14,14 @@ from pathlib import Path
 from threading import Thread
 from typing import ClassVar
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 if __name__ != "__main__":
     import pytest
     pytestmark = pytest.mark.optional
 
-from components.cli.opencode_adapter import run, turn_usage
+from components.cli import usage_relay
+from components.cli.opencode_adapter import run
 from tests.fixtures.cli_coding_provider import Handler, start
 
 
@@ -67,6 +70,12 @@ def native_turn(binary, instructions=False):
             assert target.read_text() == "def add(a, b):\n    return a + b\n"
             expected_calls = ["read", "edit", "subagent", "read"] if instructions else ["read", "edit"]
             assert Handler.calls == expected_calls
+            # ADR 029: the relay counts every answer, a subagent's included.
+            served = len(Handler.served)
+            assert any(row["child"] for row in Handler.served) == instructions
+            assert result.usage == {"fixture-coder": {
+                "input_tokens": 10 * served, "output_tokens": 5 * served,
+                "requests": served, "requests_without_usage": 0}}
             if instructions:
                 assert Handler.instruction_checks >= 6 and Handler.instruction_children >= 2
                 assert not marker.exists()
@@ -89,6 +98,8 @@ def native_turn(binary, instructions=False):
                          "fixture-coder", "Change the function.", "invalid-test-grant", 30)
             assert denied.returncode != 0
             assert Handler.calls == expected_calls
+            # A refused request is not usage.
+            assert denied.usage == {}
         finally:
             server.shutdown()
             server.server_close()
@@ -213,8 +224,23 @@ def native_api_keys_only(binary):
             "HTTP_PROXY": address, "HTTPS_PROXY": address, "ALL_PROXY": address,
             "OPENCODE_CONFIG": str(home / ".config" / "opencode" / "opencode.json"),
         }
+        relays, outbound = [], []
+
+        class Recorded(usage_relay.Relay):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                relays.append(self)
+
+        opened = socket.create_connection
+
+        def connect(address, *args, **kwargs):
+            outbound.append(address[:2])
+            return opened(address, *args, **kwargs)
+
         try:
-            with patch.dict(os.environ, shell):
+            with patch.dict(os.environ, shell), \
+                    patch.object(usage_relay, "Relay", Recorded), \
+                    patch.object(socket, "create_connection", connect):
                 result = run(wrapper, project, f"http://127.0.0.1:{server.server_port}/v1",
                              "fixture-coder", "Fix the addition function in math.py.",
                              Handler.grant, 60)
@@ -222,37 +248,44 @@ def native_api_keys_only(binary):
             assert target.read_text() == "def add(a, b):\n    return a + b\n"
             assert Handler.calls == ["read", "edit"]
             # Every address the runtime connected or sent to, on any host or
-            # port (DNS included), is the gateway fixture or a loopback port
+            # port (DNS included), is the CLI's usage relay or a loopback port
             # the runtime itself bound and listened on (its own local server).
+            # It never reaches the gateway directly.
+            [relay] = relays
             contacted, own, other = connections(log)
             print("KEY-09 contacted:", sorted(contacted), "own listeners:", sorted(own),
-                  "other families:", sorted(other))
-            gateway = ("AF_INET", "127.0.0.1", server.server_port)
-            assert gateway in contacted
+                  "other families:", sorted(other), "relay:", relay.url)
+            relay_address = ("AF_INET", "127.0.0.1", urlsplit(relay.url).port)
+            assert relay_address in contacted
+            assert server.server_port not in {port for _, _, port in contacted}
             loopback = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
-            for family, host, port in contacted - {gateway}:
+            for family, host, port in contacted - {relay_address}:
                 assert host in loopback and any(row[2] == port for row in own), (
                     family, host, port)
+            # The relay, in the CLI's own process, connected to the gateway
+            # and nothing else.
+            assert outbound and set(outbound) == {("127.0.0.1", server.server_port)}
+            assert relay.upstreams and set(relay.upstreams) == {
+                ("127.0.0.1", server.server_port)}
             assert trap.server_port not in {port for _, _, port in contacted}
             assert Trap.hits == []
             # Every streamed request asked for token usage.
             assert Handler.stream_options and all(
                 row == {"include_usage": True} for row in Handler.stream_options)
-            # Exact totals: each answer is 10 input tokens (4 cached) and 5
-            # output tokens (2 reasoning), so counting cached or reasoning
-            # tokens twice fails. The runtime prints only the text of the
-            # turn's last step, so that request counts without usage.
+            # Exact totals from every answer the gateway sent, the last step's
+            # included (the runtime prints no step events for it): each answer
+            # is 10 input tokens (4 cached) and 5 output tokens (2 reasoning),
+            # so counting cached or reasoning tokens twice fails.
             steps = [row for row in Handler.served if row["tools"] and not row["child"]]
-            assert len(steps) == 3 and all(row["usage"] for row in steps)
+            assert len(steps) == 3 and all(row["usage"] for row in Handler.served)
             kinds = [json.loads(line).get("type") for line in result.stdout.splitlines()
                      if line.startswith("{")]
             print("KEY-09 runtime events:", kinds)
-            finished = kinds.count("step_finish")
-            assert 1 <= finished <= 3
-            assert turn_usage(result.stdout) == {
-                "input_tokens": 10 * finished, "output_tokens": 5 * finished,
-                "requests": 3, "requests_without_usage": 3 - finished,
-            }
+            served = len(Handler.served)
+            assert result.usage == {"fixture-coder": {
+                "input_tokens": 10 * served, "output_tokens": 5 * served,
+                "requests": served, "requests_without_usage": 0,
+            }}
             for secret in ("synthetic-openai", "synthetic-anthropic", "synthetic-copilot"):
                 assert secret not in result.stdout + result.stderr
         finally:

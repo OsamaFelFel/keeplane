@@ -24,6 +24,7 @@
 | Preview an existing Claude, Codex or Qwen project setup | [CLI migration preview](guide/cli-migration-preview.md) |
 | Run tests and retain their results | [Testing](guide/regression-local.md) |
 | Read the experimental allowed-model catalog | [Runtime catalog](guide/runtime-catalog.md) |
+| See your own tokens and estimated cost per model | [`keeplane usage`](guide/cli-usage.md) |
 | Report and read a developer's own token usage per model | [Usage API](guide/runtime-catalog.md#report-and-read-your-own-usage), [how usage is kept](architecture/developer-usage.md) |
 | Test internal gateway policy decisions | [Runtime authorization](architecture/runtime-authorization.md) |
 | Understand the components | [Architecture](architecture/local-preview.md) |

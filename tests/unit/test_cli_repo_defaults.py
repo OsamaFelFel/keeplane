@@ -13,7 +13,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from components.cli import coding, keeplane, opencode_adapter, project_identity
+from components.cli import (
+    coding,
+    keeplane,
+    opencode_adapter,
+    project_identity,
+    usage_relay,
+)
 from components.cli.credential_profile import Credential, default_path, opened
 from tests.unit import test_cli_project_profile as profile_tests
 
@@ -110,9 +116,9 @@ def test_repo_02_code_with_only_the_task_uses_the_repo_profile_gateway_and_pick(
     assert config["providers"]["keeplane"]["headers"] == {
         "X-Keeplane-Project-ID": PROJECT
     }
-    assert config["providers"]["keeplane"]["settings"] == {
-        "baseURL": "https://gateway.test/v1"
-    }
+    assert opencode_adapter.relay_address(
+        config["providers"]["keeplane"]["settings"]["baseURL"]
+    )
     assert native[native.index("--model") + 1] == "keeplane/coder"
     assert seen["binary"] == str(sample.opencode)
     assert str(options["cwd"]) == str(sample.repo / "src")
@@ -121,6 +127,14 @@ def test_repo_02_code_with_only_the_task_uses_the_repo_profile_gateway_and_pick(
 def test_repo_03_old_flags_still_override_every_default(
     sample, fake_runtime, saved_gateway, monkeypatch, capsys
 ):
+    relays = []
+
+    class Recorded(usage_relay.Relay):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            relays.append(self)
+
+    monkeypatch.setattr(usage_relay, "Relay", Recorded)
     given = str(uuid.uuid4())
     sample.server.model_ids = ["coder", "general"]
     assert (
@@ -145,11 +159,18 @@ def test_repo_03_old_flags_still_override_every_default(
     )
     calls = sample.server.calls
     assert calls[1][3] == {"project_id": given, "name": "Given"}
-    # --gateway wins over the address saved at sign-in.
+    # --gateway wins over the address saved at sign-in: the runtime's only
+    # address is the turn's loopback relay, and the relay sends on to --gateway.
     config = json.loads(fake_runtime[1][0][1]["env"]["OPENCODE_CONFIG_CONTENT"])
-    assert config["providers"]["keeplane"]["settings"] == {
-        "baseURL": "https://other-gateway.test/v1"
-    }
+    base = config["providers"]["keeplane"]["settings"]["baseURL"]
+    assert opencode_adapter.relay_address(base)
+    [relay] = relays
+    assert relay.url == base
+    assert (relay.scheme, relay.netloc, relay.prefix) == (
+        "https",
+        "other-gateway.test",
+        "/v1",
+    )
     assert not any("task-model" in row[1] for row in calls)
     assert any("model-choice?model_id=general" in row[1] for row in calls)
     assert "chosen by Keeplane" not in capsys.readouterr().err

@@ -29,9 +29,9 @@ def test_adapter_uses_immutable_reviewed_text_without_importing_project_settings
         source.write_text("Edited after the snapshot")
         config = json.loads(options["env"]["OPENCODE_CONFIG_CONTENT"])
         assert options["env"]["OPENCODE_CONFIG_PROJECT_DISABLE"] == "1"
-        assert config["providers"]["keeplane"]["settings"] == {
-            "baseURL": "https://gateway.test/v1"
-        }
+        assert opencode_adapter.relay_address(
+            config["providers"]["keeplane"]["settings"]["baseURL"]
+        )
         # One plugin package (the instruction plugin); the rest turn built-ins off.
         packages = [row for row in config["plugins"] if isinstance(row, dict)]
         assert "repo-key" not in json.dumps(config) and len(packages) == 1
