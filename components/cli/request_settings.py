@@ -13,6 +13,7 @@ such as a provider, an address, a key or a plugin, is refused: the runtime
 only ever reaches the gateway (D185).
 """
 
+import json
 import math
 
 if __package__:
@@ -24,39 +25,29 @@ else:
 ALLOWED = ("temperature", "top_p", "max_tokens", "reasoning_effort")
 REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
 MAX_TOKENS = 1_000_000
-# Words that show a setting tries to choose where or how a request is sent.
-ROUTING_WORDS = {
-    "a provider": ("provider", "package", "npm", "canonical"),
-    "an address": ("url", "uri", "address", "endpoint", "host", "proxy", "base"),
-    "a key": (
-        "key",
-        "accesstoken",
-        "refreshtoken",
-        "bearer",
-        "auth",
-        "secret",
-        "credential",
-        "password",
-        "header",
-        "env",
-    ),
-    "a plugin": ("plugin", "mcp", "tool"),
-}
 
 
 class RequestSettingsError(settings_file.SettingsError):
     pass
 
 
-def _refused(model_id, reason):
-    return RequestSettingsError(
-        "Keeplane's settings file "
-        + str(settings_file.path())
-        + ' has request settings for "'
-        + model_id
-        + '" that '
-        + reason
-    )
+def _shown(text, limit=64):
+    """Text as printed in a message: plain if short and printable, else quoted."""
+    if (
+        isinstance(text, str)
+        and 0 < len(text) <= limit
+        and text.isprintable()
+        and text.strip() == text
+    ):
+        return text
+    shown = json.dumps(text, ensure_ascii=True)
+    return shown if len(shown) <= limit else shown[: limit - 4] + '..."'
+
+
+def _value(value, limit=64):
+    """An allowed setting's value as JSON, shortened if long."""
+    text = json.dumps(value, ensure_ascii=True)
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def _number(value):
@@ -67,62 +58,80 @@ def _number(value):
     )
 
 
+# Each setting's range, as the message gives it: (low, high, whole numbers only).
+RANGES = {
+    "temperature": (0, 2, False),
+    "top_p": (0, 1, False),
+    "max_tokens": (1, MAX_TOKENS, True),
+}
+
+
 def _valid(name, value):
-    if name == "temperature":
-        return _number(value) and 0 <= value <= 2
-    if name == "top_p":
-        return _number(value) and 0 <= value <= 1
-    if name == "max_tokens":
+    if name == "reasoning_effort":
+        return value in REASONING_EFFORTS
+    low, high, whole = RANGES[name]
+    if whole and not (isinstance(value, int) and not isinstance(value, bool)):
+        return False
+    return _number(value) and low <= value <= high
+
+
+def _allowed_values(name):
+    if name == "reasoning_effort":
         return (
-            isinstance(value, int)
-            and not isinstance(value, bool)
-            and 0 < value <= MAX_TOKENS
+            "one of "
+            + ", ".join(REASONING_EFFORTS[:-1])
+            + " or "
+            + REASONING_EFFORTS[-1]
         )
-    return value in REASONING_EFFORTS
-
-
-def _kind(name):
-    folded = str(name).lower().replace("-", "").replace("_", "")
-    for kind, words in ROUTING_WORDS.items():
-        if any(word in folded for word in words):
-            return kind
-    return None
+    low, high, whole = RANGES[name]
+    span = "from " + format(low, ",") + " to " + format(high, ",")
+    return ("a whole number " if whole else "") + span
 
 
 def check(model_id, values):
-    """Return a model's checked request settings, or refuse them."""
+    """Return a model's checked request settings, or refuse them.
+
+    A refused setting's value is never printed unless the setting is one of
+    the four allowed: a provider, address, key or plugin setting may hold a
+    secret.
+    """
+    model = _shown(model_id, 256)
     if not isinstance(values, dict):
-        raise _refused(model_id, "aren't an object.")
-    for name in values:
-        if name in ALLOWED:
-            continue
-        kind = _kind(name)
-        if kind is not None:
-            raise _refused(
-                model_id,
-                'set "' + str(name) + '", ' + kind + " setting. Keeplane "
-                "always sends requests to its gateway, so provider, address, key and "
-                "plugin settings aren't allowed.",
-            )
-        raise _refused(
-            model_id,
-            'set "' + str(name) + "\", which Keeplane doesn't pass on. Use "
-            "only " + ", ".join(ALLOWED[:-1]) + " or " + ALLOWED[-1] + ".",
+        raise RequestSettingsError(
+            "Your Keeplane settings for " + model + " aren't a set of request "
+            "settings, so nothing was sent. Use "
+            + ", ".join(ALLOWED[:-1])
+            + " or "
+            + ALLOWED[-1]
+            + "."
         )
+    for name in values:
+        if name not in ALLOWED:
+            raise RequestSettingsError(
+                "Your Keeplane settings for "
+                + model
+                + " have "
+                + _shown(name)
+                + ", which Keeplane doesn't pass on, so nothing was sent. Use "
+                + ", ".join(ALLOWED[:-1])
+                + " or "
+                + ALLOWED[-1]
+                + "."
+            )
     for name in ALLOWED:
         if name in values and not _valid(name, values[name]):
-            raise _refused(
-                model_id, 'set "' + name + "\" to a value it can't have. " + HINTS[name]
+            raise RequestSettingsError(
+                "Your Keeplane settings for "
+                + model
+                + " set "
+                + name
+                + " to "
+                + _value(values[name])
+                + ", but it must be "
+                + _allowed_values(name)
+                + ", so nothing was sent."
             )
     return {name: values[name] for name in ALLOWED if name in values}
-
-
-HINTS = {
-    "temperature": "Use a number from 0 to 2.",
-    "top_p": "Use a number from 0 to 1.",
-    "max_tokens": "Use a whole number from 1 to " + format(MAX_TOKENS, ",") + ".",
-    "reasoning_effort": "Use one of " + ", ".join(REASONING_EFFORTS) + ".",
-}
 
 
 def for_model(model_id):

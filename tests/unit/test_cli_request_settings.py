@@ -160,70 +160,100 @@ def test_req_02_settings_reach_the_gateway_unchanged(tmp_path, monkeypatch, gate
     assert {name: received[name] for name in SETTINGS} == SETTINGS
 
 
+# Provider, address, key and plugin settings, with values that may be secret.
 REFUSED = {
-    # Provider, address, key and plugin settings, each with the reason.
-    "provider": ("provider", "openai"),
-    "package": ("provider", "@opencode/ai/providers/openai"),
-    "baseURL": ("address", "https://api.openai.com/v1"),
-    "api_base": ("address", "https://api.openai.com/v1"),
-    "apiKey": ("key", "sk-synthetic"),
-    "api_key": ("key", "sk-synthetic"),
-    "headers": ("key", {"Authorization": "Bearer x"}),
-    "env": ("key", ["OPENAI_API_KEY"]),
-    "plugins": ("plugin", ["./plugin"]),
-    "mcp": ("plugin", {"remote": {}}),
+    "provider": "openai",
+    "package": "@opencode/ai/providers/openai",
+    "baseURL": "https://api.openai.com/v1",
+    "api_base": "https://api.openai.com/v1",
+    "apiKey": "sk-synthetic",
+    "api_key": "sk-synthetic",
+    "headers": {"Authorization": "Bearer sk-synthetic"},
+    "env": ["OPENAI_API_KEY"],
+    "plugins": ["./plugin"],
+    "mcp": {"remote": {"url": "https://example.invalid"}},
 }
+NOT_PASSED_ON = (
+    "Your Keeplane settings for coder have {}, which Keeplane doesn't pass on, "
+    "so nothing was sent. Use temperature, top_p, max_tokens or reasoning_effort."
+)
 
 
-# REQ-03 A provider, address, key or plugin setting is refused with a clear
-# message, and nothing starts.
+# REQ-03 A provider, address, key or plugin setting is refused with the decided
+# message, which never prints its value, and nothing starts.
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_req_03_routing_settings_are_refused(tmp_path, monkeypatch, name):
-    kind, value = REFUSED[name]
+    value = REFUSED[name]
     settings_file.set_request_settings("coder", {"temperature": 0.2, name: value})
     with pytest.raises(request_settings.RequestSettingsError) as refused:
         turn(tmp_path, monkeypatch)
     message = str(refused.value)
-    assert f'"{name}"' in message and " " + kind + " setting" in message
-    assert "provider, address, key and plugin settings aren't allowed" in message
-    assert "sk-synthetic" not in message
+    assert message == NOT_PASSED_ON.format(name)
+    assert json.dumps(value) not in message and "sk-synthetic" not in message
 
 
-# REQ-04 Any other setting Keeplane doesn't pass on is refused, naming the
-# four it does.
+# REQ-04 Any other setting Keeplane doesn't pass on is refused the same way,
+# naming the four it does. A name that isn't plain text is shown quoted.
 @pytest.mark.parametrize(
-    "name",
-    ["seed", "stop", "top_k", "frequency_penalty", "maxOutputTokens", "temperature "],
-)
-def test_req_04_unreviewed_settings_are_refused(name):
-    with pytest.raises(
-        request_settings.RequestSettingsError,
-        match="Use only temperature, top_p, max_tokens or reasoning_effort",
-    ):
-        request_settings.check("coder", {name: 1})
-
-
-# REQ-05 A value a setting can't have is refused, with the values it can.
-@pytest.mark.parametrize(
-    "name,value,hint",
+    "name,shown",
     [
-        ("temperature", -0.1, "from 0 to 2"),
-        ("temperature", 2.5, "from 0 to 2"),
-        ("temperature", "0.2", "from 0 to 2"),
-        ("temperature", True, "from 0 to 2"),
-        ("temperature", float("nan"), "from 0 to 2"),
-        ("top_p", 1.01, "from 0 to 1"),
-        ("top_p", None, "from 0 to 1"),
-        ("max_tokens", 0, "whole number"),
-        ("max_tokens", 1.5, "whole number"),
-        ("max_tokens", 1_000_001, "whole number"),
-        ("reasoning_effort", "maximum", "one of none"),
-        ("reasoning_effort", 3, "one of none"),
+        ("seed", "seed"),
+        ("stop", "stop"),
+        ("top_k", "top_k"),
+        ("frequency_penalty", "frequency_penalty"),
+        ("maxOutputTokens", "maxOutputTokens"),
+        ("temperature ", '"temperature "'),
+        ("bad\nname", '"bad\\nname"'),
     ],
 )
-def test_req_05_values_are_checked(name, value, hint):
-    with pytest.raises(request_settings.RequestSettingsError, match=hint):
+def test_req_04_unreviewed_settings_are_refused(name, shown):
+    with pytest.raises(request_settings.RequestSettingsError) as refused:
+        request_settings.check("coder", {name: 1})
+    assert str(refused.value) == NOT_PASSED_ON.format(shown)
+
+
+# REQ-05 A value a setting can't have is refused, with the decided message
+# giving the range, or for reasoning_effort the allowed words.
+@pytest.mark.parametrize(
+    "name,value,shown,allowed",
+    [
+        ("temperature", -0.1, "-0.1", "from 0 to 2"),
+        ("temperature", 2.5, "2.5", "from 0 to 2"),
+        ("temperature", "0.2", '"0.2"', "from 0 to 2"),
+        ("temperature", True, "true", "from 0 to 2"),
+        ("temperature", float("nan"), "NaN", "from 0 to 2"),
+        ("top_p", 1.01, "1.01", "from 0 to 1"),
+        ("top_p", None, "null", "from 0 to 1"),
+        ("max_tokens", 0, "0", "a whole number from 1 to 1,000,000"),
+        ("max_tokens", 1.5, "1.5", "a whole number from 1 to 1,000,000"),
+        ("max_tokens", 1_000_001, "1000001", "a whole number from 1 to 1,000,000"),
+        (
+            "reasoning_effort",
+            "maximum",
+            '"maximum"',
+            "one of none, minimal, low, medium, high or xhigh",
+        ),
+        (
+            "reasoning_effort",
+            3,
+            "3",
+            "one of none, minimal, low, medium, high or xhigh",
+        ),
+    ],
+)
+def test_req_05_values_are_checked(name, value, shown, allowed):
+    with pytest.raises(request_settings.RequestSettingsError) as refused:
         request_settings.check("coder", {name: value})
+    assert str(refused.value) == (
+        f"Your Keeplane settings for coder set {name} to {shown}, "
+        f"but it must be {allowed}, so nothing was sent."
+    )
+
+
+def test_req_05_a_long_value_is_shortened():
+    with pytest.raises(request_settings.RequestSettingsError) as refused:
+        request_settings.check("coder", {"temperature": "x" * 200})
+    assert '"' + "x" * 60 + "..., but it must be from 0 to 2" in str(refused.value)
 
 
 @pytest.mark.parametrize(
@@ -350,8 +380,8 @@ def test_req_07_keeplane_code_refuses_before_the_runtime(
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert runtime[1] == []
     error = capsys.readouterr().err
-    assert '"coder"' in error and '"baseURL", an address setting' in error
-    assert "settings.json" in error
+    assert error == NOT_PASSED_ON.format("baseURL") + "\n"
+    assert "api.openai.com" not in error
 
 
 def test_req_07_keeplane_code_passes_the_settings(

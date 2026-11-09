@@ -329,15 +329,23 @@ then writes its own cap under the same name, and your value replaces it, so
 no `max_completion_tokens` is sent beside it.
 
 Nothing else is allowed in a model's request settings. A turn always goes to
-your Keeplane gateway, so a provider, address, key or plugin setting is refused
-before the runtime starts, and nothing is sent:
+your Keeplane gateway, so a provider, address, key or plugin setting, or any
+other setting, stops `code` before the runtime starts. It exits 1 and sends
+nothing. The setting's value is never printed:
 
 ```text
-Keeplane's settings file /home/dev/.config/keeplane/settings.json has request settings for "coder" that set "baseURL", an address setting. Keeplane always sends requests to its gateway, so provider, address, key and plugin settings aren't allowed.
+Your Keeplane settings for coder have baseURL, which Keeplane doesn't pass on, so nothing was sent. Use temperature, top_p, max_tokens or reasoning_effort.
 ```
 
-Any other setting, or a value out of range, is refused the same way, with the
-settings or values you can use.
+A value out of range is refused the same way:
+
+```text
+Your Keeplane settings for coder set temperature to 2.5, but it must be from 0 to 2, so nothing was sent.
+```
+
+For `max_tokens` the message says it must be a whole number from 1 to
+1,000,000. For `reasoning_effort` it says it must be one of none, minimal,
+low, medium, high or xhigh.
 
 `keeplane code` has no web search and no web fetch: the model cannot search
 the web or open a web page during a turn, even if your shell holds a search
