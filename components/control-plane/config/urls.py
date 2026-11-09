@@ -8,6 +8,7 @@ urlpatterns = [
     path("", include("data_classes.urls")),
     path("", include("projects.urls")),
     path("", include("audit.urls")),
+    path("", include("usage.urls")),
     path("api/status", web.gateway_status),
     path("health", web.gateway_health),
     path("health/app", web.app_health),
