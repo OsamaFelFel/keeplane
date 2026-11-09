@@ -8,30 +8,80 @@ Keeplane identity, project and model policy on every model request. The
 [installed journey](../../tests/e2e/installed-cli-cases.md) covers this flow with
 a shared-key model; personal-key coding is not enabled here.
 
-First [sign in](cli-browser-login.md). Then choose a model from
-`keeplane models --profile PROFILE --project PROJECT_ID` for a registered
-project, or ask the installation operator which model to use on first use.
+First [sign in](cli-browser-login.md). Then go to any Git repo and run:
 
 ```sh
-keeplane code \
-  --profile "$HOME/.config/keeplane/account" \
-  --project 00000000-0000-0000-0000-000000000001 --name "Example" \
-  --model coder --runtime /path/to/opencode-v2 \
-  --gateway https://gateway.example.com/v1 \
-  --directory /path/to/repository \
+cd /path/to/repository
+keeplane code --gateway https://gateway.example.com/v1 \
   'Fix the addition function and check the result.'
 ```
 
-Use your installation's project ID, model and gateway URL. On a Kubernetes
-installation with the chart's Ingress, the gateway URL is Keeplane's own
-address followed by `/v1`, such as `https://keeplane.example.com/v1` (see
-[how developers reach protected models](kubernetes-installation-reference.md#how-developers-reach-protected-models)). `code` checks the
-current account, records project use and checks the allowed model list before
-starting the runtime. If the model needs your own provider key and yours is
-missing or refused, the CLI uses another allowed model and says why; see
-[provider key commands](cli-provider-key-commands.md). A supplied project ID identifies requested context; it
-does not prove where repository contents came from. The gateway makes the final
-decision, including changes made after the CLI's initial checks.
+The repo needs no setup in Keeplane. `code` works out everything else:
+
+| What | Where it comes from | Override |
+| --- | --- | --- |
+| Account | The profile in `~/.config/keeplane/account` (or `$XDG_CONFIG_HOME/keeplane/account`) | `--profile PATH` |
+| Project | The repo's `origin` remote, or an ID saved in the repo's Git folder; see [how a repo becomes a project](cli-project-commands.md#how-a-repo-becomes-a-project) | `--project ID --name NAME` |
+| Model | The model Keeplane picks for this project, which `code` names before it starts | `--model MODEL` |
+| Coding runtime | `"runtime"` in your [settings file](#the-settings-file), then `opencode` on your `PATH` | `--runtime PATH` |
+| Gateway | The address saved in your profile when you signed in | `--gateway URL` |
+| Folder | The folder you run it in | `--directory PATH` |
+
+Today the server doesn't tell the CLI its gateway address yet, so pass
+`--gateway` with the address your admin gave you. Without it, `code` sends
+nothing and says:
+
+```text
+Keeplane doesn't know your gateway address yet, so nothing was sent. Pass --gateway with the address your admin gave you, ending in /v1.
+```
+
+Once your Keeplane server gives the address at sign-in, sign in again and
+`keeplane code 'task'` needs no options at all.
+
+On a Kubernetes installation with the chart's Ingress, the gateway URL is
+Keeplane's own address followed by `/v1`, such as
+`https://keeplane.example.com/v1` (see
+[how developers reach protected models](kubernetes-installation-reference.md#how-developers-reach-protected-models)).
+On the Docker preview it is `http://127.0.0.1:5000/v1`.
+
+Without `--model`, `code` asks the server which allowed model the task goes to
+and prints, for example, `Using coder for this task, chosen by Keeplane. Pass
+--model to choose another.` If none of the project's models can be used right
+now, it sends nothing and says so. `code` checks the current account, records
+that you use the project, and checks the allowed model list before starting the
+runtime. Until an admin sets the repo's data class on the Projects page, the
+repo can use every model your organization has approved. If the model needs
+your own provider key and yours is missing or refused, the CLI uses another
+allowed model and says why; see
+[provider key commands](cli-provider-key-commands.md). The project ID is the
+context the CLI asks for; it does not prove where repository contents came
+from. The gateway makes the final decision, including changes made after the
+CLI's initial checks.
+
+### The coding runtime
+
+`code` runs OpenCode V2 **2.0.27** and refuses any other version. It looks for
+it in `--runtime`, then in the settings file, then as `opencode` on your
+`PATH`. If it finds none, or finds another version, it starts nothing and says
+how to fix it:
+
+```text
+Keeplane needs OpenCode V2 2.0.27, and /usr/local/bin/opencode is another version or doesn't run. Install 2.0.27, then put it on your PATH, pass --runtime PATH, or set "runtime" in your Keeplane settings file.
+```
+
+### The settings file
+
+Your CLI settings live outside every repo, in
+`~/.config/keeplane/settings.json` (or `$XDG_CONFIG_HOME/keeplane/settings.json`).
+To keep the runtime somewhere other than your `PATH`, save its full path there:
+
+```json
+{"runtime": "/opt/opencode-2.0.27/bin/opencode"}
+```
+
+Only you may be able to change the file (for example `chmod 600`), because
+`code` runs the program it names. Keys Keeplane doesn't know are ignored.
+Server and gateway addresses are not kept here; they stay in your profile.
 
 If your organization has not added any model yet, or none is approved for the
 project's data class, `code` stops before the runtime starts and sends nothing:
@@ -105,7 +155,9 @@ so before it starts.
 
 ```mermaid
 flowchart LR
-  Profile[Signed-in account] --> Check[Register project and check models]
+  Repo[Repo in this folder] --> Project[Project from origin remote or saved ID]
+  Project --> Profile[Signed-in account]
+  Profile --> Check[Register project and check models]
   Check -->|no models| Stop[No models are available yet; nothing sent]
   Check -->|model can't be used now| Stop2[Model can't be used right now; nothing sent]
   Check --> Choice[Own key missing? Use another allowed model]
@@ -136,11 +188,10 @@ returns 143. Cleanup covers the owned runtime process group; detached tools and
 safe resume of an unfinished turn are not guaranteed. Review file edits before
 retrying: cancellation does not undo them. Finish or cancel the active command
 before using its account profile elsewhere.
-Sign out with `keeplane logout --profile PROFILE`; the gateway must reject
+Sign out with `keeplane logout`; the gateway must reject
 that credential on subsequent requests. Already authorized work is not recalled.
 
 Use explicit [refresh](cli-account-profile.md) before a turn when needed;
 [device sign-in](cli-device-login.md) is available when this machine has no browser.
 Use [init preview](cli-migration-preview.md) to inspect existing project settings
-without changing files. Migration apply and automatic routing remain separate
-work. Release runtime selection and distribution checks remain open.
+without changing files. Release runtime selection and distribution checks remain open.

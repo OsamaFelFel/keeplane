@@ -1,4 +1,4 @@
-"""Sign in, use projects and manage your own provider keys."""
+"""Sign in, code in any repo through Keeplane and manage your own provider keys."""
 
 import argparse
 import json
@@ -14,9 +14,10 @@ if __package__:
         credential_refresh,
         device_login,
         opencode_adapter,
+        project_identity,
         provider_keys,
     )
-    from .credential_profile import ProfileError, opened
+    from .credential_profile import ProfileError, default_path, opened
     from .project_registration import register
     from .server_connection import ConnectionError, account, models
 else:
@@ -26,8 +27,9 @@ else:
     import credential_refresh
     import device_login
     import opencode_adapter
+    import project_identity
     import provider_keys
-    from credential_profile import ProfileError, opened
+    from credential_profile import ProfileError, default_path, opened
     from project_registration import register
     from server_connection import ConnectionError, account, models
 
@@ -52,12 +54,35 @@ def project_command(action, profile_path, project_id, name=None):
         return output
 
 
+def profile_path(given, *, create=False):
+    """The profile to use: --profile, or the default one (ADR 030)."""
+    if given:
+        return given
+    path = default_path()
+    if create:
+        # Only the default's own folder is made; a --profile folder must already exist.
+        path.parent.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            path.parent.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+    return str(path)
+
+
+def repo_project(project_id, name=None, *, need_name=False):
+    """--project when given, otherwise the project of the repo in this folder."""
+    if project_id is not None and not need_name:
+        return project_identity.resolve(Path.cwd(), project_id, "").id, None
+    project = project_identity.resolve(Path.cwd(), project_id, name)
+    return project.id, project.name
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     login = commands.add_parser("login", help="Sign in through the browser")
     login.add_argument("--server", required=True)
-    login.add_argument("--profile", required=True)
+    login.add_argument("--profile", help="Default: ~/.config/keeplane/account")
     login.add_argument("--timeout", type=int, default=120)
     login.add_argument("--device", action="store_true", help="Sign in using a code on another browser")
     init = commands.add_parser("init", help="Preview existing project instructions and settings")
@@ -67,9 +92,15 @@ def main():
     init.add_argument("--directory", type=Path, default=Path.cwd())
     init.add_argument("--source", choices=("CLAUDE.md", "QWEN.md"))
     init.add_argument("--plan", type=Path, help="Save a selected instruction preview outside the repository")
-    code = commands.add_parser("code", help="Run a local coding turn through the protected gateway")
-    for flag in ("profile", "project", "name", "model", "runtime", "gateway"):
-        code.add_argument("--" + flag, required=True)
+    code = commands.add_parser(
+        "code", help="Run a local coding turn through the protected gateway",
+        description="Code in the repo in this folder. Every option has a default.")
+    code.add_argument("--profile", help="Default: ~/.config/keeplane/account")
+    code.add_argument("--project", help="Default: worked out from the repo")
+    code.add_argument("--name", help="Default: the repo's remote path or folder name")
+    code.add_argument("--model", help="Default: the model Keeplane picks for this project")
+    code.add_argument("--runtime", help="Default: the settings file, then opencode on PATH")
+    code.add_argument("--gateway", help="Default: the address saved when you signed in")
     code.add_argument("--directory", type=Path, default=Path.cwd())
     code.add_argument("--timeout", type=float, default=300)
     code.add_argument("--instructions", action="append", default=[], type=Path)
@@ -79,11 +110,11 @@ def main():
     keys = commands.add_parser("keys", help="Manage your server-held model provider keys")
     key_commands = keys.add_subparsers(dest="key_action", required=True)
     key_list = key_commands.add_parser("list", help="List allowed models and your saved key status")
-    key_list.add_argument("--profile", required=True)
-    key_list.add_argument("--project", required=True)
+    key_list.add_argument("--profile")
+    key_list.add_argument("--project", help="Default: worked out from the repo")
     for action in ("set", "status", "check", "remove"):
         command = key_commands.add_parser(action)
-        command.add_argument("--profile", required=True)
+        command.add_argument("--profile")
         command.add_argument("--model", required=True)
         if action == "set":
             command.add_argument("--key-stdin", action="store_true", help="Read the key from a pipe instead of the hidden prompt")
@@ -92,17 +123,19 @@ def main():
         "refresh": "Rotate this CLI credential pair once",
         "logout": "Revoke this CLI session and remove its local credential",
         "forget": "Remove only the local credential",
-        "register-project": "Record account use of an explicit project",
-        "models": "List the project's currently allowed models",
+        "register-project": "Record your use of this repo's project",
+        "models": "List the models this repo's project may use",
     }.items():
         command = commands.add_parser(action, help=help_text)
-        command.add_argument("--profile", required=True)
+        command.add_argument("--profile", help="Default: ~/.config/keeplane/account")
         if action in {"register-project", "models"}:
-            command.add_argument("--project", required=True)
+            command.add_argument("--project", help="Default: worked out from the repo")
         if action == "register-project":
-            command.add_argument("--name", required=True)
+            command.add_argument("--name", help="Default: the repo's remote path or folder name")
     args = parser.parse_args()
     try:
+        if args.command != "init":
+            args.profile = profile_path(args.profile, create=args.command == "login")
         if args.command == "init":
             if sys.version_info < (3, 11):
                 print("Migration preview requires Python 3.11 or newer.", file=sys.stderr)
@@ -142,7 +175,7 @@ def main():
             output = credential_refresh.refresh(args.profile)
         elif args.command == "keys":
             if args.key_action == "list":
-                output = provider_keys.list_keys(args.profile, args.project)
+                output = provider_keys.list_keys(args.profile, repo_project(args.project)[0])
             else:
                 output = provider_keys.run(args.key_action, args.profile, args.model,
                                            key_stdin=getattr(args, "key_stdin", False))
@@ -159,11 +192,12 @@ def main():
             print(result.stderr, end="", file=sys.stderr)
             return result.returncode
         else:
-            output = project_command(
-                args.command, args.profile, args.project, getattr(args, "name", None)
-            )
+            project_id, name = repo_project(
+                args.project, getattr(args, "name", None),
+                need_name=args.command == "register-project")
+            output = project_command(args.command, args.profile, project_id, name)
         print(output)
-    except (ProfileError, ConnectionError) as error:
+    except (ProfileError, ConnectionError, project_identity.ProjectIdentityError) as error:
         print(str(error), file=sys.stderr)
         return 1
     except subprocess.TimeoutExpired:

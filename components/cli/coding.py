@@ -1,22 +1,24 @@
-"""Run a local coding turn with the signed-in account and requested project."""
+"""Run a local coding turn with the signed-in account in the current repo's project."""
 
 import json
-import uuid
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
 if __package__:
-    from . import opencode_adapter
+    from . import opencode_adapter, project_identity, settings_file
     from .credential_profile import ProfileError, opened
     from .project_registration import register
     from .server_connection import (ConnectionError, account, model_alternatives,
-                                    model_choice, models, origin)
+                                    model_choice, models, origin, request)
 else:
     import opencode_adapter
+    import project_identity
+    import settings_file
     from credential_profile import ProfileError, opened
     from project_registration import register
     from server_connection import (ConnectionError, account, model_alternatives,
-                                   model_choice, models, origin)
+                                   model_choice, models, origin, request)
 
 
 NO_MODELS = ("No models are available for this project yet, so nothing was sent. "
@@ -56,6 +58,64 @@ REASONS = {
     "refused": "The provider refused your key for {requested}",
     "outdated": "Your provider key for {requested} was saved for an earlier model setup",
 }
+
+
+NO_GATEWAY = ("Keeplane doesn't know your gateway address yet, so nothing was sent. "
+              "Pass --gateway with the address your admin gave you, ending in /v1.")
+
+NO_ROUTED_MODEL = ("None of the models allowed for this project can be used right now, "
+                   "so nothing was sent. Choose one with --model; `keeplane models` "
+                   "lists them.")
+
+NO_RUNTIME = ("Keeplane can't find OpenCode V2 " + opencode_adapter.VERSION + ". Install "
+              "it, then put `opencode` on your PATH, pass --runtime PATH, or set "
+              '"runtime" in your Keeplane settings file.')
+
+WRONG_RUNTIME = ("Keeplane needs OpenCode V2 " + opencode_adapter.VERSION + ", and {path} "
+                 "is another version or doesn't run. Install " + opencode_adapter.VERSION
+                 + ", then put it on your PATH, pass --runtime PATH, or set \"runtime\" in your "
+                 "Keeplane settings file.")
+
+TASK_MODEL_FIELDS = {"project_id", "requested_model_id", "persona", "level",
+                     "model_id", "chosen_by", "reason"}
+
+
+def find_runtime(given=None):
+    """OpenCode from --runtime, then the settings file, then PATH (ADR 030).
+
+    The adapter checks the exact version before every turn.
+    """
+    if given:
+        return str(Path(given).expanduser())
+    try:
+        saved = settings_file.runtime()
+    except settings_file.SettingsError as error:
+        raise ConnectionError(str(error)) from None
+    if saved:
+        return saved
+    found = shutil.which("opencode")
+    if found is None:
+        raise ConnectionError(NO_RUNTIME)
+    return found
+
+
+def task_model(issuer, project_id, credential):
+    """Ask the server which allowed model a task with no --model goes to."""
+    body = request(issuer, "/api/runtime/projects/" + project_id + "/task-model",
+                   credential)
+    try:
+        data = json.loads(body)
+        if (not isinstance(data, dict) or set(data) != TASK_MODEL_FIELDS
+                or data["project_id"] != project_id
+                or data["requested_model_id"] is not None
+                or (data["model_id"] is not None and (
+                    not isinstance(data["model_id"], str)
+                    or not 0 < len(data["model_id"]) <= 256
+                    or any(ord(c) < 32 or ord(c) == 127 for c in data["model_id"])))):
+            raise ValueError
+    except (ValueError, UnicodeError, RecursionError):
+        raise ConnectionError("The server returned an invalid model choice.") from None
+    return data["model_id"]
 
 
 def chosen_model(issuer, project_id, model, credential, notify):
@@ -143,22 +203,36 @@ def gateway_endpoint(value):
 def run(profile_path, project_id, name, model, binary, directory, gateway, prompt,
         timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None,
         notify=None):
-    gateway = gateway_endpoint(gateway)
+    """One coding turn. Only the profile and prompt are needed (Spec 009 ST30).
+
+    The project comes from the repo, the gateway from the profile, the model
+    from the server's task-model route and the runtime from the settings file
+    or PATH; each given value overrides.
+    """
+    if gateway is not None:
+        gateway = gateway_endpoint(gateway)
     directory = Path(directory).expanduser().resolve(strict=True)
     if not directory.is_dir():
         raise ValueError("Choose a working repository directory.")
-    project_id = str(uuid.UUID(str(project_id)))
+    project = project_identity.resolve(directory, project_id, name)
+    project_id = project.id
+    binary = find_runtime(binary)
     with opened(profile_path) as profile:
         credential = profile.load()
+        if gateway is None:
+            # The address the server gave at sign-in (task 009-02), once saved.
+            saved = getattr(credential, "gateway", None)
+            if not saved:
+                raise ConnectionError(NO_GATEWAY)
+            gateway = gateway_endpoint(saved)
         actor = account(credential.issuer, credential.access_token)
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
-        register(credential.issuer, project_id, name, credential.access_token)
+        register(credential.issuer, project_id, project.name, credential.access_token)
         catalog = models(credential.issuer, project_id, credential.access_token)
         if not catalog["models"]:
             raise ConnectionError(NO_MODELS)
-        if model not in {row["id"] for row in catalog["models"]}:
-            raise ConnectionError("This model is not currently allowed for the project.")
+        allowed = {row["id"] for row in catalog["models"]}
         secrets = (credential.access_token, credential.refresh_token)
 
         def report(message):
@@ -167,16 +241,41 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             if notify:
                 notify(message)
 
-        model = chosen_model(credential.issuer, project_id, model, credential.access_token, report)
-        if model not in {row["id"] for row in catalog["models"]}:
-            raise ConnectionError("This model is not currently allowed for the project.")
-        result = opencode_adapter.run(
-            binary, directory, gateway, model, prompt, credential.access_token,
-            timeout, cancelled=cancelled, instructions=instructions,
-            state_dir=state_dir, session=session,
-            account_context={"issuer": credential.issuer, "actor_id": actor["id"],
-                             "project_id": project_id},
-        )
+        if model is None:
+            try:
+                model = task_model(credential.issuer, project_id, credential.access_token)
+            except ConnectionError as error:
+                if error.status == 404:  # An older server has no task-model route.
+                    raise ConnectionError(NO_ROUTED_MODEL, 404) from None
+                raise
+            if model is None:
+                raise ConnectionError(NO_ROUTED_MODEL)
+            if model not in allowed:
+                raise ConnectionError("This model is not currently allowed for the project.")
+            report("Using " + model + " for this task, chosen by Keeplane. "
+                   "Pass --model to choose another.")
+        else:
+            if model not in allowed:
+                raise ConnectionError("This model is not currently allowed for the project.")
+            model = chosen_model(credential.issuer, project_id, model,
+                                 credential.access_token, report)
+            if model not in allowed:
+                raise ConnectionError("This model is not currently allowed for the project.")
+        try:
+            result = opencode_adapter.run(
+                binary, directory, gateway, model, prompt, credential.access_token,
+                timeout, cancelled=cancelled, instructions=instructions,
+                state_dir=state_dir, session=session,
+                account_context={"issuer": credential.issuer, "actor_id": actor["id"],
+                                 "project_id": project_id},
+            )
+        except (FileNotFoundError, PermissionError):
+            raise ConnectionError(WRONG_RUNTIME.format(path=binary)) from None
+        except ValueError as error:
+            # The adapter's exact-version check; other ValueErrors stay generic.
+            if str(error).startswith("This prototype requires OpenCode V2"):
+                raise ConnectionError(WRONG_RUNTIME.format(path=binary)) from None
+            raise
         problem = model_problem(result.stdout) if result.returncode else None
         if problem:
             try:
