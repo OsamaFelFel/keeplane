@@ -1,6 +1,5 @@
 """Device CLI → real Django/Toolkit HTTP; controlled human code entry and consent."""
 
-import importlib.util
 import json
 import os
 import uuid
@@ -22,6 +21,8 @@ from django.test import override_settings
 from model_registry.fingerprints import fingerprint
 from model_registry.policy import DjangoModelPolicy
 from projects.models import ProjectUse
+
+from tests.support.cli_source import load_cli
 
 try:
     from tests.integration.test_cli_oauth_browser import browser_flow
@@ -67,24 +68,6 @@ class QuietHandler(WSGIRequestHandler):
         pass
 
 
-def load_cli(monkeypatch):
-    source = Path(
-        os.environ.get("KEEPLANE_CLI_SOURCE", Path(__file__).resolve().parents[2])
-    )
-    entry = source / "components/cli/keeplane.py"
-    if not entry.is_file():
-        if "KEEPLANE_CLI_SOURCE" in os.environ:
-            pytest.fail("The explicitly configured CLI source is unavailable")
-        pytest.skip(
-            "Compose the reviewed browser/profile CLI before this optional journey"
-        )
-    monkeypatch.syspath_prepend(str(entry.parent))
-    spec = importlib.util.spec_from_file_location("keeplane_join", entry)
-    cli = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cli)
-    return cli
-
-
 def test_real_device_client_profile_registration_catalog_and_logout(
     browser_flow,
     monkeypatch,
@@ -97,7 +80,7 @@ def test_real_device_client_profile_registration_catalog_and_logout(
     from common import api
     from model_registry import runtime_views
 
-    cli = load_cli(monkeypatch)
+    cli = load_cli(monkeypatch, Path(__file__).resolve().parents[2])
 
     flow = browser_flow
     call_command("register_cli_client", device=True, verbosity=0)
@@ -306,7 +289,7 @@ def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
     tmp_path,
     replay,
 ):
-    cli = load_cli(monkeypatch)
+    cli = load_cli(monkeypatch, Path(__file__).resolve().parents[2])
     flow = browser_flow
     initial = flow.exchange(flow.code())
     assert initial.status_code == 200

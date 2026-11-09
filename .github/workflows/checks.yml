@@ -421,6 +421,76 @@ jobs:
           path: test-results/detection-image/
           retention-days: 30
 
+  cli-sign-in:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Run the CLI sign-in integration checks with the hash-pinned sign-in packages
+        # pytest.ini deselects these (optional, live), and the backend shards
+        # don't install the sign-in packages. Their hashes are for the app
+        # image's Python, so the checks run in that same pinned base image.
+        run: |
+          mkdir -p test-results/cli-sign-in
+          docker run --rm \
+            -v "$PWD:/src" -w /src \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e PYTHONPATH=components/control-plane \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e KEEPLANE_CLI_OAUTH_ENABLED=1 \
+            -e KEEPLANE_DEVICE_JOURNEY_REQUIRED=1 \
+            -e KEEPLANE_TEST_REPORT_DIR=/tmp/reports \
+            --entrypoint sh \
+            python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a \
+            -euc '
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r tests/requirements.txt
+              /tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --no-deps -r components/control-plane/requirements-cli-auth.txt
+              /tmp/venv/bin/python -m pytest -m "optional and live" -p no:cacheprovider -rs \
+                tests/integration/test_cli_oauth_identity.py \
+                tests/integration/test_cli_oauth_browser.py \
+                tests/integration/test_cli_oauth_device.py \
+                tests/integration/test_cli_oauth_journey.py \
+                tests/integration/test_cli_oauth_key_journey.py \
+                tests/integration/test_cli_device_journey.py \
+                tests/integration/test_cli_admin_sign_in.py \
+                tests/integration/test_cli_sign_in_again.py \
+                tests/integration/test_cli_sign_in_readiness.py \
+                tests/integration/test_developer_usage.py \
+                --junitxml=test-results/cli-sign-in/junit.xml
+            '
+      - name: Fail if a sign-in case was skipped
+        # Only the full coding journey may skip: it needs the native runtime,
+        # which the coding-runtime job checks.
+        run: |
+          python3 - test-results/cli-sign-in/junit.xml <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          skipped = [
+              case.get("name")
+              for case in ET.parse(sys.argv[1]).iter("testcase")
+              if case.find("skipped") is not None
+              and not case.get("name", "").startswith(
+                  "test_real_signed_in_coding_tools_resume_and_policy_withdrawal["
+              )
+          ]
+          for name in skipped:
+              print(f"Sign-in case was skipped: {name}", file=sys.stderr)
+          sys.exit(1 if skipped else 0)
+          EOF
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: cli-sign-in-${{ github.sha }}
+          path: test-results/cli-sign-in/
+          retention-days: 30
+
   coding-runtime:
     needs: scope
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
