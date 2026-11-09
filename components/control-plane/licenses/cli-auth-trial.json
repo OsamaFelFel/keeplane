@@ -1,5 +1,5 @@
 {
-  "scope": "Optional Linux musl x86-64 CPython 3.13 sign-in trial; excludes the existing Django/base-image graph and other wheel platforms.",
+  "scope": "CLI sign-in packages (ADR 028) for Linux musl x86-64 CPython 3.13; excludes the existing Django/base-image graph and other wheel platforms.",
   "packages": [
     {
       "name": "certifi",

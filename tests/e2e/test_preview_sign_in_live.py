@@ -253,12 +253,12 @@ class Cli:
         return "CLI access allowed" in page
 
 
-# What `keeplane models` says with no approved model. Until an admin first saves
-# a data-class or model setting, a fresh preview's model policy has no settings
-# to read and fails closed (503), which the CLI reports as Keeplane being
-# temporarily unavailable, exit 1, with nothing on stdout. Once settings exist
-# it prints the empty catalog, exit 0 (cli-project-commands.md: "an empty list
-# is valid").
+# `keeplane models` with no approved model. The documented outcome is the empty
+# catalog, exit 0 (cli-project-commands.md: "an empty list is valid"). Known
+# bug, keeplane issue #249: until an admin first saves a data-class or model
+# setting, a fresh preview's model policy has no settings to read and fails
+# closed (503), so the CLI says Keeplane is temporarily unavailable, exit 1,
+# with nothing on stdout. The suite accepts that only until #249 is fixed.
 UNAVAILABLE = "Keeplane is temporarily unavailable; retry later."
 
 
