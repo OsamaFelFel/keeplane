@@ -40,7 +40,7 @@ RUN pip install --prefix /cli-auth-dependencies/usr/local --ignore-installed --n
     --only-binary=:all: --require-hashes --no-deps \
     -r /app/requirements-cli-auth.txt
 
-# Explicit shared-database sign-in trial; normal image targets stay unchanged.
+# Shared-database package with CLI sign-in (ADR 028), built on the user's machine.
 FROM postgres AS postgres-cli-auth-trial
 COPY --from=cli-auth-dependencies /cli-auth-dependencies/usr/local/ /usr/local/
 

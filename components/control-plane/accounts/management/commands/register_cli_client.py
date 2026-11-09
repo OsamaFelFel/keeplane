@@ -18,7 +18,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not apps.is_installed("oauth2_provider"):
             raise CommandError(
-                "Install and migrate the CLI sign-in trial dependencies first"
+                "Install and migrate the CLI sign-in packages first"
             )
         from oauth2_provider.models import Application
 

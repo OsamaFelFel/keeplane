@@ -253,6 +253,26 @@ class Cli:
         return "CLI access allowed" in page
 
 
+# What `keeplane models` says with no approved model. Until an admin first saves
+# a data-class or model setting, a fresh preview's model policy has no settings
+# to read and fails closed (503), which the CLI reports as Keeplane being
+# temporarily unavailable, exit 1, with nothing on stdout. Once settings exist
+# it prints the empty catalog, exit 0 (cli-project-commands.md: "an empty list
+# is valid").
+UNAVAILABLE = "Keeplane is temporarily unavailable; retry later."
+
+
+def empty_catalog(listed, project):
+    code, out, err = listed
+    if code == 1:
+        return out == "" and err == UNAVAILABLE
+    try:
+        catalog = json.loads(out)
+    except ValueError:
+        return False
+    return code == 0 and err == "" and catalog == {"project_id": project, "models": []}
+
+
 def access_token(profile):
     return json.loads((profile / "credential.json").read_text())["access_token"]
 
@@ -265,6 +285,7 @@ def run_cases():
     developer_name = "sign-in-live-" + suffix
     developer_password = uuid.uuid4().hex + uuid.uuid4().hex
     cases, failures = [], []
+    approved_before = []
     state = {"developer": None, "model": False}
     admin = Browser()
 
@@ -390,13 +411,14 @@ def run_cases():
                     if reports[-1:] == list(settled(0))
                     and answer[0] != 200
                     and runner.snapshot() == before
-                    and listed[0] == 0
+                    and empty_catalog(listed, project)
                     else "fail",
                     {
                         "enroller": reports[-1:],
                         "gateway_status": answer[0],
                         "models_exit": listed[0],
                         "models_output": listed[1],
+                        "models_errors": listed[2],
                         "upstream_calls": runner.snapshot().get(upstream, 0),
                     },
                 )
@@ -454,6 +476,12 @@ def run_cases():
                     if code:
                         failures.append(f"{profile.name} logout failed")
             restore(admin, password, model, state, failures)
+            # Removing the model starts the enroller's ADR 027 wait. Return
+            # only once it has settled again, so the next suite starts clean.
+            if state["model"] and not wait_for_report(
+                settled(len(approved_before)), timeout=300
+            ):
+                failures.append("the model enroller did not settle after clean-up")
     cleanup = "complete" if not failures else "; ".join(failures)
     report = {
         "suite": "Spec 009 ST29/ST30 CLI sign-in and the guarded gateway on the default preview",

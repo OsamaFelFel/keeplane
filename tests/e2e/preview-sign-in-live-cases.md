@@ -33,7 +33,7 @@ preview, where every case must run.
 | --- | --- | --- |
 | PSI-LIVE-01 | The developer runs `keeplane login --server http://127.0.0.1:3000 --profile …` and signs in through the browser. | The CLI says `Signed in to Keeplane.`, `whoami` names the developer, and the saved credential file is private (mode 0600). |
 | PSI-LIVE-02 | The developer runs `keeplane login --device` into a second profile and enters the code in a browser. | The CLI names the preview's own confirm-device address, the browser shows "CLI access allowed", the CLI says `Signed in to Keeplane.` and `whoami` names the developer. |
-| PSI-LIVE-03 | No model is approved yet. The developer lists the project's models and sends a request through the guarded gateway. | The enroller's last report is `No model is enrolled for protected access.`, `keeplane models` lists none, the gateway gives no answer, and the runner receives nothing. |
+| PSI-LIVE-03 | No model is approved yet. The developer lists the project's models and sends a request through the guarded gateway. | The enroller's last report is `No model is enrolled for protected access.`, the gateway gives no answer, and the runner receives nothing. `keeplane models` gives what the CLI documents for this state. On a fresh preview, before an admin has saved any data-class or model setting, the model policy has no settings to read and fails closed: the CLI prints `Keeplane is temporarily unavailable; retry later.` on stderr, nothing on stdout, and exits 1. Once settings exist it prints the empty catalog (`"models": []`) and exits 0. |
 | PSI-LIVE-04 | The admin adds one runner model approved for Public data; the developer lists models and sends a request with, then without, the CLI's credential. | The enroller reports one more model enrolled (`Protected access is ready: 1 model is enrolled.` on a fresh preview); `keeplane models` lists it; the signed-in request returns 200 with the runner's answer and reaches the runner once; the request with no credential is refused (401) and reaches nothing. |
 
 ## Restoring the preview
@@ -41,8 +41,10 @@ preview, where every case must run.
 Afterwards the suite logs both CLI profiles out (which revokes them), removes
 the model from Keeplane and the gateway, and removes the developer. Removing a
 model makes the enroller wait about 3 minutes and 16 seconds before its next
-change (ADR 027), so a second run straight after waits for it to settle first.
-A restore step that can't be confirmed fails the run.
+change (ADR 027).
+The suite returns only once the enroller reports the starting number of
+models again (up to 5 minutes), so the next suite starts with a settled
+enroller. A restore step that can't be confirmed fails the run.
 
 ## Not covered here
 
