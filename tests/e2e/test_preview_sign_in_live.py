@@ -136,6 +136,16 @@ def guarded(token, project, model, url=GATEWAY):
     return status, answer
 
 
+def own_usage(token, model):
+    """The developer's totals for ``model`` today and this month (zeros if none)."""
+    data, _ = usage.fetch(BASE, token, None)
+    for row in data["models"]:
+        if row["model"] == model:
+            return row
+    zero = dict.fromkeys(usage.COUNTS, 0)
+    return {"cost_status": None, "today": dict(zero), "this_month": dict(zero)}
+
+
 class Cli:
     """The source-tree CLI, as a developer runs it, with a fixture browser."""
 
@@ -475,17 +485,29 @@ def run_cases():
 
             # PSI-LIVE-05: a turn's request through the CLI's usage relay is
             # reported, and `keeplane usage` shows the local model's tokens
-            # with no cost.
+            # with no cost. Totals are compared before and after, so usage
+            # already recorded this month doesn't matter.
+            before_usage = own_usage(token, model)
             base = GATEWAY.removesuffix("/chat/completions")
-            with usage_relay.Relay(base, timeout=60) as relay:
+            with usage_relay.Relay(base, timeout=60, grant=token) as relay:
                 relayed = guarded(
                     token, project, model, relay.url + "/chat/completions"
                 )
                 relay.close()
                 counts = relay.usage()
             warning = usage.report_turn(BASE, project, token, counts)
+            after_usage = own_usage(token, model)
+            added = {
+                period: {
+                    name: after_usage[period][name] - before_usage[period][name]
+                    for name in usage.COUNTS
+                }
+                for period in ("today", "this_month")
+            }
             shown = cli.run("usage", "--profile", str(browser_profile))
             rows = [line.split() for line in shown[1].splitlines()]
+            mine = [row for row in rows if row[:2] == [model, "Today"]]
+            following = rows[rows.index(mine[0]) + 1] if mine else []
             record(
                 "PSI-LIVE-05",
                 "pass"
@@ -500,14 +522,28 @@ def run_cases():
                     }
                 }
                 and warning == ""
+                and all(
+                    added[period]
+                    == {
+                        "input_tokens": 2,
+                        "output_tokens": 2,
+                        "requests": 1,
+                        "requests_without_usage": 0,
+                    }
+                    for period in added
+                )
+                and after_usage["cost_status"] == "local"
                 and shown[0] == 0
-                and [model, "Today", "2", "2", "—"] in rows
-                and ["This", "month", "2", "2", "—"] in rows
-                and "Costs are estimates" not in shown[1]
+                and mine
+                and mine[0][-1] == "—"
+                and following[:2] == ["This", "month"]
+                and following[-1] == "—"
                 else "fail",
                 {
                     "relayed": relayed,
                     "counts": counts,
+                    "added": added,
+                    "cost_status": after_usage["cost_status"],
                     "report_warning": warning,
                     "usage_exit": shown[0],
                     "usage_output": shown[1].splitlines(),

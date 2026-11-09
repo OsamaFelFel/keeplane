@@ -87,7 +87,14 @@ def report_turn(issuer, project_id, credential, counts):
             failed.append(model)
     if not failed:
         return ""
-    return NOT_RECORDED.format(models=", ".join(failed)) + "\n"
+    return NOT_RECORDED.format(models=joined(failed)) + "\n"
+
+
+def joined(names):
+    """ "A", "A and B", "A, B and C": the decided way to list models."""
+    if len(names) < 2:
+        return "".join(names)
+    return ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def zone_from_path(path):

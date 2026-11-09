@@ -247,7 +247,8 @@ The counts come from the gateway's answers. For each turn, `code` starts a
 small relay on `127.0.0.1`, on a port picked for that turn, and gives the
 runtime the relay's address as its only provider. The relay sends every
 request on unchanged to the gateway, and nowhere else; it adds no credential
-(the runtime's own Keeplane grant goes through as it is) and reads the token
+(the runtime's own Keeplane grant goes through as it is; a request without
+this turn's grant is refused) and reads the token
 counts in each answer, streamed or not, as it passes it back. So the turn's
 last answer and calls made by subagents are counted too. The runtime also asks
 the gateway to include token counts in streamed answers.

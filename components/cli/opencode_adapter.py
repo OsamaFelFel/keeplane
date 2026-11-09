@@ -253,7 +253,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
     # which counts the usage in every answer, subagents' included.
     with managed(state_dir, binding, session) as state, \
             tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary, \
-            usage_relay.Relay(gateway, timeout) as relay:
+            usage_relay.Relay(gateway, timeout, grant=grant) as relay:
         profile = Path(temporary)
         environment = {
             name: value

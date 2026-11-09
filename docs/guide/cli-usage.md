@@ -81,6 +81,16 @@ token counts in it. So every model call is counted, including the turn's last
 answer and calls made by subagents. See
 [Developers' computers](outbound-connections.md#developers-computers).
 
+The relay only sends on requests that carry this turn's own Keeplane grant.
+Other users and programs on the same computer can reach its port while a turn
+runs, but they can't use it: any other request is refused (403), never sent to
+the gateway and never counted. The relay stops when the turn ends.
+
+Because the CLI, not the coding tool, now connects to the gateway, it checks
+the gateway's HTTPS certificate with the same trust as its calls to your
+Keeplane server: `SSL_CERT_FILE` and `SSL_CERT_DIR`, or the system store. See
+[developers with a private CA](certificate-operations.md#renew-the-public-https-certificate).
+
 A model call whose answer had no token counts still counts as a call, and its
 tokens are never guessed. The table then says the model's totals may be low:
 

@@ -5,6 +5,7 @@ The plain-English cases are in cli-usage-cases.md next to this file.
 
 import gzip
 import http.client
+import io
 import json
 import socket
 import subprocess
@@ -124,7 +125,13 @@ def gateway():
 
 
 def call(
-    relay_url, model="coder", *, path="/chat/completions", headers=None, body=None
+    relay_url,
+    model="coder",
+    *,
+    path="/chat/completions",
+    headers=None,
+    body=None,
+    grant=GRANT,
 ):
     """What the runtime does: one model request to its provider address."""
     url = urlsplit(relay_url)
@@ -145,7 +152,7 @@ def call(
         url.path + path,
         payload,
         {
-            "Authorization": "Bearer " + GRANT,
+            "Authorization": "Bearer " + grant,
             "Content-Type": "application/json",
             "X-Keeplane-Project-ID": "project",
             **(headers or {}),
@@ -169,7 +176,7 @@ def call(
 )
 def test_use_01_relay_counts_each_answer(gateway, mode, expected):
     Gateway.mode = mode
-    with usage_relay.Relay(gateway.url) as relay:
+    with usage_relay.Relay(gateway.url, grant=GRANT) as relay:
         assert opencode_adapter.relay_address(relay.url)
         assert relay.url.endswith("/v1")
         status, data = call(relay.url)
@@ -197,7 +204,7 @@ def test_use_01_relay_counts_each_answer(gateway, mode, expected):
 # request without tokens; a refused request isn't counted; an unreachable
 # gateway gives the runtime an error.
 def test_use_02_requests_without_usage_and_refusals(gateway):
-    with usage_relay.Relay(gateway.url) as relay:
+    with usage_relay.Relay(gateway.url, grant=GRANT) as relay:
         for mode in ("stream-none", "whole-no-usage", "gzip"):
             Gateway.mode = mode
             assert call(relay.url)[0] == 200
@@ -218,7 +225,7 @@ def test_use_02_requests_without_usage_and_refusals(gateway):
     with socket.socket() as spare:
         spare.bind(("127.0.0.1", 0))
         closed = spare.getsockname()[1]
-    with usage_relay.Relay(f"http://127.0.0.1:{closed}/v1") as relay:
+    with usage_relay.Relay(f"http://127.0.0.1:{closed}/v1", grant=GRANT) as relay:
         status, data = call(relay.url)
         assert status == 502 and b"could not reach the gateway" in data
         relay.close()
@@ -229,7 +236,7 @@ def test_use_02_requests_without_usage_and_refusals(gateway):
 # CLI up: the relay stops within its bound and counts that call without tokens.
 def test_use_02_a_stalled_answer_does_not_hold_the_turn(gateway):
     Gateway.mode = "stall"
-    with usage_relay.Relay(gateway.url) as relay:
+    with usage_relay.Relay(gateway.url, grant=GRANT) as relay:
         url = urlsplit(relay.url)
         connection = http.client.HTTPConnection(url.hostname, url.port, timeout=10)
         connection.request(
@@ -257,17 +264,20 @@ def test_use_02_a_stalled_answer_does_not_hold_the_turn(gateway):
 # USE-03 The relay only takes the gateway's own paths and only listens on
 # 127.0.0.1; it refuses a gateway address with credentials.
 def test_use_03_relay_scope(gateway):
-    with usage_relay.Relay(gateway.url) as relay:
+    with usage_relay.Relay(gateway.url, grant=GRANT) as relay:
         connection = http.client.HTTPConnection("127.0.0.1", urlsplit(relay.url).port)
         connection.request(
-            "POST", "/other/chat/completions", b"{}", {"Content-Length": "2"}
+            "POST",
+            "/other/chat/completions",
+            b"{}",
+            {"Content-Length": "2", "Authorization": "Bearer " + GRANT},
         )
         assert connection.getresponse().status == 404
         connection.close()
         assert relay.server.server_address[0] == "127.0.0.1"
     assert all(row["path"].startswith("/v1/") for row in Gateway.seen)
     with pytest.raises(usage_relay.RelayError):
-        usage_relay.Relay("https://user:secret@gateway.test/v1")
+        usage_relay.Relay("https://user:secret@gateway.test/v1", grant=GRANT)
 
 
 # USE-04 The settings check takes only a loopback relay address.
@@ -660,13 +670,31 @@ def test_use_11_report_after_a_turn(server):
             "Keeplane couldn't record this task's usage of coder, so "
             "`keeplane usage` may show less than you used.\n"
         )
+    # Several failed models are listed as "A and B", "A, B and C".
+    row = counts["coder"]
+    assert usage.report_turn(
+        server.issuer, project, server.access, {"large": row, "coder": row}
+    ) == (
+        "Keeplane couldn't record this task's usage of coder and large, so "
+        "`keeplane usage` may show less than you used.\n"
+    )
+    assert usage.report_turn(
+        server.issuer, project, server.access, {"c": row, "a": row, "b": row}
+    ) == (
+        "Keeplane couldn't record this task's usage of a, b and c, so "
+        "`keeplane usage` may show less than you used.\n"
+    )
 
 
-def test_use_11_keeplane_code_reports_and_keeps_the_turn(
-    server, gateway, tmp_path, monkeypatch, capsys
-):
+@pytest.fixture
+def coding(server, gateway, tmp_path, monkeypatch):
+    """`keeplane code` with a stand-in runtime that calls its relay twice.
+
+    The test sets ``ending`` to how the runtime's turn ends after those calls.
+    """
     project = str(uuid.uuid4())
     server.answer = {"project_id": project, "models": [{"id": "coder"}]}
+    state = SimpleNamespace(project=project, calls=0, ending=None)
 
     def version(command, **options):
         return subprocess.CompletedProcess(command, 0, "opencode v2.0.27\n", "")
@@ -674,8 +702,12 @@ def test_use_11_keeplane_code_reports_and_keeps_the_turn(
     def turn(command, **options):
         config = json.loads(options["env"]["OPENCODE_CONFIG_CONTENT"])
         base = config["providers"]["keeplane"]["settings"]["baseURL"]
-        call(base)
-        call(base)
+        grant = options["env"]["KEEPLANE_RUNTIME_GRANT"]
+        for _ in range(2):
+            assert call(base, grant=grant)[0] == 200
+            state.calls += 1
+        if state.ending is not None:
+            return state.ending(command)
         return subprocess.CompletedProcess(command, 0, "Coding finished.\n", "")
 
     binary = tmp_path / "runtime"
@@ -715,12 +747,20 @@ def test_use_11_keeplane_code_reports_and_keeps_the_turn(
         )
         return keeplane.main()
 
-    assert code() == 0
+    state.code = code
+    return state
+
+
+def reports(server):
+    return [row[2] for row in server.calls if row[1] == "/api/runtime/usage"]
+
+
+def test_use_11_keeplane_code_reports_and_keeps_the_turn(server, coding, capsys):
+    assert coding.code() == 0
     assert capsys.readouterr().out == "Coding finished.\n"
-    reports = [row[2] for row in server.calls if row[1] == "/api/runtime/usage"]
-    assert reports == [
+    assert reports(server) == [
         {
-            "project_id": project,
+            "project_id": coding.project,
             "model": "coder",
             "input_tokens": 20,
             "output_tokens": 10,
@@ -729,7 +769,7 @@ def test_use_11_keeplane_code_reports_and_keeps_the_turn(
         }
     ]
     server.report_status = 503
-    assert code() == 0
+    assert coding.code() == 0
     captured = capsys.readouterr()
     assert captured.out == "Coding finished.\n"
     assert captured.err.endswith(
@@ -737,3 +777,92 @@ def test_use_11_keeplane_code_reports_and_keeps_the_turn(
         "so `keeplane usage` may show less than you used.\n"
     )
     assert server.access not in captured.err
+
+
+def expired(command):
+    events = [{"type": "step_start"}, {"type": "error", "error": {"statusCode": 401}}]
+    stdout = "".join(json.dumps(event) + "\n" for event in events)
+    return subprocess.CompletedProcess(command, 1, stdout, "")
+
+
+def cancelled(command):
+    raise KeyboardInterrupt
+
+
+def terminated(command):
+    raise opencode_adapter.Cancelled
+
+
+def timed_out(command):
+    raise subprocess.TimeoutExpired(command, 300)
+
+
+# USE-11 A turn that ends in an expired sign-in, a cancel (Ctrl-C or SIGTERM)
+# or a time-out sends no usage report, even though the relay counted calls.
+@pytest.mark.parametrize(
+    "ending,status",
+    [(expired, 1), (cancelled, 130), (terminated, 143), (timed_out, 124)],
+    ids=["expired", "ctrl-c", "sigterm", "timeout"],
+)
+def test_use_11_no_report_after_an_unfinished_turn(
+    server, coding, monkeypatch, capsys, ending, status
+):
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    coding.ending = ending
+    assert coding.code() == status
+    assert coding.calls == 2
+    assert reports(server) == []
+    assert not any(
+        row[0] == "POST" and row[1] == "/api/runtime/usage" for row in server.calls
+    )
+    error = capsys.readouterr().err
+    expected = {
+        expired: "Your Keeplane sign-in has expired, so nothing more was sent.",
+        cancelled: "Cancelled.",
+        terminated: "Coding turn terminated",
+        timed_out: "Coding turn timed out",
+    }[ending]
+    assert expected in error
+
+
+# USE-12 The relay sends on only this turn's requests: one without this turn's
+# grant (another local user or program on the port) is refused with 403, not
+# sent to the gateway and not counted.
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Authorization": "Bearer someone-else"},
+        {"Authorization": "Bearer " + GRANT + "x"},
+        {"Authorization": "Basic " + GRANT},
+        {"Authorization": ""},
+    ],
+    ids=["other-grant", "longer", "other-scheme", "empty"],
+)
+def test_use_12_only_this_turns_grant(gateway, headers):
+    with usage_relay.Relay(gateway.url, grant=GRANT) as relay:
+        status, data = call(relay.url, headers=headers)
+        assert status == 403 and b"only this Keeplane turn" in data
+        # No Authorization header at all.
+        url = urlsplit(relay.url)
+        connection = http.client.HTTPConnection(url.hostname, url.port, timeout=10)
+        connection.request(
+            "POST",
+            url.path + "/chat/completions",
+            b'{"model":"coder"}',
+            {"Content-Type": "application/json"},
+        )
+        assert connection.getresponse().status == 403
+        connection.close()
+        # This turn's own request still goes through.
+        assert call(relay.url)[0] == 200
+        relay.close()
+        assert relay.upstreams == [("127.0.0.1", gateway.port)]
+        assert relay.usage()["coder"]["requests"] == 1
+    assert len(Gateway.seen) == 1
+    assert Gateway.seen[0]["headers"]["Authorization"] == "Bearer " + GRANT
+
+
+def test_use_12_relay_needs_a_grant(gateway):
+    for grant in (None, ""):
+        with pytest.raises(usage_relay.RelayError):
+            usage_relay.Relay(gateway.url, grant=grant)

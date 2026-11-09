@@ -13,6 +13,7 @@ as it arrives, streamed or not, and reads the ``usage`` object from it. It
 keeps nothing else: no prompt, answer or header.
 """
 
+import hmac
 import http.client
 import json
 import socket
@@ -51,6 +52,12 @@ CHUNK = 64 * 1024
 COUNTS = ("input_tokens", "output_tokens", "requests", "requests_without_usage")
 GATEWAY_UNREACHABLE = (
     b'{"error":{"message":"Keeplane could not reach the gateway.",'
+    b'"type":"keeplane_relay"}}'
+)
+
+
+NOT_THIS_TURN = (
+    b'{"error":{"message":"This relay serves only this Keeplane turn.",'
     b'"type":"keeplane_relay"}}'
 )
 
@@ -179,11 +186,18 @@ class Server(ThreadingHTTPServer):
 class Relay:
     """One turn's relay to ``gateway``; use it as a context manager.
 
+    Only requests that carry this turn's ``grant`` as their bearer are sent
+    on. Another local user or program can reach the port during the turn, but
+    any other request is refused with 403: not sent on and not counted.
+
     ``url`` is the address for the runtime's provider. ``usage()`` gives the
     counts per model, keyed by the model each request named.
     """
 
-    def __init__(self, gateway, timeout=300):
+    def __init__(self, gateway, timeout=300, *, grant):
+        if not isinstance(grant, str) or not grant:
+            raise RelayError("The relay needs this turn's grant.")
+        self.authorization = ("Bearer " + grant).encode("utf-8")
         url = urlsplit(gateway)
         if (
             url.scheme not in ("http", "https")
@@ -265,7 +279,18 @@ class Relay:
             )
         return http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
 
+    def ours(self, client):
+        values = client.headers.get_all("Authorization") or []
+        return len(values) == 1 and hmac.compare_digest(
+            values[0].encode("utf-8", "replace"), self.authorization
+        )
+
     def forward(self, client):
+        if not self.ours(client):
+            # Not this turn's runtime: never sent on, never counted.
+            client.close_connection = True
+            reply(client, 403, NOT_THIS_TURN)
+            return
         path = client.path
         if not path.startswith("/") or not (
             path == self.prefix
