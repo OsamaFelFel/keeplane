@@ -299,17 +299,21 @@ def run_cases():
 
             # DEV-02: in the sample repo, list the models and choose the coder.
             listed = first.run("models", cwd=repo)
+            # Output that isn't the documented catalog is a recorded failure.
             try:
                 catalog = json.loads(listed[1])
                 shown = {row["id"] for row in catalog["models"]}
             except (ValueError, KeyError, TypeError):
                 catalog, shown = None, set()
+            if not isinstance(catalog, dict):
+                catalog = None
             chosen = first.run("use", coder_model, cwd=repo)
             record(
                 "DEV-02",
                 "pass"
                 if listed[0] == 0
-                and catalog["project_id"] == project_id
+                and catalog is not None
+                and catalog.get("project_id") == project_id
                 and {coder_model, cloud_model} <= shown
                 and shown <= approved
                 and not shown & unapproved
@@ -322,7 +326,8 @@ def run_cases():
                     "all_listed_approved": shown <= approved,
                     "unapproved_listed": sorted(shown & unapproved),
                     "unapproved_in_admin_list": len(unapproved),
-                    "project_matches_repo": bool(catalog)
+                    "models_output_is_catalog": catalog is not None,
+                    "project_matches_repo": catalog is not None
                     and catalog.get("project_id") == project_id,
                     "use_exit": chosen[0],
                     "use_output": chosen[1],
@@ -575,6 +580,7 @@ def run_cases():
                 "pass"
                 if out[0] == 0
                 and attempt[0] == 1
+                and attempt[1] == ""
                 and attempt[2] == SIGNED_OUT
                 and listed[0] == 1
                 and listed[1] == ""
@@ -589,6 +595,7 @@ def run_cases():
                     "logout_exit": out[0],
                     "logout_output": out[1],
                     "code_exit": attempt[0],
+                    "code_output": attempt[1],
                     "code_message": attempt[2],
                     "models_exit": listed[0],
                     "models_message": listed[2],
