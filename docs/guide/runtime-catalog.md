@@ -68,3 +68,37 @@ its class. Invalid bodies or extra fields return 400; unavailable storage return
 This records use before onboarding. It does not infer Git identity, write repo
 files, assign a class or grant access. The developer client supplies the project
 context explicitly; repository/content provenance remains outside this check.
+
+## Report and read your own usage
+
+After each turn a developer client sends one usage report per model it used:
+
+```text
+POST /api/runtime/usage
+Authorization: Bearer <credential>
+
+{"project_id":"…","model":"coder","input_tokens":1200,"output_tokens":300,"requests":3,"requests_without_usage":0}
+```
+
+Success returns 204. The account comes from the credential; any other field,
+such as an account ID, prompt or path, is ignored and never stored. A model that
+isn't eligible for the project, or a project you can't use, returns 403; counts
+that aren't whole numbers of 0 or more, or zero requests, return 400; an
+unavailable model policy returns 503. Large numbers are capped.
+
+Read your totals for today and this month in your own time zone:
+
+```text
+GET /api/runtime/usage?tz=Europe/Berlin
+Authorization: Bearer <credential>
+```
+
+The answer lists each model you used this month with `input_tokens`,
+`output_tokens`, `requests` and `requests_without_usage` for `today` and
+`this_month`. Without `tz` it uses UTC. Totals are hourly, so a day or month
+starts at the UTC hour nearest your local midnight, at most 30 minutes away. A
+storage failure returns 503. An unknown zone or any other parameter
+returns 400. You only ever see your own usage; admins have no route to read it.
+Totals older than the previous calendar month are deleted. Usage can undercount
+when a report is lost and is never billing evidence. See
+[developer usage](../architecture/developer-usage.md) for the details.

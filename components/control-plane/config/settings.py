@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "data_classes",
     "projects",
     "audit",
+    "usage",
 ]
 CLI_OAUTH_ENABLED = os.environ.get("KEEPLANE_CLI_OAUTH_ENABLED", "0") == "1"
 if find_spec("oauth2_provider"):
