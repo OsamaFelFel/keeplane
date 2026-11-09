@@ -450,7 +450,7 @@ jobs:
             -euc '
               python -m venv /tmp/venv
               /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r tests/requirements.txt
-              /tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes -r components/control-plane/requirements-cli-auth.txt
+              /tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --no-deps -r components/control-plane/requirements-cli-auth.txt
               /tmp/venv/bin/python -m pytest -m "optional and live" -p no:cacheprovider -rs \
                 tests/integration/test_cli_oauth_identity.py \
                 tests/integration/test_cli_oauth_browser.py \
@@ -459,6 +459,8 @@ jobs:
                 tests/integration/test_cli_oauth_key_journey.py \
                 tests/integration/test_cli_device_journey.py \
                 tests/integration/test_cli_sign_in_again.py \
+                tests/integration/test_cli_sign_in_readiness.py \
+                tests/integration/test_developer_usage.py \
                 --junitxml=test-results/cli-sign-in/junit.xml
             '
       - name: Fail if a sign-in case was skipped
