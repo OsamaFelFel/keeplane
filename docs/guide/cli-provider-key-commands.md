@@ -20,8 +20,10 @@ for a profile other than `~/.config/keeplane/account`.
 Each row shows `id`, `own_key_required` and `status`. Personal models report
 `added`, `missing` or `refused`; models using no key or a shared key report `false` and
 `null`. `added` means a saved registration, including one that may need checking
-again after a model changes. `refused` is the last confirmed result of an explicit
-saved-key check. Listing does not test the provider or read key files. A model that
+again after a model changes. `refused` is the last confirmed result of a
+saved-key check: `keeplane keys check`, or the one `keeplane code` asks for when
+a task on your key fails (below). Listing does not test the provider or read key
+files. A model that
 is no longer allowed for this project disappears from the list. No key is shown.
 
 Add or replace a key with a hidden prompt:
@@ -71,6 +73,19 @@ All commands recheck the profile's current account. A changed or withdrawn accou
 stops before key input or key management. Status reports `added`, `missing` or `refused`
 and `cleanup_pending`; it describes a stored registration rather than permission
 to use a model. You can inspect and remove an old key after its model changes.
+
+You don't have to run `check` to find a refused key. When a `keeplane code`
+task on your own key fails with the provider's 401 or 403, the CLI asks the
+server for this same check. If the provider refused the key, `code` says:
+
+```text
+The provider refused your own key for coder, so this task stopped. Replace it with `keeplane keys set --model coder`. Run `keeplane keys list` to see your keys.
+```
+
+and `keeplane keys list` then shows the key as `refused`. A key already shown as
+refused is not checked again; replacing it clears the refusal.
+[Coding with the CLI](cli-coding.md#when-the-provider-refuses-your-own-key) has
+the details.
 
 Use `check` when you need to verify the saved key again. Keeplane makes one
 bounded provider request without sending the key back to your machine. A provider
