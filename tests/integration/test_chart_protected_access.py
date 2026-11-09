@@ -346,14 +346,16 @@ def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
         assert phrase in section, phrase
     quickstart = QUICKSTART.read_text()
     for phrase in ("KP_SERVER=https://<host>", "KP_GATEWAY=https://<host>/v1",
-                   "the profile doesn't keep it",
+                   "doesn't tell the CLI its gateway address yet",
                    "a resumed session,\nmust use the same one"):
         assert phrase in quickstart, phrase
-    # The CLI saves no gateway and needs one on every coding turn.
+    # The profile keeps no gateway yet, so a coding turn needs --gateway; once the
+    # server gives one at sign-in (task 009-02), `code` takes it from the profile.
     assert "gateway" not in inspect.getsource(credential_profile).lower()
+    assert 'getattr(credential, "gateway", None)' in inspect.getsource(coding.run)
     # A session history records the gateway, so a resumed turn needs the same one.
     assert '"gateway": gateway' in inspect.getsource(opencode_adapter.run)
-    assert '"runtime", "gateway"):\n        code.add_argument("--" + flag, required=True)' in inspect.getsource(keeplane.main)
+    assert 'code.add_argument("--gateway", help=' in inspect.getsource(keeplane.main)
     for given, used in (("https://keeplane.example/v1", "https://keeplane.example/v1"),
                         ("https://keeplane.example/v1/", "https://keeplane.example/v1"),
                         ("http://127.0.0.1:5000/v1", "http://127.0.0.1:5000/v1")):

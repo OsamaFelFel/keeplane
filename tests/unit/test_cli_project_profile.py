@@ -27,6 +27,8 @@ def connected(tmp_path):
         choice_status=200,
         alternatives=[],
         alternatives_status=200,
+        task_model="coder",
+        task_model_status=200,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -52,6 +54,15 @@ def connected(tmp_path):
                     **(state.choice or {}),
                 }
                 status = state.choice_status
+            elif self.path.endswith("/task-model"):
+                value = {
+                    "project_id": self.path.split("/")[-2],
+                    "requested_model_id": None, "persona": None, "level": None,
+                    "model_id": state.task_model,
+                    "chosen_by": "first_allowed" if state.task_model else None,
+                    "reason": None,
+                }
+                status = state.task_model_status
             elif "/model-alternatives?" in self.path:
                 value = {
                     "project_id": self.path.split("/")[-2],

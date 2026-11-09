@@ -21,6 +21,17 @@ class ProfileError(Exception):
     pass
 
 
+def default_path():
+    """``$XDG_CONFIG_HOME/keeplane/account``: ``~/.config/keeplane/account`` by default."""
+    configured = os.environ.get("XDG_CONFIG_HOME", "")
+    home = (
+        Path(configured)
+        if configured and Path(configured).is_absolute()
+        else (Path.home() / ".config")
+    )
+    return home / "keeplane" / "account"
+
+
 @dataclass(repr=False, frozen=True)
 class Credential:
     issuer: str
