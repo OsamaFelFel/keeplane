@@ -196,14 +196,18 @@ def check_settings(config, gateway, instruction_plugin=None):
 def turn_usage(stdout):
     """Token usage the runtime reported for one turn, or None (ADR 029).
 
-    Each model request of the turn ends with a step_finish event whose tokens
-    come from the gateway's answer. Cached input counts as input and reasoning
-    as output. A request whose answer carried no usage reports zero tokens and
-    is counted in requests_without_usage. Requests of child sessions
-    (subagents) are not in the runtime's output, so they are not counted.
+    Each model request of the turn is a step: it starts with a step_start
+    event and, when the runtime prints it, ends with a step_finish event whose
+    tokens come from the gateway's answer. Input is the runtime's non-cached
+    input plus cache reads and writes; output is its visible output plus
+    reasoning. OpenCode 2.0.27 does not print the step_finish of a turn's last
+    step, so that request, and any whose answer carried no usage, counts in
+    requests_without_usage and its tokens are missing. Requests of child
+    sessions (subagents) are not in the runtime's output, so they are not
+    counted.
     """
-    totals = {"input_tokens": 0, "output_tokens": 0, "requests": 0,
-              "requests_without_usage": 0}
+    starts, finishes, used = 0, 0, 0
+    totals = {"input_tokens": 0, "output_tokens": 0}
 
     def count(value):
         return value if type(value) is int and value > 0 else 0
@@ -213,20 +217,27 @@ def turn_usage(stdout):
             event = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(event, dict) or event.get("type") != "step_finish":
+        if not isinstance(event, dict):
             continue
+        if event.get("type") == "step_start":
+            starts += 1
+            continue
+        if event.get("type") != "step_finish":
+            continue
+        finishes += 1
         part = event.get("part")
         tokens = part.get("tokens") if isinstance(part, dict) else None
         tokens = tokens if isinstance(tokens, dict) else {}
         cache = tokens.get("cache") if isinstance(tokens.get("cache"), dict) else {}
         used_in = count(tokens.get("input")) + count(cache.get("read")) + count(cache.get("write"))
         used_out = count(tokens.get("output")) + count(tokens.get("reasoning"))
-        totals["requests"] += 1
-        if used_in + used_out == 0:
-            totals["requests_without_usage"] += 1
+        used += bool(used_in + used_out)
         totals["input_tokens"] += used_in
         totals["output_tokens"] += used_out
-    return totals if totals["requests"] else None
+    requests = max(starts, finishes)
+    if not requests:
+        return None
+    return {**totals, "requests": requests, "requests_without_usage": requests - used}
 
 
 def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None):

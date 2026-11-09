@@ -324,9 +324,11 @@ def test_key_06_turn_usage():
             }
         )
 
+    start = json.dumps({"type": "step_start", "part": {"type": "step-start"}})
     stdout = "\n".join(
         [
             json.dumps({"type": "text", "part": {"text": "hi"}}),
+            start,
             step(input=100, output=20, reasoning=5, cache={"read": 30, "write": 2}),
             "not json",
             step(input=10, output=3, reasoning=0, cache={"read": 0, "write": 0}),
@@ -339,6 +341,17 @@ def test_key_06_turn_usage():
         "output_tokens": 28,
         "requests": 4,
         "requests_without_usage": 2,
+    }
+    # The runtime prints no step_finish for a turn's last step: that request
+    # counts, without usage.
+    last = "\n".join(
+        [start, step(input=6, output=3, reasoning=2, cache={"read": 4}), start]
+    )
+    assert opencode_adapter.turn_usage(last) == {
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "requests": 2,
+        "requests_without_usage": 1,
     }
 
 

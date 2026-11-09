@@ -41,9 +41,11 @@
   the gateway fixture or a loopback port the runtime bound and listened on itself
   (its own local server). The trap is never contacted, no saved secret is printed,
   and every streamed request asks for usage (`stream_options.include_usage`).
-  The fixture sends usage only when asked, with cached and reasoning tokens, so
-  the turn's totals must be exactly 30 input and 15 output tokens over 3
-  requests: counting either detail twice fails.
+  The fixture sends usage only when asked, with cached and reasoning tokens
+  (10 input with 4 cached, 5 output with 2 reasoning). The turn has 3 requests,
+  and its totals must be exactly 10 input and 5 output tokens for each printed
+  `step_finish`, so counting either detail twice fails. The runtime prints no
+  `step_finish` for the last step, so that request counts without usage.
   The unit cases KEY-01 to KEY-08 are in
   [`cli-runtime-settings-cases.md`](../unit/cli-runtime-settings-cases.md).
 
