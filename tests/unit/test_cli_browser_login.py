@@ -45,6 +45,8 @@ def issuer():
         refresh_requests=[],
         expected_refresh=None,
         refresh_client="keeplane-cli",
+        # Extra session fields, such as "gateway_url" from a 009-02 server.
+        session_extra={},
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -81,7 +83,12 @@ def issuer():
                 state.account_headers = dict(self.headers)
                 self.respond(
                     state.account_status,
-                    {"id": state.actor, "username": "developer", "role": "developer"},
+                    {
+                        "id": state.actor,
+                        "username": "developer",
+                        "role": "developer",
+                        **state.session_extra,
+                    },
                 )
 
         def do_POST(self):

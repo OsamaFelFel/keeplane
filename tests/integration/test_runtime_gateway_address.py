@@ -1,17 +1,22 @@
 """The server gives signed-in CLIs the installer's gateway address (Spec 009 ST30, ADR 030).
 
-Cases RGA-01 to RGA-04 in runtime-gateway-address-cases.md.
+Cases RGA-01 to RGA-05 in runtime-gateway-address-cases.md.
 """
 
 import os
 import subprocess
 import sys
 from pathlib import Path
+from threading import Thread
+from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 import pytest
 from accounts import authentication
+from django.core.wsgi import get_wsgi_application
 from django.test import Client, override_settings
 from model_registry import runtime_views
+
+from components.cli import server_connection
 
 ROOT = Path(__file__).resolve().parents[2]
 GATEWAY = "https://keeplane.example/v1"
@@ -121,3 +126,43 @@ def test_the_server_reads_the_setting_once_at_start_up(value, started, message):
     else:
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == started
+
+
+class QuietHandler(WSGIRequestHandler):
+    def log_message(self, *args):
+        pass
+
+
+# RGA-05
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    ("configured", "saved"),
+    [
+        (GATEWAY, GATEWAY),
+        ("http://127.0.0.1:5000/v1", "http://127.0.0.1:5000/v1"),
+        (None, None),
+    ],
+)
+def test_the_cli_reads_the_address_it_saves_at_sign_in(signed_in, configured, saved):
+    identity, token, _ = signed_in
+    http = make_server(
+        "127.0.0.1", 0, get_wsgi_application(), handler_class=QuietHandler
+    )
+    address = f"http://127.0.0.1:{http.server_port}"
+    thread = Thread(target=http.serve_forever, daemon=True)
+    try:
+        with override_settings(
+            GATEWAY_PUBLIC_URL=configured, ALLOWED_HOSTS=["127.0.0.1"]
+        ):
+            thread.start()
+            actor, gateway = server_connection.session(address, token)
+            assert server_connection.account(address, token) == actor
+    finally:
+        if thread.is_alive():
+            http.shutdown()
+        http.server_close()
+        thread.join(timeout=5)
+    assert actor == {
+        key: identity.session(token)[key] for key in ("id", "username", "role")
+    }
+    assert gateway == saved

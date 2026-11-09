@@ -3,7 +3,6 @@
 import json
 import shutil
 from pathlib import Path
-from urllib.parse import urlsplit
 
 if __package__:
     from . import opencode_adapter, project_identity, settings_file
@@ -13,10 +12,10 @@ if __package__:
         ConnectionError,
         SignInExpired,
         account,
+        gateway_endpoint,
         model_alternatives,
         model_choice,
         models,
-        origin,
         request,
     )
 else:
@@ -29,10 +28,10 @@ else:
         ConnectionError,
         SignInExpired,
         account,
+        gateway_endpoint,
         model_alternatives,
         model_choice,
         models,
-        origin,
         request,
     )
 
@@ -230,13 +229,6 @@ def problem_message(problem, model, alternatives):
     if not alternatives:
         return NO_OTHER_MODEL[problem].format(model=model)
     return message + SWITCH[problem] + " using --model: " + ", ".join(alternatives) + "."
-
-
-def gateway_endpoint(value):
-    url = urlsplit(value)
-    if url.path.rstrip("/") != "/v1" or url.query or url.fragment:
-        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
-    return origin(value[:len(value) - len(url.path)]) + "/v1"
 
 
 def run(profile_path, project_id, name, model, binary, directory, gateway, prompt,

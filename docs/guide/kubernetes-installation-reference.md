@@ -783,9 +783,9 @@ the gateway's protected path, and every management path private.
   path `/v1/chat/completions` (`pathType: Exact`) to that Service; the app's
   Ingress, `<release>-app`, routes everything else to the app as before and
   carries no gateway path, so only one Ingress claims the protected path.
-  Nothing else of the gateway is routed. Developers give their CLI
-  `https://<host>/v1` as its gateway (`--gateway`), signed in to the same
-  Keeplane. If you run your own edge instead, route only that exact path, over
+  Nothing else of the gateway is routed. Developers' CLIs use
+  `https://<host>/v1` as their gateway, which they save when they sign in to
+  the same Keeplane. If you run your own edge instead, route only that exact path, over
   TLS, to `<release>-gateway-runtime:5000`.
 - **Network policy.** With `networkPolicy.gatewayIngressEnabled`, the gateway
   ingress policy also admits `networkPolicy.publicEntry` (your ingress
@@ -823,16 +823,17 @@ and the server gives that address to a signed-in CLI as `gateway_url` on
 one worked out from a request's headers; with no address set, `gateway_url` is
 `null`, which says Keeplane doesn't know it. The server refuses to start with an
 address that doesn't end in `/v1`, has a user name, password, query or
-fragment, or uses `http` to another computer. This CLI version doesn't read
-the address yet and doesn't save it in the profile: developers pass it to
-`keeplane code --gateway` on every turn, and a resumed session must use the
-same address it started with. With the chart's Ingress, give each
-developer two addresses on `ingress.host`:
+fragment, or uses `http` to another computer. The CLI checks the address and
+saves it in the developer's profile at sign-in and at `keeplane refresh`, so
+`keeplane code` needs no `--gateway`; `--gateway` still overrides it, and a
+resumed session must use the same address it started with. With the chart's
+Ingress, developers need only the first of these two addresses on
+`ingress.host`:
 
 | For | Address | Where the developer uses it |
 | --- | --- | --- |
 | Sign-in and account commands | `https://<host>` | `keeplane login --server` |
-| Coding | `https://<host>/v1` | `keeplane code --gateway` |
+| Coding | `https://<host>/v1` | Saved at sign-in; `keeplane code --gateway` overrides it |
 
 The coding runtime adds `/chat/completions` to the gateway address, so its
 model calls land on the one path the protected Ingress routes. The CLI refuses
@@ -841,13 +842,14 @@ a gateway address whose path isn't `/v1` or that has a query, and refuses
 the developer's Keeplane session, which the app checks, so developers code
 through the gateway of the same Keeplane they signed in to. If you run your
 own edge, the coding address is `https://` with the host you publish the path
-on, followed by `/v1`.
+on, followed by `/v1`, which developers pass as `--gateway`.
 
 The chart publishes a coding address, and sets `KEEPLANE_GATEWAY_PUBLIC_URL`,
 only with the enroller and the chart's Ingress on. Without them, or with a
 customer-run gateway (`gateway.mode=existing`), it routes nothing to a gateway
-and the server answers that it doesn't know the address: the managed gateway's port 4000 takes only the gateway keys, not a
-developer's session, and a customer-run gateway's coding address is the `/v1`
+and the server answers that it doesn't know the address, so developers pass it
+to `keeplane code --gateway`: the managed gateway's port 4000 takes only the
+gateway keys, not a developer's session, and a customer-run gateway's coding address is the `/v1`
 address of the route you set up for developer model traffic (see
 [Keeplane's checks on a customer-run gateway](gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway)).
 

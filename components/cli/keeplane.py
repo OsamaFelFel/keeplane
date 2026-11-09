@@ -106,7 +106,7 @@ def main():
     code.add_argument("--name", help="Default: the repo's remote path or folder name")
     code.add_argument("--model", help="Default: the model Keeplane picks for this project")
     code.add_argument("--runtime", help="Default: the settings file, then opencode on PATH")
-    code.add_argument("--gateway", help="Your gateway address, ending in /v1. Required until your server gives it at sign-in")
+    code.add_argument("--gateway", help="Default: the address your server gave at sign-in, ending in /v1")
     code.add_argument("--directory", type=Path, default=Path.cwd())
     code.add_argument("--timeout", type=float, default=300)
     code.add_argument("--instructions", action="append", default=[], type=Path)

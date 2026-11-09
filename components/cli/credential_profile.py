@@ -1,5 +1,7 @@
 """Private, explicit CLI credentials; no vendor configuration or history import."""
 
+from __future__ import annotations
+
 import fcntl
 import json
 import os
@@ -12,9 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 if __package__:
-    from .server_connection import ConnectionError, origin
+    from .server_connection import ConnectionError, gateway_endpoint, origin
 else:
-    from server_connection import ConnectionError, origin
+    from server_connection import ConnectionError, gateway_endpoint, origin
 
 
 class ProfileError(Exception):
@@ -39,6 +41,8 @@ class Credential:
     access_token: str
     refresh_token: str
     client_id: str = "keeplane-cli"
+    # The gateway address the server gave at sign-in (task 009-02b), or None.
+    gateway: str | None = None
 
     def __repr__(self):
         return "<Keeplane credential: redacted>"
@@ -54,12 +58,19 @@ def private_file(info):
 
 
 def decode(data):
+    """Check a stored profile; v3 adds the gateway the server gave at sign-in."""
     try:
         fields = {"format", "issuer", "actor_id", "access_token", "refresh_token"}
         if isinstance(data, dict) and data.get("format") == "keeplane-credential-v1":
             if set(data) != fields:
                 raise ValueError
             data = dict(data, client_id="keeplane-cli")
+        elif isinstance(data, dict) and data.get("format") == "keeplane-credential-v3":
+            if (
+                set(data) != fields | {"client_id", "gateway"}
+                or gateway_endpoint(data["gateway"]) != data["gateway"]
+            ):
+                raise ValueError
         elif (
             not isinstance(data, dict)
             or data.get("format") != "keeplane-credential-v2"
@@ -76,9 +87,19 @@ def decode(data):
             or not re.fullmatch(r"[A-Za-z0-9_-]{16,200}", data["refresh_token"])
         ):
             raise ValueError
-        return Credential(**{key: data[key] for key in Credential.__annotations__})
+        values = {key: data[key] for key in Credential.__annotations__ if key in data}
+        return Credential(**values)
     except (ValueError, TypeError, AttributeError, ConnectionError):
         raise ProfileError("Credential profile is invalid.") from None
+
+
+def encode(credential):
+    """A profile without a gateway stays v2, so an older CLI still reads it."""
+    data = vars(credential).copy()
+    if data["gateway"] is None:
+        del data["gateway"]
+        return dict(format="keeplane-credential-v2", **data)
+    return dict(format="keeplane-credential-v3", **data)
 
 
 def unique(pairs):
@@ -114,8 +135,9 @@ class Profile:
             raise ProfileError("Credential profile is invalid.") from None
 
     def save(self, credential):
-        data = dict(format="keeplane-credential-v2", **vars(credential))
-        decode(data)
+        data = encode(credential)
+        if decode(data) != credential:
+            raise ProfileError("Credential profile is invalid.")
         payload = json.dumps(data).encode()
         if len(payload) > 4096:
             raise ProfileError("Credential profile is invalid.")

@@ -112,7 +112,7 @@ flowchart LR
     runtime["Coding runtime<br/>(started by keeplane code)"]
   end
   server["Keeplane server<br/>(--server)"]
-  gateway["Gateway<br/>(--gateway)"]
+  gateway["Gateway<br/>(saved at sign-in, or --gateway)"]
   cli -- "sign-in, account, models, keys, sign-out" --> server
   cli -- "opens the sign-in page" --> browser
   browser --> server
@@ -126,7 +126,7 @@ flowchart LR
 | CLI | The Keeplane server given to `keeplane login --server` | Sign-in, refresh, `whoami`, project registration, `models`, `keys`, the checks before a coding turn, and sign-out |
 | CLI | Its own one-time listener on `127.0.0.1` | Browser sign-in only: the server's sign-in page sends the browser back to it. Nothing outside the computer connects to it |
 | Browser | The Keeplane server's sign-in page | Browser sign-in; `keeplane login --device` shows a code to use in any browser instead |
-| Coding runtime | The gateway URL given to `keeplane code --gateway` | Each model call in a coding turn |
+| Coding runtime | The gateway address the server gave at sign-in, or the one given to `keeplane code --gateway` | Each model call in a coding turn |
 
 The CLI never uses a proxy from the developer's shell and never follows a
 redirect, so its requests and credentials go only to the server it was given.
