@@ -44,6 +44,7 @@ def private(path):
 
 
 def browser_sign_in(issuer, path, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(browser_login, "no_browser", lambda: None)
     monkeypatch.setattr(browser_login.webbrowser, "open", issuer.browser)
     monkeypatch.setattr(
         "sys.argv",

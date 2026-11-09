@@ -56,10 +56,12 @@ means nothing reached the gateway.
   signed out, and the next `code` says so.
 - **EXP-15 Server unreachable when signing in again.** Signing in again stops
   with the connection error and keeps the saved credential.
-- **OUT-01 Signed out.** After `keeplane logout`, nothing is sent and the command
-  exits 1. `code`, `models`, `keys` and `register-project` say "You're signed out
-  of Keeplane, so nothing was sent. Run `keeplane login` to sign in." `whoami` and
-  `refresh` say "You're signed out of Keeplane. Run `keeplane login` to sign in."
+- **OUT-01 Signed out.** After `keeplane logout` only the server address is
+  kept, nothing is sent and the command exits 1. `code`, `models`, `usage`,
+  `keys` and `register-project` say "You're signed out of Keeplane, so nothing
+  was sent. Run `keeplane login` to sign in." `whoami` and `refresh` say "You're
+  signed out of Keeplane. Run `keeplane login` to sign in." `use` says "You're
+  signed out of Keeplane, so nothing was saved. Run `keeplane login` to sign in."
 - **OUT-03 Logout again.** `logout` when already signed out prints "You're
   already signed out of Keeplane.", sends nothing and exits 0.
 - **OUT-02 Never signed in.** With no profile at all the message is the same,

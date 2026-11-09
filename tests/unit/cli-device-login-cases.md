@@ -10,6 +10,7 @@
 | Refusal, malformed pending response, timeout or cancellation | Stop without retrying an ambiguous exchange or saving a credential. |
 | Account or save failure after issuance | Attempt exact new-pair revocation. |
 | HTTP transport | No cookies, ambient proxy or redirect forwarding. |
+| No browser on the machine | `keeplane login` uses the device code without `--device` ([no-browser cases](cli-no-browser-cases.md)). |
 
 The integration journey separately joins the actual Django device flow, native
 browser account and CSRF forms, current actor, registration, model catalog and

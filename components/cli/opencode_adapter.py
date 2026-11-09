@@ -14,10 +14,12 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 if __package__:
-    from . import usage_relay
+    from . import request_settings, settings_file, usage_relay
     from .instructions import snapshot
     from .session_state import account_binding, managed
 else:
+    import request_settings
+    import settings_file
     import usage_relay
     from instructions import snapshot
     from session_state import account_binding, managed
@@ -47,6 +49,11 @@ PROVIDER_POLICIES = (
 )
 # ADR 029: ask for token usage on streamed answers (stream_options.include_usage).
 MODEL_COMPATIBILITY = {"supportsUsageInStreaming": True}
+# Spec 004 ST26: with the developer's max_tokens, the runtime writes its own
+# output cap as max_tokens too (it would otherwise send max_completion_tokens),
+# and the request body overlay then replaces that value with the developer's.
+# One cap reaches the gateway, by the developer's name and value.
+OWN_MAX_TOKENS = {"maxTokensField": "max_tokens"}
 SETTINGS_KEYS = frozenset({"providers", "model", "share", "snapshots", "websearch",
                            "plugins", "experimental"})
 # Words that name a sign-in, a stored credential or a key anywhere in the
@@ -161,7 +168,9 @@ def check_settings(config, relay, instruction_plugin=None):
     Keeplane's loopback usage relay (which sends everything on to the gateway
     and nowhere else), the grant from KEEPLANE_RUNTIME_GRANT and at most the project
     header; one model entry that is exactly its name and the streamed-usage
-    flag; sharing and snapshots off; web search off; the web-tool and provider
+    flag, plus at most the developer's reviewed request settings as its body
+    (Spec 004 ST26) and, only with their max_tokens, the flag that makes the
+    runtime's own output cap max_tokens too; sharing and snapshots off; web search off; the web-tool and provider
     plugin directives; at most Keeplane's own instruction plugin; and the
     gateway-only provider policy. No key anywhere may name a sign-in, key or
     credential.
@@ -190,8 +199,22 @@ def check_settings(config, relay, instruction_plugin=None):
     [(model, options)] = models.items()
     if config["model"] != PROVIDER + "/" + model:
         raise ValueError("Runtime settings must use one gateway model.")
-    if options != {"name": model, "compatibility": MODEL_COMPATIBILITY}:
+    body = options.get("body") if isinstance(options, dict) else None
+    compatibility = dict(MODEL_COMPATIBILITY)
+    if isinstance(body, dict) and "max_tokens" in body:
+        compatibility.update(OWN_MAX_TOKENS)
+    if (not isinstance(options, dict)
+            or {key: value for key, value in options.items() if key != "body"}
+            != {"name": model, "compatibility": compatibility}):
         raise ValueError("The gateway model may only hold its name and the streamed-usage flag.")
+    if "body" in options and (
+            not isinstance(body, dict) or not body or set(body) - set(request_settings.ALLOWED)):
+        raise ValueError("The gateway model may only add the reviewed request settings.")
+    if body:
+        try:
+            request_settings.check(model, body)
+        except settings_file.SettingsError:
+            raise ValueError("The gateway model may only add the reviewed request settings.") from None
     if config["share"] != "disabled" or config["snapshots"] is not False:
         raise ValueError("Runtime settings must keep sharing and snapshots off.")
     if config["websearch"] is not False:
@@ -213,8 +236,12 @@ def check_settings(config, relay, instruction_plugin=None):
         raise ValueError("Runtime settings may only add Keeplane's instruction plugin.")
 
 
-def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None):
-    """Use a disposable profile; the gateway remains responsible for authorization."""
+def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None, request_options=None):
+    """Use a disposable profile; the gateway remains responsible for authorization.
+
+    ``request_options`` are the model's request settings (Spec 004 ST26); when
+    not given they are read from the CLI settings file's ``models`` section.
+    """
     if os.name != "posix":
         raise ValueError("This prototype currently supports macOS and Linux.")
     url = urlsplit(gateway)
@@ -235,6 +262,9 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         raise ValueError("Gateway credentials must use only letters, digits, dot, underscore, tilde or hyphen.")
     if timeout <= 0 or not prompt.strip():
         raise ValueError("Provide a prompt and a positive timeout.")
+    # Checked before anything starts, so a refused setting sends nothing.
+    request_options = request_settings.check(
+        model, request_settings.for_model(model) if request_options is None else request_options)
     binary = str(Path(binary).expanduser().resolve(strict=True))
     directory = str(Path(directory).expanduser().resolve(strict=True))
     if not Path(directory).is_dir():
@@ -283,6 +313,13 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             "plugins": list(DISABLED_BUILTINS) + list(DISABLED_PROVIDERS),
             "experimental": {"policies": [dict(row) for row in PROVIDER_POLICIES]},
         }
+        if request_options:
+            # Spec 004 ST26: the runtime lays these over each request body, so
+            # the gateway gets them by the same names and values.
+            entry = config["providers"][PROVIDER]["models"][model]
+            entry["body"] = dict(request_options)
+            if "max_tokens" in request_options:
+                entry["compatibility"].update(OWN_MAX_TOKENS)
         if account_context is not None:
             config["providers"][PROVIDER]["headers"] = {
                 "X-Keeplane-Project-ID": account_context["project_id"],
@@ -381,7 +418,7 @@ def main():
     except KeyboardInterrupt:
         print("Coding turn cancelled; review any edits before retrying.", file=sys.stderr)
         return 130
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, settings_file.SettingsError) as error:
         print(str(error).replace(grant or "\0", "[redacted]"), file=sys.stderr)
         return 2
     print(result.stdout, end="")

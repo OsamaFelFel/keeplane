@@ -63,7 +63,7 @@ NOT_CONTINUED = (
 )
 OFFER = "Sign in again now? [Y/n] "
 START = "Signed in. Start the task now? [Y/n] "
-BROWSER = "Opening Keeplane sign-in in your browser."
+BROWSER = browser_login.BROWSER
 
 
 def signed_in(path):
@@ -159,8 +159,8 @@ def sign_in(path, *, timeout=120, announce=None):
     if client_id == device_login.CLIENT_ID:
         device_login.login(server, path, timeout=timeout, announce=announce)
     else:
-        announce(BROWSER)
-        browser_login.login(server, path, timeout=timeout)
+        # Announces the browser, or uses the device code when none can open.
+        browser_login.login(server, path, timeout=timeout, announce=announce)
 
 
 def recover(expired, start, path, *, stdin=None, stdout=None, stderr=None, timeout=120):
