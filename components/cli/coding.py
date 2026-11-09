@@ -5,7 +5,13 @@ import shutil
 from pathlib import Path
 
 if __package__:
-    from . import opencode_adapter, project_identity, settings_file, usage
+    from . import (
+        opencode_adapter,
+        project_identity,
+        provider_keys,
+        settings_file,
+        usage,
+    )
     from .credential_profile import ProfileError, opened
     from .project_registration import register
     from .server_connection import (
@@ -21,6 +27,7 @@ if __package__:
 else:
     import opencode_adapter
     import project_identity
+    import provider_keys
     import settings_file
     import usage
     from credential_profile import ProfileError, opened
@@ -116,6 +123,12 @@ SWITCH_UNAVAILABLE = ("{model} is approved for this project but can't be used ri
 UNMARKED = "Your `keeplane use` choice isn't shown in this list until the file is fixed."
 OWN_KEY_MOVED = ("Your own key for {model} {state}, so {task} uses {other}. "
                  "Run `keeplane keys list` to see your keys.")
+
+# Spec 004 ST11 (ADR 030): the provider refused the developer's own key during
+# a task, and the server's recheck confirmed it.
+KEY_REFUSED = ("The provider refused your own key for {model}, so this task stopped. "
+               "Replace it with `keeplane keys set --model {model}`. "
+               "Run `keeplane keys list` to see your keys.")
 
 NO_RUNTIME = ("Keeplane can't find OpenCode V2 " + opencode_adapter.VERSION + ". Install "
               "it, then put `opencode` on your PATH, pass --runtime PATH, or set "
@@ -392,6 +405,19 @@ def gateway_refused_sign_in(stdout):
     return None
 
 
+def provider_refusal(stdout):
+    """Whether one of the runtime's error events carries a 401 or 403.
+
+    The gateway passes the provider's answer on, so a refused own key shows
+    here like the gateway's own refusals; only the server's recheck tells
+    them apart.
+    """
+    return any(
+        key in ("statusCode", "status") and type(value) is int and value in (401, 403)
+        for event in _events(stdout) if event.get("type") == "error"
+        for key, value in _walk(event))
+
+
 def model_problem(stdout):
     """Return "down", "too_big" or None for the runtime's error events.
 
@@ -495,7 +521,14 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             if str(error).startswith("This prototype requires OpenCode V2"):
                 raise ConnectionError(WRONG_RUNTIME.format(path=binary)) from None
             raise
-        refused = gateway_refused_sign_in(result.stdout) if result.returncode else None
+        # ST11: a 401 or 403 on the developer's own key has the server recheck it
+        # first. The server only answers a sign-in that still works, so a 401
+        # it confirms as a refused key isn't an expired sign-in.
+        key_refused = bool(result.returncode) and provider_refusal(result.stdout) and \
+            provider_keys.refused_after_failure(credential.issuer, credential.access_token,
+                                                project_id, model)
+        refused = (gateway_refused_sign_in(result.stdout)
+                   if result.returncode and not key_refused else None)
         if refused is not None:
             # ST29: the gateway refused the sign-in; nothing more is sent, not even
             # a request for other models.
@@ -503,8 +536,11 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
                 result.stdout = result.stdout.replace(secret, "[redacted]")
                 result.stderr = result.stderr.replace(secret, "[redacted]")
             raise SignInExpired(more=refused, result=result)
-        problem = model_problem(result.stdout) if result.returncode else None
-        if problem:
+        problem = (model_problem(result.stdout)
+                   if result.returncode and not key_refused else None)
+        if key_refused:
+            result.stderr += KEY_REFUSED.format(model=model) + "\n"
+        elif problem:
             try:
                 alternatives = model_alternatives(
                     credential.issuer, project_id, model, credential.access_token)
