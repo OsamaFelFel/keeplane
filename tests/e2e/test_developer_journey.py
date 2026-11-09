@@ -28,6 +28,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -145,6 +146,26 @@ class Developer(preview.Cli):
 
     def token(self):
         return preview.access_token(self.profile())
+
+
+def gateway_requests():
+    """How many requests the guarded gateway's listener has logged, or None."""
+    logs = classes.compose(
+        "--profile",
+        "runtime",
+        "logs",
+        "--no-color",
+        "--no-log-prefix",
+        "gateway",
+        runtime=True,
+        timeout=60,
+    )
+    if logs.returncode:
+        return None
+    return sum(
+        "request" in line.split() and "listener=keeplane-runtime" in line.split()
+        for line in logs.stdout.splitlines()
+    )
 
 
 def usage_rows(token):
@@ -532,28 +553,53 @@ def run_cases():
                     },
                 )
 
-            # DEV-05: sign out, then try to code: nothing reaches the gateway.
+            # DEV-05: sign out, then try to code and list models: nothing
+            # reaches the model or the guarded gateway. Then the old grant,
+            # sent straight to the gateway, is refused (task 009-05).
             token = first.token()
             out = first.run("logout")
             before = coder.served()
+            seen_before = gateway_requests()
             attempt = first.run("code", "anything", cwd=repo)
+            listed = first.run("models", cwd=repo)
+            time.sleep(2)  # Let the gateway write any request it received.
+            seen_after = gateway_requests()
             replay = preview.guarded(token, project_id, coder_model)
+            deadline = time.monotonic() + 15
+            seen_probe = gateway_requests()
+            while seen_probe == seen_after and time.monotonic() < deadline:
+                time.sleep(1)
+                seen_probe = gateway_requests()
             record(
                 "DEV-05",
                 "pass"
                 if out[0] == 0
                 and attempt[0] == 1
                 and attempt[2] == SIGNED_OUT
+                and listed[0] == 1
+                and listed[1] == ""
+                and listed[2] == SIGNED_OUT
                 and coder.served() == before
+                and seen_before is not None
+                and seen_after == seen_before
                 and replay[0] in (401, 403)
+                and seen_probe == seen_after + 1
                 else "fail",
                 {
                     "logout_exit": out[0],
                     "logout_output": out[1],
                     "code_exit": attempt[0],
                     "code_message": attempt[2],
+                    "models_exit": listed[0],
+                    "models_message": listed[2],
                     "model_answers_after": coder.served() - before,
-                    "old_token_at_gateway": replay[0],
+                    "gateway_requests_after_cli": None
+                    if seen_before is None
+                    else seen_after - seen_before,
+                    "old_grant_at_gateway": replay[0],
+                    "gateway_requests_after_probe": None
+                    if seen_after is None
+                    else seen_probe - seen_after,
                 },
             )
         finally:
