@@ -1,6 +1,8 @@
 name: keeplane-local
 
 # Protected local product preview. Production packaging remains open.
+# deploy/local/up.py adds deploy/local/runtime.yaml: CLI sign-in, the guarded
+# gateway on loopback port 5000 and the model enroller (ADR 027, ADR 028).
 services:
   volume-init:
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a

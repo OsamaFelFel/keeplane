@@ -88,7 +88,8 @@ service and never stored or logged.
 1. Build the app from the `detection` image target, which adds the detector
    and its language model (about 750 MiB more image and about 750 MiB more app
    memory). For a shared PostgreSQL install use `postgres-detection`, or
-   `postgres-cli-auth-detection` with CLI sign-in:
+   `postgres-cli-auth-detection` with CLI sign-in. The `detection` target has CLI
+   sign-in, like the preview:
 
    ```sh
    docker build -f components/control-plane/Dockerfile --target detection \
@@ -110,7 +111,7 @@ service and never stored or logged.
    ```sh
    KEEPLANE_RUNTIME_APP_IMAGE=keeplane-app:detection \
    KEEPLANE_PERSONAL_DATA_DETECTION=1 \
-     python3 deploy/local/up.py --runtime-model MODEL_ID
+     python3 deploy/local/up.py
    ```
 
 Without this setting the gateway's checks carry only the project and model, as

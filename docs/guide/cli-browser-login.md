@@ -2,9 +2,8 @@
 
 Install the [Keeplane CLI wheel](cli-install.md), then sign in to your
 installation. You need macOS or Linux, Python 3.9+, a browser and the server URL
-from your operator. The server must use an operator-prepared trial image with
-browser authorization enabled and the fixed Keeplane CLI client registered;
-the ordinary preview image does not include it.
+from your operator. The [local preview](local-preview.md) has browser sign-in
+on; for other servers see [CLI sign-in on the server](cli-sign-in-server.md).
 
 Sign-in uses your existing Keeplane account. Before saving credentials, the CLI
 checks that account with the configured server. Browser UI acceptance and the

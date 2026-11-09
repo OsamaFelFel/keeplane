@@ -33,14 +33,6 @@ RUN apk add --no-cache libpq=18.6-r0 \
 ENV PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
 
-# Explicit local ADR 022 trial only; never selected by the default build.
-FROM core AS cli-auth-trial
-USER 0
-RUN pip install --no-cache-dir --only-binary=:all: --require-hashes --no-deps \
-        -r /app/requirements-cli-auth.txt \
-    && python /app/remove_runtime_installers.py
-USER 65532:65532
-
 # Optional sign-in dependencies, copied with their original wheel notices.
 FROM core AS cli-auth-dependencies
 USER 0
@@ -64,13 +56,20 @@ COPY components/control-plane/licenses/personal-data-detection.md \
      components/control-plane/licenses/presidio-analyzer-2.2.364-LICENSE.txt \
      /detection-dependencies/usr/share/keeplane/licenses/
 
-# Local SQLite preview or Kubernetes local trial with detection.
-FROM core AS detection
+# The local SQLite app with CLI sign-in (ADR 028): the hash-pinned sign-in
+# packages and their original wheel notices. Built on the user's machine; the
+# preview and the detection target below start from it.
+FROM core AS sign-in
 USER 0
-COPY --from=detection-dependencies /detection-dependencies/ /
-RUN python /app/remove_runtime_installers.py
-ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
+RUN pip install --no-cache-dir --only-binary=:all: --require-hashes --no-deps \
+        -r /app/requirements-cli-auth.txt \
+    && python /app/remove_runtime_installers.py
 USER 65532:65532
+
+# Local SQLite preview or Kubernetes local trial with detection.
+FROM sign-in AS detection
+COPY --from=detection-dependencies /detection-dependencies/ /
+ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
 
 # Shared-database (PostgreSQL) package with detection, for Kubernetes installs.
 FROM postgres AS postgres-detection
@@ -82,7 +81,5 @@ FROM postgres-cli-auth-trial AS postgres-cli-auth-detection
 COPY --from=detection-dependencies /detection-dependencies/ /
 ENV KEEPLANE_PERSONAL_DATA_MODEL=en_core_web_lg
 
-FROM core AS preview
-USER 0
-RUN python /app/remove_runtime_installers.py
-USER 65532:65532
+# The default target: the local preview, with CLI sign-in (ADR 028).
+FROM sign-in AS preview

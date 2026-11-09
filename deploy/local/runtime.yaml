@@ -1,4 +1,6 @@
-# Opt-in managed preview only. Never apply this to a customer gateway.
+# The managed local preview's protected runtime, which deploy/local/up.py starts
+# by default: CLI sign-in, the guarded gateway on loopback and the model
+# enroller (ADR 027, ADR 028). Never apply this to a customer gateway.
 services:
   runtime-init:
     profiles: ["runtime"]
@@ -22,12 +24,12 @@ services:
   app:
     image: ${KEEPLANE_RUNTIME_APP_IMAGE:-keeplane-preview:docker-local}
     environment:
-      KEEPLANE_CLI_OAUTH_ENABLED: ${KEEPLANE_RUNTIME_OAUTH_ENABLED:-0}
+      KEEPLANE_CLI_OAUTH_ENABLED: "1"
       RUNTIME_AUTHORIZER_KEY_FILE: /installed/callback-key
       RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
       GATEWAY_FILE_CONFIG: /installed/gateway.json
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
-      # Spec 005 ST20: off unless the operator starts the guarded preview with
+      # Spec 005 ST20: off unless the operator starts the preview with
       # KEEPLANE_PERSONAL_DATA_DETECTION=1 and a detection image. The installer
       # and the enroller get the same value, so every guard they write sends
       # each request's messages to Keeplane's check.
@@ -51,7 +53,7 @@ services:
       PROVIDER_KEY_DIR: /provider-keys
       PUBLIC_ORIGIN: http://127.0.0.1:${KEEPLANE_PORT:-3000}
       GATEWAY_MODE: managed
-      KEEPLANE_CLI_OAUTH_ENABLED: ${KEEPLANE_RUNTIME_OAUTH_ENABLED:-0}
+      KEEPLANE_CLI_OAUTH_ENABLED: "1"
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
       KEEPLANE_PERSONAL_DATA_DETECTION: ${KEEPLANE_PERSONAL_DATA_DETECTION:-0}
     volumes:

@@ -1,14 +1,16 @@
 # Run Keeplane locally
 
 This starts the development application, its model gateway and a small Qwen demo
-model on your computer. It keeps existing accounts and registered models.
+model on your computer, with CLI sign-in and the guarded model gateway that the
+Keeplane CLI uses. It keeps existing accounts and registered models.
 
 ## Before you start
 
 - Python 3.9 or newer.
 - Node.js 22.12 or newer, including npm.
 - Docker running, with Docker Compose supporting `up --wait`.
-- A free local port; the default is 3000.
+- Two free local ports: 3000 for the browser and 5000 for the guarded model
+  gateway.
 - Internet access for the first dependency, image and model downloads. The model
   download is about 0.4 GB; allow more space for Docker images and npm packages.
 
@@ -24,14 +26,38 @@ python3 deploy/local/up.py
 ```
 
 The command installs the locked frontend dependencies, builds the application,
-runs Django database migrations, starts Docker and checks sign-in and the gateway. The first run takes longer
-because it downloads dependencies and the demo model. Success looks like:
+runs Django database migrations, starts Docker and checks sign-in and the gateway.
+It then turns on CLI sign-in, registers the Keeplane CLI's browser and device
+clients, and starts a fresh guarded model gateway and the model enroller, which
+enrols every model approved in **Models and routing**. No extra options are
+needed. The first run takes longer because it downloads dependencies and the
+demo model. Success looks like:
 
 ```text
+No model is enrolled for protected access.
 Keeplane is ready: http://127.0.0.1:3000
+Guarded model gateway for the CLI: http://127.0.0.1:5000/v1
+Sign in from the CLI: keeplane login --server http://127.0.0.1:3000 --profile PROFILE
 First admin username: first-admin
 First admin password file: <path on your computer>
 Configuration file: <path on your computer>
+```
+
+The first line is the model enroller's report. Once you have approved models it
+says how many are enrolled, for example `Protected access is ready: 1 model is
+enrolled.`
+
+```mermaid
+sequenceDiagram
+  participant L as up.py
+  participant D as Docker
+  L->>D: Build the app image (with the sign-in packages) and start it
+  L->>D: Check the admin sign-in and the gateway
+  L->>D: Fresh guarded gateway, migrate, register the CLI clients
+  L->>D: Start the app with CLI sign-in, check it again
+  L->>D: Start the model enroller
+  D-->>L: Enroller report (models enrolled)
+  L-->>L: Print the server and gateway addresses
 ```
 
 Open the printed address. `127.0.0.1` means your own computer; this development
@@ -86,6 +112,7 @@ between containers stay the same.
 | --- | --- | --- |
 | `--port` / `KEEPLANE_PORT` | Browser port | `3000` |
 | `--runtime-dir` / `KEEPLANE_RUNTIME_DIR` | Local credential directory | Existing legacy directory, otherwise `.keeplane/local/` |
+| `--runtime-port` | Loopback port of the guarded model gateway | `5000` |
 | `--context-size` / `QWEN_CONTEXT_TOKENS` | Bundled runner context, in tokens | `4096` |
 | `--verbose` | Show dependency and container build output | Off |
 
@@ -108,13 +135,33 @@ another installation: this launcher manages one Compose project and its volumes.
    `demo-qwen` already has these approvals.
 5. Open **Audit** to see the infrastructure admin's sign-ins, then sign out.
 
-There is no chat panel. For opt-in signed-in CLI model access, follow the
-[guarded runtime setup](guarded-runtime.md); it requires an explicitly prepared
-OAuth-capable trial app image. The default preview does not enable that flow.
+There is no chat panel. Developers use the Keeplane CLI instead; see
+[Sign in from the CLI](#sign-in-from-the-cli).
 
 The local
 [`ask.py`](../../deploy/local/ask.py) helper exercises a model request; it is a
 development tool. See [model setup](model-add-local.md) for the supported flows.
+
+## Sign in from the CLI
+
+The preview accepts CLI sign-in as soon as it is ready. Create a developer in
+**Users**, [install the CLI](cli-install.md), then sign in with the printed
+server address and a private profile outside Git:
+
+```sh
+keeplane login --server http://127.0.0.1:3000 --profile "$HOME/.config/keeplane/account"
+keeplane whoami --profile "$HOME/.config/keeplane/account"
+```
+
+The browser opens Keeplane's sign-in page; sign in and choose **Continue** to
+allow CLI access. With no browser on this computer, add `--device` and enter the
+printed code in a browser elsewhere. See [browser sign-in](cli-browser-login.md)
+and [device sign-in](cli-device-login.md).
+
+The CLI's model requests go to the printed guarded gateway,
+`http://127.0.0.1:5000/v1`. It answers only signed-in developers, for models
+approved for their project; until you approve a model it serves nothing. See
+[guarded model access](guarded-runtime.md) and [coding](cli-coding.md).
 
 ## Isolated networks
 
@@ -141,11 +188,22 @@ limits, are separate from runner capacity and belong to the client request.
 
 ## Stop and troubleshoot
 
-Stop with `docker compose --env-file "<printed configuration file>" down`.
+Stop everything, including the guarded gateway's model enroller, with:
+
+```sh
+docker compose --env-file "<printed configuration file>" \
+  -f compose.yaml -f deploy/local/runtime.yaml --profile qwen --profile runtime down
+```
+
 Volumes are kept. Add `-v` only if you intend to delete their data.
 
 - **Missing tool:** install the prerequisites above and retry.
-- **Port in use:** choose another port with `--port`.
+- **Port in use:** choose another port with `--port`, or `--runtime-port` for
+  the guarded gateway.
+- **Guarded gateway refuses every request:** run
+  `docker compose -f compose.yaml -f deploy/local/runtime.yaml logs model-enroller`.
+  Right after a model is removed or edited it waits about 3 minutes before
+  enrolling again; see [guarded model access](guarded-runtime.md).
 - **Build failure:** repeat the command with `--verbose` for the underlying error.
 - **Sign-in check refused:** check the address and credential directory; retain
   the original password file when restarting.
