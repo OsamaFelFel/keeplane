@@ -1,0 +1,21 @@
+# Your own usage: report after each turn, `keeplane usage`
+
+Spec 009 ST31 "My usage", "A local model", "Cost is an estimate" and "Only my
+own usage" (D186, D189, D191, ADR 029). Journey: DEV-04. Stand-in gateway,
+server and runtime on loopback; run
+`python -m pytest tests/unit/test_cli_usage.py`. The real runtime through the
+relay is KEY-09 in [`cli-runtime-cases.md`](../e2e/cli-runtime-cases.md).
+
+| Case | Expected result |
+| --- | --- |
+| USE-01 The relay counts each answer | A request through the relay reaches the gateway as sent: same path and body, the runtime's own grant and project header, the gateway's host, and only an uncompressed answer asked for. The answer comes back as sent. Each answer's usage is counted per model named in the request, streamed (usage in the last event, even split across writes) or not; when a stream repeats usage, the last (running total) counts. `prompt_tokens` and `completion_tokens` already hold cached input and reasoning, so neither is added twice. |
+| USE-02 Answers without usage | A streamed or whole answer with no usage, or one the relay can't read (compressed), counts as a request without tokens. A refused request (401) and a request that names no model aren't counted. With the gateway unreachable, the runtime gets a 502 and nothing is counted. An answer still streaming when the runtime has gone doesn't hold the CLI up: the relay stops within its bound and counts that call without tokens. |
+| USE-03 What the relay takes | It listens on `127.0.0.1` only and passes on only the gateway's own paths (others get 404). A gateway address with credentials is refused. |
+| USE-04 Only a loopback relay | The settings check takes a provider address only when it is plain HTTP on `127.0.0.1` with a port, no trailing slash, query or user. |
+| USE-05 A turn goes through its relay | The runtime's provider address is the turn's relay, the turn's counts come back with its result, and the relay is gone after the turn. |
+| USE-06 The usage table | `keeplane usage` asks for the machine's time zone and prints each model's input and output tokens and cost for today and this month: dollars for an estimate (to the millionth below $1, cents from $1), "—" for a local model, "no list price" for a cloud model with no price. Below the table: "Costs are estimates from each provider's list price (price list of 3 November 2026), in US dollars." and, per model, "[Model]: [N] requests didn't report tokens, so its totals may be low." ("1 request" for one). |
+| USE-07 Time zone | The zone comes from `TZ`, the `/etc/localtime` link or `/etc/timezone`. When it can't be read, or the server doesn't know it, the CLI asks for UTC and the heading ends "(UTC)". |
+| USE-08 Notes and nothing yet | A period whose cost leaves tokens out adds "[Model]: some of its tokens couldn't be priced, so its cost may be low." With no cost shown there is no label. With nothing used this month: "You haven't used any models this month." |
+| USE-09 Only my own usage | `keeplane usage` has no option for another developer (`--account`, `--user`, `--developer`, `--all` are refused) and its request names nobody. |
+| USE-10 Sign-in and server problems | Signed out: "You're signed out of Keeplane, so nothing was sent. Run `keeplane login` to sign in.", nothing sent. Expired: "Your Keeplane sign-in has expired. Run `keeplane login` to sign in again." An older server (404) and an answer of the wrong shape are named; all exit 1. |
+| USE-11 Reports after a turn | One report per model with requests: project, model, input and output tokens, requests and requests without usage, nothing else. `keeplane code` sends them after the turn with the relay's counts. A report the server refuses (401, 403, 503) adds "Keeplane couldn't record this task's usage of coder, so `keeplane usage` may show less than you used." and the turn keeps its output and exit status. |

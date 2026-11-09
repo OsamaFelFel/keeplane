@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 if __package__:
-    from . import opencode_adapter, project_identity, settings_file
+    from . import opencode_adapter, project_identity, settings_file, usage
     from .credential_profile import ProfileError, opened
     from .project_registration import register
     from .server_connection import (
@@ -23,6 +23,7 @@ else:
     import opencode_adapter
     import project_identity
     import settings_file
+    import usage
     from credential_profile import ProfileError, opened
     from project_registration import register
     from server_connection import (
@@ -331,6 +332,10 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             except ConnectionError:
                 alternatives = None  # An older server: the developer still gets the reason.
             result.stderr += problem_message(problem, model, alternatives) + "\n"
+        # ADR 029: one usage report per model, from the gateway's answers.
+        result.stderr += usage.report_turn(credential.issuer, project_id,
+                                           credential.access_token,
+                                           getattr(result, "usage", None))
         for secret in secrets:
             result.stdout = result.stdout.replace(secret, "[redacted]")
             result.stderr = result.stderr.replace(secret, "[redacted]")

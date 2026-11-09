@@ -335,7 +335,15 @@ CLI_DESTINATIONS = {
         "guide": "sign-in page",
     },
     "coding-runtime": {
-        "what": "The coding runtime the developer installed, started by `keeplane code`; it reaches only the gateway URL given",
+        "what": "The coding runtime the developer installed, started by `keeplane code`; it reaches only the CLI's usage relay",
+        "guide": "Coding runtime",
+    },
+    "usage-relay": {
+        "what": "The CLI's own listener on 127.0.0.1 for one turn: the runtime's only provider address, sent on unchanged to the gateway (ADR 029)",
+        "guide": "Usage relay",
+    },
+    "gateway": {
+        "what": "The gateway URL the developer gave or the server saved at sign-in; only the usage relay connects to it",
         "guide": "`keeplane code --gateway`",
     },
 }
@@ -361,7 +369,12 @@ CLI_CALL_SITES = {
     "opencode_adapter.py": (
         {"subprocess"},
         {"coding-runtime"},
-        "Starts the coding runtime with its own outbound features off and only the gateway as a provider",
+        "Starts the coding runtime with its own outbound features off and only the usage relay as a provider",
+    ),
+    "usage_relay.py": (
+        {"http.client", "socket", "socketserver", "ssl"},
+        {"usage-relay", "gateway"},
+        "One turn's loopback relay: sends each runtime request unchanged to the gateway, adds no credential, reads each answer's usage; no proxy, no redirects",
     ),
     "keeplane.py": (
         {"subprocess"},

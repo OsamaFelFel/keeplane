@@ -248,7 +248,7 @@ def test_signed_in_coding_registers_checks_catalog_and_passes_project_context(
     environment = options["env"]
     config = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
     assert config["providers"]["keeplane"]["headers"] == {"X-Keeplane-Project-ID": project}
-    assert config["providers"]["keeplane"]["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert opencode_adapter.relay_address(config["providers"]["keeplane"]["settings"]["baseURL"])
     assert environment["KEEPLANE_RUNTIME_GRANT"] == connected.access
     assert connected.access not in json.dumps(native_command) + json.dumps(config)
     assert options["input"] == "Fix the addition function."
@@ -430,7 +430,7 @@ def test_repository_settings_cannot_change_the_model_or_destination(
     assert "OPENCODE_CONFIG" not in environment and "OPENCODE_MODEL" not in environment
     config = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
     assert config["model"] == "keeplane/coder" and set(config["providers"]) == {"keeplane"}
-    assert config["providers"]["keeplane"]["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert opencode_adapter.relay_address(config["providers"]["keeplane"]["settings"]["baseURL"])
     assert "unapproved" not in json.dumps([native_command, config])
     assert "repo-key" not in json.dumps([native_command, config])
 
@@ -510,7 +510,7 @@ def test_code_02_keeplane_sets_no_request_settings_of_its_own(
     config = json.loads(runtime[1][0][1]["env"]["OPENCODE_CONFIG_CONTENT"])
     provider = config["providers"]["keeplane"]
     assert set(provider) == {"package", "env", "settings", "models", "headers"}
-    assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert opencode_adapter.relay_address(provider["settings"]["baseURL"])
     # The only model entry besides its name asks for usage on streamed answers
     # (ADR 029); it sets no temperature, top-p, token limit or effort.
     assert provider["models"] == {"coder": {

@@ -17,6 +17,7 @@ if __package__:
         project_identity,
         provider_keys,
         sign_in_again,
+        usage,
     )
     from .credential_profile import ProfileError, default_path, opened
     from .project_registration import register
@@ -31,13 +32,14 @@ else:
     import project_identity
     import provider_keys
     import sign_in_again
+    import usage
     from credential_profile import ProfileError, default_path, opened
     from project_registration import register
     from server_connection import ConnectionError, SignInExpired, account, models
 
 # Commands that send something with the saved sign-in (ST29 "Sign out").
 SIGNED_IN_COMMANDS = {"code", "keys", "whoami", "refresh", "logout",
-                      "register-project", "models"}
+                      "register-project", "models", "usage"}
 
 
 def project_command(action, profile_path, project_id, name=None):
@@ -131,6 +133,7 @@ def main():
         "forget": "Remove only the local credential",
         "register-project": "Record your use of this repo's project",
         "models": "List the models this repo's project may use",
+        "usage": "Show your own tokens and estimated cost per model, today and this month",
     }.items():
         command = commands.add_parser(action, help=help_text)
         command.add_argument("--profile", help="Default: ~/.config/keeplane/account")
@@ -187,6 +190,8 @@ def main():
             output = account_session.run(args.command, args.profile)
         elif args.command == "refresh":
             output = credential_refresh.refresh(args.profile)
+        elif args.command == "usage":
+            output = usage.show(args.profile)
         elif args.command == "keys":
             if args.key_action == "list":
                 output = provider_keys.list_keys(args.profile, repo_project(args.project)[0])

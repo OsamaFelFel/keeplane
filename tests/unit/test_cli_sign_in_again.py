@@ -479,13 +479,23 @@ def test_exp_12_an_unreachable_server_keeps_the_saved_sign_in(connected):  # noq
     [
         (["code", "anything"], SIGNED_OUT),
         (["models"], SIGNED_OUT),
+        (["usage"], SIGNED_OUT),
         (["keys", "list"], SIGNED_OUT),
         (["keys", "status", "--model", "coder"], SIGNED_OUT),
         (["register-project"], SIGNED_OUT),
         (["whoami"], SIGNED_OUT_SHORT),
         (["refresh"], SIGNED_OUT_SHORT),
     ],
-    ids=["code", "models", "keys-list", "keys-status", "register", "whoami", "refresh"],
+    ids=[
+        "code",
+        "models",
+        "usage",
+        "keys-list",
+        "keys-status",
+        "register",
+        "whoami",
+        "refresh",
+    ],
 )
 def test_out_01_signed_out_sends_nothing_and_says_how_to_sign_in(
     connected,  # noqa: F811

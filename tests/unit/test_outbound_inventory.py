@@ -539,6 +539,8 @@ def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
 ):
     import json
 
+    from components.cli import opencode_adapter
+
     seen = adapter_launch(tmp_path, monkeypatch, instructions)
     environment = seen["env"]
     for name, value in RUNTIME_SWITCHES.items():
@@ -554,11 +556,12 @@ def test_egr_17_the_coding_runtime_starts_with_its_own_connections_off(
     assert config["share"] == "disabled"
     assert list(config["providers"]) == ["keeplane"]
     provider = config["providers"]["keeplane"]
-    assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
+    # Only the turn's loopback usage relay, which sends on to the gateway alone.
+    assert opencode_adapter.relay_address(provider["settings"]["baseURL"])
     # A provider built into the runtime: nothing is installed for it.
     assert provider["package"] == "@opencode/ai/providers/openai-compatible"
     addresses = set(re.findall(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", json.dumps(config)))
-    assert addresses == {"https://gateway.test/v1"}
+    assert addresses == {provider["settings"]["baseURL"]}
     assert seen["command"][1:4] == ["run", "--standalone", "--format"]
     # No web search or web fetch, even with search provider keys in the shell.
     assert config["websearch"] is False

@@ -117,9 +117,9 @@ def test_repo_02_code_with_only_the_task_uses_the_repo_profile_gateway_and_pick(
     assert config["providers"]["keeplane"]["headers"] == {
         "X-Keeplane-Project-ID": PROJECT
     }
-    assert config["providers"]["keeplane"]["settings"] == {
-        "baseURL": "https://gateway.test/v1"
-    }
+    assert opencode_adapter.relay_address(
+        config["providers"]["keeplane"]["settings"]["baseURL"]
+    )
     assert native[native.index("--model") + 1] == "keeplane/coder"
     assert seen["binary"] == str(sample.opencode)
     assert str(options["cwd"]) == str(sample.repo / "src")

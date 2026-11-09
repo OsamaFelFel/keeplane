@@ -21,7 +21,9 @@ Start with the installed `keeplane` command:
 5. [Run a coding turn and resume it](../../docs/guide/cli-coding.md) with
    `keeplane code`. Select reviewed instruction files explicitly and keep history
    outside the repository.
-6. [Refresh or sign out](../../docs/guide/cli-account-profile.md) with
+6. [See your own usage](../../docs/guide/cli-usage.md) per model, today and this
+   month, with `keeplane usage`.
+7. [Refresh or sign out](../../docs/guide/cli-account-profile.md) with
    `keeplane refresh` or `keeplane logout`, using the same private profile.
 
 These commands need macOS or Linux and Python 3.9+ unless noted above. Sign-in

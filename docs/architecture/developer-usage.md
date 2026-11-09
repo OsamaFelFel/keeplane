@@ -6,7 +6,10 @@ ST31, ADR 029). Open Source has the whole feature; Enterprise adds nothing.
 
 ```mermaid
 flowchart LR
-  Runtime[Coding runtime] -->|usage in each model answer| CLI[Developer CLI]
+  Runtime[Coding runtime] -->|model calls| Relay[CLI usage relay<br/>127.0.0.1, one turn]
+  Relay -->|the same calls, unchanged| Gateway[Gateway]
+  Gateway -->|answers with usage| Relay
+  Relay -->|counts per model| CLI[Developer CLI]
   CLI -->|POST /api/runtime/usage<br/>one report per model per turn| Auth[Sign-in token<br/>sent as a bearer]
   Auth --> Check[Project access and<br/>models eligible for the project]
   Check --> Caps[Caps]
@@ -25,8 +28,15 @@ flowchart LR
 
 Token counts exist only in the model's answer, which passes through the gateway
 to the developer's coding runtime. The control plane approves a request before
-it is sent and never sees the answer. So after each turn the CLI sends one
-report per model it used. A report that is lost (crash, offline) is not counted:
+it is sent and never sees the answer. So `keeplane code` puts a relay on
+`127.0.0.1` between the runtime and the gateway for each turn: the runtime's
+only provider address is the relay, which sends each request on unchanged,
+adds no credential, and reads the `usage` object of each answer (the last
+event of a stream, or the whole answer) as it passes it back. This counts
+every model call, including the turn's last answer and subagents' calls, which
+the runtime itself doesn't print. A call whose answer has no `usage` counts in
+`requests_without_usage`. After each turn the CLI sends one report per model
+it used (see [`keeplane usage`](../guide/cli-usage.md)). A report that is lost (crash, offline) is not counted:
 usage can undercount and is never billing evidence.
 
 ## Recording a report

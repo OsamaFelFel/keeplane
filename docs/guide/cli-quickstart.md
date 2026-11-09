@@ -104,6 +104,16 @@ explicitly between turns when needed:
 keeplane refresh
 ```
 
+## See your usage
+
+```sh
+keeplane usage
+```
+
+After each turn `code` reports the tokens each model used. `usage` shows your
+own tokens per model for today and this month, with a cost estimated from the
+provider's list price for cloud models; see [your own usage](cli-usage.md).
+
 ## Manage your own key and sign out
 
 Only use these steps after the operator confirms that an installed Personal

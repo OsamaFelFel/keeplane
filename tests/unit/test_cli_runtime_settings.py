@@ -15,6 +15,9 @@ import pytest
 from components.cli import opencode_adapter
 
 GATEWAY = "https://gateway.test/v1"
+# The address of a turn's loopback usage relay (ADR 029), which alone sends on
+# to the gateway.
+RELAY = "http://127.0.0.1:41234/v1"
 SIGN_IN_PLUGINS = (
     "opencode.provider.chatgpt",
     "opencode.provider.openai",
@@ -75,7 +78,9 @@ def test_key_01_only_the_gateway_provider(tmp_path, monkeypatch, context):
     provider = config["providers"]["keeplane"]
     assert provider["package"] == "@opencode/ai/providers/openai-compatible"
     assert provider["env"] == ["KEEPLANE_RUNTIME_GRANT"]
-    assert provider["settings"] == {"baseURL": GATEWAY}
+    assert list(provider["settings"]) == ["baseURL"]
+    assert opencode_adapter.relay_address(provider["settings"]["baseURL"])
+    assert provider["settings"]["baseURL"].endswith("/v1")
     assert config["model"] == "keeplane/coder"
     assert seen["command"][-2:] == ["--model", "keeplane/coder"]
     assert config["experimental"] == {
@@ -140,7 +145,7 @@ def good():
             "keeplane": {
                 "package": "@opencode/ai/providers/openai-compatible",
                 "env": ["KEEPLANE_RUNTIME_GRANT"],
-                "settings": {"baseURL": GATEWAY},
+                "settings": {"baseURL": RELAY},
                 "models": {
                     "coder": {
                         "name": "coder",
@@ -198,6 +203,12 @@ TAMPERED = {
     ),
     "other address": lambda c: provider(c)["settings"].update(
         baseURL="https://api.openai.com/v1"
+    ),
+    "gateway without the relay": lambda c: provider(c)["settings"].update(
+        baseURL=GATEWAY
+    ),
+    "another loopback port": lambda c: provider(c)["settings"].update(
+        baseURL="http://127.0.0.1:41235/v1"
     ),
     "api key": lambda c: provider(c)["settings"].update(apiKey="sk-synthetic"),
     "provider key env": lambda c: provider(c)["env"].append("OPENAI_API_KEY"),
@@ -267,12 +278,24 @@ TAMPERED = {
 
 # KEY-04 The runtime settings check passes what `keeplane code` writes.
 def test_key_04_reviewed_settings_pass():
-    opencode_adapter.check_settings(good(), GATEWAY)
+    opencode_adapter.check_settings(good(), RELAY)
     with_plugin = good()
     with_plugin["plugins"].insert(
         0, {"package": "/cli/instruction_plugin", "options": {}}
     )
-    opencode_adapter.check_settings(with_plugin, GATEWAY, "/cli/instruction_plugin")
+    opencode_adapter.check_settings(with_plugin, RELAY, "/cli/instruction_plugin")
+
+
+# KEY-04 The relay address must be loopback: settings that name the gateway
+# itself, or any address off this machine, as the relay are refused.
+@pytest.mark.parametrize(
+    "relay", [GATEWAY, "http://localhost:41234/v1", "http://10.0.0.5:41234/v1"]
+)
+def test_key_04_the_relay_is_loopback(relay):
+    config = good()
+    provider(config)["settings"]["baseURL"] = relay
+    with pytest.raises(ValueError, match="loopback relay"):
+        opencode_adapter.check_settings(config, relay)
 
 
 # KEY-05 No runtime sign-in, subscription or OAuth path for OpenAI or
@@ -285,7 +308,7 @@ def test_key_05_sign_in_paths_are_refused(name):
     # Keeplane's own plugin is allowed, so a refusal is about the change itself.
     plugin = "/cli/instruction_plugin" if name == "instruction plugin extra" else None
     with pytest.raises(ValueError):
-        opencode_adapter.check_settings(copy.deepcopy(config), GATEWAY, plugin)
+        opencode_adapter.check_settings(copy.deepcopy(config), RELAY, plugin)
 
 
 def test_key_05_refusal_stops_before_the_runtime(tmp_path, monkeypatch):
@@ -312,74 +335,8 @@ def test_key_05_refusal_stops_before_the_runtime(tmp_path, monkeypatch):
     assert started == []
 
 
-# KEY-06 Usage from a turn: input (cached input included), output (reasoning
-# included), requests and requests without usage, from step_finish events.
-def test_key_06_turn_usage():
-    def step(**tokens):
-        return json.dumps(
-            {
-                "type": "step_finish",
-                "sessionID": "s",
-                "part": {"type": "step-finish", "tokens": tokens},
-            }
-        )
-
-    start = json.dumps({"type": "step_start", "part": {"type": "step-start"}})
-    stdout = "\n".join(
-        [
-            start,
-            json.dumps({"type": "text", "part": {"text": "hi"}}),
-            step(input=100, output=20, reasoning=5, cache={"read": 30, "write": 2}),
-            "not json",
-            step(input=10, output=3, reasoning=0, cache={"read": 0, "write": 0}),
-            step(input=0, output=0, reasoning=0, cache={"read": 0, "write": 0}),
-            json.dumps({"type": "step_finish", "part": {}}),
-        ]
-    )
-    assert opencode_adapter.turn_usage(stdout) == {
-        "input_tokens": 142,
-        "output_tokens": 28,
-        "requests": 4,
-        "requests_without_usage": 2,
-    }
-    # What OpenCode 2.0.27 prints for a read, an edit and an answer: the last
-    # step has only its text, and counts as a request without usage.
-    tool = json.dumps({"type": "tool_use", "part": {}})
-    text = json.dumps({"type": "text", "part": {"text": "Fixed."}})
-    tokens = {"input": 6, "output": 3, "reasoning": 2, "cache": {"read": 4, "write": 0}}
-    last = "\n".join([start, tool, step(**tokens), start, tool, step(**tokens), text])
-    assert opencode_adapter.turn_usage(last) == {
-        "input_tokens": 20,
-        "output_tokens": 10,
-        "requests": 3,
-        "requests_without_usage": 1,
-    }
-
-
-# KEY-07 No model request in the turn, or nonsense counts: nothing to report,
-# and negative, fractional, boolean or text counts count as zero.
-def test_key_07_no_usage():
-    assert opencode_adapter.turn_usage("") is None
-    assert opencode_adapter.turn_usage(json.dumps({"type": "error"})) is None
-    odd = json.dumps(
-        {
-            "type": "step_finish",
-            "part": {
-                "tokens": {
-                    "input": -5,
-                    "output": 1.5,
-                    "reasoning": True,
-                    "cache": {"read": "9"},
-                }
-            },
-        }
-    )
-    assert opencode_adapter.turn_usage(odd) == {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "requests": 1,
-        "requests_without_usage": 1,
-    }
+# KEY-06 and KEY-07, the usage of each turn, are now read from the gateway's
+# answers by the relay: see test_cli_usage.py (USE-01, USE-02, USE-05).
 
 
 # KEY-08 The CLI has no command to sign in with a personal subscription:
