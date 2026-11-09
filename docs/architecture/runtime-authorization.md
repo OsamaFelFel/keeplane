@@ -278,6 +278,13 @@ the journal SQLite keeps beside the file), not the signing secret or the rest of
 It shares the installer's private lock, so the two never write at once. A
 failure leaves the declaration disabled and is retried on the next pass.
 
+Its log gets one line per new state: the hold ("A model change is waiting"),
+then, when the hold ends, the settled state with the number of enrolled models
+or "No model is enrolled for protected access.". The end of a hold is always
+reported, even when it leaves no model or the same models, so a waiter reading
+the last line never stops on a hold that has ended. Passes that find nothing
+new write nothing.
+
 ### Per-copy guard status
 
 In Kubernetes each gateway copy is a StatefulSet Pod with its own private guard
