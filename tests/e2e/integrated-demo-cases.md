@@ -1,5 +1,9 @@
 # Protected Docker demo cases
 
+These cases are the admin half of the MVP journey. The developer half, DEV-01
+to DEV-05 (sign in from the CLI, choose a model, code in a sample repo, see
+usage, sign out), is in [developer-journey-cases.md](developer-journey-cases.md).
+
 Run `python3 deploy/local/up.py`, then `.venv/bin/python -m pytest tests/e2e/test_integrated_demo.py -m live`.
 The test uses the same protected port 3000 API that the supplied admin screen
 uses. Data classes are off on a fresh installation, so the admin turns them

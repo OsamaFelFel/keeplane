@@ -14,5 +14,5 @@ runtime doubles; run `python -m pytest tests/unit/test_cli_repo_defaults.py`.
 | REPO-07 No runtime | With none found, `code` says how to install OpenCode V2 2.0.27 and sends nothing. |
 | REPO-08 Wrong version | A runtime reporting another version, or a missing file, is named in the message and not run. |
 | REPO-09 No usable pick | When the server picks no model, picks one outside the catalog, or is too old to pick (404), `code` stops before the runtime; a 503 says Keeplane is unavailable. |
-| REPO-10 Other commands | `models`, `register-project` and `keys list` use the repo's project; `--project` overrides. |
+| REPO-10 Other commands | `models`, `register-project` and `keys list` use the repo's project; `--project` overrides. In a repo nobody set up, `models` records it first, as `code` does (D149), so its allowed models list at once; with `--project` alone nothing is recorded. |
 | REPO-11 Not a repo | Outside a Git repo, `code`, `models` and `register-project` send nothing and name `--project` and `--name`. |

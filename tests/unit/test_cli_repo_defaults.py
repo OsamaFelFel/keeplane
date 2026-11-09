@@ -291,6 +291,14 @@ def test_repo_10_models_and_register_use_the_repo_in_this_folder(
 ):
     assert run(monkeypatch, "models") == 0
     assert json.loads(capsys.readouterr().out)["project_id"] == PROJECT
+    # A repo nobody set up works at once (D149): `models` records it first,
+    # as `code` does, so the server can list its allowed models (DEV-02).
+    registered = [
+        row for row in sample.server.calls if row[1] == "/api/runtime/projects"
+    ]
+    assert [row[3] for row in registered] == [
+        {"project_id": PROJECT, "name": "Platform/payments-api"}
+    ]
     assert run(monkeypatch, "register-project") == 0
     assert json.loads(capsys.readouterr().out)["project_id"] == PROJECT
     assert sample.server.calls[-1][3] == {
@@ -298,8 +306,13 @@ def test_repo_10_models_and_register_use_the_repo_in_this_folder(
         "name": "Platform/payments-api",
     }
     given = str(uuid.uuid4())
+    before = len(sample.server.calls)
     assert run(monkeypatch, "models", "--project", given) == 0
     assert json.loads(capsys.readouterr().out)["project_id"] == given
+    # With --project and no name, nothing is recorded.
+    assert "/api/runtime/projects" not in [
+        row[1] for row in sample.server.calls[before:]
+    ]
     seen = []
     monkeypatch.setattr(
         keeplane.provider_keys,

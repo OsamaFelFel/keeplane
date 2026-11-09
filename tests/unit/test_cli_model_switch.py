@@ -58,9 +58,11 @@ def test_sw_01_use_saves_an_allowed_model_for_this_repo(allowed, monkeypatch, ca
     )
     assert settings_file.project_model(PROJECT) == "general"
     assert stat.S_IMODE(os.stat(settings_file.path()).st_mode) == 0o600
-    # Only the account and the allowed list are asked; nothing is sent to a model.
+    # The account, the repo's first-use record (D149) and the allowed list are
+    # asked; nothing is sent to a model.
     assert routes(allowed.server) == [
         ("GET", "/api/runtime/session"),
+        ("POST", "/api/runtime/projects"),
         ("GET", f"/api/runtime/projects/{PROJECT}/models"),
     ]
     # The switch belongs to this project only.

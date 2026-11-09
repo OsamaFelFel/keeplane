@@ -169,6 +169,58 @@ The CLI's model requests go to the printed guarded gateway,
 approved for their project; until you approve a model it serves nothing. See
 [guarded model access](guarded-runtime.md) and [coding](cli-coding.md).
 
+### Try the developer half by hand
+
+This is what the [developer journey check](../../tests/e2e/developer-journey-cases.md)
+(DEV-01 to DEV-05) runs. You need OpenCode V2 2.0.27 on your `PATH`
+([install the CLI](cli-install.md)) and a model approved for Public data, for
+example `demo-qwen` from [Try the application](#try-the-application). The small
+local Qwen often can't make the tool calls an edit needs, so expect an answer
+but not always a file change; the automated check uses a fixture model that
+always makes the same edit.
+
+1. As the first admin, create a developer in **Users**.
+2. Make a sample repo with a failing test:
+
+   ```sh
+   mkdir sample && cd sample && git init -q
+   printf 'def add(a, b):\n    return a - b\n' > calc.py
+   printf 'from calc import add\nassert add(2, 3) == 5\n' > test_calc.py
+   git add . && git commit -q -m "Sample"
+   ```
+
+3. Sign in as the developer (DEV-01), then choose the model (DEV-02):
+
+   ```sh
+   keeplane login --server http://127.0.0.1:3000
+   keeplane whoami
+   keeplane models
+   keeplane use demo-qwen
+   ```
+
+4. Run a task (DEV-03). The CLI shows the runtime's answer and file changes,
+   then `Answered by demo-qwen.` As the admin, open **Projects**: the repo is
+   listed as not set up, with the developer.
+
+   ```sh
+   keeplane code "Make the failing test pass"
+   git diff
+   ```
+
+5. See your own usage (DEV-04). The local model shows tokens and `—` for cost.
+
+   ```sh
+   keeplane usage
+   ```
+
+6. Sign out, then try again (DEV-05). The CLI says you're signed out and how
+   to sign in, and nothing is sent.
+
+   ```sh
+   keeplane logout
+   keeplane code "anything"
+   ```
+
 ## Isolated networks
 
 Internet access is needed only for the first downloads. Once Keeplane is
