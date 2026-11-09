@@ -15,6 +15,7 @@ only ever reaches the gateway (D185).
 
 import json
 import math
+import re
 
 if __package__:
     from . import settings_file
@@ -31,23 +32,34 @@ class RequestSettingsError(settings_file.SettingsError):
     pass
 
 
-def _shown(text, limit=64):
-    """Text as printed in a message: plain if short and printable, else quoted."""
+USE = "Use " + ", ".join(ALLOWED[:-1]) + " or " + ALLOWED[-1] + "."
+PLAIN_NAME = re.compile(r"[A-Za-z0-9_]{1,32}")
+PLAIN_WORD = re.compile(r"[A-Za-z]{1,16}")
+
+
+def _name(name):
+    """A setting's name in quotes, or None when it must not be printed."""
+    if isinstance(name, str) and PLAIN_NAME.fullmatch(name):
+        return '"' + name + '"'
+    return None
+
+
+def _value(name, value):
+    """A refused value as printed, or None when it must not be printed.
+
+    Only a finite number, or for reasoning_effort a plain word of up to 16
+    letters (in quotes), is ever shown: anything else (text, an object, a
+    list, true or false) might be a key or an address put in the wrong place.
+    """
+    if _number(value):
+        return json.dumps(value)
     if (
-        isinstance(text, str)
-        and 0 < len(text) <= limit
-        and text.isprintable()
-        and text.strip() == text
+        name == "reasoning_effort"
+        and isinstance(value, str)
+        and PLAIN_WORD.fullmatch(value)
     ):
-        return text
-    shown = json.dumps(text, ensure_ascii=True)
-    return shown if len(shown) <= limit else shown[: limit - 4] + '..."'
-
-
-def _value(value, limit=64):
-    """An allowed setting's value as JSON, shortened if long."""
-    text = json.dumps(value, ensure_ascii=True)
-    return text if len(text) <= limit else text[: limit - 3] + "..."
+        return '"' + value + '"'
+    return None
 
 
 def _number(value):
@@ -91,45 +103,50 @@ def _allowed_values(name):
 def check(model_id, values):
     """Return a model's checked request settings, or refuse them.
 
-    A refused setting's value is never printed unless the setting is one of
-    the four allowed: a provider, address, key or plugin setting may hold a
-    secret.
+    ``model_id`` is the task's model, never a key read from the file. A
+    setting Keeplane doesn't pass on, such as a provider, address, key or
+    plugin setting, is named only when its name is plain, and never with its
+    value. An allowed setting's value is printed only when it is a finite
+    number, or a plain word for reasoning_effort; anything else is described.
     """
-    model = _shown(model_id, 256)
+    start = "Your Keeplane settings for " + model_id
     if not isinstance(values, dict):
         raise RequestSettingsError(
-            "Your Keeplane settings for " + model + " aren't a set of request "
-            "settings, so nothing was sent. Use "
-            + ", ".join(ALLOWED[:-1])
-            + " or "
-            + ALLOWED[-1]
-            + "."
+            start + " aren't a set of request settings, so nothing was sent. " + USE
         )
     for name in values:
         if name not in ALLOWED:
+            shown = _name(name)
+            if shown is None:
+                raise RequestSettingsError(
+                    start + " have a setting Keeplane doesn't pass on, so nothing "
+                    "was sent. " + USE
+                )
             raise RequestSettingsError(
-                "Your Keeplane settings for "
-                + model
-                + " have "
-                + _shown(name)
-                + ", which Keeplane doesn't pass on, so nothing was sent. Use "
-                + ", ".join(ALLOWED[:-1])
-                + " or "
-                + ALLOWED[-1]
-                + "."
+                start + " have " + shown + ", which Keeplane doesn't pass on, so "
+                "nothing was sent. " + USE
             )
     for name in ALLOWED:
         if name in values and not _valid(name, values[name]):
+            shown = _value(name, values[name])
+            start_value = start + " set " + name + " to "
+            if shown is not None:
+                raise RequestSettingsError(
+                    start_value
+                    + shown
+                    + ", but it must be "
+                    + _allowed_values(name)
+                    + ", so nothing was sent."
+                )
+            if name == "reasoning_effort":
+                raise RequestSettingsError(
+                    start_value
+                    + "something that isn't "
+                    + _allowed_values(name)
+                    + ", so nothing was sent."
+                )
             raise RequestSettingsError(
-                "Your Keeplane settings for "
-                + model
-                + " set "
-                + name
-                + " to "
-                + _value(values[name])
-                + ", but it must be "
-                + _allowed_values(name)
-                + ", so nothing was sent."
+                start_value + "something that isn't a number, so nothing was sent."
             )
     return {name: values[name] for name in ALLOWED if name in values}
 

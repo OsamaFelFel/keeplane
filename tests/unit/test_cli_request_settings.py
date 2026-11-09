@@ -173,9 +173,14 @@ REFUSED = {
     "plugins": ["./plugin"],
     "mcp": {"remote": {"url": "https://example.invalid"}},
 }
+USE = "Use temperature, top_p, max_tokens or reasoning_effort."
 NOT_PASSED_ON = (
-    "Your Keeplane settings for coder have {}, which Keeplane doesn't pass on, "
-    "so nothing was sent. Use temperature, top_p, max_tokens or reasoning_effort."
+    'Your Keeplane settings for coder have "{}", which Keeplane doesn\'t pass on, '
+    "so nothing was sent. " + USE
+)
+UNNAMED = (
+    "Your Keeplane settings for coder have a setting Keeplane doesn't pass on, "
+    "so nothing was sent. " + USE
 )
 
 
@@ -193,52 +198,68 @@ def test_req_03_routing_settings_are_refused(tmp_path, monkeypatch, name):
 
 
 # REQ-04 Any other setting Keeplane doesn't pass on is refused the same way,
-# naming the four it does. A name that isn't plain text is shown quoted.
+# naming the four it does. Only a plain name of up to 32 letters, digits or
+# underscores is shown, in quotes.
 @pytest.mark.parametrize(
-    "name,shown",
-    [
-        ("seed", "seed"),
-        ("stop", "stop"),
-        ("top_k", "top_k"),
-        ("frequency_penalty", "frequency_penalty"),
-        ("maxOutputTokens", "maxOutputTokens"),
-        ("temperature ", '"temperature "'),
-        ("bad\nname", '"bad\\nname"'),
-    ],
+    "name",
+    ["seed", "stop", "top_k", "frequency_penalty", "maxOutputTokens", "a" * 32],
 )
-def test_req_04_unreviewed_settings_are_refused(name, shown):
+def test_req_04_unreviewed_settings_are_refused(name):
     with pytest.raises(request_settings.RequestSettingsError) as refused:
         request_settings.check("coder", {name: 1})
-    assert str(refused.value) == NOT_PASSED_ON.format(shown)
+    assert str(refused.value) == NOT_PASSED_ON.format(name)
+
+
+# REQ-04 A name that isn't plain is never printed.
+@pytest.mark.parametrize(
+    "name",
+    [
+        "temperature ",
+        "bad\nname",
+        "max-tokens",
+        "sk-live-abcdef",
+        "https://api.example.invalid",
+        "a" * 33,
+        "tëmperature",
+        "",
+    ],
+)
+def test_req_04_names_that_are_not_plain_are_never_printed(name):
+    with pytest.raises(request_settings.RequestSettingsError) as refused:
+        request_settings.check("coder", {name: 1})
+    assert str(refused.value) == UNNAMED
+
+
+# REQ-04 A model's settings that aren't an object are refused.
+@pytest.mark.parametrize("values", [["temperature"], "temperature", 0.2, None])
+def test_req_04_settings_that_are_not_an_object(values):
+    with pytest.raises(request_settings.RequestSettingsError) as refused:
+        request_settings.check("coder", values)
+    assert str(refused.value) == (
+        "Your Keeplane settings for coder aren't a set of request settings, "
+        "so nothing was sent. " + USE
+    )
 
 
 # REQ-05 A value a setting can't have is refused, with the decided message
-# giving the range, or for reasoning_effort the allowed words.
+# giving the range, or for reasoning_effort the allowed words. Only a finite
+# number, or a short plain word for reasoning_effort, is printed.
+WORDS = "one of none, minimal, low, medium, high or xhigh"
+
+
 @pytest.mark.parametrize(
     "name,value,shown,allowed",
     [
         ("temperature", -0.1, "-0.1", "from 0 to 2"),
         ("temperature", 2.5, "2.5", "from 0 to 2"),
-        ("temperature", "0.2", '"0.2"', "from 0 to 2"),
-        ("temperature", True, "true", "from 0 to 2"),
-        ("temperature", float("nan"), "NaN", "from 0 to 2"),
         ("top_p", 1.01, "1.01", "from 0 to 1"),
-        ("top_p", None, "null", "from 0 to 1"),
         ("max_tokens", 0, "0", "a whole number from 1 to 1,000,000"),
         ("max_tokens", 1.5, "1.5", "a whole number from 1 to 1,000,000"),
         ("max_tokens", 1_000_001, "1000001", "a whole number from 1 to 1,000,000"),
-        (
-            "reasoning_effort",
-            "maximum",
-            '"maximum"',
-            "one of none, minimal, low, medium, high or xhigh",
-        ),
-        (
-            "reasoning_effort",
-            3,
-            "3",
-            "one of none, minimal, low, medium, high or xhigh",
-        ),
+        ("max_tokens", 10**80, "1" + "0" * 80, "a whole number from 1 to 1,000,000"),
+        ("reasoning_effort", "maximum", '"maximum"', WORDS),
+        ("reasoning_effort", "a" * 16, '"' + "a" * 16 + '"', WORDS),
+        ("reasoning_effort", 3, "3", WORDS),
     ],
 )
 def test_req_05_values_are_checked(name, value, shown, allowed):
@@ -250,10 +271,63 @@ def test_req_05_values_are_checked(name, value, shown, allowed):
     )
 
 
-def test_req_05_a_long_value_is_shortened():
+SECRET = "sk-live-abcdef"
+
+
+# REQ-05 Text, an object, a list, true or false, null or a number that isn't
+# finite in a numeric setting is never printed.
+@pytest.mark.parametrize("name", ["temperature", "top_p", "max_tokens"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        SECRET,
+        "0.2",
+        {"url": "https://" + SECRET + ".example.invalid"},
+        [SECRET],
+        True,
+        False,
+        None,
+        float("nan"),
+        float("inf"),
+    ],
+)
+def test_req_05_other_values_are_never_printed(name, value):
     with pytest.raises(request_settings.RequestSettingsError) as refused:
-        request_settings.check("coder", {"temperature": "x" * 200})
-    assert '"' + "x" * 60 + "..., but it must be from 0 to 2" in str(refused.value)
+        request_settings.check("coder", {name: value})
+    message = str(refused.value)
+    assert message == (
+        f"Your Keeplane settings for coder set {name} to something that "
+        "isn't a number, so nothing was sent."
+    )
+    assert SECRET not in message
+
+
+# REQ-05 For reasoning_effort, only a plain word of up to 16 letters is shown.
+@pytest.mark.parametrize(
+    "value",
+    [
+        SECRET,
+        "sklive" * 3,
+        "a" * 17,
+        "low ",
+        "lów",
+        "",
+        {"effort": SECRET},
+        [SECRET],
+        True,
+        None,
+        float("nan"),
+    ],
+)
+def test_req_05_other_efforts_are_never_printed(value):
+    with pytest.raises(request_settings.RequestSettingsError) as refused:
+        request_settings.check("coder", {"reasoning_effort": value})
+    message = str(refused.value)
+    assert message == (
+        "Your Keeplane settings for coder set reasoning_effort to something that "
+        f"isn't {WORDS}, so nothing was sent."
+    )
+    assert SECRET not in message and "sklive" not in message
 
 
 @pytest.mark.parametrize(

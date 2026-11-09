@@ -336,8 +336,12 @@ other setting, stops `code` before the runtime starts. It exits 1 and sends
 nothing. The setting's value is never printed:
 
 ```text
-Your Keeplane settings for coder have baseURL, which Keeplane doesn't pass on, so nothing was sent. Use temperature, top_p, max_tokens or reasoning_effort.
+Your Keeplane settings for coder have "baseURL", which Keeplane doesn't pass on, so nothing was sent. Use temperature, top_p, max_tokens or reasoning_effort.
 ```
+
+A name that isn't a plain name of up to 32 letters, digits or underscores
+isn't printed either: the message says the settings "have a setting Keeplane
+doesn't pass on".
 
 A value out of range is refused the same way:
 
@@ -347,7 +351,11 @@ Your Keeplane settings for coder set temperature to 2.5, but it must be from 0 t
 
 For `max_tokens` the message says it must be a whole number from 1 to
 1,000,000. For `reasoning_effort` it says it must be one of none, minimal,
-low, medium, high or xhigh.
+low, medium, high or xhigh. Only a number, or for `reasoning_effort` a plain
+word of up to 16 letters, is printed. For anything else, such as text in a
+number setting, the message says you set it "to something that isn't a
+number" (or, for `reasoning_effort`, "something that isn't one of" the
+allowed words), so a key put in the wrong place never appears on screen.
 
 `keeplane code` has no web search and no web fetch: the model cannot search
 the web or open a web page during a turn, even if your shell holds a search
