@@ -9,9 +9,14 @@ input and output tokens. Each model gets one ``cost_status``:
 - ``local``: a model Keeplane added from a local runner, never priced;
 - ``no_list_price``: any other model, including a cloud model with no row and a
   model whose provider Keeplane didn't record.
+
+Each period also gets ``cost_partial``: true when an ``estimate`` leaves out
+some of that period's tokens because they were counted before Keeplane recorded
+the model's provider.
 """
 
 import logging
+from datetime import timedelta
 from datetime import timezone as dt_timezone
 
 from django.db.models import Q, Sum
@@ -36,8 +41,16 @@ def price_list():
         return None
 
 
-def hour_start(moment):
-    return moment.astimezone(dt_timezone.utc).replace(minute=0, second=0, microsecond=0)
+def first_priced_hour(recorded):
+    """The first hourly total that holds only usage from after ``recorded``.
+
+    A total covers its whole UTC hour, so the hour the origin was recorded in
+    may hold earlier usage under the same name; it is priced only when the
+    origin was recorded exactly on the hour.
+    """
+    recorded = recorded.astimezone(dt_timezone.utc)
+    hour = recorded.replace(minute=0, second=0, microsecond=0)
+    return hour if hour == recorded else hour + timedelta(hours=1)
 
 
 def priced_tokens(user_id, model_id, since, day_start, month_start):
@@ -98,16 +111,26 @@ def add_estimates(user_id, usage, day_start, month_start):
         status, price = pricing(origin, listed)
         item["cost_status"] = status
         if price is None:
-            item["today"]["estimated_cost"] = None
-            item["this_month"]["estimated_cost"] = None
+            for period in ("today", "this_month"):
+                item[period]["estimated_cost"] = None
+                item[period]["cost_partial"] = False
             continue
-        today, month = priced_tokens(
+        priced = priced_tokens(
             user_id,
             item["model"],
-            hour_start(origin["origin_recorded_at"]),
+            first_priced_hour(origin["origin_recorded_at"]),
             day_start,
             month_start,
         )
-        item["today"]["estimated_cost"] = str(price.cost(*today))
-        item["this_month"]["estimated_cost"] = str(price.cost(*month))
+        for period, (input_tokens, output_tokens) in zip(
+            ("today", "this_month"), priced, strict=True
+        ):
+            counts = item[period]
+            counts["estimated_cost"] = str(price.cost(input_tokens, output_tokens))
+            # Some of this period's tokens predate the recorded origin, so the
+            # cost leaves them out.
+            counts["cost_partial"] = (input_tokens, output_tokens) != (
+                counts["input_tokens"],
+                counts["output_tokens"],
+            )
     return usage

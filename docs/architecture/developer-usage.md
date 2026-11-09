@@ -77,9 +77,11 @@ these totals (D191).
  "price_list": {"date": "2026-11-09", "currency": "USD"},
  "models": [{"model": "coder", "cost_status": "estimate",
    "today": {"input_tokens": 2000, "output_tokens": 500, "requests": 7,
-             "requests_without_usage": 1, "estimated_cost": "0.003500"},
+             "requests_without_usage": 1, "estimated_cost": "0.003500",
+             "cost_partial": false},
    "this_month": {"input_tokens": 9000, "output_tokens": 2100, "requests": 31,
-                  "requests_without_usage": 1, "estimated_cost": "0.015300"}}]}
+                  "requests_without_usage": 1, "estimated_cost": "0.015300",
+                  "cost_partial": false}}]}
 ```
 
 Models are listed by ID and only if used this month. Each model's cost is
@@ -129,10 +131,22 @@ Each model in the answer has a `cost_status`:
 | `no_list_price` | A cloud model with no matching row, a model whose provider Keeplane didn't record (set up before Keeplane recorded it, or registered directly in the gateway), or a model whose approval has since been removed. | `null` |
 
 Matching is exact on the recorded provider and model name: no letter-case
-folding, prefixes or aliases. Only tokens counted from the UTC hour the
-provider was recorded are priced, so if a removed local model's name is later
-reused for a cloud model, the local model's earlier tokens are not priced.
-Setting a model up again keeps what was recorded.
+folding, prefixes or aliases.
+
+Only hourly totals that start at or after the moment the provider was recorded
+are priced: the next full UTC hour, or that same hour if it was recorded exactly
+on the hour. A total covers its whole hour, so the hour the model was added in
+may also hold an earlier model's tokens under the same name. If a removed
+local model's name is reused for a cloud model, none of the local model's
+tokens are priced, even ones from earlier in the same hour. The cloud model's
+own tokens in that first part-hour are left out too, so the estimate can be
+low. When a period's cost leaves out some of its tokens this way, that
+period's `cost_partial` is `true`, so the CLI can say so. It is `false`
+otherwise, and always `false` when there is no cost.
+
+Setting a model up again keeps what was recorded while Keeplane still owns the
+model. If its gateway definition was replaced outside Keeplane, setting it up
+again clears the recorded provider, and the model shows `no_list_price`.
 
 `price_list` names the list's date and currency, for the label the CLI shows
 with every cost. If the shipped list can't be read (a release bug), usage still

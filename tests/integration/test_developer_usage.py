@@ -110,6 +110,9 @@ def counts(input_tokens, output_tokens, requests, without=0):
     }
 
 
+NO_COST = {"estimated_cost": None, "cost_partial": False}
+
+
 def test_du_01_reports_add_up_in_the_hour_and_read_back(usage):
     assert post(usage, report()).status_code == 204
     assert post(usage, report(input_tokens=800, output_tokens=200)).status_code == 204
@@ -138,8 +141,16 @@ def test_du_01_reports_add_up_in_the_hour_and_read_back(usage):
             {
                 "model": "coder",
                 "cost_status": "no_list_price",
-                "today": {**counts(2000, 500, 7, 1), "estimated_cost": None},
-                "this_month": {**counts(2000, 500, 7, 1), "estimated_cost": None},
+                "today": {
+                    **counts(2000, 500, 7, 1),
+                    "estimated_cost": None,
+                    "cost_partial": False,
+                },
+                "this_month": {
+                    **counts(2000, 500, 7, 1),
+                    "estimated_cost": None,
+                    "cost_partial": False,
+                },
             }
         ],
     }

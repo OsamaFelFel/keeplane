@@ -114,6 +114,7 @@ def test_du_s1_only_the_signed_in_developers_totals_come_back(app):
                 "requests": 2,
                 "requests_without_usage": 1,
                 "estimated_cost": None,
+                "cost_partial": False,
             },
             "this_month": {
                 "input_tokens": 1000,
@@ -121,6 +122,7 @@ def test_du_s1_only_the_signed_in_developers_totals_come_back(app):
                 "requests": 2,
                 "requests_without_usage": 1,
                 "estimated_cost": None,
+                "cost_partial": False,
             },
         }
     ]

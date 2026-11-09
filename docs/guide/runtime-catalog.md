@@ -104,6 +104,10 @@ The answer lists each model you used this month with `input_tokens`,
 - `no_list_price`: a cloud model Keeplane has no list price for, or one whose
   provider it didn't record; `estimated_cost` is `null`.
 
+`cost_partial` is `true` for a period whose cost leaves out tokens counted
+before Keeplane recorded the model's provider (including the rest of the hour
+it was added in); otherwise `false`.
+
 `price_list` gives the shipped price list's `date` and `currency` (`USD`). Costs
 are estimates from each provider's public list price; discounts and negotiated
 prices are never applied.

@@ -128,7 +128,8 @@ def test_du_c1_a_listed_cloud_model_shows_an_estimated_cost(priced, source):
         source,
         UPSTREAM[source],
     )
-    used(priced, "cloud-coder", 1234, 567)
+    # Added at 15:20, so pricing starts with the 16:00 total.
+    used(priced, "cloud-coder", 1234, 567, at=NOW + timedelta(hours=1))
     priced.clock.now = NOW + timedelta(days=1)
     used(priced, "cloud-coder", 2_000_000, 10)
     body, found = models(priced)
@@ -144,6 +145,8 @@ def test_du_c1_a_listed_cloud_model_shows_an_estimated_cost(priced, source):
     assert item["this_month"]["estimated_cost"] == month
     assert item["this_month"]["input_tokens"] == 2_001_234
     assert item["this_month"]["output_tokens"] == 577
+    assert not item["today"]["cost_partial"]
+    assert not item["this_month"]["cost_partial"]
 
 
 def test_du_c2_a_local_model_shows_tokens_and_no_cost(priced):
@@ -193,20 +196,47 @@ def test_du_c4_a_model_whose_provider_wasnt_recorded_is_not_priced(priced):
 
 
 def test_du_c5_usage_from_before_the_provider_was_recorded_is_not_priced(priced):
-    # A local model used this name earlier in the month, was removed, and a
-    # cloud model was then added under the same name.
+    # A local model used this name earlier in the month and earlier in this
+    # very hour (15:05), was removed, and at 15:20 a cloud model was added
+    # under the same name and used at 15:25.
     used(priced, "reused", 9_000_000, 9_000_000, at=NOW - timedelta(days=2))
     used(priced, "reused", 1_000_000, 0, at=NOW - timedelta(hours=1))
+    used(priced, "reused", 500_000, 500_000, at=NOW - timedelta(minutes=15))
     add_cloud(priced, "reused", "openai", "test-gpt")
+    used(priced, "reused", 7, 7, at=NOW + timedelta(minutes=5))
+    priced.clock.now = NOW + timedelta(hours=1)
     used(priced, "reused", 1000, 1000)
     _, found = models(priced)
     item = found["reused"]
     assert item["cost_status"] == "estimate"
-    assert item["this_month"]["input_tokens"] == 10_001_000
-    assert item["today"]["input_tokens"] == 1_001_000
-    # Only the 1,000 + 1,000 tokens after it was added are priced.
+    assert item["this_month"]["input_tokens"] == 10_501_007
+    assert item["today"]["input_tokens"] == 1_501_007
+    # The 15:00 total mixes the local model's tokens with the cloud model's,
+    # so only totals from 16:00 on are priced: the 1,000 + 1,000 tokens.
     assert item["today"]["estimated_cost"] == "0.018000"
     assert item["this_month"]["estimated_cost"] == "0.018000"
+    assert item["today"]["cost_partial"] and item["this_month"]["cost_partial"]
+
+
+def test_du_c5_a_model_added_exactly_on_the_hour_is_priced_from_that_hour(priced):
+    on_the_hour = NOW.replace(minute=0)
+    used(priced, "cloud-coder", 1_000_000, 0, at=on_the_hour - timedelta(minutes=1))
+    priced.clock.now = on_the_hour
+    add_cloud(priced, "cloud-coder", "openai", "test-gpt")
+    used(priced, "cloud-coder", 1000, 1000, at=on_the_hour + timedelta(minutes=30))
+    _, found = models(priced)
+    item = found["cloud-coder"]
+    assert item["today"]["estimated_cost"] == "0.018000"
+    assert item["today"]["cost_partial"]
+    # Today without the earlier hour: a later day holds only priced usage.
+    priced.clock.now = on_the_hour + timedelta(days=1)
+    used(priced, "cloud-coder", 1000, 1000)
+    _, found = models(priced)
+    item = found["cloud-coder"]
+    assert item["today"]["estimated_cost"] == "0.018000"
+    assert not item["today"]["cost_partial"]
+    assert item["this_month"]["estimated_cost"] == "0.036000"
+    assert item["this_month"]["cost_partial"]
 
 
 def test_du_c6_setting_a_model_up_again_keeps_its_recorded_provider(priced):
@@ -217,12 +247,44 @@ def test_du_c6_setting_a_model_up_again_keeps_its_recorded_provider(priced):
     priced.clock.now = NOW + timedelta(hours=3)
     approval = ModelApproval.objects.get(pk="cloud-coder")
     priced.stores.catalog.approve(
-        "cloud-coder", [], approval.gateway_fingerprint, key_choice="personal"
+        "cloud-coder",
+        [],
+        approval.gateway_fingerprint,
+        owned_by_keeplane=True,
+        key_choice="personal",
     )
     after = ModelApproval.objects.values(
         "origin", "provider", "provider_model", "origin_recorded_at"
     ).get(pk="cloud-coder")
     assert after == before
+
+
+def test_du_c6_a_definition_replaced_outside_keeplane_loses_its_provider(priced):
+    add_cloud(priced, "cloud-coder", "openai", "test-gpt")
+    # Someone replaces the gateway definition directly, then an admin sets
+    # the model up again in Keeplane.
+    record = priced.registrar.gateway.records["cloud-coder"]
+    record["value"]["params"]["model"] = "something-else"
+    record["revision"] += 1
+    status, body = priced.registrar.setup("cloud-coder", {"key_choice": "personal"})
+    assert status == 200, body
+    approval = ModelApproval.objects.get(pk="cloud-coder")
+    assert not approval.owned_by_keeplane
+    assert (
+        approval.origin,
+        approval.provider,
+        approval.provider_model,
+        approval.origin_recorded_at,
+    ) == ("", "", "", None)
+    priced.clock.now = NOW + timedelta(hours=2)
+    used(priced, "cloud-coder", 1000, 1000)
+    _, found = models(priced)
+    assert found["cloud-coder"]["cost_status"] == "no_list_price"
+    assert found["cloud-coder"]["today"]["estimated_cost"] is None
+    with pytest.raises(ValueError, match="Only a model Keeplane adds"):
+        priced.stores.catalog.approve(
+            "cloud-coder", [], "definition", added_from=("local", "", "")
+        )
 
 
 def test_du_c7_a_broken_shipped_list_shows_tokens_without_costs(priced, monkeypatch):
@@ -253,7 +315,9 @@ def test_du_c8_an_origin_that_doesnt_add_up_is_refused(priced):
         ["local", "", ""],
     ]:
         with pytest.raises(ValueError, match="provider could not be recorded"):
-            catalog.approve("bad", [], "definition", added_from=added_from)
+            catalog.approve(
+                "bad", [], "definition", owned_by_keeplane=True, added_from=added_from
+            )
     assert not ModelApproval.objects.filter(pk="bad").exists()
     for fields in [
         {"origin": "cloud", "provider": "openai", "provider_model": ""},

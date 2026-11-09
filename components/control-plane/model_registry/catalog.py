@@ -116,7 +116,8 @@ class DjangoModelCatalog:
         ``added_from`` is given only when Keeplane adds the model:
         ``("local", "", "")`` for a local runner, or ``("cloud", provider,
         provider_model)``. It is recorded once, for cost estimates (ADR 029),
-        and kept from setup to setup.
+        and kept from setup to setup while Keeplane still owns the model; an
+        approval saved with ``owned_by_keeplane`` false clears it.
         """
         if key_choice not in ProviderKeyChoice.values:
             raise ValueError("Choose a supported provider key option")
@@ -133,6 +134,8 @@ class DjangoModelCatalog:
             )
         ):
             raise ValueError("The model's provider could not be recorded")
+        if added_from is not None and not owned_by_keeplane:
+            raise ValueError("Only a model Keeplane adds has its provider recorded")
         if context_tokens is not None and (
             type(context_tokens) is not int or context_tokens <= 0
         ):
@@ -165,7 +168,13 @@ class DjangoModelCatalog:
             if context_tokens is not None:
                 # Kept from setup to setup; only a runner's report changes it.
                 stored["context_tokens"] = context_tokens
-            if added_from is not None:
+            if not owned_by_keeplane:
+                # A model Keeplane didn't add, or whose definition was replaced
+                # outside Keeplane, loses its recorded origin: it isn't priced.
+                stored.update(
+                    origin="", provider="", provider_model="", origin_recorded_at=None
+                )
+            elif added_from is not None:
                 origin, provider, provider_model = added_from
                 stored.update(
                     origin=origin,

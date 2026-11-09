@@ -55,8 +55,8 @@ October 2026.
 | DU-C2 | An admin adds a model from a local runner whose model name matches a listed cloud model, and the developer uses it. | Tokens show; the cost status is `local` and there is no cost. |
 | DU-C3 | An admin adds cloud models whose provider model isn't listed, or is listed only for the other provider. | Tokens show; the cost status is `no_list_price` and there is no cost. |
 | DU-C4 | Usage exists for a model approved without Keeplane recording its provider, and for a model with no approval. | Neither is priced: `no_list_price`. |
-| DU-C5 | A name's earlier usage this month came before a cloud model was added under it. | Only tokens from the hour it was added on are priced; the tokens still all show. |
-| DU-C6 | A cloud model is set up again later. | Its recorded provider, model name and time stay as they were. |
+| DU-C5 | A local model used a name earlier this month and at 15:05, was removed, and a cloud model was added under the name at 15:20 and used at 15:25 and 16:20. Another cloud model is added exactly at 15:00. | Every token shows, but only totals from 16:00 on are priced, so none of the local model's tokens are, and `cost_partial` is true. A model added exactly on the hour is priced from that hour; a later day with only priced usage has `cost_partial` false. |
+| DU-C6 | A cloud model is set up again later; another's gateway definition is replaced outside Keeplane, then it is set up again. | The first keeps its recorded provider, model name and time. The second is no longer owned by Keeplane, its provider is cleared and it shows `no_list_price`. |
 | DU-C7 | The shipped price list can't be read. | Tokens still show, no model is priced, local models stay `local` and the price list is empty. |
 | DU-C8 | Something tries to record an unknown provider, an empty or too-long model name, a local model with a provider, or a cloud model without its time. | Each is refused and nothing is saved. |
 | DU-C9 | The database is upgraded with an approval saved before this change, and an app copy from before the upgrade saves another. | Both keep no recorded provider, so neither is priced. |
