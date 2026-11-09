@@ -47,6 +47,15 @@ Header authentication follows [DRF's custom authentication contract](https://www
 [Isolated HTTP cases](../../tests/integration/runtime-catalog-cases.md) cover
 revocation, class restrictions, unknown contexts and outages.
 
+## Read the signed-in account
+
+Send `GET /api/runtime/session` with the Bearer credential. Success returns 200,
+not cached, with `id`, `username`, `role` and `gateway_url`: the gateway address
+for coding, ending in `/v1`, that the installer set in
+`KEEPLANE_GATEWAY_PUBLIC_URL`, or `null` when it isn't set. The address never
+comes from the request's headers. Cookies, a missing or invalid credential, or
+a signed-out one return 401. [Cases](../../tests/integration/runtime-gateway-address-cases.md).
+
 ## Revoke a test session
 
 Send `DELETE /api/runtime/session` with the same Bearer credential and an empty

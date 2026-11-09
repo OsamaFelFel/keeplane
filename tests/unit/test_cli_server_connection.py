@@ -177,3 +177,13 @@ def test_profile_command_never_prints_saved_credentials(server, tmp_path, monkey
     assert account_session.main() == 1
     assert "temporarily unavailable" in capsys.readouterr().err
     assert (path / "credential.json").exists()
+
+
+@pytest.mark.parametrize("gateway", ["http://127.0.0.1:5000/v1", None])
+def test_account_accepts_a_server_that_gives_its_gateway_address(server, gateway):
+    # CLI-CON-04: a task 009-02 server adds gateway_url; the account is unchanged.
+    actor = str(uuid.uuid4())
+    server.payload = json.dumps({"id": actor, "username": "developer", "role": "developer",
+                                 "gateway_url": gateway}).encode()
+    assert account(server.url, "synthetic-session") == {
+        "id": actor, "username": "developer", "role": "developer"}

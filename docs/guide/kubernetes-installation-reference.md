@@ -816,8 +816,15 @@ the gateway's protected path, and every management path private.
   to the whole host rather than one Ingress's paths; check your controller's
   documentation for any you set.
 
-**What to give developers.** The CLI doesn't get the gateway address from the
-server and doesn't save it in the profile: developers pass it to
+**What to give developers.** With the enroller and the chart's Ingress, the
+chart sets the app's `KEEPLANE_GATEWAY_PUBLIC_URL` to `https://<ingress.host>/v1`,
+and the server gives that address to a signed-in CLI as `gateway_url` on
+`GET /api/runtime/session`. It is always the address the installer set, never
+one worked out from a request's headers; with no address set, `gateway_url` is
+`null`, which says Keeplane doesn't know it. The server refuses to start with an
+address that doesn't end in `/v1`, has a user name, password, query or
+fragment, or uses `http` to another computer. This CLI version doesn't read
+the address yet and doesn't save it in the profile: developers pass it to
 `keeplane code --gateway` on every turn, and a resumed session must use the
 same address it started with. With the chart's Ingress, give each
 developer two addresses on `ingress.host`:
@@ -836,9 +843,10 @@ through the gateway of the same Keeplane they signed in to. If you run your
 own edge, the coding address is `https://` with the host you publish the path
 on, followed by `/v1`.
 
-The chart publishes a coding address only with the enroller on. Without it,
-or with a customer-run gateway (`gateway.mode=existing`), it routes nothing to
-a gateway: the managed gateway's port 4000 takes only the gateway keys, not a
+The chart publishes a coding address, and sets `KEEPLANE_GATEWAY_PUBLIC_URL`,
+only with the enroller and the chart's Ingress on. Without them, or with a
+customer-run gateway (`gateway.mode=existing`), it routes nothing to a gateway
+and the server answers that it doesn't know the address: the managed gateway's port 4000 takes only the gateway keys, not a
 developer's session, and a customer-run gateway's coding address is the `/v1`
 address of the route you set up for developer model traffic (see
 [Keeplane's checks on a customer-run gateway](gateway-configuration.md#keeplanes-checks-on-a-customer-run-gateway)).

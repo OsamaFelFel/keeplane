@@ -47,6 +47,12 @@ The first line is the model enroller's report. Once you have approved models it
 says how many are enrolled, for example `Protected access is ready: 1 model is
 enrolled.`
 
+The app also gives that gateway address to every signed-in CLI: the account on
+`GET /api/runtime/session` carries `"gateway_url": "http://127.0.0.1:5000/v1"`,
+or the `--runtime-port` you chose, set as `KEEPLANE_GATEWAY_PUBLIC_URL` in
+`deploy/local/runtime.yaml`. This CLI version still needs it as
+`keeplane code --gateway`.
+
 ```mermaid
 sequenceDiagram
   participant L as up.py

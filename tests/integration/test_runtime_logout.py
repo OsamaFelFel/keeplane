@@ -55,7 +55,10 @@ def test_current_runtime_account_requires_live_explicit_bearer(sessions):
         "/api/runtime/session", HTTP_AUTHORIZATION="Bearer " + sessions.first
     )
     assert response.status_code == 200
-    assert response.json() == sessions.identity.session(sessions.first)
+    assert response.json() == {
+        **sessions.identity.session(sessions.first),
+        "gateway_url": None,
+    }
     assert "no-store" in response["Cache-Control"]
     sessions.identity.logout(sessions.first)
     assert (
