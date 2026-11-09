@@ -107,17 +107,22 @@ def test_du_s1_only_the_signed_in_developers_totals_come_back(app):
     assert mine == [
         {
             "model": "coder",
+            "cost_status": "no_list_price",
             "today": {
                 "input_tokens": 1000,
                 "output_tokens": 250,
                 "requests": 2,
                 "requests_without_usage": 1,
+                "estimated_cost": None,
+                "cost_partial": False,
             },
             "this_month": {
                 "input_tokens": 1000,
                 "output_tokens": 250,
                 "requests": 2,
                 "requests_without_usage": 1,
+                "estimated_cost": None,
+                "cost_partial": False,
             },
         }
     ]

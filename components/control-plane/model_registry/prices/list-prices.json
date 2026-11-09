@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "currency": "USD",
+  "date": "2026-11-09",
+  "note": "Standard list prices per million tokens, copied by hand from each provider's public pricing page. No discounts, batch, cache, regional or fast-mode prices. Models priced by prompt length are left out. See docs/architecture/developer-usage.md#updating-the-price-list.",
+  "prices": [
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-1",
+      "input_per_million": "10",
+      "output_per_million": "50",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "input_per_million": "4",
+      "output_per_million": "20",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "input_per_million": "5",
+      "output_per_million": "25",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "input_per_million": "2",
+      "output_per_million": "10",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "input_per_million": "2",
+      "output_per_million": "10",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "input_per_million": "3",
+      "output_per_million": "15",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5",
+      "input_per_million": "1",
+      "output_per_million": "5",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "input_per_million": "1",
+      "output_per_million": "5",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.1",
+      "input_per_million": "1.25",
+      "output_per_million": "10",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5",
+      "input_per_million": "1.25",
+      "output_per_million": "10",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "input_per_million": "0.25",
+      "output_per_million": "2",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "input_per_million": "2",
+      "output_per_million": "8",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "input_per_million": "0.40",
+      "output_per_million": "1.60",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "input_per_million": "2.50",
+      "output_per_million": "10",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "input_per_million": "0.15",
+      "output_per_million": "0.60",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-09"
+    }
+  ]
+}

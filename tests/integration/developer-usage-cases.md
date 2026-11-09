@@ -1,8 +1,8 @@
 # Developer usage on the server
 
-Spec 009 ST31 (D186, D191), ADR 029, task 009-08. Journey case DEV-04 (with
-009-09 and 009-10). Run
-`.venv/bin/python -m pytest tests/integration/test_developer_usage.py tests/integration/test_developer_usage_storage.py`.
+Spec 009 ST31 (D186, D189, D191), ADR 029, tasks 009-08 and 009-09. Journey
+case DEV-04 (with 009-10). Run
+`.venv/bin/python -m pytest tests/integration/test_developer_usage.py tests/integration/test_developer_usage_storage.py tests/integration/test_usage_cost.py`.
 The storage cases run once on SQLite and once on PostgreSQL; the PostgreSQL
 runs need `KEEPLANE_TEST_POSTGRES_*` (CI's PostgreSQL job sets them) and are
 skipped elsewhere. DU-15 needs the separately pinned CLI sign-in packages.
@@ -40,3 +40,23 @@ skipped elsewhere. DU-15 needs the separately pinned CLI sign-in packages.
 | DU-S4 | A read and a report are sent with session cookies only. | Both get 401 and nothing is stored. |
 | DU-S5 | A report carries a prompt, answer and path. | The stored row holds only the account, model, hour and four counts. |
 | DU-S6 | Two app copies on the same database each send 20 reports at the same time, after a total from before the previous month was written. | All 40 reports are counted in one total per hour, and the old total is gone. |
+
+## Estimated cost (`test_usage_cost.py`)
+
+Models are added through Keeplane's own add flow: cloud models against the
+cloud-provider fixture, local models from a runner. A test price list replaces
+the shipped one: OpenAI `test-gpt` at $3 in and $15 out per million tokens,
+checked 1 October 2026, and Anthropic `test-claude` at $1 and $5, checked 15
+October 2026.
+
+| ID | Plain-English action | Expected result |
+| --- | --- | --- |
+| DU-C1 | An admin adds an OpenAI, then an Anthropic, cloud model whose provider model is listed; the developer uses it on two days and reads their usage. | Keeplane recorded the provider and provider model name. The model's cost status is `estimate`, with today's and this month's cost to a millionth of a dollar, and the answer names the price list's date (1 October 2026, its oldest row) and US dollars. |
+| DU-C2 | An admin adds a model from a local runner whose model name matches a listed cloud model, and the developer uses it. | Tokens show; the cost status is `local` and there is no cost. |
+| DU-C3 | An admin adds cloud models whose provider model isn't listed, or is listed only for the other provider. | Tokens show; the cost status is `no_list_price` and there is no cost. |
+| DU-C4 | Usage exists for a model approved without Keeplane recording its provider, and for a model with no approval. | Neither is priced: `no_list_price`. |
+| DU-C5 | A local model used a name earlier this month and at 15:05, was removed, and a cloud model was added under the name at 15:20 and used at 15:25 and 16:20. Another cloud model is added exactly at 15:00. | Every token shows, but only totals from 16:00 on are priced, so none of the local model's tokens are, and `cost_partial` is true. A model added exactly on the hour is priced from that hour; a later day with only priced usage has `cost_partial` false. |
+| DU-C6 | A cloud model is set up again later; another's gateway definition is replaced outside Keeplane, then it is set up again. | The first keeps its recorded provider, model name and time. The second is no longer owned by Keeplane, its provider is cleared and it shows `no_list_price`. |
+| DU-C7 | The shipped price list can't be read. | Tokens still show, no model is priced, local models stay `local` and the price list is empty. |
+| DU-C8 | Something tries to record an unknown provider, an empty or too-long model name, a local model with a provider, or a cloud model without its time. | Each is refused and nothing is saved. |
+| DU-C9 | The database is upgraded with an approval saved before this change, and an app copy from before the upgrade saves another. | Both keep no recorded provider, so neither is priced. |

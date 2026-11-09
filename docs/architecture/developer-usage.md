@@ -1,8 +1,8 @@
 # Developer usage
 
 The Django `usage` app keeps each developer's own token usage per model, so the
-CLI can show today's and this month's totals (Spec 009 ST31, ADR 029). Open
-Source has the whole feature; Enterprise adds nothing.
+CLI can show today's and this month's totals and an estimated cost (Spec 009
+ST31, ADR 029). Open Source has the whole feature; Enterprise adds nothing.
 
 ```mermaid
 flowchart LR
@@ -14,6 +14,10 @@ flowchart LR
   CLI -->|GET /api/runtime/usage?tz=Area/City| Auth
   Auth --> Read[Signed-in developer's totals<br/>for today and this month]
   Read --> Totals
+  Read --> Cost[Estimated cost:<br/>tokens times list price]
+  Add[Admin adds a model] -->|provider and provider model name| Approvals[(Model approvals)]
+  Cost --> Approvals
+  Cost --> Prices[[list-prices.json<br/>shipped with Keeplane]]
   Retention[Delete totals older than<br/>the previous month] --> Totals
 ```
 
@@ -70,14 +74,18 @@ these totals (D191).
 
 ```json
 {"time_zone": "Europe/Berlin", "today": "2026-11-09", "month": "2026-11",
- "models": [{"model": "coder",
-   "today": {"input_tokens": 2000, "output_tokens": 500, "requests": 7, "requests_without_usage": 1},
-   "this_month": {"input_tokens": 9000, "output_tokens": 2100, "requests": 31, "requests_without_usage": 1}}]}
+ "price_list": {"date": "2026-11-09", "currency": "USD"},
+ "models": [{"model": "coder", "cost_status": "estimate",
+   "today": {"input_tokens": 2000, "output_tokens": 500, "requests": 7,
+             "requests_without_usage": 1, "estimated_cost": "0.003500",
+             "cost_partial": false},
+   "this_month": {"input_tokens": 9000, "output_tokens": 2100, "requests": 31,
+                  "requests_without_usage": 1, "estimated_cost": "0.015300",
+                  "cost_partial": false}}]}
 ```
 
-Models are listed by ID and only if used this month. Task 009-09 adds an
-estimated cost to each period from the shipped price list; the counts stay as
-they are.
+Models are listed by ID and only if used this month. Each model's cost is
+described under [estimated cost](#estimated-cost).
 
 Totals are hourly, so a day or a month starts at the UTC hour nearest local
 midnight, at most 30 minutes away. In a zone with a 45-minute offset the
@@ -98,5 +106,88 @@ whole for every developer: at 1 December 03:00 UTC it is still November in New
 York, so all of October is kept. Nobody
 can change this, and there is no "last month" view.
 
-[Cases DU-01 to DU-18 and DU-S1 to DU-S6](../../tests/integration/developer-usage-cases.md)
-and [report rules](../../tests/unit/usage-totals-cases.md) cover this design.
+## Estimated cost
+
+Cost is worked out when usage is read, never stored: tokens times the list price
+of the provider's model, in US dollars. It is an estimate. Discounts, negotiated
+prices and batch, cached-input, regional or fast-mode prices are never applied;
+cached-input and reasoning tokens count as ordinary input and output tokens.
+Requests that reported no tokens add nothing.
+
+**Which models are priced.** When an admin adds a model, Keeplane records where
+it runs on its approval:
+
+- a model from a local runner (any local source) is recorded as `local`;
+- a cloud model is recorded as `cloud` with its provider (`openai` or
+  `anthropic`) and the provider's own model name, the upstream model ID the
+  admin entered.
+
+Each model in the answer has a `cost_status`:
+
+| `cost_status` | When | `estimated_cost` |
+| --- | --- | --- |
+| `estimate` | A cloud model whose provider and model name exactly match a row in the price list. | A decimal string in US dollars, to a millionth of a dollar, rounded half up. |
+| `local` | A model Keeplane added from a local runner. It is never priced, whatever its name. | `null` |
+| `no_list_price` | A cloud model with no matching row, a model whose provider Keeplane didn't record (set up before Keeplane recorded it, or registered directly in the gateway), or a model whose approval has since been removed. | `null` |
+
+Matching is exact on the recorded provider and model name: no letter-case
+folding, prefixes or aliases.
+
+Only hourly totals that start at or after the moment the provider was recorded
+are priced: the next full UTC hour, or that same hour if it was recorded exactly
+on the hour. A total covers its whole hour, so the hour the model was added in
+may also hold an earlier model's tokens under the same name. If a removed
+local model's name is reused for a cloud model, none of the local model's
+tokens are priced, even ones from earlier in the same hour. The cloud model's
+own tokens in that first part-hour are left out too, so the estimate can be
+low. When a period's cost leaves out some of its tokens this way, that
+period's `cost_partial` is `true`, so the CLI can say so. It is `false`
+otherwise, and always `false` when there is no cost.
+
+Setting a model up again keeps what was recorded while Keeplane still owns the
+model. If its gateway definition was replaced outside Keeplane, setting it up
+again clears the recorded provider, and the model shows `no_list_price`.
+
+`price_list` names the list's date and currency, for the label the CLI shows
+with every cost. If the shipped list can't be read (a release bug), usage still
+answers with `price_list: null` and no model priced.
+
+The price list is only as fresh as the installed Keeplane release. In the local
+preview, OpenAI and Anthropic models answer from a local mock provider, but they
+are still priced as the real provider's model, so DEV-04 can show a cost.
+
+## Updating the price list
+
+The list is
+[`components/control-plane/model_registry/prices/list-prices.json`](../../components/control-plane/model_registry/prices/list-prices.json).
+It ships with Keeplane; nothing is fetched at runtime and no third-party price
+dataset is copied. Maintainers update it by hand:
+
+1. Open each provider's own public pricing page:
+   [OpenAI](https://developers.openai.com/api/docs/pricing) (Standard tier) and
+   [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) (base
+   input and output tokens).
+2. For each row, copy the standard input and output price per million tokens as
+   text (for example `"2.50"`), and set `checked` to today's date. Use the exact
+   model name the provider's API takes, such as `gpt-4.1-mini` or
+   `claude-sonnet-4-6`. Add a separate row for each name the provider documents
+   for the same model (for example a dated ID and its alias).
+3. Leave a model out if its price depends on the prompt's length (OpenAI's
+   long-context flagship models, Claude Haiku 5.5) or if you can't confirm the
+   price on the provider's page. It then shows "no list price", which is better
+   than a wrong price.
+4. Set the list's `date` to the oldest row's `checked` date. The label shows
+   this date, so the list never looks fresher than its oldest price.
+5. Run `.venv/bin/python -m pytest tests/unit/test_list_prices.py`; the loader
+   refuses a list that breaks a rule (sources must be the provider's own https
+   pages, one row per provider and model, prices as text with at most four
+   decimals).
+
+Each row holds `provider`, `model`, `input_per_million`, `output_per_million`,
+`source` (the pricing page) and `checked`. Adding another provider also needs
+Keeplane's cloud add flow to support it.
+
+The [developer usage cases](../../tests/integration/developer-usage-cases.md)
+(DU-01 to DU-18, DU-S1 to DU-S6 and DU-C1 to DU-C9), the
+[report rules](../../tests/unit/usage-totals-cases.md) and the
+[list-price rules](../../tests/unit/list-prices-cases.md) cover this design.

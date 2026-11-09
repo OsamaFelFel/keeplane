@@ -107,7 +107,7 @@
       "audit": "0001_initial",
       "data_classes": "0002_personal_data_detection",
       "gateway_publications": "0002_definitionpublication",
-      "model_registry": "0009_gateway_guard_status",
+      "model_registry": "0010_model_origin",
       "projects": "0001_initial",
       "usage": "0001_initial"
     },
