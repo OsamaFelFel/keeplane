@@ -16,6 +16,7 @@ if __package__:
         opencode_adapter,
         project_identity,
         provider_keys,
+        settings_file,
         sign_in_again,
         usage,
     )
@@ -31,6 +32,7 @@ else:
     import opencode_adapter
     import project_identity
     import provider_keys
+    import settings_file
     import sign_in_again
     import usage
     from credential_profile import ProfileError, default_path, opened
@@ -39,25 +41,73 @@ else:
 
 # Commands that send something with the saved sign-in (ST29 "Sign out").
 SIGNED_IN_COMMANDS = {"code", "keys", "whoami", "refresh", "logout",
-                      "register-project", "models", "usage"}
+                      "register-project", "models", "use", "usage"}
+
+# Spec 004 ST17 (D150): the developer's switch for this repo's project.
+SWITCHED = ("This repo's next tasks use {model}. "
+            "Run `keeplane use --auto` to let Keeplane choose again.")
+AUTO = "This repo's next tasks use the model Keeplane chooses."
+# A developer can't switch to a model the project doesn't allow (keeplane #178).
+# Wording decided by the associate product owner for task 009-07.
+NOT_ALLOWED = ("{model} isn't allowed for this project. Nothing was saved. "
+               "Choose one that `keeplane models` lists.")
+SIGNED_OUT_USE = ("You're signed out of Keeplane, so nothing was saved. "
+                  "Run `keeplane login` to sign in.")
 
 
-def project_command(action, profile_path, project_id, name=None):
+def marked(issuer, project_id, credential, notify):
+    """The allowed models, marking the one the next task uses (ST17)."""
+    result = models(issuer, project_id, credential)
+    allowed = {row["id"] for row in result["models"]}
+    current, chosen_by, notices = coding.current_choice(
+        issuer, project_id, credential, allowed)
+    for notice in notices:
+        notify(notice)
+    for row in result["models"]:
+        row["current"] = row["id"] == current
+    result["chosen_by"] = chosen_by
+    return result
+
+
+def use_model(profile_path, project_id, model):
+    """Save the switch for this repo's project, only for an allowed model."""
     with opened(profile_path) as profile:
         credential = profile.load()
         actor = account(credential.issuer, credential.access_token)
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
+        catalog = models(credential.issuer, project_id, credential.access_token)
+    if model not in {row["id"] for row in catalog["models"]}:
+        raise ConnectionError(NOT_ALLOWED.format(model=model), 403)
+    settings_file.set_project_model(project_id, model)
+    return SWITCHED.format(model=model)
+
+
+def project_command(action, profile_path, project_id, name=None, notify=None):
+    with opened(profile_path) as profile:
+        credential = profile.load()
+        actor = account(credential.issuer, credential.access_token)
+        if actor["id"] != credential.actor_id:
+            raise ProfileError("The server account changed; sign in again.")
+        secrets = (credential.access_token, credential.refresh_token)
+
+        def report(message):
+            for secret in secrets:
+                message = message.replace(secret, "[redacted]")
+            if notify:
+                notify(message)
+
         if action == "register-project":
             result = register(
                 credential.issuer, project_id, name, credential.access_token
             )
         elif action == "models":
-            result = models(credential.issuer, project_id, credential.access_token)
+            result = marked(credential.issuer, project_id, credential.access_token,
+                            report)
         else:
             raise ValueError("Choose a project command")
         output = json.dumps(result, indent=2)
-        for secret in (credential.access_token, credential.refresh_token):
+        for secret in secrets:
             output = output.replace(secret, "[redacted]")
         return output
 
@@ -106,9 +156,10 @@ def main():
     code.add_argument("--profile", help="Default: ~/.config/keeplane/account")
     code.add_argument("--project", help="Default: worked out from the repo")
     code.add_argument("--name", help="Default: the repo's remote path or folder name")
-    code.add_argument("--model", help="Default: the model Keeplane picks for this project")
+    code.add_argument("--model", help="This turn only. Default: your `keeplane use` "
+                      "choice, then the model Keeplane picks for this project")
     code.add_argument("--runtime", help="Default: the settings file, then opencode on PATH")
-    code.add_argument("--gateway", help="Your gateway address, ending in /v1. Required until your server gives it at sign-in")
+    code.add_argument("--gateway", help="Default: the address your server gave at sign-in, ending in /v1")
     code.add_argument("--directory", type=Path, default=Path.cwd())
     code.add_argument("--timeout", type=float, default=300)
     code.add_argument("--instructions", action="append", default=[], type=Path)
@@ -132,7 +183,7 @@ def main():
         "logout": "Revoke this CLI session and remove its local credential",
         "forget": "Remove only the local credential",
         "register-project": "Record your use of this repo's project",
-        "models": "List the models this repo's project may use",
+        "models": "List the models this repo's project may use, marking the current one",
         "usage": "Show your own tokens and estimated cost per model, today and this month",
     }.items():
         command = commands.add_parser(action, help=help_text)
@@ -141,15 +192,30 @@ def main():
             command.add_argument("--project", help="Default: worked out from the repo")
         if action == "register-project":
             command.add_argument("--name", help="Default: the repo's remote path or folder name")
+    use = commands.add_parser(
+        "use", help="Choose the model for this repo's next tasks",
+        description="Save the model this repo's next tasks use, or let Keeplane choose.")
+    use.add_argument("model", nargs="?", metavar="MODEL",
+                     help="A model `keeplane models` lists")
+    use.add_argument("--auto", action="store_true",
+                     help="Clear your choice and let Keeplane choose")
+    use.add_argument("--profile", help="Default: ~/.config/keeplane/account")
+    use.add_argument("--project", help="Default: worked out from the repo")
     args = parser.parse_args()
+    if args.command == "use" and (args.model is None) == (not args.auto):
+        parser.error("Name one MODEL, or pass --auto.")
     try:
         if args.command != "init":
             args.profile = profile_path(args.profile, create=args.command == "login")
-        if args.command in SIGNED_IN_COMMANDS and not sign_in_again.signed_in(args.profile):
+        # Clearing a switch is local, so it needs no sign-in.
+        needs_sign_in = args.command in SIGNED_IN_COMMANDS and not (
+            args.command == "use" and args.auto)
+        if needs_sign_in and not sign_in_again.signed_in(args.profile):
             if args.command == "logout":
                 print(sign_in_again.ALREADY_SIGNED_OUT)
                 return 0
-            print(sign_in_again.SIGNED_OUT_MESSAGES[args.command], file=sys.stderr)
+            print(SIGNED_OUT_USE if args.command == "use"
+                  else sign_in_again.SIGNED_OUT_MESSAGES[args.command], file=sys.stderr)
             return 1
         if args.command == "init":
             if sys.version_info < (3, 11):
@@ -190,6 +256,13 @@ def main():
             output = account_session.run(args.command, args.profile)
         elif args.command == "refresh":
             output = credential_refresh.refresh(args.profile)
+        elif args.command == "use":
+            project_id = repo_project(args.project)[0]
+            if args.auto:
+                settings_file.set_project_model(project_id, None)
+                output = AUTO
+            else:
+                output = use_model(args.profile, project_id, args.model)
         elif args.command == "usage":
             output = usage.show(args.profile)
         elif args.command == "keys":
@@ -223,13 +296,18 @@ def main():
             project_id, name = repo_project(
                 args.project, getattr(args, "name", None),
                 need_name=args.command == "register-project")
-            output = project_command(args.command, args.profile, project_id, name)
+            output = project_command(
+                args.command, args.profile, project_id, name,
+                notify=lambda message: print(message, file=sys.stderr))
         print(output)
     except SignInExpired as expired:
-        print(sign_in_again.expired_message(
-            expired, args.command, getattr(args, "key_action", None)), file=sys.stderr)
+        print(sign_in_again.EXPIRED_NOT_SAVED if args.command == "use"
+              else sign_in_again.expired_message(
+                  expired, args.command, getattr(args, "key_action", None)),
+              file=sys.stderr)
         return 1
-    except (ProfileError, ConnectionError, project_identity.ProjectIdentityError) as error:
+    except (ProfileError, ConnectionError, project_identity.ProjectIdentityError,
+            settings_file.SettingsError) as error:
         print(str(error), file=sys.stderr)
         return 1
     except subprocess.TimeoutExpired:

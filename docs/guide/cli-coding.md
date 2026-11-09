@@ -12,8 +12,7 @@ First [sign in](cli-browser-login.md). Then go to any Git repo and run:
 
 ```sh
 cd /path/to/repository
-keeplane code --gateway https://gateway.example.com/v1 \
-  'Fix the addition function and check the result.'
+keeplane code 'Fix the addition function and check the result.'
 ```
 
 The repo needs no setup in Keeplane. `code` works out everything else:
@@ -22,22 +21,27 @@ The repo needs no setup in Keeplane. `code` works out everything else:
 | --- | --- | --- |
 | Account | The profile in `~/.config/keeplane/account` (or `$XDG_CONFIG_HOME/keeplane/account`) | `--profile PATH` |
 | Project | The repo's `origin` remote, or an ID saved in the repo's Git folder; see [how a repo becomes a project](cli-project-commands.md#how-a-repo-becomes-a-project) | `--project ID --name NAME` |
-| Model | The model Keeplane picks for this project, which `code` names before it starts | `--model MODEL` |
+| Model | Your [`keeplane use`](#choose-the-model) choice for this repo, otherwise the model Keeplane picks; `code` names it before it starts | `--model MODEL` (this turn only) |
 | Coding runtime | `"runtime"` in your [settings file](#the-settings-file), then `opencode` on your `PATH` | `--runtime PATH` |
 | Gateway | The address saved in your profile when you signed in | `--gateway URL` |
 | Folder | The folder you run it in | `--directory PATH` |
 
-The server gives a signed-in CLI the gateway address its installer set, but
-this CLI version doesn't save it yet, so pass `--gateway` with the address
-your admin gave you. Without it, `code` sends
-nothing and says:
+When you sign in, the server gives the CLI the gateway address its installer
+set, and the CLI saves it in your profile; `keeplane refresh` saves the
+server's current address again. The CLI checks it the same way as `--gateway`
+and, if the server gives one it can't use, `login` exits 1 with "The server
+gave a gateway address the CLI can't use, so you aren't signed in. Ask your
+admin to check `KEEPLANE_GATEWAY_PUBLIC_URL`." `--gateway`
+overrides the saved address for one turn. If the server has no address (an
+older server, or one whose installer didn't set it), nothing is saved and,
+without `--gateway`, `code` sends nothing and says:
 
 ```text
 Keeplane doesn't know your gateway address yet, so nothing was sent. Pass --gateway with the address your admin gave you, ending in /v1.
 ```
 
-Once your Keeplane server gives the address at sign-in, sign in again and
-`keeplane code 'task'` needs no options at all.
+A profile saved by an earlier CLI version has no address either: once your
+server gives one, run `keeplane refresh` to save it.
 
 On a Kubernetes installation with the chart's Ingress, the gateway URL is
 Keeplane's own address followed by `/v1`, such as
@@ -46,9 +50,17 @@ Keeplane's own address followed by `/v1`, such as
 On the Docker preview it is `http://127.0.0.1:5000/v1`.
 
 Without `--model`, `code` asks the server which allowed model the task goes to
-and prints, for example, `Using coder for this task, chosen by Keeplane. Pass
---model to choose another.` If none of the project's models can be used right
-now, it sends nothing and says so. `code` checks the current account, records
+and prints, for example:
+
+```text
+Using coder for this task, chosen by Keeplane. Run `keeplane use <model>` to choose another.
+```
+
+If none of the project's models can be used right now, it sends nothing and
+says so. After a turn that finished, it prints every model that answered in
+it, for example `Answered by coder.` (or `Answered by coder and general.`),
+even when your provider key moved the task to another model. A turn that
+failed shows why instead. `code` checks the current account, records
 that you use the project, and checks the allowed model list before starting the
 runtime. Until an admin sets the repo's data class on the Projects page, the
 repo can use every model your organization has approved. If the model needs
@@ -58,6 +70,75 @@ allowed model and says why; see
 context the CLI asks for; it does not prove where repository contents came
 from. The gateway makes the final decision, including changes made after the
 CLI's initial checks.
+
+### Choose the model
+
+To use another allowed model for this repo's next tasks, list the models and
+switch:
+
+```sh
+keeplane models
+keeplane use general
+```
+
+```text
+This repo's next tasks use general. Run `keeplane use --auto` to let Keeplane choose again.
+```
+
+`keeplane models` lists only the models allowed for this repo's project and
+marks the one your next task uses with `"current": true`; `"chosen_by"` says
+whether you chose it (`you`) or Keeplane did (`keeplane`). If Keeplane can't
+pick one right now, nothing is marked. `use` accepts only a listed
+model. Any other is refused and nothing is saved:
+
+```text
+outside isn't allowed for this project. Nothing was saved. Choose one that `keeplane models` lists.
+```
+
+The choice is saved in your [settings file](#the-settings-file) under the
+repo's project ID, so it applies in every clone of the same remote on this
+computer and nowhere else. Each task then says:
+
+```text
+Using general for this task, as you chose with `keeplane use`. Run `keeplane use --auto` to let Keeplane choose.
+```
+
+Your choice comes before Keeplane's own picks, such as an admin's persona rule
+or a complexity level. `keeplane use --auto` clears it, with no sign-in needed:
+
+```text
+This repo's next tasks use the model Keeplane chooses.
+```
+
+`--model MODEL` still works for a single turn and leaves your choice as it is.
+
+If an admin later stops allowing the model you chose, `code` sends nothing,
+and Keeplane doesn't pick another one for you:
+
+```text
+You switched this repo to general, but it isn't allowed for this project any more, so nothing was sent. Run `keeplane use <model>` with a model `keeplane models` lists, or `keeplane use --auto` to let Keeplane choose.
+```
+
+`keeplane models` prints the same message without ", so nothing was sent". A
+refusal that isn't about the model is shown in the server's words, and `code`
+adds that nothing was sent, for example
+`This project is unavailable. Nothing was sent.`
+
+If the model you chose needs your own provider key and yours is missing or
+refused, the task goes to the model Keeplane would pick next and says why:
+
+```text
+Your own key for general is missing, so this task uses coder. Run `keeplane keys list` to see your keys.
+```
+
+It says "is refused" when the provider refused the key. Your choice stays
+saved, so the next task tries it again. `keeplane models` then marks the model
+the next task really uses, chosen by Keeplane, and says why on stderr.
+
+If your settings file can't be read, `keeplane models` still lists the models
+but marks none, and says "Your `keeplane use` choice isn't shown in this list
+until the file is fixed."; `code` stops, because the same file names the
+runtime it runs.
 
 ### When your sign-in has expired
 
@@ -120,7 +201,7 @@ print:
 Your Keeplane sign-in has expired. Run `keeplane login` to sign in again.
 ```
 
-`keys set` and `keys remove` print:
+`keys set`, `keys remove` and `use <model>` print:
 
 ```text
 Your Keeplane sign-in has expired. Nothing was saved. Run `keeplane login` to sign in again.
@@ -137,6 +218,9 @@ nothing. `code`, `models`, `keys` and `register-project` exit 1 with:
 ```text
 You're signed out of Keeplane, so nothing was sent. Run `keeplane login` to sign in.
 ```
+
+`use <model>` exits 1 with "You're signed out of Keeplane, so nothing was saved.
+Run `keeplane login` to sign in." (`use --auto` works signed out.)
 
 `whoami` and `refresh` exit 1 with:
 
@@ -181,6 +265,9 @@ To keep the runtime somewhere other than your `PATH`, save its full path there:
 ```json
 {"runtime": "/opt/opencode-2.0.27/bin/opencode"}
 ```
+
+`keeplane use` saves your model choice in the same file, under `"projects"` and
+the repo's project ID; use the command rather than editing it by hand.
 
 Only you may be able to change the file (for example `chmod 600`), because
 `code` runs the program it names. Keys Keeplane doesn't know are ignored.
@@ -272,11 +359,11 @@ model on its own. If the model is still down, the turn stops and `code` prints
 the runtime's error followed by:
 
 ```text
-coder is unavailable right now, so this task stopped. Wait and try again, or run it with another model allowed for this project using --model: general, local.
+coder is unavailable right now, so this task stopped. Wait and try again, or run `keeplane use <model>` with another model allowed for this project: general, local.
 ```
 
-Run the same `code` command again later, or with one of the listed models in
-`--model`. The list is checked for you: only models set up in Keeplane, allowed
+Run the same `code` command again later, or switch to one of the listed models
+with `keeplane use <model>` (or pass it in `--model` for one turn). The list is checked for you: only models set up in Keeplane, allowed
 for the project's class and with a usable key. If no other model is allowed
 for the project, `code` prints instead:
 
@@ -288,7 +375,7 @@ When the model refuses a task as too big for its context, nothing is retried
 and `code` prints:
 
 ```text
-This task is too big for coder's context, so it stopped. Run it with another model allowed for this project using --model: large.
+This task is too big for coder's context, so it stopped. Make the task smaller, or run `keeplane use <model>` with another model allowed for this project: large.
 ```
 
 If no other model is allowed for the project, it prints instead:
@@ -310,12 +397,15 @@ flowchart LR
   Profile --> Check[Register project and check models]
   Check -->|no models| Stop[No models are available yet; nothing sent]
   Check -->|model can't be used now| Stop2[Model can't be used right now; nothing sent]
-  Check --> Choice[Own key missing? Use another allowed model]
+  Check --> Pick[Your keeplane use choice, else Keeplane's pick]
+  Pick -->|choice no longer allowed| Stop3[Switch not allowed; nothing sent]
+  Pick --> Choice[Own key missing? Use another allowed model]
   Choice --> Local[Local coding runtime and tools]
   Local --> Gateway[Protected gateway checks every request]
   Gateway --> Model[Allowed model]
+  Model -->|turn finished| Answered[Answered by each model that answered]
   Model -->|5xx, timeout or 429 before the answer starts| Retry[Same model, up to two more tries]
-  Retry -->|still down| Tell[Stop: wait, or choose a listed model]
+  Retry -->|still down| Tell[Stop: wait, or keeplane use a listed model]
   Model -->|too big for its context| Tell
 ```
 

@@ -340,21 +340,22 @@ def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
     reference = REFERENCE.read_text()
     section = reference.split("\n**What to give developers.**", 1)[1].split("\nEach request reaches one copy.", 1)[0]
     for phrase in ("| `https://<host>` | `keeplane login --server` |",
-                   "| `https://<host>/v1` | `keeplane code --gateway` |",
-                   "doesn't save it in the profile", "/chat/completions",
-                   "a resumed session must use the\nsame address",
+                   "| `https://<host>/v1` | Saved at sign-in; `keeplane code --gateway` overrides it |",
+                   "saves it in the developer's profile at sign-in", "/chat/completions",
+                   "a\nresumed session must use the same address",
                    "`gateway.mode=existing`", "port 4000",
                    "`KEEPLANE_GATEWAY_PUBLIC_URL` to `https://<ingress.host>/v1`",
                    "`gateway_url` on\n`GET /api/runtime/session`", "`null`"):
         assert phrase in section, phrase
     quickstart = QUICKSTART.read_text()
-    for phrase in ("KP_SERVER=https://<host>", "KP_GATEWAY=https://<host>/v1",
-                   "this CLI\nversion doesn't use it yet",
-                   "a resumed session,\nmust use the same one"):
+    for phrase in ("KP_SERVER=https://<host>", "the gateway `https://<host>/v1`",
+                   "the CLI saves it in\nyour profile for `keeplane code`",
+                   "a resumed session, must use the same one"):
         assert phrase in quickstart, phrase
-    # The profile keeps no gateway yet, so a coding turn needs --gateway; once the
-    # server gives one at sign-in (task 009-02), `code` takes it from the profile.
-    assert "gateway" not in inspect.getsource(credential_profile).lower()
+    # The profile keeps the gateway the server gave at sign-in (task 009-02b),
+    # checked by the CLI's own gateway check, and `code` takes it from there.
+    assert "gateway_endpoint(data[\"gateway\"])" in inspect.getsource(credential_profile)
+    assert credential_profile.gateway_endpoint is coding.gateway_endpoint
     assert 'getattr(credential, "gateway", None)' in inspect.getsource(coding.run)
     # A session history records the gateway, so a resumed turn needs the same one.
     assert '"gateway": gateway' in inspect.getsource(opencode_adapter.run)

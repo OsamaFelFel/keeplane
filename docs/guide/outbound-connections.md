@@ -113,7 +113,7 @@ flowchart LR
     relay["Usage relay for one turn<br/>127.0.0.1"]
   end
   server["Keeplane server<br/>(--server)"]
-  gateway["Gateway<br/>(--gateway)"]
+  gateway["Gateway<br/>(saved at sign-in, or --gateway)"]
   cli -- "sign-in, account, models, keys, sign-out" --> server
   cli -- "opens the sign-in page" --> browser
   browser --> server
@@ -129,7 +129,7 @@ flowchart LR
 | CLI | Its own one-time listener on `127.0.0.1` | Browser sign-in only: the server's sign-in page sends the browser back to it. Nothing outside the computer connects to it |
 | Browser | The Keeplane server's sign-in page | Browser sign-in; `keeplane login --device` shows a code to use in any browser instead |
 | Coding runtime | The CLI's usage relay on `127.0.0.1`, a port picked for each turn | Each model call in a coding turn |
-| Usage relay (in the CLI) | The gateway URL given to `keeplane code --gateway`, or saved at sign-in | Each model call in a coding turn, sent on unchanged. The relay adds no credential and reads only the token counts in each answer, for [usage](cli-usage.md). Nothing outside the computer connects to it; another local user can reach its port during a turn, but a request without that turn's grant is refused (403) and never sent on |
+| Usage relay (in the CLI) | The gateway address the server gave at sign-in, or the one given to `keeplane code --gateway` | Each model call in a coding turn, sent on unchanged. The relay adds no credential and reads only the token counts in each answer, for [usage](cli-usage.md). Nothing outside the computer connects to it; another local user can reach its port during a turn, but a request without that turn's grant is refused (403) and never sent on |
 
 The CLI never uses a proxy from the developer's shell and never follows a
 redirect, so its requests and credentials go only to the server it was given.

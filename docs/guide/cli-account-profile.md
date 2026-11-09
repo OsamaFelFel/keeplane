@@ -27,8 +27,12 @@ it; recover with logout or operator withdrawal and sign in again. Do not blindly
 retry a lost rotation response: the server withdraws the rotated family
 when a previously used refresh token is replayed.
 
-New profiles use format v2 and store only the fixed browser or device client ID.
-Strict v1 profiles are read as browser-issued and upgrade on save. Device profiles
+New profiles store only the fixed browser or device client ID and, when the
+server gives one at sign-in or refresh, its gateway address (format v3; v2
+without an address). Strict v1 profiles are read as browser-issued and upgrade
+on save. An older CLI can't read a profile that holds a gateway address and
+refuses it, so nothing is lost; before going back to an older CLI version, sign
+out with the current one. Device profiles
 created before v2 need logout and a new device sign-in before refresh. Client IDs
 and account IDs are metadata, not authority; the server rechecks the grant.
 

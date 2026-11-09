@@ -6,9 +6,9 @@ runtime doubles; run `python -m pytest tests/unit/test_cli_repo_defaults.py`.
 | Case | Expected result |
 | --- | --- |
 | REPO-01 Default profile | Every command uses `~/.config/keeplane/account` (or `$XDG_CONFIG_HOME/keeplane/account`); `login` makes its private 0700 folder. `--profile` still overrides. |
-| REPO-02 Only the task | In a clone, `keeplane code "task"` with a gateway address in the profile registers the repo's project with its remote path as name, lists its models, asks the server's `task-model` route, names the chosen model on stderr, and runs `opencode` from `PATH` against that gateway with the project header. |
+| REPO-02 Only the task | In a clone, `keeplane code "task"` with a gateway address in the profile registers the repo's project with its remote path as name, lists its models, asks the server's `task-model` route, names the chosen model on stderr ("Run `keeplane use <model>` to choose another."), and runs `opencode` from `PATH` against that gateway with the project header. |
 | REPO-03 Old flags | `--profile`, `--project`, `--name`, `--model`, `--runtime` and `--gateway` still override every default; with `--model` the server's pick isn't asked. |
-| REPO-04 No gateway yet | Until the server gives a gateway address at sign-in (task 009-02), `code` without `--gateway` says "Keeplane doesn't know your gateway address yet, so nothing was sent…" and makes no request. `--gateway` alone is then enough. |
+| REPO-04 No gateway yet | When the profile has no gateway address (the server gave none at sign-in, or it was saved by an older CLI), `code` without `--gateway` says "Keeplane doesn't know your gateway address yet, so nothing was sent…" and makes no request. `--gateway` alone is then enough. |
 | REPO-05 Bad saved gateway | A saved address that isn't HTTPS (or loopback HTTP) ending in `/v1` is refused before any request. |
 | REPO-06 Finding the runtime | `--runtime`, then `"runtime"` in the settings file, then `opencode` on `PATH`. |
 | REPO-07 No runtime | With none found, `code` says how to install OpenCode V2 2.0.27 and sends nothing. |

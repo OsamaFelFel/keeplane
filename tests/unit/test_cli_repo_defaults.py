@@ -13,7 +13,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from components.cli import coding, keeplane, opencode_adapter, project_identity
+from components.cli import (
+    coding,
+    keeplane,
+    opencode_adapter,
+    project_identity,
+    usage_relay,
+)
 from components.cli.credential_profile import Credential, default_path, opened
 from tests.unit import test_cli_project_profile as profile_tests
 
@@ -57,20 +63,13 @@ def sample(tmp_path, monkeypatch, connected):
 
 
 @pytest.fixture
-def saved_gateway(monkeypatch):
-    """The gateway address the server gives at sign-in once task 009-02 lands."""
-    real = coding.opened
-
-    @contextmanager
-    def with_gateway(path):
-        with real(path) as profile:
-            credential = profile.load()
-            loaded = SimpleNamespace(
-                **vars(credential), gateway="https://gateway.test/v1"
-            )
-            yield SimpleNamespace(load=lambda: loaded)
-
-    monkeypatch.setattr(coding, "opened", with_gateway)
+def saved_gateway(sample):
+    """The gateway address the server gave at sign-in (task 009-02b)."""
+    with opened(sample.profile) as store:
+        credential = store.load()
+        store.save(
+            Credential(**dict(vars(credential), gateway="https://gateway.test/v1"))
+        )
 
 
 def run(monkeypatch, *arguments):
@@ -126,8 +125,16 @@ def test_repo_02_code_with_only_the_task_uses_the_repo_profile_gateway_and_pick(
 
 
 def test_repo_03_old_flags_still_override_every_default(
-    sample, fake_runtime, monkeypatch, capsys
+    sample, fake_runtime, saved_gateway, monkeypatch, capsys
 ):
+    relays = []
+
+    class Recorded(usage_relay.Relay):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            relays.append(self)
+
+    monkeypatch.setattr(usage_relay, "Relay", Recorded)
     given = str(uuid.uuid4())
     sample.server.model_ids = ["coder", "general"]
     assert (
@@ -152,6 +159,18 @@ def test_repo_03_old_flags_still_override_every_default(
     )
     calls = sample.server.calls
     assert calls[1][3] == {"project_id": given, "name": "Given"}
+    # --gateway wins over the address saved at sign-in: the runtime's only
+    # address is the turn's loopback relay, and the relay sends on to --gateway.
+    config = json.loads(fake_runtime[1][0][1]["env"]["OPENCODE_CONFIG_CONTENT"])
+    base = config["providers"]["keeplane"]["settings"]["baseURL"]
+    assert opencode_adapter.relay_address(base)
+    [relay] = relays
+    assert relay.url == base
+    assert (relay.scheme, relay.netloc, relay.prefix) == (
+        "https",
+        "other-gateway.test",
+        "/v1",
+    )
     assert not any("task-model" in row[1] for row in calls)
     assert any("model-choice?model_id=general" in row[1] for row in calls)
     assert "chosen by Keeplane" not in capsys.readouterr().err
@@ -178,7 +197,7 @@ def test_repo_05_a_bad_saved_gateway_is_refused_before_any_request(
     def bad(path):
         with real(path) as profile:
             loaded = SimpleNamespace(
-                **vars(profile.load()), gateway="http://remote.test/v1"
+                **dict(vars(profile.load()), gateway="http://remote.test/v1")
             )
             yield SimpleNamespace(load=lambda: loaded)
 

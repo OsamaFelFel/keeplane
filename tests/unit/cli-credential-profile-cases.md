@@ -2,7 +2,7 @@
 
 | Case | Expected result |
 | --- | --- |
-| Private owned profile; atomic replace | Exact issuer/account/token round trip; files 0600, directory 0700; repr/str redacted. |
+| Private owned profile; atomic replace | Exact issuer/account/token round trip, and gateway address when saved; files 0600, directory 0700; repr/str redacted. |
 | Concurrent use | Stable file lock refuses the second caller. |
 | Symlink, hardlink, FIFO, foreign file/owner or unsafe modes | Refused without reading/exporting secrets or paths. |
 | Oversized/malformed state; failed replacement | Generic failure; prior credential preserved; temporary write removed when possible. |

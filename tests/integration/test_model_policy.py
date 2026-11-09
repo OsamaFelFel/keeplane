@@ -117,11 +117,55 @@ def test_unverified_gateway_state_fails_closed(policy, broken):
 
 
 def test_missing_settings_are_not_replaced_with_permissive_defaults(policy):
+    # Approvals exist, so the settings row was saved once and is now lost.
     service, _, _ = policy
     Settings.objects.all().delete()
     with pytest.raises(ModelPolicyUnavailable):
         service.eligible_model_ids("project-a")
     assert not Settings.objects.exists()
+
+
+@pytest.fixture
+def fresh(db):
+    """A fresh installation: the gateway lists models, no admin saved policy."""
+    resources = [{"id": "gateway-only", "revision": 1}]
+    gateway = SimpleNamespace(
+        models=lambda: (200, {"data": [{"id": "gateway-only"}]}),
+        resources=lambda: (200, {"resources": deepcopy(resources)}),
+    )
+    assert not Settings.objects.exists() and not ModelApproval.objects.exists()
+    return DjangoModelPolicy(gateway), resources
+
+
+def test_mp_03_fresh_installation_uses_defaults_without_writing_them(fresh):
+    service, _ = fresh
+    held = SimpleNamespace(held=True)
+    assert service.eligible_model_ids("project-a") == set()
+    assert service.eligibility("project-a", held) == (frozenset(), None)
+    assert service.detection_on() is False
+    assert not Settings.objects.exists()
+
+
+def test_mp_03_first_saved_setting_then_applies(fresh, domain_services):
+    service, resources = fresh
+    domain_services.classes.set_enabled(False)
+    assert Settings.objects.filter(classes_enabled=False).exists()
+    assert service.eligible_model_ids("project-a") == set()
+    domain_services.catalog.approve(
+        "gateway-only", [], fingerprint("gateway-only", resources)
+    )
+    assert service.eligible_model_ids("project-a") == {"gateway-only"}
+
+
+def test_mp_03_fresh_installation_storage_failure_fails_closed(fresh, monkeypatch):
+    service, _ = fresh
+
+    def fail(*args, **kwargs):
+        raise DatabaseError("Unavailable database")
+
+    monkeypatch.setattr(ModelApproval.objects, "exists", fail)
+    with pytest.raises(StorageUnavailable):
+        service.eligible_model_ids("project-a")
 
 
 @pytest.mark.parametrize("classes", [{}, "Confidential", ["Confidential", 3]])

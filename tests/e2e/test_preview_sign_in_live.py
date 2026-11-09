@@ -266,24 +266,21 @@ class Cli:
         return "CLI access allowed" in page
 
 
-# `keeplane models` with no approved model. The documented outcome is the empty
-# catalog, exit 0 (cli-project-commands.md: "an empty list is valid"). Known
-# bug, keeplane issue #249: until an admin first saves a data-class or model
-# setting, a fresh preview's model policy has no settings to read and fails
-# closed (503), so the CLI says Keeplane is temporarily unavailable, exit 1,
-# with nothing on stdout. The suite accepts that only until #249 is fixed.
-UNAVAILABLE = "Keeplane is temporarily unavailable; retry later."
-
-
+# `keeplane models` with no approved model: the documented empty catalog, exit 0
+# (cli-project-commands.md: "an empty list is valid"), also on a fresh preview
+# where no admin has saved a data-class or model setting yet.
 def empty_catalog(listed, project):
     code, out, err = listed
-    if code == 1:
-        return out == "" and err == UNAVAILABLE
     try:
         catalog = json.loads(out)
     except ValueError:
         return False
-    return code == 0 and err == "" and catalog == {"project_id": project, "models": []}
+    # With nothing to list, nothing is marked as the current choice (Spec 004 ST17).
+    return (
+        code == 0
+        and err == ""
+        and catalog == {"project_id": project, "models": [], "chosen_by": None}
+    )
 
 
 def access_token(profile):
