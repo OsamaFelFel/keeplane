@@ -16,10 +16,11 @@ if __package__:
         opencode_adapter,
         project_identity,
         provider_keys,
+        sign_in_again,
     )
     from .credential_profile import ProfileError, default_path, opened
     from .project_registration import register
-    from .server_connection import ConnectionError, account, models
+    from .server_connection import ConnectionError, SignInExpired, account, models
 else:
     import account_session
     import browser_login
@@ -29,9 +30,14 @@ else:
     import opencode_adapter
     import project_identity
     import provider_keys
+    import sign_in_again
     from credential_profile import ProfileError, default_path, opened
     from project_registration import register
-    from server_connection import ConnectionError, account, models
+    from server_connection import ConnectionError, SignInExpired, account, models
+
+# Commands that send something with the saved sign-in (ST29 "Sign out").
+SIGNED_IN_COMMANDS = {"code", "keys", "whoami", "refresh", "logout",
+                      "register-project", "models"}
 
 
 def project_command(action, profile_path, project_id, name=None):
@@ -136,6 +142,9 @@ def main():
     try:
         if args.command != "init":
             args.profile = profile_path(args.profile, create=args.command == "login")
+        if args.command in SIGNED_IN_COMMANDS and not sign_in_again.signed_in(args.profile):
+            print(sign_in_again.SIGNED_OUT, file=sys.stderr)
+            return 1
         if args.command == "init":
             if sys.version_info < (3, 11):
                 print("Migration preview requires Python 3.11 or newer.", file=sys.stderr)
@@ -163,6 +172,8 @@ def main():
                 from migration_preview import report
             return report(args.directory)
         elif args.command == "login":
+            # An expired sign-in is replaced; one the server still accepts is refused.
+            sign_in_again.clear_expired(args.profile)
             if args.device:
                 device_login.login(args.server, args.profile, timeout=args.timeout)
             else:
@@ -180,14 +191,23 @@ def main():
                 output = provider_keys.run(args.key_action, args.profile, args.model,
                                            key_stdin=getattr(args, "key_stdin", False))
         elif args.command == "code":
-            with opencode_adapter.termination_requested() as cancelled:
-                result = coding.run(
-                    args.profile, args.project, args.name, args.model, args.runtime,
-                    args.directory, args.gateway, args.prompt, args.timeout,
-                    cancelled=cancelled, instructions=args.instructions,
-                    state_dir=args.state_dir, session=args.session,
-                    notify=lambda message: print(message, file=sys.stderr),
-                )
+            def start():
+                with opencode_adapter.termination_requested() as cancelled:
+                    return coding.run(
+                        args.profile, args.project, args.name, args.model, args.runtime,
+                        args.directory, args.gateway, args.prompt, args.timeout,
+                        cancelled=cancelled, instructions=args.instructions,
+                        state_dir=args.state_dir, session=args.session,
+                        notify=lambda message: print(message, file=sys.stderr),
+                    )
+
+            try:
+                result = start()
+            except SignInExpired as expired:
+                # ST29, D190: in a terminal, offer to sign in again, then ask to start.
+                result = sign_in_again.recover(expired, start, args.profile)
+                if result is None:
+                    return 1
             print(result.stdout, end="")
             print(result.stderr, end="", file=sys.stderr)
             return result.returncode

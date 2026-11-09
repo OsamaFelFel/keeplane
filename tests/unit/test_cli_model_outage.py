@@ -159,15 +159,14 @@ def test_malformed_alternatives_are_not_shown(
 @pytest.mark.parametrize(
     "event",
     [
-        api_error(401, "Unauthorized"),
         api_error(403, "This model is not eligible for the project"),
         api_error(400, "Bad request"),
         {"type": "error", "error": {"message": "Stream ended unexpectedly"}},
         {"type": "text", "statusCode": 503},
     ],
-    ids=["401", "403", "400", "no-status", "not-an-error"],
+    ids=["403", "400", "no-status", "not-an-error"],
 )
-def test_other_failures_keep_their_own_output(
+def test_other_failures_keep_their_own_output(  # A 401: test_cli_sign_in_again.py
     connected, runtime, monkeypatch, tmp_path, capsys, event  # noqa: F811
 ):
     failed_turn(monkeypatch, runtime, event)

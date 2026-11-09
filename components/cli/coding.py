@@ -9,16 +9,32 @@ if __package__:
     from . import opencode_adapter, project_identity, settings_file
     from .credential_profile import ProfileError, opened
     from .project_registration import register
-    from .server_connection import (ConnectionError, account, model_alternatives,
-                                    model_choice, models, origin, request)
+    from .server_connection import (
+        ConnectionError,
+        SignInExpired,
+        account,
+        model_alternatives,
+        model_choice,
+        models,
+        origin,
+        request,
+    )
 else:
     import opencode_adapter
     import project_identity
     import settings_file
     from credential_profile import ProfileError, opened
     from project_registration import register
-    from server_connection import (ConnectionError, account, model_alternatives,
-                                   model_choice, models, origin, request)
+    from server_connection import (
+        ConnectionError,
+        SignInExpired,
+        account,
+        model_alternatives,
+        model_choice,
+        models,
+        origin,
+        request,
+    )
 
 
 NO_MODELS = ("No models are available for this project yet, so nothing was sent. "
@@ -155,18 +171,41 @@ def _walk(value, depth=0):
             yield from _walk(item, depth + 1)
 
 
+def _events(stdout):
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict):
+            yield event
+
+
+def gateway_refused_sign_in(stdout):
+    """None, or whether earlier steps went out before the gateway said 401.
+
+    The runtime prints an event only once a model step has started, so any event
+    before the 401 error means part of the task had already been sent.
+    """
+    earlier = False
+    for event in _events(stdout):
+        if event.get("type") == "error":
+            if any(key in ("statusCode", "status") and type(value) is int and value == 401
+                   for key, value in _walk(event)):
+                return earlier
+        else:
+            earlier = True
+    return None
+
+
 def model_problem(stdout):
     """Return "down", "too_big" or None for the runtime's error events.
 
     The gateway has already retried a model that is down: a 429 or 5xx that
     remains is final. A context-length refusal is never retried.
     """
-    for line in stdout.splitlines():
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(event, dict) or event.get("type") != "error":
+    for event in _events(stdout):
+        if event.get("type") != "error":
             continue
         statuses, text = set(), []
         for key, value in _walk(event):
@@ -276,6 +315,14 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             if str(error).startswith("This prototype requires OpenCode V2"):
                 raise ConnectionError(WRONG_RUNTIME.format(path=binary)) from None
             raise
+        refused = gateway_refused_sign_in(result.stdout) if result.returncode else None
+        if refused is not None:
+            # ST29: the gateway refused the sign-in; nothing more is sent, not even
+            # a request for other models.
+            for secret in secrets:
+                result.stdout = result.stdout.replace(secret, "[redacted]")
+                result.stderr = result.stderr.replace(secret, "[redacted]")
+            raise SignInExpired(more=refused, result=result)
         problem = model_problem(result.stdout) if result.returncode else None
         if problem:
             try:
