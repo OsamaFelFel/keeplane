@@ -25,10 +25,10 @@ Every command uses the private profile `~/.config/keeplane/account` (or
 [device sign-in](cli-device-login.md) for prerequisites and cancellation behavior.
 
 `models` lists the models this repo's project may use now; an empty list is
-valid. It marks the model your next task uses with `"current": true` (none when
-Keeplane can't pick one right now), and
-`"chosen_by"` says whether you chose it with `keeplane use` (`you`) or Keeplane
-picked it (`keeplane`):
+valid, for example on a new installation before an admin approves a model. It
+marks the model your next task uses with `"current": true` (none when Keeplane
+can't pick one right now), and `"chosen_by"` says whether you chose it with
+`keeplane use` (`you`) or Keeplane picked it (`keeplane`):
 
 ```json
 {
@@ -38,10 +38,13 @@ picked it (`keeplane`):
 }
 ```
 
+An empty list has nothing to mark: `"models": []` and `"chosen_by": null`.
+
 `use <model>` switches this repo's next tasks to one of those models, and
 `use --auto` goes back to Keeplane's pick; see
-[choose the model](cli-coding.md#choose-the-model). `register-project` records that your account uses the project and
-returns the name the server keeps for it. `keeplane code` does both for you on
+[choose the model](cli-coding.md#choose-the-model). `register-project` records
+that your account uses the project and returns the name the server keeps for
+it. `keeplane code` does both for you on
 every turn, so you rarely need them. Pass `--project ID` (and, for
 `register-project`, `--name NAME`) to use another project.
 
