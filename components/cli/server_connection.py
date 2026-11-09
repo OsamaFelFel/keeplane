@@ -109,7 +109,9 @@ def logout(server, credential):
 def account(server, credential):
     try:
         data = json.loads(request(server, "/api/runtime/session", credential))
-        if (not isinstance(data, dict) or set(data) != {"id", "username", "role"}
+        # A server with task 009-02 also gives "gateway_url"; the CLI doesn't use it yet.
+        if (not isinstance(data, dict)
+                or set(data) - {"gateway_url"} != {"id", "username", "role"}
                 or data["id"] != str(uuid.UUID(data["id"]))
                 or not isinstance(data["username"], str)
                 or not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", data["username"])
@@ -117,7 +119,7 @@ def account(server, credential):
             raise ValueError
     except (ValueError, TypeError, AttributeError, RecursionError):
         raise ConnectionError("The server returned an invalid account.") from None
-    return data
+    return {"id": data["id"], "username": data["username"], "role": data["role"]}
 
 
 def models(server, project_id, credential):

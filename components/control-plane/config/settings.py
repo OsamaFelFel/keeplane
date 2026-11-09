@@ -6,11 +6,15 @@ from importlib.util import find_spec
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from common.gateway_address import public_gateway_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_ORIGIN = os.environ.get("PUBLIC_ORIGIN", "http://127.0.0.1:3000")
 PUBLIC_ORIGIN_ALIASES = os.environ.get("PUBLIC_ORIGIN_ALIASES", "")
 RUNTIME_AUTHORIZER_KEY_FILE = os.environ.get("RUNTIME_AUTHORIZER_KEY_FILE", "")
 RUNTIME_GUARD_MANIFEST_FILE = os.environ.get("RUNTIME_GUARD_MANIFEST_FILE", "")
+# ADR 030: the gateway address developers' CLIs use, set by the installer; None when unset.
+GATEWAY_PUBLIC_URL = public_gateway_url(os.environ.get("KEEPLANE_GATEWAY_PUBLIC_URL", ""))
 # Personal-data detection model: an installed package name or a directory.
 # Never downloaded; when it is missing, detected-on requests are all held.
 PERSONAL_DATA_MODEL = os.environ.get("KEEPLANE_PERSONAL_DATA_MODEL", "en_core_web_lg")
