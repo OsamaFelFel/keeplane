@@ -133,6 +133,9 @@ def test_a_down_model_is_retried_twice_and_never_switched(
                 "selected_models": [row["model_id"] for row in observed["decisions"]],
             }
         )
+        if stream:
+            whole = isinstance(response, dict) and finished_stream(response)
+            report["finished"] = whole
         save_report()
         assert status in statuses
         # The same model only, the expected number of times.
@@ -147,6 +150,9 @@ def test_a_down_model_is_retried_twice_and_never_switched(
         assert entry and all(row["status"] == 200 for row in entry)
         assert len(entry) + len(selected) == len(observed["decisions"])
         assert observed["developer_key_forwarded"] == [False] * contacts
+        if stream:
+            # The answer after the retry arrives whole, with its final event.
+            assert finished_stream(response)
         report["passed"] = True
         save_report()
 
