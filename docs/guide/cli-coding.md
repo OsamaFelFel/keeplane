@@ -69,8 +69,11 @@ you in again:
 Your Keeplane sign-in has expired, so nothing was sent. Sign in again now? [Y/n]
 ```
 
-Press Enter (or type `y`) to sign in again with the same server, the same way
-as last time: through the browser, or with a code if you used `login --device`.
+Press Enter (or type `y` or `yes`) to sign in again with the same server, the
+same way as last time: through the browser, or with a code if you used
+`login --device`. The old sign-in is removed first, so if you cancel or the new
+sign-in fails, you are signed out. If only the gateway refused it and the server
+still accepted it, the server is asked to end it before you sign in again.
 Then `code` asks before it starts the task:
 
 ```text
@@ -80,10 +83,23 @@ Signed in. Start the task now? [Y/n]
 If the gateway refused the sign-in part-way through a task, the steps that had
 already run stay on screen and the message says "so nothing more was sent". Saying
 yes then starts the task again from the beginning, so review any edits first.
-Answering `n` to either question stops with:
+Any other answer is no, and so is no answer at all. Answering no to the first
+question stops with:
 
 ```text
 Run `keeplane login` to sign in again.
+```
+
+Answering no to the second leaves you signed in and exits with status 1:
+
+```text
+You're signed in. The task wasn't started, so nothing was sent. Run it again when you're ready.
+```
+
+or, if earlier steps had already gone out:
+
+```text
+You're signed in. The task wasn't continued, so nothing more was sent. Run it again when you're ready.
 ```
 
 In a script, or whenever the CLI isn't talking to a terminal, there is no
@@ -93,21 +109,42 @@ question. `code` exits with status 1 and prints:
 Your Keeplane sign-in has expired, so nothing was sent. Run `keeplane login` to sign in again.
 ```
 
-Other commands, such as `keeplane models` and `keeplane whoami`, print the same
-message and exit 1; only `code` offers to sign in again. `keeplane login`
-replaces the expired sign-in.
+It says "so nothing more was sent" when earlier steps had already gone out.
+
+Only `code` offers to sign in again. The other commands exit 1. `whoami`,
+`models` and the key commands that only read (`keys list`, `status`, `check`)
+print:
+
+```text
+Your Keeplane sign-in has expired. Run `keeplane login` to sign in again.
+```
+
+`keys set` and `keys remove` print:
+
+```text
+Your Keeplane sign-in has expired. Nothing was saved. Run `keeplane login` to sign in again.
+```
+
+`register-project` prints the same message as `code` in a script.
+`keeplane login` replaces the expired sign-in.
 
 ### When you're signed out
 
-After `keeplane logout`, or before you have ever signed in, `code`, `models`,
-`keys`, `whoami`, `register-project`, `refresh` and `logout` send nothing and
-exit 1 with:
+After `keeplane logout`, or before you have ever signed in, commands send
+nothing. `code`, `models`, `keys` and `register-project` exit 1 with:
 
 ```text
 You're signed out of Keeplane, so nothing was sent. Run `keeplane login` to sign in.
 ```
 
-There is no offer to sign in here; run `keeplane login` when you want to.
+`whoami` and `refresh` exit 1 with:
+
+```text
+You're signed out of Keeplane. Run `keeplane login` to sign in.
+```
+
+`logout` prints `You're already signed out of Keeplane.` and succeeds. There is
+no offer to sign in here; run `keeplane login` when you want to.
 
 ```mermaid
 flowchart LR
@@ -120,7 +157,7 @@ flowchart LR
   Expired --> Terminal{Terminal?}
   Expired2 --> Terminal
   Terminal -->|no| Exit[Exit 1: run keeplane login]
-  Terminal -->|yes| Offer[Sign in again, then ask to start]
+  Terminal -->|yes| Offer[Remove old sign-in, sign in again, then ask to start]
 ```
 
 ### The coding runtime

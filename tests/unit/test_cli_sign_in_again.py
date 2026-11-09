@@ -40,6 +40,22 @@ OFFER_MORE = (
 )
 START = "Signed in. Start the task now? [Y/n] "
 DECLINED = "Run `keeplane login` to sign in again.\n"
+NOT_STARTED = (
+    "You're signed in. The task wasn't started, so nothing was sent. "
+    "Run it again when you're ready.\n"
+)
+NOT_CONTINUED = (
+    "You're signed in. The task wasn't continued, so nothing more was sent. "
+    "Run it again when you're ready.\n"
+)
+EXPIRED_READ = (
+    "Your Keeplane sign-in has expired. Run `keeplane login` to sign in again.\n"
+)
+EXPIRED_NOT_SAVED = (
+    "Your Keeplane sign-in has expired. Nothing was saved. "
+    "Run `keeplane login` to sign in again.\n"
+)
+SIGNED_OUT_SHORT = "You're signed out of Keeplane. Run `keeplane login` to sign in.\n"
 SIGNED_OUT = (
     "You're signed out of Keeplane, so nothing was sent. "
     "Run `keeplane login` to sign in.\n"
@@ -195,9 +211,26 @@ def test_exp_04_declining_to_start_after_signing_in_starts_nothing(
     error = capsys.readouterr().err
     assert (
         error
-        == OFFER + "Opening Keeplane sign-in in your browser.\n" + START + DECLINED
+        == OFFER + "Opening Keeplane sign-in in your browser.\n" + START + NOT_STARTED
     )
     assert len(sign_ins) == 1 and not runtime[1]
+
+
+def test_exp_04b_declining_to_continue_after_earlier_steps_says_nothing_more(
+    connected,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+    tmp_path,
+    capsys,
+    sign_ins,
+    terminal,
+):
+    gateway_events(monkeypatch, runtime, {"type": "step_start"}, UNAUTHORIZED)
+    terminal("y", "n")
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    error = capsys.readouterr().err
+    assert error.startswith(OFFER_MORE) and error.endswith(START + NOT_CONTINUED)
+    assert len(sign_ins) == 1 and len(runtime[1]) == 1
 
 
 def test_exp_05_a_device_sign_in_signs_in_again_with_the_device_code(
@@ -290,17 +323,37 @@ def test_exp_08_in_a_terminal_a_gateway_401_offers_more_and_runs_again_on_yes(
     assert error.count("Sign in again now?") == 1
 
 
-@pytest.mark.parametrize("action", ["whoami", "models", "register-project"])
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        (["whoami"], EXPIRED_READ),
+        (["models", "--project", "P"], EXPIRED_READ),
+        (["keys", "status", "--model", "coder"], EXPIRED_READ),
+        (["keys", "set", "--model", "coder", "--key-stdin"], EXPIRED_NOT_SAVED),
+        (["keys", "remove", "--model", "coder"], EXPIRED_NOT_SAVED),
+        (["register-project", "--project", "P"], SCRIPT),
+    ],
+    ids=["whoami", "models", "keys-status", "keys-set", "keys-remove", "register"],
+)
 def test_exp_09_other_commands_say_the_sign_in_has_expired(
     connected,  # noqa: F811
     monkeypatch,
     capsys,
-    action,
+    arguments,
+    expected,
 ):
     connected.status = 401
-    extra = ["--project", str(uuid.uuid4())] if action != "whoami" else []
-    assert command(monkeypatch, connected, action, *extra) == 1
-    assert capsys.readouterr().err == SCRIPT
+    monkeypatch.setattr(sys, "stdin", io.StringIO("sk-synthetic-provider-key\n"))
+    head = arguments[:2] if arguments[0] == "keys" else arguments[:1]
+    rest = [
+        str(uuid.uuid4()) if value == "P" else value for value in arguments[len(head) :]
+    ]
+    monkeypatch.setattr(
+        "sys.argv", ["keeplane", *head, "--profile", str(connected.path), *rest]
+    )
+    assert keeplane.main() == 1
+    assert capsys.readouterr().err == expected
+    assert paths(connected) == ["/api/runtime/session"]
 
 
 def test_exp_10_login_replaces_an_expired_sign_in_but_not_a_current_one(
@@ -331,6 +384,79 @@ def test_exp_11_login_still_refuses_a_sign_in_the_server_accepts(
         assert profile.load().access_token == connected.access
 
 
+def test_exp_13_a_gateway_401_the_server_still_accepts_ends_that_sign_in_first(
+    connected,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+    tmp_path,
+    capsys,
+    sign_ins,
+    terminal,
+):
+    # Only the gateway refused it. On yes the server is asked to revoke it, so
+    # signing in again works instead of "This profile is signed in".
+    old, runs = connected.access, runtime[1]
+
+    def turn(command, **options):
+        runs.append((command, options))
+        stdout = (
+            json.dumps(UNAUTHORIZED) + "\n" if len(runs) == 1 else "Coding finished.\n"
+        )
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    monkeypatch.setattr(opencode_adapter, "coding_turn", turn)
+    terminal("y", "y")
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
+    output = capsys.readouterr()
+    assert (
+        output.err.startswith(OFFER) and "This profile is signed in" not in output.err
+    )
+    assert output.out.endswith("Coding finished.\n")
+    revoked = [row for row in connected.calls if row[0] == "DELETE"]
+    assert len(revoked) == 1 and revoked[0][2]["Authorization"] == "Bearer " + old
+    assert len(sign_ins) == 1 and len(runs) == 2
+    assert runs[1][1]["env"]["KEEPLANE_RUNTIME_GRANT"] == NEW_ACCESS
+
+
+def test_exp_14_cancelling_the_new_sign_in_leaves_you_signed_out(
+    connected,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+    tmp_path,
+    capsys,
+    terminal,
+):
+    def cancelled(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(browser_login, "login", cancelled)
+    connected.status = 401
+    terminal("y")
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 130
+    assert not (connected.path / "credential.json").exists() and not runtime[1]
+    capsys.readouterr()
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert capsys.readouterr().err == SIGNED_OUT
+
+
+def test_exp_15_an_unreachable_server_stops_signing_in_again_and_keeps_the_sign_in(
+    connected,  # noqa: F811
+    sign_ins,
+):
+    with opened(connected.path) as profile:
+        profile.save(
+            Credential(
+                "http://127.0.0.1:9",
+                connected.actor,
+                connected.access,
+                connected.refresh,
+            )
+        )
+    with pytest.raises(sign_in_again.ConnectionError):
+        sign_in_again.sign_in(connected.path, announce=lambda message: None)
+    assert not sign_ins and (connected.path / "credential.json").exists()
+
+
 def test_exp_12_an_unreachable_server_keeps_the_saved_sign_in(connected):  # noqa: F811
     with opened(connected.path) as profile:
         profile.save(
@@ -349,18 +475,17 @@ def test_exp_12_an_unreachable_server_keeps_the_saved_sign_in(connected):  # noq
 
 
 @pytest.mark.parametrize(
-    "arguments",
+    "arguments,expected",
     [
-        ["code", "anything"],
-        ["models"],
-        ["whoami"],
-        ["keys", "list"],
-        ["keys", "status", "--model", "coder"],
-        ["register-project"],
-        ["refresh"],
-        ["logout"],
+        (["code", "anything"], SIGNED_OUT),
+        (["models"], SIGNED_OUT),
+        (["keys", "list"], SIGNED_OUT),
+        (["keys", "status", "--model", "coder"], SIGNED_OUT),
+        (["register-project"], SIGNED_OUT),
+        (["whoami"], SIGNED_OUT_SHORT),
+        (["refresh"], SIGNED_OUT_SHORT),
     ],
-    ids=lambda value: "-".join(value[:2]),
+    ids=["code", "models", "keys-list", "keys-status", "register", "whoami", "refresh"],
 )
 def test_out_01_signed_out_sends_nothing_and_says_how_to_sign_in(
     connected,  # noqa: F811
@@ -368,6 +493,7 @@ def test_out_01_signed_out_sends_nothing_and_says_how_to_sign_in(
     tmp_path,
     capsys,
     arguments,
+    expected,
 ):
     assert command(monkeypatch, connected, "logout") == 0
     capsys.readouterr()
@@ -377,7 +503,20 @@ def test_out_01_signed_out_sends_nothing_and_says_how_to_sign_in(
         ["keeplane", *arguments[:2], "--profile", str(connected.path), *arguments[2:]],
     )
     assert keeplane.main() == 1
-    assert capsys.readouterr().err.endswith(SIGNED_OUT)
+    assert capsys.readouterr().err == expected
+    assert connected.calls == []
+
+
+def test_out_03_logout_when_already_signed_out_says_so_and_succeeds(
+    connected,  # noqa: F811
+    monkeypatch,
+    capsys,
+):
+    assert command(monkeypatch, connected, "logout") == 0
+    capsys.readouterr()
+    connected.calls.clear()
+    assert command(monkeypatch, connected, "logout") == 0
+    assert capsys.readouterr().out == "You're already signed out of Keeplane.\n"
     assert connected.calls == []
 
 

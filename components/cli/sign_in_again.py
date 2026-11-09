@@ -18,16 +18,47 @@ if __package__:
         ConnectionError,
         SignInExpired,
         account,
+        logout,
     )
 else:
     import browser_login
     import device_login
     from credential_profile import ProfileError, opened
-    from server_connection import SIGN_IN_AGAIN, ConnectionError, SignInExpired, account
+    from server_connection import (
+        SIGN_IN_AGAIN,
+        ConnectionError,
+        SignInExpired,
+        account,
+        logout,
+    )
 
 SIGNED_OUT = (
     "You're signed out of Keeplane, so nothing was sent. "
     "Run `keeplane login` to sign in."
+)
+SIGNED_OUT_SHORT = "You're signed out of Keeplane. Run `keeplane login` to sign in."
+ALREADY_SIGNED_OUT = "You're already signed out of Keeplane."
+# What each command says when signed out (associate product owner, 9 November).
+SIGNED_OUT_MESSAGES = {
+    "code": SIGNED_OUT,
+    "models": SIGNED_OUT,
+    "keys": SIGNED_OUT,
+    "register-project": SIGNED_OUT,
+    "whoami": SIGNED_OUT_SHORT,
+    "refresh": SIGNED_OUT_SHORT,
+}
+EXPIRED_READ = "Your Keeplane sign-in has expired. " + SIGN_IN_AGAIN
+EXPIRED_NOT_SAVED = (
+    "Your Keeplane sign-in has expired. Nothing was saved. " + SIGN_IN_AGAIN
+)
+KEY_CHANGES = {"set", "remove"}
+NOT_STARTED = (
+    "You're signed in. The task wasn't started, so nothing was sent. "
+    "Run it again when you're ready."
+)
+NOT_CONTINUED = (
+    "You're signed in. The task wasn't continued, so nothing more was sent. "
+    "Run it again when you're ready."
 )
 OFFER = "Sign in again now? [Y/n] "
 START = "Signed in. Start the task now? [Y/n] "
@@ -37,6 +68,17 @@ BROWSER = "Opening Keeplane sign-in in your browser."
 def signed_in(path):
     """False when the profile holds no credential: never signed in, or signed out."""
     return (Path(path).expanduser() / "credential.json").exists()
+
+
+def expired_message(expired, command, key_action=None):
+    """The expired-sign-in line for a command other than ``code``."""
+    if command in {"whoami", "models"} or (
+        command == "keys" and key_action not in KEY_CHANGES
+    ):
+        return EXPIRED_READ
+    if command == "keys":
+        return EXPIRED_NOT_SAVED
+    return str(expired)
 
 
 def in_terminal(stdin=None, stderr=None):
@@ -80,13 +122,39 @@ def clear_expired(path):
         return credential.issuer, credential.client_id
 
 
-def sign_in(path, *, timeout=120, announce=None):
-    """Sign in again with the saved server, the same way as last time."""
-    announce = announce or (lambda message: print(message, file=sys.stderr))
-    saved = clear_expired(path)
-    if saved is None:
+def end_refused(path):
+    """End a sign-in the gateway refused, so the developer can sign in again.
+
+    The developer said yes, so the credential goes either way. A server that
+    already refuses it needs no revocation; one that still accepts it (only the
+    gateway said 401) is asked to revoke it first. A server that can't be
+    reached keeps it, and the error says so.
+    """
+    if not signed_in(path):
         raise ProfileError(SIGNED_OUT)
-    server, client_id = saved
+    with opened(path) as profile:
+        credential = profile.load()
+        try:
+            account(credential.issuer, credential.access_token)
+        except SignInExpired:
+            pass
+        else:
+            try:
+                logout(credential.issuer, credential.access_token)
+            except SignInExpired:
+                pass
+        profile.forget()
+        return credential.issuer, credential.client_id
+
+
+def sign_in(path, *, timeout=120, announce=None):
+    """Sign in again with the saved server, the same way as last time.
+
+    The old credential is removed first; if the new sign-in is cancelled or
+    fails, the developer is signed out.
+    """
+    announce = announce or (lambda message: print(message, file=sys.stderr))
+    server, client_id = end_refused(path)
     if client_id == device_login.CLIENT_ID:
         device_login.login(server, path, timeout=timeout, announce=announce)
     else:
@@ -112,7 +180,7 @@ def recover(expired, start, path, *, stdin=None, stdout=None, stderr=None, timeo
         path, timeout=timeout, announce=lambda message: stderr.write(message + "\n")
     )
     if not ask(START, stdin=stdin, stderr=stderr):
-        stderr.write(SIGN_IN_AGAIN + "\n")
+        stderr.write((NOT_CONTINUED if expired.more else NOT_STARTED) + "\n")
         return None
     try:
         return start()

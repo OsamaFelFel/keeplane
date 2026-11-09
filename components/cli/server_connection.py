@@ -34,6 +34,7 @@ class SignInExpired(ConnectionError):
     """
 
     def __init__(self, *, more=False, result=None):
+        self.more = more
         self.notice = EXPIRED_MORE if more else EXPIRED
         super().__init__(self.notice + " " + SIGN_IN_AGAIN, 401)
         self.result = result

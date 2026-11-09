@@ -143,7 +143,10 @@ def main():
         if args.command != "init":
             args.profile = profile_path(args.profile, create=args.command == "login")
         if args.command in SIGNED_IN_COMMANDS and not sign_in_again.signed_in(args.profile):
-            print(sign_in_again.SIGNED_OUT, file=sys.stderr)
+            if args.command == "logout":
+                print(sign_in_again.ALREADY_SIGNED_OUT)
+                return 0
+            print(sign_in_again.SIGNED_OUT_MESSAGES[args.command], file=sys.stderr)
             return 1
         if args.command == "init":
             if sys.version_info < (3, 11):
@@ -217,6 +220,10 @@ def main():
                 need_name=args.command == "register-project")
             output = project_command(args.command, args.profile, project_id, name)
         print(output)
+    except SignInExpired as expired:
+        print(sign_in_again.expired_message(
+            expired, args.command, getattr(args, "key_action", None)), file=sys.stderr)
+        return 1
     except (ProfileError, ConnectionError, project_identity.ProjectIdentityError) as error:
         print(str(error), file=sys.stderr)
         return 1

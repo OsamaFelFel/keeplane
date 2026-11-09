@@ -42,7 +42,10 @@ also lose an exchange response; local storage cannot undo server issuance.
 saved at sign-in. Roles are read fresh. `logout` revokes that credential and its
 paired refresh token, then removes the local credential. A confirmed 401 also
 removes an already withdrawn credential. An outage or ambiguous response retains
-it so you can retry. To remove only the local copy during recovery:
+it so you can retry. When a sign-in has expired, `keeplane login` replaces it, and
+once you are signed out, commands send nothing; see
+[when your sign-in has expired](cli-coding.md#when-your-sign-in-has-expired).
+To remove only the local copy during recovery:
 
 ```sh
 python3 components/cli/account_session.py forget --profile /private/keeplane-account
