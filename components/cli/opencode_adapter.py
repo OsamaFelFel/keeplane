@@ -49,6 +49,11 @@ PROVIDER_POLICIES = (
 )
 # ADR 029: ask for token usage on streamed answers (stream_options.include_usage).
 MODEL_COMPATIBILITY = {"supportsUsageInStreaming": True}
+# Spec 004 ST26: with the developer's max_tokens, the runtime writes its own
+# output cap as max_tokens too (it would otherwise send max_completion_tokens),
+# and the request body overlay then replaces that value with the developer's.
+# One cap reaches the gateway, by the developer's name and value.
+OWN_MAX_TOKENS = {"maxTokensField": "max_tokens"}
 SETTINGS_KEYS = frozenset({"providers", "model", "share", "snapshots", "websearch",
                            "plugins", "experimental"})
 # Words that name a sign-in, a stored credential or a key anywhere in the
@@ -164,7 +169,8 @@ def check_settings(config, relay, instruction_plugin=None):
     and nowhere else), the grant from KEEPLANE_RUNTIME_GRANT and at most the project
     header; one model entry that is exactly its name and the streamed-usage
     flag, plus at most the developer's reviewed request settings as its body
-    (Spec 004 ST26); sharing and snapshots off; web search off; the web-tool and provider
+    (Spec 004 ST26) and, only with their max_tokens, the flag that makes the
+    runtime's own output cap max_tokens too; sharing and snapshots off; web search off; the web-tool and provider
     plugin directives; at most Keeplane's own instruction plugin; and the
     gateway-only provider policy. No key anywhere may name a sign-in, key or
     credential.
@@ -194,9 +200,12 @@ def check_settings(config, relay, instruction_plugin=None):
     if config["model"] != PROVIDER + "/" + model:
         raise ValueError("Runtime settings must use one gateway model.")
     body = options.get("body") if isinstance(options, dict) else None
+    compatibility = dict(MODEL_COMPATIBILITY)
+    if isinstance(body, dict) and "max_tokens" in body:
+        compatibility.update(OWN_MAX_TOKENS)
     if (not isinstance(options, dict)
             or {key: value for key, value in options.items() if key != "body"}
-            != {"name": model, "compatibility": MODEL_COMPATIBILITY}):
+            != {"name": model, "compatibility": compatibility}):
         raise ValueError("The gateway model may only hold its name and the streamed-usage flag.")
     if "body" in options and (
             not isinstance(body, dict) or not body or set(body) - set(request_settings.ALLOWED)):
@@ -307,7 +316,10 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         if request_options:
             # Spec 004 ST26: the runtime lays these over each request body, so
             # the gateway gets them by the same names and values.
-            config["providers"][PROVIDER]["models"][model]["body"] = dict(request_options)
+            entry = config["providers"][PROVIDER]["models"][model]
+            entry["body"] = dict(request_options)
+            if "max_tokens" in request_options:
+                entry["compatibility"].update(OWN_MAX_TOKENS)
         if account_context is not None:
             config["providers"][PROVIDER]["headers"] = {
                 "X-Keeplane-Project-ID": account_context["project_id"],

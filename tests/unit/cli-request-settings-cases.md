@@ -8,12 +8,18 @@ real OpenCode V2 2.0.27 binary, is in
 own pass-through of these settings to the provider is PROTO-01 in
 [`native-runtime-protocol-cases.md`](../integration/native-runtime-protocol-cases.md).
 
+The task asks for the end-to-end check in both gateway modes. REQ-08 covers
+the runtime and the relay against a gateway fixture. The other mode, a
+signed-in developer through the guarded gateway on the preview, is covered by
+the developer journey check of task 009-13, which runs the pinned runtime
+against the preview in `live-preview.yml`.
+
 | Case | Expected result |
 | --- | --- |
-| REQ-01 Saved settings become the model's options | Temperature, top_p, max_tokens and reasoning_effort saved under `"models"` for the turn's model in the CLI settings file become that model's request body in the runtime's settings, with the same names, values and types, and the runtime settings check accepts them. Each works on its own. Another model's settings are not used. With none saved, or an empty object, the model entry has no body: Keeplane adds no setting of its own. |
+| REQ-01 Saved settings become the model's options | Temperature, top_p, max_tokens and reasoning_effort saved under `"models"` for the turn's model in the CLI settings file become that model's request body in the runtime's settings, with the same names, values and types, and the runtime settings check accepts them. Each works on its own. With max_tokens, and only then, the model entry also sets `maxTokensField` to `max_tokens`, so the runtime writes its own output cap under that name and the body's value replaces it: no `max_completion_tokens` is sent. Another model's settings are not used. With none saved, or an empty object, the model entry has no body and only the usage flag: Keeplane adds no setting of its own. |
 | REQ-02 Unchanged through the relay | A request carrying those settings goes through the turn's usage relay, and the gateway receives the same body, byte for byte. |
 | REQ-03 Routing settings refused | A provider (`provider`, `package`), address (`baseURL`, `api_base`), key (`apiKey`, `api_key`, `headers`, `env`) or plugin (`plugins`, `mcp`) setting is refused, naming the setting, its kind and the file, without printing its value. The runtime is not started. |
 | REQ-04 Other settings refused | Any other setting (`seed`, `stop`, `top_k`, `frequency_penalty`, `maxOutputTokens`, a name with a stray space) is refused, naming the four allowed settings. |
 | REQ-05 Values checked | `temperature` must be a number from 0 to 2, `top_p` from 0 to 1, `max_tokens` a whole number from 1 to 1,000,000 and `reasoning_effort` one of none, minimal, low, medium, high or xhigh. Text, true or false, NaN and out-of-range values are refused with the allowed values; values at the limits pass unchanged. |
-| REQ-06 Runtime check stays strict | The runtime settings check accepts a model entry that adds only a body of the allowed settings with valid values, and refuses an empty or non-object body, an address, a key, an unreviewed setting, a bad value, or a body that would change the model, messages, streaming or usage request. |
+| REQ-06 Runtime check stays strict | The runtime settings check accepts a model entry that adds only a body of the allowed settings with valid values, and refuses an empty or non-object body, an address, a key, an unreviewed setting, a bad value, or a body that would change the model, messages, streaming or usage request, or that sets `max_completion_tokens`. The `maxTokensField` flag is accepted only as `max_tokens` and only with a body that has max_tokens; any other compatibility change is refused. |
 | REQ-07 `keeplane code` | With a refused setting, `keeplane code` prints the message, exits 1 and starts no runtime. With valid settings the runtime gets them as the model's body. |

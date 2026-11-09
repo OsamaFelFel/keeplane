@@ -89,6 +89,12 @@ def model_entry(config):
     return config["providers"]["keeplane"]["models"]["coder"]
 
 
+USAGE_FLAG = {"supportsUsageInStreaming": True}
+# With max_tokens, the runtime's own output cap is written as max_tokens too,
+# so the body's value replaces it and no max_completion_tokens is sent.
+OWN_CAP = {**USAGE_FLAG, "maxTokensField": "max_tokens"}
+
+
 # REQ-01 The settings saved for a model become the runtime's request body
 # overlay for that model, with the same names and values.
 def test_req_01_saved_settings_become_the_model_options(tmp_path, monkeypatch):
@@ -97,7 +103,7 @@ def test_req_01_saved_settings_become_the_model_options(tmp_path, monkeypatch):
     config = turn(tmp_path, monkeypatch)
     assert model_entry(config) == {
         "name": "coder",
-        "compatibility": {"supportsUsageInStreaming": True},
+        "compatibility": OWN_CAP,
         "body": SETTINGS,
     }
     opencode_adapter.check_settings(
@@ -109,14 +115,23 @@ def test_req_01_saved_settings_become_the_model_options(tmp_path, monkeypatch):
 @pytest.mark.parametrize("name", sorted(SETTINGS))
 def test_req_01_one_setting(tmp_path, monkeypatch, name):
     settings_file.set_request_settings("coder", {name: SETTINGS[name]})
-    assert model_entry(turn(tmp_path, monkeypatch))["body"] == {name: SETTINGS[name]}
+    config = turn(tmp_path, monkeypatch)
+    assert model_entry(config)["body"] == {name: SETTINGS[name]}
+    # Only max_tokens moves the runtime's own cap onto the same field.
+    assert model_entry(config)["compatibility"] == (
+        OWN_CAP if name == "max_tokens" else USAGE_FLAG
+    )
+    opencode_adapter.check_settings(
+        config, config["providers"]["keeplane"]["settings"]["baseURL"]
+    )
 
 
 @pytest.mark.parametrize("saved", [None, {}])
 def test_req_01_no_settings_add_nothing(tmp_path, monkeypatch, saved):
     if saved is not None:
         settings_file.set_request_settings("coder", saved)
-    assert "body" not in model_entry(turn(tmp_path, monkeypatch))
+    entry = model_entry(turn(tmp_path, monkeypatch))
+    assert "body" not in entry and entry["compatibility"] == USAGE_FLAG
 
 
 # REQ-02 Through the turn's usage relay, the gateway receives the request
@@ -234,7 +249,10 @@ def test_req_05_values_in_range_pass_unchanged(name, value):
 
 # REQ-06 The runtime settings check stays strict: the model entry may add
 # only a body of the reviewed settings with valid values.
-def runtime_settings(body):
+def runtime_settings(body, compatibility=None):
+    if compatibility is None:
+        has_cap = isinstance(body, dict) and "max_tokens" in body
+        compatibility = OWN_CAP if has_cap else USAGE_FLAG
     config = {
         "providers": {
             "keeplane": {
@@ -244,7 +262,7 @@ def runtime_settings(body):
                 "models": {
                     "coder": {
                         "name": "coder",
-                        "compatibility": {"supportsUsageInStreaming": True},
+                        "compatibility": compatibility,
                         "body": body,
                     }
                 },
@@ -263,10 +281,33 @@ def runtime_settings(body):
     return config
 
 
-def test_req_06_check_accepts_the_reviewed_body():
-    opencode_adapter.check_settings(
-        runtime_settings(dict(SETTINGS)), "http://127.0.0.1:41234/v1"
-    )
+@pytest.mark.parametrize(
+    "body", [dict(SETTINGS), {"max_tokens": 777}, {"temperature": 0.2}]
+)
+def test_req_06_check_accepts_the_reviewed_body(body):
+    opencode_adapter.check_settings(runtime_settings(body), "http://127.0.0.1:41234/v1")
+
+
+# REQ-06 The output-cap flag comes only with max_tokens, and only as max_tokens.
+@pytest.mark.parametrize(
+    "body,compatibility",
+    [
+        ({"max_tokens": 777}, USAGE_FLAG),
+        ({"temperature": 0.2}, OWN_CAP),
+        (None, OWN_CAP),
+        (
+            {"max_tokens": 777},
+            {**USAGE_FLAG, "maxTokensField": "max_completion_tokens"},
+        ),
+        ({"max_tokens": 777}, {**OWN_CAP, "supportsStore": True}),
+    ],
+)
+def test_req_06_check_refuses_a_cap_flag_out_of_place(body, compatibility):
+    config = runtime_settings(body, compatibility)
+    if body is None:
+        del config["providers"]["keeplane"]["models"]["coder"]["body"]
+    with pytest.raises(ValueError, match="streamed-usage flag"):
+        opencode_adapter.check_settings(config, "http://127.0.0.1:41234/v1")
 
 
 @pytest.mark.parametrize(
@@ -283,6 +324,8 @@ def test_req_06_check_accepts_the_reviewed_body():
         {"messages": []},
         {"stream": False},
         {"stream_options": {"include_usage": False}},
+        {"max_completion_tokens": 777},
+        {"max_tokens": 777, "max_completion_tokens": 32000},
     ],
 )
 def test_req_06_check_refuses_any_other_body(body):

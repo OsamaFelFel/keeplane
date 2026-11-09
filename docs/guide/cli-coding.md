@@ -295,7 +295,9 @@ repository's own runtime configuration, and runtime environment variables, are
 not loaded, so they cannot send a task to a model outside the class.
 
 Settings your runtime sends with each request, such as temperature, reach the
-model unchanged: Keeplane adds none of its own.
+model unchanged. Keeplane adds no request settings of its own. The runtime does
+set its own cap on output tokens (`max_completion_tokens`), unless you set
+`max_tokens` for the model, as below.
 
 ### Request settings for a model
 
@@ -321,6 +323,10 @@ gateway, and the model, with the same names and values. Each is optional:
 
 Whether a model uses a setting is up to the model and its server; Keeplane
 doesn't change or drop it.
+
+With `max_tokens` set, it is the only output cap in each request: the runtime
+then writes its own cap under the same name, and your value replaces it, so
+no `max_completion_tokens` is sent beside it.
 
 Nothing else is allowed in a model's request settings. A turn always goes to
 your Keeplane gateway, so a provider, address, key or plugin setting is refused

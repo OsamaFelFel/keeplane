@@ -57,8 +57,12 @@
   CLI settings file saves temperature 0.37, top_p 0.81, max_tokens 777 and
   reasoning_effort `low` for the fixture model. The pinned real runtime reads and
   edits the file, and every request the gateway fixture receives, through the
-  usage relay, carries exactly those four values. The fixture prints what it
-  received in the CI log. The unit cases REQ-01 to REQ-07 are in
+  usage relay, carries exactly those four values. No request carries a
+  different `max_completion_tokens`: without the developer's max_tokens the
+  runtime sends its own (32000 on tool requests), and with it that cap is gone,
+  so max_tokens is the only one. The fixture prints what it received in the CI
+  log. The signed-in mode, through the guarded gateway on the preview, is
+  covered by the developer journey check of task 009-13 in `live-preview.yml`. The unit cases REQ-01 to REQ-07 are in
   [`cli-request-settings-cases.md`](../unit/cli-request-settings-cases.md).
 
 Run isolated checks with `python -m pytest tests/unit/test_cli_adapter.py tests/unit/test_cli_instructions.py`.

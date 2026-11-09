@@ -341,6 +341,8 @@ def native_request_settings(binary):
             assert len(EchoingHandler.received) >= 3
             for row in EchoingHandler.received:
                 assert {name: row[name] for name in REQUEST_SETTINGS} == REQUEST_SETTINGS, row
+                # One output cap: the runtime's own is not sent beside max_tokens.
+                assert row["max_completion_tokens"] in (None, REQUEST_SETTINGS["max_tokens"]), row
         finally:
             server.shutdown()
             server.server_close()
