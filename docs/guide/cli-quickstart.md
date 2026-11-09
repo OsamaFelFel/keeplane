@@ -24,8 +24,8 @@ which stores plaintext credentials protected by OS file permissions; pass
 `--profile PATH` to use another. Keep history outside the repository. Use the
 server address for sign-in and the protected gateway's `/v1` address for
 coding; an ordinary unprotected model listener is insufficient. The server
-doesn't tell the CLI its gateway address yet, so pass `--gateway` to
-`keeplane code`. With `--state-dir`, the session history records the
+now gives a signed-in CLI the gateway address its installer set, but this CLI
+version doesn't use it yet, so pass `--gateway` to `keeplane code`. With `--state-dir`, the session history records the
 gateway address, and a later turn on that history, such as a resumed session,
 must use the same one. On a Kubernetes installation with the chart's Ingress, both are
 on Keeplane's one address: `KP_SERVER=https://<host>` and

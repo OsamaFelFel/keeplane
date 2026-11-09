@@ -1,6 +1,6 @@
 """The default preview starts CLI sign-in and the guarded gateway with no flags.
 
-Cases PSL-01 to PSL-06 in preview-sign-in-launcher-cases.md (Spec 009 ST29 and
+Cases PSL-01 to PSL-07 in preview-sign-in-launcher-cases.md (Spec 009 ST29 and
 ST30, ADR 028). Docker, Node.js and the containers are substituted; the
 Compose check renders the files with `docker compose config`, which starts
 nothing.
@@ -232,3 +232,15 @@ def test_the_preview_app_and_its_installer_always_accept_cli_sign_in(rendered):
         assert services["gateway"]["ports"][0]["host_ip"] == "127.0.0.1"
         assert services["gateway"]["ports"][0]["published"] == "5000"
         assert services["model-enroller"]["command"][-1] == "run_model_enroller"
+
+
+# PSL-07
+def test_the_preview_app_gives_the_cli_its_loopback_gateway_address(rendered):
+    for extra, port in (({}, "5000"), ({"KEEPLANE_RUNTIME_PORT": "5001"}, "5001")):
+        services = rendered(**extra)
+        assert services["gateway"]["ports"][0]["published"] == port
+        assert services["app"]["environment"]["KEEPLANE_GATEWAY_PUBLIC_URL"] == (
+            f"http://127.0.0.1:{port}/v1"
+        )
+        for name in ("runtime-install", "model-enroller"):
+            assert "KEEPLANE_GATEWAY_PUBLIC_URL" not in services[name]["environment"]

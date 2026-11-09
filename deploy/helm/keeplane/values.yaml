@@ -119,7 +119,8 @@ gateway:
   # agentgateway-standalone.mode=database. Developers reach the protected
   # models through Service <release>-gateway-runtime (port 5000 only) and,
   # with ingress.enabled, the Ingress path /v1/chat/completions on
-  # ingress.host: their CLI's gateway is https://<ingress.host>/v1. Create
+  # ingress.host: their CLI's gateway is https://<ingress.host>/v1, which the
+  # app then gives signed-in CLIs (KEEPLANE_GATEWAY_PUBLIC_URL). Create
   # its database roles first, as in docs/guide/guard-status-roles.md; the
   # migration Job then sets their grants. See
   # docs/guide/kubernetes-installation-reference.md#model-enroller.

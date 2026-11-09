@@ -27,8 +27,9 @@ The repo needs no setup in Keeplane. `code` works out everything else:
 | Gateway | The address saved in your profile when you signed in | `--gateway URL` |
 | Folder | The folder you run it in | `--directory PATH` |
 
-Today the server doesn't tell the CLI its gateway address yet, so pass
-`--gateway` with the address your admin gave you. Without it, `code` sends
+The server gives a signed-in CLI the gateway address its installer set, but
+this CLI version doesn't save it yet, so pass `--gateway` with the address
+your admin gave you. Without it, `code` sends
 nothing and says:
 
 ```text

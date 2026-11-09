@@ -116,3 +116,21 @@ execute bit and nothing for other users. Takes a dict with "mode" and "where".
 {{- fail (printf "%s gives Secret files mode %#o. The managed gateway copies accept only owner and group read (0440) or stricter, such as 0400: no write or execute bit and nothing for other users. Leave the mode unset and the chart uses 0440." .where $mode) -}}
 {{- end -}}
 {{- end -}}
+
+{{- /* The protected path's own Ingress renders (gateway-runtime-ingress.yaml). */ -}}
+{{- define "keeplane.protectedIngress.on" -}}
+{{- if and .Values.ingress.enabled (eq .Values.gateway.mode "managed") .Values.gateway.install (include "keeplane.enroller.on" .) }}true{{ end -}}
+{{- end -}}
+
+{{- /*
+ADR 030: the app's KEEPLANE_GATEWAY_PUBLIC_URL, the gateway address the server
+gives signed-in CLIs: https://<ingress.host>/v1 when the protected path's
+Ingress renders, so it is always the address that Ingress publishes. Without it
+the chart sets nothing and the server says it doesn't know the address.
+*/ -}}
+{{- define "keeplane.gatewayPublicUrl.env" -}}
+{{- if include "keeplane.protectedIngress.on" . }}
+- name: KEEPLANE_GATEWAY_PUBLIC_URL
+  value: {{ printf "https://%s/v1" (required "ingress.host is required when ingress is enabled" .Values.ingress.host) | quote }}
+{{- end }}
+{{- end -}}

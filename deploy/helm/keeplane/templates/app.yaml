@@ -139,6 +139,7 @@ spec:
             - name: RUNTIME_AUTHORIZER_KEY_FILE
               value: /run/gateway-keys/callback-key
             {{- end }}
+            {{- if include "keeplane.protectedIngress.on" . }}{{- include "keeplane.gatewayPublicUrl.env" . | trim | nindent 12 }}{{- end }}
             - name: PREVIEW_RUNNER_URLS
               value: {{ .Values.app.runnerUrls | quote }}
             {{- if .Values.app.personalDataDetection.enabled }}

@@ -25,6 +25,9 @@ services:
     image: ${KEEPLANE_RUNTIME_APP_IMAGE:-keeplane-preview:docker-local}
     environment:
       KEEPLANE_CLI_OAUTH_ENABLED: "1"
+      # ADR 030: the address the server gives signed-in CLIs, the guarded
+      # gateway's loopback port above.
+      KEEPLANE_GATEWAY_PUBLIC_URL: http://127.0.0.1:${KEEPLANE_RUNTIME_PORT:-5000}/v1
       RUNTIME_AUTHORIZER_KEY_FILE: /installed/callback-key
       RUNTIME_GUARD_MANIFEST_FILE: /installed/manifest.json
       GATEWAY_FILE_CONFIG: /installed/gateway.json

@@ -3,6 +3,7 @@
 import os
 import uuid
 
+from django.conf import settings
 from django.views.decorators.cache import never_cache
 from rest_framework.decorators import (
     api_view,
@@ -53,13 +54,19 @@ def project_models(request, project_id):
 @authentication_classes([RuntimeSessionAuthentication])
 @permission_classes([IsAuthenticated])
 def session(request):
-    """Return the current account or revoke this request's exact credential."""
+    """Return the current account or revoke this request's exact credential.
+
+    The account comes with the gateway address the installer set for developers'
+    CLIs (ADR 030), or null when Keeplane doesn't know it; never one guessed from
+    this request.
+    """
     if request.method == "GET":
         return Response(
             {
                 "id": str(request.user.pk),
                 "username": request.user.username,
                 "role": request.user.role,
+                "gateway_url": settings.GATEWAY_PUBLIC_URL,
             }
         )
     if request.body:
