@@ -1,7 +1,7 @@
 # Sign in using a code
 
 `keeplane login` uses this code by itself when it can't open a browser: over SSH,
-with no display, or when the browser fails to start (see
+with no display, when no browser can be found, or when the browser fails to start (see
 [browser sign-in](cli-browser-login.md#when-no-browser-can-open)). Use `--device`
 to choose it yourself. It needs
 macOS or Linux, Python 3.9+, and a Keeplane server with device authorization
