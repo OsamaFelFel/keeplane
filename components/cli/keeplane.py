@@ -273,7 +273,7 @@ def main():
             output = usage.show(args.profile)
         elif args.command == "keys":
             if args.key_action == "list":
-                output = provider_keys.list_keys(args.profile, repo_project(args.project)[0])
+                output = provider_keys.list_keys(args.profile, *repo_project(args.project))
             else:
                 output = provider_keys.run(args.key_action, args.profile, args.model,
                                            key_stdin=getattr(args, "key_stdin", False))
