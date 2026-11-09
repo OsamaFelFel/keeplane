@@ -178,6 +178,14 @@ class Model(BaseHTTPRequestHandler):
                 return
             append("tool_result_seen", send_protocol_response(self, body))
             return
+        if body.get("stream"):
+            # A streamed request gets a whole event stream, as a real provider
+            # sends. A plain JSON body here breaks the gateway's stream, which
+            # the gateway may then retry as a failed contact.
+            from runtime_protocol import send_protocol_response
+
+            send_protocol_response(self, body)
+            return
         data = json.dumps(
             {
                 "id": "fixture",
