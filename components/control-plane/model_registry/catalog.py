@@ -5,6 +5,7 @@ from common.storage import settings_change, storage_service
 from data_classes.models import DataClass
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
+from usage import origin_hour
 
 from .levels import LEVEL_NAMES, LevelError, ModelInUse, describe_level_change
 from .models import (
@@ -117,7 +118,9 @@ class DjangoModelCatalog:
         ``("local", "", "")`` for a local runner, or ``("cloud", provider,
         provider_model)``. It is recorded once, for cost estimates (ADR 029),
         and kept from setup to setup while Keeplane still owns the model; an
-        approval saved with ``owned_by_keeplane`` false clears it.
+        approval saved with ``owned_by_keeplane`` false clears it. With it
+        Keeplane records whether the name had no usage yet in that UTC hour,
+        for any developer, so a new name is priced from its first hour.
         """
         if key_choice not in ProviderKeyChoice.values:
             raise ValueError("Choose a supported provider key option")
@@ -172,15 +175,23 @@ class DjangoModelCatalog:
                 # A model Keeplane didn't add, or whose definition was replaced
                 # outside Keeplane, loses its recorded origin: it isn't priced.
                 stored.update(
-                    origin="", provider="", provider_model="", origin_recorded_at=None
+                    origin="",
+                    provider="",
+                    provider_model="",
+                    origin_recorded_at=None,
+                    origin_hour_priced=False,
                 )
             elif added_from is not None:
                 origin, provider, provider_model = added_from
+                recorded, hour_unused = origin_hour.record_origin(
+                    model_id, timezone.now
+                )
                 stored.update(
                     origin=origin,
                     provider=provider,
                     provider_model=provider_model,
-                    origin_recorded_at=timezone.now(),
+                    origin_recorded_at=recorded,
+                    origin_hour_priced=hour_unused,
                 )
             ModelApproval.objects.update_or_create(pk=model_id, defaults=stored)
             if actor and previous != values:

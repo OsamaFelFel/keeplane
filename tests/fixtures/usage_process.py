@@ -101,6 +101,57 @@ def rows():
     ]
 
 
+def held(write):
+    """Run ``write`` in one transaction, kept open until the test says go.
+
+    The process answers ``{"held": true}`` once the write is done, then waits
+    for one more line before committing, so another process can be started
+    against the open transaction.
+    """
+    from django.db import transaction
+
+    with transaction.atomic():
+        result = write()
+        print(json.dumps({"held": True}), flush=True)
+        sys.stdin.readline()
+    return result
+
+
+def add_report(command):
+    from usage import totals
+
+    return totals.add(
+        command["user_id"],
+        command["model"],
+        {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "requests": 1,
+            "requests_without_usage": 0,
+        },
+        now=datetime.fromisoformat(command["at"]),
+    )
+
+
+def record_origin(command):
+    """Record a cloud origin for the model at ``at``, as Keeplane's add flow does."""
+    from model_registry import catalog
+    from model_registry.models import ModelApproval
+
+    audit, _ = services()
+    moment = datetime.fromisoformat(command["at"])
+    catalog.timezone = SimpleNamespace(now=lambda: moment)
+    catalog.DjangoModelCatalog(audit).approve(
+        command["model"],
+        [],
+        "definition",
+        owned_by_keeplane=True,
+        key_choice="personal",
+        added_from=("cloud", "openai", "test-gpt"),
+    )
+    return ModelApproval.objects.get(pk=command["model"]).origin_hour_priced
+
+
 def handle(command):
     action = command["action"]
     if action == "migrate":
@@ -116,6 +167,11 @@ def handle(command):
         return [call(command)["status"] for _ in range(command["count"])]
     if action == "rows":
         return rows()
+    if action in ("add_report", "record_origin"):
+        write = {"add_report": add_report, "record_origin": record_origin}[action]
+        if command.get("hold"):
+            return held(lambda: write(command))
+        return write(command)
     if action == "old_total":
         from usage.models import UsageTotal
 

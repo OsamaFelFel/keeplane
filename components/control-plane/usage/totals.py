@@ -18,7 +18,7 @@ from django.db.models import F, Q, Sum
 from django.db.models.functions import Least
 from django.utils import timezone
 
-from . import costs
+from . import costs, origin_hour
 from .models import UsageTotal
 
 COUNTS = ("input_tokens", "output_tokens", "requests", "requests_without_usage")
@@ -85,10 +85,13 @@ def delete_old_totals(now=None):
 
 def add(user_id, model_id, counts, now=None):
     """Add one capped report to the developer's total for this hour and model."""
-    hour = current_hour(now)
-    rows = UsageTotal.objects.filter(user_id=user_id, model_id=model_id, hour=hour)
     increase = {name: Least(F(name) + counts[name], MAX_TOTAL) for name in COUNTS}
     with transaction.atomic():
+        # Ordered against Keeplane recording the model's provider, and the hour
+        # read after that, so the report lands either before or after it.
+        origin_hour.adding_report(model_id)
+        hour = current_hour(now)
+        rows = UsageTotal.objects.filter(user_id=user_id, model_id=model_id, hour=hour)
         if not rows.update(**increase):
             try:
                 with transaction.atomic():

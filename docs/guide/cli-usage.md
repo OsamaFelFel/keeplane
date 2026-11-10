@@ -37,8 +37,9 @@ input; output tokens include reasoning.
 - **no list price** is a cloud model Keeplane has no price for. Its tokens
   still show.
 
-When some of a model's tokens couldn't be priced (for example tokens used
-before Keeplane recorded the model's provider), a line says so:
+A cloud model is priced from the moment your admin adds it. When some of a
+model's tokens couldn't be priced (for example a name reused for a new model,
+whose tokens earlier that hour may belong to the old one), a line says so:
 
 ```text
 cloud: some of its tokens couldn't be priced, so its cost may be low.
