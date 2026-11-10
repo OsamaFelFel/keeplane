@@ -545,7 +545,7 @@ def command(action, arguments):
             time.sleep(0.1)
     elif action == "outage":
         steps = json.loads(arguments)
-        allowed = {"ok", "slow", "context", "mid", "429"} | {
+        allowed = {"ok", "slow", "context", "local-context", "mid", "429"} | {
             str(code) for code in range(500, 600)
         }
         assert isinstance(steps, list) and set(steps) <= allowed
