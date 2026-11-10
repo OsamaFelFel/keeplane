@@ -235,11 +235,11 @@ Keeplane.
 
    ```sh
    cat old-ca.crt new-ca.crt > ca-bundle.crt
-   kubectl -n "$NS" create configmap model-endpoint-ca --from-file=ca.crt=ca-bundle.crt \
+   kubectl -n "$NS" create secret generic model-endpoint-ca --from-file=ca.crt=ca-bundle.crt \
      --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
    ```
 
-   For a Secret, use `create secret generic` the same way.
+   For a ConfigMap, replace it the same way with `create configmap`.
 2. Restart the app and gateway copies, and wait for both:
 
    ```sh

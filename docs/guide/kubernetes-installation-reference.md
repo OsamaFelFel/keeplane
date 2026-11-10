@@ -200,15 +200,17 @@ namespace, and name it with the key that holds it. Set `secretName` or
 `configMapName`, not both:
 
 ```sh
-kubectl -n "$NS" create configmap model-endpoint-ca --from-file=ca.crt=private-ca.crt
+kubectl -n "$NS" create secret generic model-endpoint-ca --from-file=ca.crt=private-ca.crt
 ```
 
 ```yaml
 trust:
   extraCaBundle:
-    configMapName: model-endpoint-ca   # or secretName: model-endpoint-ca
+    secretName: model-endpoint-ca   # or configMapName: for a ConfigMap
     key: ca.crt
 ```
+
+A CA certificate is public, so a ConfigMap with the same key works as well.
 
 ```mermaid
 flowchart LR
