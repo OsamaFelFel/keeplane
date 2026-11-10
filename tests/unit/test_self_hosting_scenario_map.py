@@ -11,7 +11,9 @@ TESTS = Path(__file__).resolve().parents[1]
 MAP = TESTS / "e2e/self-hosting-cases.md"
 # The CI workflow that installs the chart on kind clusters and runs live test
 # files on every revision. Each of its jobs (the cluster with outside access
-# and the isolated network) has a LIVE_TESTS line naming its files.
+# and the isolated network) has a LIVE_TESTS line naming its files; the first
+# also has a RUNTIME_LIVE_TESTS line, the files it runs with the pinned coding
+# runtime.
 LIVE_WORKFLOW = TESTS.parent / ".github/workflows/kubernetes-live.yml"
 HEADING = "## Spec 002 scenarios (ST1–ST5)"
 
@@ -42,7 +44,7 @@ RENDER_ONLY = {"SHAPE", "NETPOL", "PKG"}
 # Catalogs whose checks need a cluster, Docker fixtures or the pinned gateway
 # image. They can support a scenario but never prove one alone, except the
 # cases of a test file the Kubernetes live workflow runs (live_ci_cases).
-NOT_IN_CI = {"K8S", "ISO", "FULL", "EXEDGE", "EXIST", "GW-KEY"}
+NOT_IN_CI = {"K8S", "ISO", "KDEV", "FULL", "EXEDGE", "EXIST", "GW-KEY"}
 # Owner decision on governance issue #47: the managed gateway refuses to
 # install without the installer's key Secret. Helm evaluates the templates
 # before anything reaches the cluster, so a refusal under `helm template` in
@@ -65,6 +67,7 @@ CATALOGS = {
     "OFF-UI": "browser/offline-assets-cases.md",
     "K8S": "e2e/kubernetes-cases.md",
     "ISO": "e2e/kubernetes-isolated-cases.md",
+    "KDEV": "e2e/kubernetes-developer-cases.md",
     "FULL": "e2e/full-product-edge-cases.md",
     "EXEDGE": "e2e/full-existing-edge-cases.md",
     "EXIST": "e2e/existing-gateway-cases.md",
@@ -116,9 +119,9 @@ def live_ci_cases():
     from tests.support.cases import EXPECTED_CASES
 
     lines = re.findall(
-        r"^\s*LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.MULTILINE
+        r"^\s*(?:RUNTIME_)?LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.MULTILINE
     )
-    assert len(lines) == 2, "Each Kubernetes live job names its LIVE_TESTS"
+    assert len(lines) == 3, "Each Kubernetes live job names its LIVE_TESTS"
     files = []
     for line in lines:
         assert line.split(), line
@@ -210,6 +213,8 @@ def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
     # The isolated-network cases, from the workflow's isolated-network job.
     assert {f"ISO-{n:02d}" for n in range(1, 13)} <= cases
+    # The protected developer release's cases, run with the coding runtime.
+    assert {f"KDEV-{n:02d}" for n in range(1, 5)} <= cases
 
 
 # Each clause of a proven scenario whose proof is a separate case: the

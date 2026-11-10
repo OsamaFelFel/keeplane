@@ -20,7 +20,7 @@ jobs:
   kind:
     name: Chart on a kind cluster
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       KIND_VERSION: v0.33.0
       KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
@@ -35,7 +35,20 @@ jobs:
       # every LIVE_TESTS line in this workflow to know which cases CI runs on
       # the current revision.
       LIVE_TESTS: tests/e2e/test_local.py tests/e2e/test_kind.py tests/e2e/test_kind_private_ca.py tests/e2e/test_gateway_secret_rotation.py tests/e2e/test_existing_gateway_preflight.py tests/e2e/test_gateway_down.py tests/e2e/test_gateway_copy_stop.py
+      # The protected developer release's cases (kubernetes-developer-cases.md),
+      # run afterwards with the pinned coding runtime. The runtime is built for
+      # musl, so they run in Alpine on the runner's network.
+      RUNTIME_LIVE_TESTS: tests/e2e/test_kind_protected.py
       KEEPLANE_KIND_QWEN: "off"
+      # Also install the protected developer release (PostgreSQL, CLI sign-in,
+      # the model enroller) at https://keeplane.kind.test.
+      KEEPLANE_KIND_PROTECTED: "on"
+      # The coding runtime the coding-runtime check in checks.yml pins: OpenCode
+      # V2 2.0.27, linux x64 baseline musl build, from npm.
+      RUNTIME_ARCHIVE_URL: https://registry.npmjs.org/@opencode/cli-linux-x64-baseline-musl/-/cli-linux-x64-baseline-musl-2.0.27.tgz
+      RUNTIME_ARCHIVE_SHA256: 19883929aff7834d777af1618a811d4d1352a46c02df3ba11aad8cafc2faf93e
+      RUNTIME_BINARY_SHA256: a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d
+      ALPINE_PYTHON_IMAGE: python:3.12.13-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322
       # The runner's Docker saves the digest-pinned fixture images in a form
       # kind's containerd refuses ("failed to check if this is a checkpoint
       # image"); the kind node pulls them by digest instead.
@@ -61,6 +74,8 @@ jobs:
             echo "KEEPLANE_TEST_REPORT_DIR=$GITHUB_WORKSPACE/$RESULTS/reports"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # The protected release's public address, on this runner's loopback.
+          echo "127.0.0.1 keeplane.kind.test" | sudo tee -a /etc/hosts
       - name: Install pinned kind, kubectl and Helm and check their checksums
         # Checksums from each project's published release checksum files:
         # kind v0.33.0 (its default node image is the kindest/node v1.37.0
@@ -84,13 +99,44 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/pip install -r tests/requirements.txt
-      - name: Build the app and install the chart on kind (managed and customer-run gateway)
+      - name: Build the app and install the chart on kind (managed, customer-run gateway and protected developer release)
         run: deploy/local/kind-up.sh
       - name: Run the live Kubernetes cases
         run: |
           # pytest.ini deselects live checks by default; -m live selects them here.
           .venv/bin/python -m pytest -m live -rA $LIVE_TESTS \
             --junitxml="$RESULTS/junit.xml"
+      - name: Download and check the pinned coding runtime
+        if: ${{ !cancelled() }}
+        run: |
+          curl --fail --location -sS --output "$RUNNER_TEMP/runtime.tgz" "$RUNTIME_ARCHIVE_URL"
+          echo "$RUNTIME_ARCHIVE_SHA256  $RUNNER_TEMP/runtime.tgz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/runtime"
+          tar -xzf "$RUNNER_TEMP/runtime.tgz" -C "$RUNNER_TEMP/runtime"
+          echo "$RUNTIME_BINARY_SHA256  $RUNNER_TEMP/runtime/package/bin/opencode" | sha256sum --check
+      - name: Run the protected developer cases with the pinned runtime
+        if: ${{ !cancelled() }}
+        # Alpine with libstdc++ for the musl runtime; the runner's network and
+        # /etc/hosts reach https://keeplane.kind.test, and the runner's
+        # temporary folder holds the kubeconfig, the trial's credentials and
+        # kubectl. The checkout keeps its path.
+        run: |
+          docker run --rm --network host \
+            -v /etc/hosts:/etc/hosts:ro \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            -v "$RUNNER_TEMP:$RUNNER_TEMP" \
+            -v "$RUNNER_TEMP/bin/kubectl:/usr/local/bin/kubectl:ro" \
+            -e KEEPLANE_OPENCODE_V2_BIN="$RUNNER_TEMP/runtime/package/bin/opencode" \
+            -e KEEPLANE_KUBECONFIG -e KEEPLANE_RUNTIME_DIR -e KEEPLANE_TEST_REPORT_DIR \
+            -e RESULTS -e RUNTIME_LIVE_TESTS \
+            "$ALPINE_PYTHON_IMAGE" \
+            sh -euc '
+              apk add --no-cache libstdc++ git >/dev/null
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet -r tests/requirements.txt
+              /tmp/venv/bin/python -m pytest $RUNTIME_LIVE_TESTS -m live \
+                -p no:cacheprovider -rA --junitxml="$RESULTS/runtime-junit.xml"
+            '
       - name: Require every selected case to have run, none skipped
         if: ${{ !cancelled() }}
         run: |
@@ -99,12 +145,14 @@ jobs:
           import sys
           import xml.etree.ElementTree as ET
 
-          path = os.path.join(os.environ["RESULTS"], "junit.xml")
-          if not os.path.exists(path):
-              sys.exit("No test results were written")
-          root = ET.parse(path).getroot()
-          cases = list(root.iter("testcase"))
-          expected = {name.rsplit("/", 1)[1][:-3] for name in os.environ["LIVE_TESTS"].split()}
+          cases = []
+          for report in ("junit.xml", "runtime-junit.xml"):
+              path = os.path.join(os.environ["RESULTS"], report)
+              if not os.path.exists(path):
+                  sys.exit("No test results were written: " + report)
+              cases += list(ET.parse(path).getroot().iter("testcase"))
+          files = os.environ["LIVE_TESTS"].split() + os.environ["RUNTIME_LIVE_TESTS"].split()
+          expected = {name.rsplit("/", 1)[1][:-3] for name in files}
           ran = {case.get("name") for case in cases}
           skipped = [case.get("name") for case in cases if case.find("skipped") is not None]
           failed = [case.get("name") for case in cases
@@ -128,10 +176,16 @@ jobs:
           # Also in the log, so a failed setup can be read without the artifact.
           cat "$out/resources.txt"
           tail -n 60 "$out/events.txt"
-          for ns in keeplane keeplane-existing supplied-gateway; do
+          for ns in keeplane keeplane-existing supplied-gateway keeplane-protected ingress-nginx; do
             kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n "$ns" describe pods > "$out/$ns-pods.txt" 2>&1 || true
             kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n "$ns" logs --all-containers --prefix --tail=300 \
               -l 'app.kubernetes.io/name' > "$out/$ns-logs.txt" 2>&1 || true
+          done
+          # Every container of the protected release, its init steps and
+          # migration Job included.
+          for pod in $(kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n keeplane-protected get pods -o name 2>/dev/null); do
+            kubectl --kubeconfig "$KEEPLANE_KUBECONFIG" -n keeplane-protected logs "$pod" --all-containers --prefix --tail=300 \
+              >> "$out/keeplane-protected-all-logs.txt" 2>&1 || true
           done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}
