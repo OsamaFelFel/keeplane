@@ -842,8 +842,9 @@ def run_cases():
         and "path: /health/app" in "\n".join(block(app_container, "livenessProbe"))
         and "path: /healthz/ready" in "\n".join(block(gateway_container, "readinessProbe"))
         and "startupProbe:" in gateway_container
-        and ["preStop:", "sleep:", "seconds: 5"]
-        == [line.strip() for line in block(gateway_container, "lifecycle")]
+        and "lifecycle:" not in gateway_container
+        and ("CONNECTION_MIN_TERMINATION_DEADLINE", "5s", False)
+        in env(gateway_container)
         and "mode: hybrid" in gateway_config
         and "replicas: 2" in next(d for d in workloads(managed) if name_of(d) == "pg-gateway")
         and "replicas: 0" in next(d for d in workloads(managed) if name_of(d) == "pg")
