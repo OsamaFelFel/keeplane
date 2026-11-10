@@ -32,6 +32,26 @@ It creates and removes one trial class and one trial approval. It requires the
 will refuse to overwrite your own approval. The isolated database suite checks
 the project-in-use rule.
 
+### With a customer-run gateway or PostgreSQL
+
+The switch works the same way when Keeplane uses a customer-run gateway
+(`existing` mode) and when it stores its settings in PostgreSQL. While classes
+are off, the gateway's Keeplane checks apply no class, so any model set up in
+Keeplane can take a project's work. Turning them on again applies the kept
+classes, approvals and project classes at both checks from the next request,
+with no restart. A model set up while classes were off gets no class approval
+when they are turned on, so a classed project can't use it until an admin
+approves it. A model the customer added to its gateway but never set up in
+Keeplane is refused whether classes are on or off. The
+[customer-run gateway class mode cases](../../tests/integration/existing-gateway-class-mode-cases.md)
+check this through the pinned gateway on SQLite and on PostgreSQL:
+
+```sh
+docker build --target postgres -t keeplane-preview:postgres-local \
+  -f components/control-plane/Dockerfile .
+.venv/bin/python -m pytest tests/integration/test_existing_gateway_class_mode.py -m live
+```
+
 Assign a class to a project in [Projects](projects.md); that page also explains
 how the class limits which models get the project's tasks. The
 Docker model preview at port 3000 uses this same protected account session.

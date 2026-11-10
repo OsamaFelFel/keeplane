@@ -158,6 +158,17 @@ calls only the first check still protects the model, but writes no
 retried request is recorded once per try, as on the managed gateway. A managed
 install refuses the backend check: its own gateway records instead.
 
+Run the backend check only for developer traffic. When an admin sets up a
+model, Keeplane sends one short request to that model through `gateway.url`
+with the gateway's runtime key and no developer session; a backend check that
+also runs for it refuses it, and setup fails with "The model didn't answer.
+Nothing was saved." One way, used by the
+[class mode cases](../../tests/integration/existing-gateway-class-mode-cases.md):
+have the developer listener set a header on every request, overriding any
+value the client sent, and choose the check's path in CEL from that header.
+Both checks read the data-class switch, the classes and the approvals on
+every call, so turning data classes off or on applies from the next request.
+
 ## Retry a model that is down
 
 When a model answers with a 5xx, times out, or answers 429 before its first
