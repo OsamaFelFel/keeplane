@@ -214,6 +214,9 @@ test('UI-11: while saving, the button is busy and spins, a screen-reader status 
   const onOpenChange = vi.fn()
   const onCreated = open(vi.fn(), onOpenChange)
   await fill(user)
+  // The status is in the dialog, empty, before saving, so screen readers hear Saving when it appears.
+  expect(screen.getByRole('dialog').contains(screen.getByRole('status'))).toBe(true)
+  expect(screen.getByRole('status').textContent).toBe('')
   await user.click(screen.getByRole('button', { name: 'Create user' }))
   expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Saving')
   // Only the button is busy: a busy dialog could keep screen readers from
@@ -237,6 +240,6 @@ test('UI-11: while saving, the button is busy and spins, a screen-reader status 
   await act(async () => { answer(response(created, 201)) })
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created))
   expect(onOpenChange).toHaveBeenCalledWith(false)
-  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.getByRole('status').textContent).toBe('')
   expect(writes(request)).toHaveLength(1)
 })

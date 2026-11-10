@@ -112,7 +112,8 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
           : unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
         {error && <FailureAlert title={`${refused || 'User'} wasn't created`}>{error} Nothing was saved. Check the details and try again.</FailureAlert>}
         {checkError && <p role="alert" className="text-[15px]">{checkError}</p>}
-        {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
+        {/* Always present so screen readers hear Saving when it appears: a live region announces changes, not its first text. */}
+        <span className="sr-only" role="status">{phase === 'saving' ? 'Saving' : ''}</span>
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => close(false)} disabled={phase === 'saving'}>Cancel</Button>
           {phase === 'no-answer' ? <Button type="button" onClick={check} disabled={checking}>Check</Button>

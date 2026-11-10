@@ -80,7 +80,8 @@ export function SetProjectClassDialog({ project, onClose, onSaved, returnFocusRe
       </div>
       {loading && <p role="status">Loading classes…</p>}
       {(loadError || error) && <Alert><AlertDescription>{loadError || error}</AlertDescription></Alert>}
-      {busy && <p className="sr-only" role="status">{phase === 'saving' ? 'Saving' : 'Checking'}</p>}
+      {/* Always present so screen readers hear Saving or Checking when it appears: a live region announces changes, not its first text. */}
+      <p className="sr-only" role="status">{phase === 'saving' ? 'Saving' : phase === 'checking' ? 'Checking' : ''}</p>
       <div className="flex justify-end gap-3"><Button variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>
         {uncertain || phase === 'checking' ? <Button disabled={busy} onClick={check}>{busy ? 'Checking…' : 'Check'}</Button> :
           <Button disabled={busy || loading || !!loadError || selected === (project.data_class?.id ?? '')} onClick={save}>{busy && <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" />}{busy ? 'Saving…' : 'Save'}</Button>}

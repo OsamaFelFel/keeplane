@@ -89,3 +89,31 @@ test('ten seconds without a write response stops saving and offers readback', as
   expect(screen.getByRole('button', { name: 'Check', exact: true })).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Saving…' })).toBeNull()
 })
+
+test('the screen-reader status is in the dialog, empty, before saving, says Saving and then Checking while busy, and empties again', async () => {
+  let fail: (cause: Error) => void = () => {}
+  let answer: (value: object) => void = () => {}
+  // Holds the write and the Check readback until the test answers them.
+  fixture(async () => response({})).mockImplementation((path: string, options: RequestInit = {}) => {
+    if (path === '/api/data-classes') return Promise.resolve(response(choices))
+    if (path === '/api/auth-options') return Promise.resolve(response({ csrf_token: 'masked' }))
+    if (options.method === 'PUT') return new Promise((_resolve, reject) => { fail = reject })
+    return new Promise(resolve => { answer = resolve })
+  })
+  render(<SetProjectClassDialog project={project} onClose={() => {}} onSaved={() => {}} />)
+  const user = userEvent.setup()
+  await screen.findByRole('option', { name: 'Public' })
+  const status = () => screen.getAllByRole('status').find(region => region.classList.contains('sr-only'))!
+  expect(screen.getByRole('dialog').contains(status())).toBe(true)
+  expect(status().textContent).toBe('')
+  await user.selectOptions(screen.getByLabelText('Data class'), 'public')
+  await user.click(screen.getByRole('button', { name: 'Save', exact: true }))
+  await waitFor(() => expect(status().textContent).toBe('Saving'))
+  await act(async () => { fail(new Error('Connection lost')) })
+  await screen.findByRole('button', { name: 'Check', exact: true })
+  expect(status().textContent).toBe('')
+  await user.click(screen.getByRole('button', { name: 'Check', exact: true }))
+  await waitFor(() => expect(status().textContent).toBe('Checking'))
+  await act(async () => { answer(response({ ...project, classes_enabled: true, data_class: project.data_class })) })
+  await waitFor(() => expect(status().textContent).toBe(''))
+})

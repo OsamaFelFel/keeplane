@@ -98,7 +98,8 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged, returnFocus }:
       {phase === 'no-answer' && <FailureAlert title={`It isn't clear whether ${username}'s role was changed`}>{checkFailed ? "Keeplane didn't answer in time. Check again."
         : unconfirmed ? "Keeplane couldn't confirm the result. Check to find out." : "Keeplane didn't answer in time. Check to find out."}</FailureAlert>}
       {refusal && phase === 'form' && <FailureAlert title={`${username}'s role wasn't changed`}>{refusal} Nothing was saved. Check the details and try again.</FailureAlert>}
-      {phase === 'saving' && <span className="sr-only" role="status">Saving</span>}
+      {/* Always present so screen readers hear Saving when it appears: a live region announces changes, not its first text. */}
+      <span className="sr-only" role="status">{phase === 'saving' ? 'Saving' : ''}</span>
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={() => close(false)} disabled={phase === 'saving'}>Cancel</Button>
         {phase === 'no-answer' ? <Button onClick={check} disabled={checking}>Check</Button>

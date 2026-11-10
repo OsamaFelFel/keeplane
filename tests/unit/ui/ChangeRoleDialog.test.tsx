@@ -101,7 +101,13 @@ test('UI-ROLE-03: the dialog reads "Role for [Username]" and a "Change role" but
 test('UI-ROLE-04: while saving, the button spins, a screen-reader status says Saving, everything is off and Escape does not close', async () => {
   let answer: (value: object) => void = () => {}
   fixture(() => new Promise(resolve => { answer = resolve }))
-  const { onOpenChange, onChanged } = await saveAdmin()
+  const user = userEvent.setup()
+  const { onOpenChange, onChanged } = open()
+  // The status is in the dialog, empty, before saving, so screen readers hear Saving when it appears.
+  expect(screen.getByRole('dialog').contains(screen.getByRole('status'))).toBe(true)
+  expect(screen.getByRole('status').textContent).toBe('')
+  await user.click(screen.getByRole('radio', { name: 'Admin' }))
+  await user.click(screen.getByRole('button', { name: 'Change role' }))
   expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Saving')
   const button = screen.getByRole('button', { name: 'Change role' })
   expect(button).toHaveProperty('disabled', true)
@@ -129,7 +135,7 @@ test('UI-ROLE-05: no answer within 10 seconds offers Check, and Check that reads
   expect(screen.getByText(unclear)).toBeTruthy()
   vi.useRealTimers()
   await expectFailureMessage(unclear, noAnswer)
-  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.getByRole('status').textContent).toBe('')
   await user.click(screen.getByRole('button', { name: 'Check' }))
   await waitFor(() => expect(onChanged).toHaveBeenCalledWith(promoted))
   expect(onOpenChange).toHaveBeenCalledWith(false)
