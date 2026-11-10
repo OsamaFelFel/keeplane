@@ -7,8 +7,14 @@ import webbrowser
 
 import pytest
 
-from components.cli import browser_login, device_login, keeplane, sign_in_again
-from components.cli.credential_profile import Credential, opened
+from components.cli import (
+    browser_login,
+    credential_profile,
+    device_login,
+    keeplane,
+    sign_in_again,
+)
+from components.cli.credential_profile import Credential, opened, saved_server
 from tests.unit.test_cli_browser_login import issuer  # noqa: F401
 
 CODE_LINE = "Open {url}/oauth/confirm-device/ and enter code ABCD1234."
@@ -322,3 +328,128 @@ def test_nb_12_a_browser_that_opened_but_did_not_finish_does_not_fall_back(
     assert browser_login.NO_BROWSER not in output.out
     assert issuer.device_starts == 0 and not issuer.exchanges
     assert not (path / "credential.json").exists()
+
+
+def unusable_server_file(path, outside, how):
+    """A signed-out profile whose server.json can't be used."""
+    with opened(path, create=True):
+        pass
+    target = path / "server.json"
+    good = b'{"format": "keeplane-server-v1", "server": "http://127.0.0.1:1"}'
+    if how == "symlink":
+        outside.write_bytes(good)
+        outside.chmod(0o600)
+        target.symlink_to(outside)
+        return
+    contents = {
+        "malformed": b"[invalid",
+        "extra key": good[:-1] + b', "x": 1}',
+        "oversize": b"x" * 4097,
+        "file mode": good,
+    }
+    target.write_bytes(contents[how])
+    target.chmod(0o644 if how == "file mode" else 0o600)
+
+
+BAD_SERVER_FILES = ["malformed", "extra key", "oversize", "file mode", "symlink"]
+
+
+# NB-13
+@pytest.mark.parametrize("how", BAD_SERVER_FILES)
+def test_nb_13_an_unusable_kept_server_names_the_way_round_it(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+    how,
+):
+    path = tmp_path / "profile"
+    unusable_server_file(path, tmp_path / "outside", how)
+    assert login(monkeypatch, path) == 1
+    assert capsys.readouterr().err == (
+        "Keeplane can't use the server address it kept for this profile. "
+        "Run `keeplane login --server <address>`, or `keeplane forget` to remove it.\n"
+    )
+    assert issuer.device_starts == 0 and not issuer.authorizations
+
+
+# NB-14
+@pytest.mark.parametrize("how", BAD_SERVER_FILES)
+def test_nb_14_server_signs_in_without_reading_the_unusable_file(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+    how,
+):
+    path = tmp_path / "profile"
+    unusable_server_file(path, tmp_path / "outside", how)
+    before = (path / "server.json").lstat()
+
+    def never(self):
+        raise AssertionError("login --server must not read server.json")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(credential_profile.Profile, "load_server", never)
+        assert login(monkeypatch, path, "--server", issuer.url) == 0
+    assert capsys.readouterr().out.endswith("Signed in to Keeplane.\n")
+    # Left exactly as it was: never trusted, never silently rewritten.
+    after = (path / "server.json").lstat()
+    assert (after.st_ino, after.st_mode, after.st_size) == (
+        before.st_ino,
+        before.st_mode,
+        before.st_size,
+    )
+    with opened(path) as profile:
+        assert profile.load().issuer == issuer.url
+    # Signing out then keeps the server just signed in to.
+    monkeypatch.setattr("sys.argv", ["keeplane", "logout", "--profile", str(path)])
+    assert keeplane.main() == 0
+    assert saved_server(path) == issuer.url
+    if how == "symlink":
+        assert (tmp_path / "outside").read_bytes().startswith(b'{"format"')
+
+
+# NB-15
+@pytest.mark.parametrize("how", BAD_SERVER_FILES)
+def test_nb_15_forget_removes_an_unusable_kept_server(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+    how,
+):
+    path = tmp_path / "profile"
+    unusable_server_file(path, tmp_path / "outside", how)
+    monkeypatch.setattr("sys.argv", ["keeplane", "forget", "--profile", str(path)])
+    assert keeplane.main() == 0
+    assert capsys.readouterr().out == (
+        "Removed the server address Keeplane couldn't use. "
+        "Run `keeplane login --server <address>` to sign in.\n"
+    )
+    assert {item.name for item in path.iterdir()} == {"lock"}
+    if how == "symlink":
+        assert (tmp_path / "outside").exists()
+    assert login(monkeypatch, path) == 1
+    assert capsys.readouterr().err == browser_login.NO_SERVER + "\n"
+    assert issuer.device_starts == 0
+
+
+# NB-16
+def test_nb_16_forget_when_signed_out_keeps_a_usable_server(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    path = tmp_path / "profile"
+    with opened(path, create=True) as profile:
+        profile.save_server(issuer.url)
+    monkeypatch.setattr("sys.argv", ["keeplane", "forget", "--profile", str(path)])
+    assert keeplane.main() == 0
+    assert capsys.readouterr().out == "You're already signed out of Keeplane.\n"
+    assert saved_server(path) == issuer.url

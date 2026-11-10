@@ -21,6 +21,23 @@ again when the server is back. `keeplane forget` removes only the local copy and
 doesn't revoke anything at the server; it keeps the server address too
 ([profile storage and recovery](cli-account-profile.md)).
 
+### If the kept server address can't be used
+
+Keeplane never trusts or rewrites a kept server address that is damaged or unsafe:
+not valid JSON, an extra field, too big, the wrong permissions, or a link. A plain
+`keeplane login` then exits 1 and says "Keeplane can't use the server address it
+kept for this profile. Run `keeplane login --server <address>`, or `keeplane
+forget` to remove it." Either way out works:
+
+- `keeplane login --server <address>` signs in without reading the file. The
+  file stays as it was until your next `logout` replaces it with the server you
+  signed in to.
+- `keeplane forget`, while you're signed out, removes the file (a link is
+  removed, never what it points to) and says "Removed the server address Keeplane
+  couldn't use. Run `keeplane login --server <address>` to sign in." With a
+  usable address it removes nothing and says "You're already signed out of
+  Keeplane."
+
 ```mermaid
 flowchart LR
   Logout[keeplane logout] --> Revoke[Server revokes the sign-in]

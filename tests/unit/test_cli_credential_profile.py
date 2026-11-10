@@ -6,8 +6,10 @@ import uuid
 import pytest
 
 from components.cli.credential_profile import (
+    UNUSABLE_SERVER,
     Credential,
     ProfileError,
+    UnusableServer,
     opened,
     saved_server,
 )
@@ -166,14 +168,100 @@ def test_an_unusable_server_address_is_refused(saved, content):
     with opened(path) as profile:
         profile.forget()
     (path / "server.json").write_bytes(content)
-    with pytest.raises(ProfileError, match="invalid"):
+    with pytest.raises(UnusableServer) as error:
         saved_server(path)
+    assert str(error.value) == UNUSABLE_SERVER
 
 
-def test_an_unsafe_server_file_is_refused(saved):
+VALID_SERVER = b'{"format": "keeplane-server-v1", "server": "https://a.example"}'
+
+
+def make_unsafe(path, outside, unsafe):
+    """Leave an unsafe server.json whose content would otherwise be valid."""
+    target = path / "server.json"
+    outside.write_bytes(VALID_SERVER)
+    outside.chmod(0o600)
+    if unsafe == "file_mode":
+        target.write_bytes(VALID_SERVER)
+        target.chmod(0o644)
+    elif unsafe == "symlink":
+        target.symlink_to(outside)
+    elif unsafe == "dangling symlink":
+        target.symlink_to(outside.parent / "nowhere")
+    elif unsafe == "hardlink":
+        os.link(outside, target)
+    else:
+        os.mkfifo(target, 0o600)
+
+
+UNSAFE_SERVER = ["file_mode", "symlink", "dangling symlink", "hardlink", "fifo"]
+
+
+@pytest.mark.parametrize("unsafe", UNSAFE_SERVER)
+def test_an_unsafe_server_file_is_refused_without_being_read(saved, tmp_path, unsafe):
     path, _ = saved
     with opened(path) as profile:
         profile.forget()
-    (path / "server.json").chmod(0o644)
-    with pytest.raises(ProfileError):
+    (path / "server.json").unlink()
+    make_unsafe(path, tmp_path / "outside", unsafe)
+    with pytest.raises(UnusableServer) as error:
         saved_server(path)
+    assert str(error.value) == UNUSABLE_SERVER
+    assert str(path) not in str(error.value)
+
+
+@pytest.mark.parametrize("unsafe", UNSAFE_SERVER)
+def test_an_unusable_server_file_does_not_block_the_profile(saved, tmp_path, unsafe):
+    # `login --server` must work: the profile opens and saves without the file.
+    path, credential = saved
+    make_unsafe(path, tmp_path / "outside", unsafe)
+    with opened(path) as profile:
+        assert profile.load() == credential
+        with pytest.raises(UnusableServer):
+            profile.load_server()
+    assert (tmp_path / "outside").read_bytes() == VALID_SERVER
+
+
+@pytest.mark.parametrize("unsafe", [*UNSAFE_SERVER, "malformed"])
+def test_remove_unusable_server_unlinks_only_the_bad_entry(saved, tmp_path, unsafe):
+    path, _ = saved
+    with opened(path) as profile:
+        profile.forget()
+    (path / "server.json").unlink()
+    if unsafe == "malformed":
+        (path / "server.json").write_bytes(b"[invalid")
+        (path / "server.json").chmod(0o600)
+    else:
+        make_unsafe(path, tmp_path / "outside", unsafe)
+    with opened(path) as profile:
+        assert profile.remove_unusable_server() is True
+    assert {item.name for item in path.iterdir()} == {"lock"}
+    if unsafe != "malformed":
+        # A link's target is never touched.
+        assert (tmp_path / "outside").read_bytes() == VALID_SERVER
+    assert saved_server(path) is None
+
+
+def test_remove_unusable_server_keeps_a_usable_address(saved):
+    path, _ = saved
+    with opened(path) as profile:
+        profile.forget()
+        assert profile.remove_unusable_server() is False
+    assert saved_server(path) == "https://keeplane.example"
+
+
+def test_sign_out_replaces_an_unusable_server_file(saved, tmp_path):
+    path, _ = saved
+    make_unsafe(path, tmp_path / "outside", "symlink")
+    with opened(path) as profile:
+        profile.forget()
+    assert not (path / "server.json").is_symlink()
+    assert saved_server(path) == "https://keeplane.example"
+    assert (tmp_path / "outside").read_bytes() == VALID_SERVER
+
+
+def test_a_server_json_directory_still_blocks_the_profile(saved):
+    path, _ = saved
+    (path / "server.json").mkdir(mode=0o700)
+    with pytest.raises(ProfileError, match="unsafe file"), opened(path):
+        pytest.fail("A directory in the profile must be refused")

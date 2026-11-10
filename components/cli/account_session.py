@@ -2,19 +2,33 @@
 
 import argparse
 import json
+import os
 import sys
 
 if __package__:
     from .credential_profile import ProfileError, opened
     from .server_connection import ConnectionError, account, logout
+    from .sign_in_again import ALREADY_SIGNED_OUT
 else:
     from credential_profile import ProfileError, opened
     from server_connection import ConnectionError, account, logout
+    from sign_in_again import ALREADY_SIGNED_OUT
+
+
+REMOVED_UNUSABLE_SERVER = (
+    "Removed the server address Keeplane couldn't use. "
+    "Run `keeplane login --server <address>` to sign in."
+)
 
 
 def run(action, path):
     with opened(path) as profile:
         if action == "forget":
+            if "credential.json" not in os.listdir(profile.directory):
+                # Signed out: only a kept address that can't be used is removed.
+                if profile.remove_unusable_server():
+                    return REMOVED_UNUSABLE_SERVER
+                return ALREADY_SIGNED_OUT
             profile.forget()
             return "Local credential removed; server revocation was not requested."
         credential = profile.load()
