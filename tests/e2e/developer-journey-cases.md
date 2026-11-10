@@ -67,16 +67,22 @@ both developers, and waits for the enroller to settle. The project stays on **Pr
 
 | DEV-06 | After DEV-05, on a machine with no browser (over SSH: `SSH_CONNECTION` is set, there is no `DISPLAY`, and the fixture browser is still named in `BROWSER`), the developer runs `keeplane login` with no options, then approves the code from another browser. | The first line is `No browser can open here, so sign in from another device.`, then `Open http://127.0.0.1:3000/oauth/confirm-device/ and enter code <code>.` (the server kept at sign-out is reused). Approving the code on Keeplane's device page signs the CLI in: `Signed in to Keeplane.`, exit 0, the saved sign-in is the device client's, and `whoami` names the developer. The fixture browser is never used (ADR 028: over SSH, always the device code). |
 | DEV-07 | The developer's CLI sign-in is expired on the server: its access token is aged past its end through Django's `oauth2_provider` models in the preview's `app` container. They run `keeplane code "anything"` in a script, then again in a terminal, where they answer yes to signing in again, approve the device code elsewhere, and answer no to starting the task. | In the script: exit 1, nothing on stdout, and only `Your Keeplane sign-in has expired, so nothing was sent. Run keeplane login to sign in again.` In the terminal: `Your Keeplane sign-in has expired, so nothing was sent. Sign in again now? [Y/n]`; after signing in, `Signed in. Start the task now? [Y/n]`; after no, `You're signed in. The task wasn't started, so nothing was sent. Run it again when you're ready.` and exit 1. Across both runs the fixture model receives nothing, the guarded gateway's log shows no new request, and the `cloud-provider` fixture's call count is unchanged. Afterwards `whoami` works: the new sign-in is saved. |
-| DEV-08 | The first admin signs in from the CLI (`keeplane login --server …`, browser flow) and, in their own clone of the sample repo, does DEV-02 and DEV-03: `keeplane models`, `keeplane code --model <a model the project doesn't allow> "anything"`, `keeplane use` with the fixture model, and `keeplane code "Make the failing test pass"`. | The same limits as the developer: `models` lists exactly what the developer's `models` lists for that project, and a model outside them is refused with `This model is not currently allowed for the project.` and exit 1, with nothing sent to the model, the gateway or the cloud fixture. Then the task works as in DEV-03: at least 3 answers, `read` then `edit`, `calc.py` fixed and the only changed file, the test passes, the answer is shown, with `Using <model> for this task, as you chose with keeplane use.` and `Answered by <model>.` On **Projects** the same project, still not set up, now lists the first admin beside the developer. The admin's CLI sign-in is signed out afterwards. |
+| DEV-08 | The first admin signs in from the CLI (`keeplane login --server …`, browser flow) and, in their own clone of the sample repo, does DEV-02 and DEV-03: `keeplane models`, `keeplane code --model <a model on the admin's list that isn't approved, so the project doesn't allow it> "anything"`, `keeplane use` with the fixture model, and `keeplane code "Make the failing test pass"`. | The same limits as the developer: `models` lists exactly what the developer's `models` lists for that project, and a model outside them is refused with `This model is not currently allowed for the project.` and exit 1, with nothing sent to the model, the gateway or the cloud fixture. Then the task works as in DEV-03: at least 3 answers, `read` then `edit`, `calc.py` fixed and the only changed file, the test passes, the answer is shown, with `Using <model> for this task, as you chose with keeplane use.` and `Answered by <model>.` On **Projects** the same project, still not set up, now lists the first admin beside the developer. The admin's CLI sign-in is signed out afterwards. |
 
 DEV-09 (the provider refuses the developer's own key) and DEV-10 (a task sent
-on the developer's own key) aren't in this suite yet. The default preview can't
-set up a model for developers' own keys: adding one fails with "OpenAI didn't
-answer. Nothing was saved." The own-key checks in `provider_probe.py` and
-`key_validation.py`, which also run when a key is saved, rechecked or used,
-send a developer's key only to an HTTPS provider address, and the preview's
-`cloud-provider` fixture is plain HTTP inside Docker. Both cases wait on that
-decision. Meanwhile RK-INT-01 to RK-INT-03 in
+on the developer's own key) are proposed own-key cases. They aren't yet in the
+task's DEV-01 to DEV-08 table, and they aren't in this suite. The default
+preview can't set up a model for developers' own keys: adding one fails with
+"OpenAI didn't answer. Nothing was saved." When an admin adds an own-key model,
+`provider_probe.py` refuses an address that isn't HTTPS; it sends no key.
+`key_validation.py` sends a developer's key only to an HTTPS address, when the
+key is saved, rechecked or used. The preview's `cloud-provider` fixture is
+plain HTTP inside Docker.
+
+Lead decision: the preview's fixture provider will get HTTPS, with a test
+certificate that only the preview app trusts. Plain HTTP for keys won't be
+allowed. That is a follow-up task, and DEV-09 and DEV-10 wait on it.
+Meanwhile RK-INT-01 to RK-INT-03 in
 [cli-refused-key-cases.md](../integration/cli-refused-key-cases.md) check the
 refused key against the real key routes.
 

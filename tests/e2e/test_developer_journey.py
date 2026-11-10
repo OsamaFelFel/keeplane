@@ -944,9 +944,21 @@ def later_cases(record, context):
             expected = sorted(row["id"] for row in json.loads(theirs[1])["models"])
         except (ValueError, KeyError, TypeError):
             shown, expected = None, []
-        unlisted = "journey-unlisted-" + uuid.uuid4().hex[:8]
+        # A real model the admin's list shows as not approved, so the
+        # project doesn't allow it.
+        _, models, _ = context["admin"].fetch("/api/models")
+        unapproved = sorted(
+            row["id"]
+            for row in (models or {}).get("models", [])
+            if not row.get("approved")
+        )
+        unlisted = unapproved[0] if unapproved else None
         before = sent_counts(coder)
-        outside = admin_cli.run("code", "--model", unlisted, "anything", cwd=clone)
+        outside = (
+            admin_cli.run("code", "--model", unlisted, "anything", cwd=clone)
+            if unlisted
+            else (None, "", "")
+        )
         time.sleep(2)
         refused_sent = sent_counts(coder)
         chosen = admin_cli.run("use", coder_model, cwd=clone)
@@ -968,6 +980,8 @@ def later_cases(record, context):
             and shown is not None
             and shown == expected
             and coder_model in shown
+            and unlisted is not None
+            and unlisted not in shown
             and outside[0] == 1
             and outside[2] == coding.NOT_ALLOWED
             and None not in before
@@ -996,6 +1010,7 @@ def later_cases(record, context):
                 "models_exit": listed[0],
                 "listed": shown,
                 "developer_listed": expected,
+                "unapproved_model": unlisted,
                 "unlisted_model_exit": outside[0],
                 "unlisted_model_message": outside[2],
                 "sent_for_unlisted_model": [

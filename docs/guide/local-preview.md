@@ -172,8 +172,8 @@ approved for their project; until you approve a model it serves nothing. See
 ### Try the developer half by hand
 
 This is what the [developer journey check](../../tests/e2e/developer-journey-cases.md)
-(DEV-01 to DEV-05, then DEV-06 to DEV-08) runs. You need OpenCode V2 2.0.27 on your `PATH`
-([install the CLI](cli-install.md)) and a model approved for Public data, for
+(DEV-01 to DEV-05, then DEV-06 to DEV-08) runs. You need OpenCode V2 2.0.27 on
+your `PATH` ([install the CLI](cli-install.md)) and a model approved for Public data, for
 example `demo-qwen` from [Try the application](#try-the-application). The small
 local Qwen often can't make the tool calls an edit needs, so expect an answer
 but not always a file change; the automated check uses a fixture model that
