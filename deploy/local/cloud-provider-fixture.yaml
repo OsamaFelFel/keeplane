@@ -1,7 +1,9 @@
 # Disposable authenticated model-provider fixture for the local kind preview.
 # It serves HTTPS with the test certificate kind-up.sh makes on every start
 # (Secret cloud-provider-tls); the app and gateway copies trust its CA through
-# trust.extraCaBundle in values.yaml.
+# trust.extraCaBundle in values.yaml. The protected release
+# (kind_protected.py) runs its own copy in its namespace and reaches it on
+# port 443 as api.openai.com.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -68,4 +70,7 @@ spec:
   ports:
     - name: https
       port: 18443
+      targetPort: 18443
+    - name: https-default
+      port: 443
       targetPort: 18443

@@ -56,25 +56,31 @@ remain available at [their recorded commit](https://github.com/OsamaFelFel/keepl
 The **Kubernetes live checks** workflow (`.github/workflows/kubernetes-live.yml`)
 runs on every pull request and on `main`. On a GitHub runner it installs pinned
 kind, kubectl and Helm (each checked against a recorded SHA-256), runs
-`deploy/local/kind-up.sh` with `KEEPLANE_KIND_QWEN=off` and
-`KEEPLANE_KIND_LOAD_IMAGES=off`, which builds the app
-image and installs the chart twice on one kind cluster: with its managed gateway
-(two copies and the installer-made key Secret) and against a separately
-installed gateway. It then runs the test files on the workflow's `LIVE_TESTS`
+`deploy/local/kind-up.sh` with `KEEPLANE_KIND_QWEN=off`,
+`KEEPLANE_KIND_LOAD_IMAGES=off` and `KEEPLANE_KIND_PROTECTED=on`, which builds the app
+images and installs the chart three times on one kind cluster: the SQLite trial
+with its managed gateway (two copies and the installer-made key Secret), the
+same against a separately installed gateway, and the protected developer
+release (PostgreSQL, CLI sign-in and the model enroller behind ingress-nginx at
+`https://keeplane.kind.test`). It then runs the test files on the workflow's `LIVE_TESTS`
 line: `e2e/test_local.py`, `e2e/test_kind.py`, `e2e/test_kind_private_ca.py`
 (the fixture provider over HTTPS with a test CA the chart's
 `trust.extraCaBundle` adds),
 `e2e/test_gateway_secret_rotation.py`, `e2e/test_existing_gateway_preflight.py`,
 `e2e/test_gateway_down.py` and `e2e/test_gateway_copy_stop.py`, which stops one
 managed gateway copy mid-stream and during admin model changes, then brings it
-back and checks it serves the current models. The job fails if any of them is skipped,
+back and checks it serves the current models. Then, in Alpine with the pinned
+coding runtime, it runs the file on its `RUNTIME_LIVE_TESTS` line,
+`e2e/test_kind_protected.py` ([cases](e2e/kubernetes-developer-cases.md)):
+device sign-in and `keeplane code` through the protected release's public
+address, on a shared key, a developer's own key and a refused own key. The job fails if any of them is skipped,
 fails or reports an incomplete case set. Reports, the JUnit file and the
 cluster's state and logs are uploaded as the `kubernetes-live-<commit>`
 artifact.
 
 The cluster has kind's default network plugin, which does not enforce
-NetworkPolicy, and no ingress controller; the app is reached through kind's
-NodePort mapping and a port-forward. The network policy, ingress, full chart
+NetworkPolicy. The SQLite trial has no ingress: its app is reached through
+kind's NodePort mapping and a port-forward. The network policy, ingress, full chart
 (FULL, EXEDGE), browser and Qwen cases are not run there.
 
 The same workflow's second job, **Chart on an isolated kind network**, runs

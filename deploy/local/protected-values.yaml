@@ -1,0 +1,92 @@
+# The protected developer release on the local kind cluster
+# (KEEPLANE_KIND_PROTECTED=on in kind-up.sh, which runs kind_protected.py):
+# PostgreSQL accounts with CLI sign-in, the managed gateway with the model
+# enroller on both copies, and one public HTTPS address,
+# https://keeplane.kind.test, for the web UI, the CLI and protected model
+# calls. kind_protected.py makes every Secret named here and sets app.image to
+# the loaded image by its digest. See docs/guide/kubernetes-local.md.
+app:
+  # Set by kind_protected.py: the postgres-cli-auth-trial image, by digest.
+  image: ""
+  pullPolicy: Never
+  replicaCount: 2
+  cliSignIn:
+    enabled: true
+  postgres:
+    enabled: true
+    # The fixture database in the same namespace, with a test certificate
+    # for the name "db"; the app checks it (verify-full).
+    host: db
+    database: keeplane
+    user: keeplane_app
+    credentialsSecret: keeplane-app-db
+    identitySecret: keeplane-identity
+    caSecret: keeplane-database-ca
+    providerKeysClaim: keeplane-provider-keys
+    migration:
+      user: keeplane_migrate
+      credentialsSecret: keeplane-migration-db
+
+# The fixture provider's test CA (kind_protected.py). Inside this cluster the
+# name api.openai.com points to that fixture, so nothing reaches the real
+# provider.
+trust:
+  extraCaBundle:
+    configMapName: cloud-provider-ca
+    key: ca.crt
+
+ingress:
+  enabled: true
+  className: nginx
+  host: keeplane.kind.test
+  tlsSecretName: keeplane-tls
+
+gateway:
+  mode: managed
+  install: true
+  keysSecret: keeplane-gateway-keys
+  copies: 2
+  # The gateway copies read the provider-key files the app writes.
+  extraVolumes:
+    - name: provider-keys
+      persistentVolumeClaim:
+        claimName: keeplane-provider-keys
+  extraVolumeMounts:
+    - name: provider-keys
+      mountPath: /provider-keys
+      readOnly: true
+  protectedIngress:
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "190"
+  enroller:
+    enabled: true
+    approvalsUser: keeplane_enroller
+    approvalsSecret: keeplane-enroller-db
+    statusRoles:
+      - keeplane_status_0
+      - keeplane_status_1
+    statusSecret: keeplane-guard-status-db
+
+agentgateway-standalone:
+  extraEnv:
+    - name: KEEPLANE_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-db
+          key: password
+    - name: GATEWAY_RUNTIME_KEY_HASH
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-keys
+          key: runtime-key-hash
+    - name: GATEWAY_ADMIN_KEY_HASH
+      valueFrom:
+        secretKeyRef:
+          name: keeplane-gateway-keys
+          key: admin-key-hash
+  podSecurityContext:
+    fsGroup: null
+  database:
+    postgres:
+      url: postgresql://keeplane:${KEEPLANE_DB_PASSWORD}@postgres:5432/keeplane

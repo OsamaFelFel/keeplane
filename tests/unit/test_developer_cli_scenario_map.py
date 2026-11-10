@@ -18,6 +18,7 @@ MAP = TESTS / "e2e/developer-cli-cases.md"
 HEADING = "## Spec 009 scenarios (ST29–ST31)"
 CHECKS = ROOT / ".github/workflows/checks.yml"
 LIVE_PREVIEW = ROOT / ".github/workflows/live-preview.yml"
+KUBERNETES_LIVE = ROOT / ".github/workflows/kubernetes-live.yml"
 
 # The scenario names in Spec 009 (product/specs/009-developer-cli.md).
 SCENARIOS = {
@@ -46,6 +47,7 @@ JOBS = {
     "cli-sign-in": CHECKS,
     "coding-runtime": CHECKS,
     "live-gateway": LIVE_PREVIEW,
+    "kind": KUBERNETES_LIVE,
 }
 # Each case prefix's catalog, the test file that runs it and the CI job that
 # runs that file (None: CI doesn't run it). A case counts only if its row is in
@@ -61,6 +63,11 @@ SOURCES = {
         "e2e/preview-sign-in-live-cases.md",
         "e2e/test_preview_sign_in_live.py",
         "live-gateway",
+    ),
+    "KDEV": (
+        "e2e/kubernetes-developer-cases.md",
+        "e2e/test_kind_protected.py",
+        "kind",
     ),
     "ADM-INT": (
         "integration/cli-admin-sign-in-cases.md",
@@ -125,6 +132,7 @@ CASE_SOURCES = {
 SUITE_TESTS = {
     "DEV": ("test_developer_journey", "CASES"),
     "PSI-LIVE": ("test_preview_sign_in_live", "CASES"),
+    "KDEV": ("test_kind_protected", "CASES"),
     "KEY-09": ("test_native_api_keys_only", None),
 }
 UNRUN_MARKS = {"live", "optional"}
