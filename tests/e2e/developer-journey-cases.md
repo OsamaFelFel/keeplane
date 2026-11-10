@@ -3,7 +3,8 @@
 **Edition:** Open Source. Spec 009 as a whole, task 009-13, ADR 028, ADR 029,
 ADR 030, and Spec 004 ST26 (DEV-03b). This is the developer half of the MVP
 journey, DEV-01 to DEV-05 in order, with DEV-03b checked on DEV-03's task,
-against `python3 deploy/local/up.py` started with no options. The admin half
+then DEV-06 to DEV-08 (device sign-in, an expired sign-in, the first admin
+coding), against `python3 deploy/local/up.py` started with no options. The admin half
 is in [integrated-demo-cases.md](integrated-demo-cases.md). To try the
 same steps by hand, see
 [the local preview guide](../../docs/guide/local-preview.md#try-the-developer-half-by-hand).
@@ -20,8 +21,9 @@ KEEPLANE_OPENCODE_V2_BIN=/path/to/opencode \
 The runtime is built for musl, so on most Linux machines it runs only in
 Alpine; the live-preview workflow runs the suite there, on the host network,
 after the other live gateway checks. Without `KEEPLANE_OPENCODE_V2_BIN`,
-DEV-01, DEV-02 and DEV-05 still run, DEV-03, DEV-03b and DEV-04 are reported
-as not run, and the suite is skipped. The workflow fails on any skipped case. The
+DEV-01, DEV-02, DEV-05, DEV-06 and DEV-07 still run (DEV-07 needs an
+`opencode` on `PATH`, but never starts it), DEV-03, DEV-03b, DEV-04 and DEV-08
+are reported as not run, and the suite is skipped. The workflow fails on any skipped case. The
 suite also skips, with the reason, when the preview, its credentials, Docker,
 the model enroller or that port are not available.
 
@@ -51,8 +53,8 @@ the model enroller or that port are not available.
 
 The admin adds both models through the same API the **Add model** screen uses,
 and the suite waits until the model enroller reports them enrolled. Afterwards
-it signs both developers out, removes both models and both developers, and
-waits for the enroller to settle. The project stays on **Projects**.
+it signs both developers and the admin's CLI out, removes both models and
+both developers, and waits for the enroller to settle. The project stays on **Projects**.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
@@ -63,11 +65,20 @@ waits for the enroller to settle. The project stays on **Projects**.
 | DEV-04 | The second developer signs in and runs one task on the fixture model in their clone. Then the first developer runs one task on the cloud model and runs `keeplane usage`. | Both tasks succeed; the cloud task's answer is shown and `Answered by <cloud model>.` The first developer's usage has exactly the two models they used. The fixture model's totals for today and this month are exactly 10 input and 5 output tokens per answer of the first developer's own DEV-03 task, with no requests missing tokens, so the second developer's task isn't in them; the second developer's own usage holds their task. The cloud model shows 2 input and 3 output tokens per request for today and this month, and a cost marked as an estimate: above zero, or, when the model was added within the same UTC hour (as here), not all its tokens are priced and `keeplane usage` says `<model>: some of its tokens couldn't be priced, so its cost may be low.` (ADR 029). In `keeplane usage`, the local model shows those tokens and `—` for cost, the cloud model shows a dollar cost, and the table says `Costs are estimates from each provider's list price (price list of …), in US dollars.` |
 | DEV-05 | They run `keeplane logout`, then `keeplane code "anything"` and `keeplane models`. Then the old sign-in is sent straight to the guarded gateway. | `logout` exits 0. `code` and `models` each exit 1 with `You're signed out of Keeplane, so nothing was sent. Run keeplane login to sign in.` and print nothing else. The fixture model receives nothing, and the guarded gateway's log shows no new request while they run. The direct request with the old sign-in is refused (401 or 403), and the gateway's log shows exactly that one request, so the log count is known to work (task 009-05's sign-out check). |
 
-DEV-06 to DEV-08 (device sign-in, an expired sign-in, the first admin coding)
-aren't in this suite yet; device sign-in on the preview is checked by PSI-LIVE-02
-in [preview-sign-in-live-cases.md](preview-sign-in-live-cases.md). A manual run with the bundled
-local Qwen, which checks only that an answer comes back through the gateway, is
-in [the local preview guide](../../docs/guide/local-preview.md#try-the-developer-half-by-hand).
+| DEV-06 | After DEV-05, on a machine with no browser (over SSH: `SSH_CONNECTION` is set, there is no `DISPLAY`, and the fixture browser is still named in `BROWSER`), the developer runs `keeplane login` with no options, then approves the code from another browser. | The first line is `No browser can open here, so sign in from another device.`, then `Open http://127.0.0.1:3000/oauth/confirm-device/ and enter code <code>.` (the server kept at sign-out is reused). Approving the code on Keeplane's device page signs the CLI in: `Signed in to Keeplane.`, exit 0, the saved sign-in is the device client's, and `whoami` names the developer. The fixture browser is never used (ADR 028: over SSH, always the device code). |
+| DEV-07 | The developer's CLI sign-in is expired on the server: its access token is aged past its end through Django's `oauth2_provider` models in the preview's `app` container. They run `keeplane code "anything"` in a script, then again in a terminal, where they answer yes to signing in again, approve the device code elsewhere, and answer no to starting the task. | In the script: exit 1, nothing on stdout, and only `Your Keeplane sign-in has expired, so nothing was sent. Run keeplane login to sign in again.` In the terminal: `Your Keeplane sign-in has expired, so nothing was sent. Sign in again now? [Y/n]`; after signing in, `Signed in. Start the task now? [Y/n]`; after no, `You're signed in. The task wasn't started, so nothing was sent. Run it again when you're ready.` and exit 1. Across both runs the fixture model receives nothing, the guarded gateway's log shows no new request, and the `cloud-provider` fixture's call count is unchanged. Afterwards `whoami` works: the new sign-in is saved. |
+| DEV-08 | The first admin signs in from the CLI (`keeplane login --server …`, browser flow) and, in their own clone of the sample repo, does DEV-02 and DEV-03: `keeplane models`, `keeplane code --model <a model the project doesn't allow> "anything"`, `keeplane use` with the fixture model, and `keeplane code "Make the failing test pass"`. | The same limits as the developer: `models` lists exactly what the developer's `models` lists for that project, and a model outside them is refused with `This model is not currently allowed for the project.` and exit 1, with nothing sent to the model, the gateway or the cloud fixture. Then the task works as in DEV-03: at least 3 answers, `read` then `edit`, `calc.py` fixed and the only changed file, the test passes, the answer is shown, with `Using <model> for this task, as you chose with keeplane use.` and `Answered by <model>.` On **Projects** the same project, still not set up, now lists the first admin beside the developer. The admin's CLI sign-in is signed out afterwards. |
+
+DEV-09 (the provider refuses the developer's own key) and DEV-10 (a task sent
+on the developer's own key) aren't in this suite yet. The default preview can't
+set up a model for developers' own keys: adding one fails with "OpenAI didn't
+answer. Nothing was saved." The own-key checks in `provider_probe.py` and
+`key_validation.py`, which also run when a key is saved, rechecked or used,
+send a developer's key only to an HTTPS provider address, and the preview's
+`cloud-provider` fixture is plain HTTP inside Docker. Both cases wait on that
+decision. Meanwhile RK-INT-01 to RK-INT-03 in
+[cli-refused-key-cases.md](../integration/cli-refused-key-cases.md) check the
+refused key against the real key routes.
 
 The report, `developer-journey.json`, records each case's observations without
 any credential, under `test-results/` (not kept in Git).

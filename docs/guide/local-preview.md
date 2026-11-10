@@ -172,7 +172,7 @@ approved for their project; until you approve a model it serves nothing. See
 ### Try the developer half by hand
 
 This is what the [developer journey check](../../tests/e2e/developer-journey-cases.md)
-(DEV-01 to DEV-05) runs. You need OpenCode V2 2.0.27 on your `PATH`
+(DEV-01 to DEV-05, then DEV-06 to DEV-08) runs. You need OpenCode V2 2.0.27 on your `PATH`
 ([install the CLI](cli-install.md)) and a model approved for Public data, for
 example `demo-qwen` from [Try the application](#try-the-application). The small
 local Qwen often can't make the tool calls an edit needs, so expect an answer
@@ -220,6 +220,23 @@ always makes the same edit.
    keeplane logout
    keeplane code "anything"
    ```
+
+7. Sign in with no browser (DEV-06). Over SSH, or with no display, the CLI
+   says `No browser can open here, so sign in from another device.` and shows
+   an address and a code; open the address on any device with a browser,
+   enter the code and allow the CLI.
+
+   ```sh
+   keeplane login
+   ```
+
+8. When your sign-in has expired (DEV-07), `keeplane code` says so, sends
+   nothing and, in a terminal, offers to sign you in again. In a script it
+   exits 1 and tells you to run `keeplane login`.
+
+9. The first admin can do the same from the CLI (DEV-08): sign in with
+   `keeplane login` and run a task. They get the same models as a developer
+   on that project, and the repo then lists them on **Projects** too.
 
 ## Isolated networks
 
