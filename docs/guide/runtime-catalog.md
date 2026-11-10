@@ -115,7 +115,9 @@ The answer lists each model you used this month with `input_tokens`,
 
 `cost_partial` is `true` for a period whose cost leaves out tokens counted
 before Keeplane recorded the model's provider (including the rest of the hour
-it was added in); otherwise `false`.
+it was added in, when the model's name already had usage in that hour);
+otherwise `false`. A model whose name had no usage yet is priced from the hour
+it was added.
 
 `price_list` gives the shipped price list's `date` and `currency` (`USD`). Costs
 are estimates from each provider's public list price; discounts and negotiated

@@ -1,6 +1,6 @@
 """Developer usage through separate app processes on SQLite and PostgreSQL.
 
-Spec 009 ST31 (D191, ADR 029). Cases DU-S1 to DU-S6 in developer-usage-cases.md.
+Spec 009 ST31 (D191, ADR 029). Cases DU-S1 to DU-S7 in developer-usage-cases.md.
 PostgreSQL cases run when ``KEEPLANE_TEST_POSTGRES_*`` names a disposable
 server (CI's PostgreSQL job sets them); elsewhere they are skipped.
 """
@@ -8,6 +8,7 @@ server (CI's PostgreSQL job sets them); elsewhere they are skipped.
 import json
 import os
 import secrets
+import select
 import subprocess
 import sys
 import uuid
@@ -208,3 +209,50 @@ def test_du_s6_two_app_copies_add_to_one_hourly_total_and_old_totals_go(app):
     assert sum(row["requests"] for row in stored) == 40
     assert sum(row["input_tokens"] for row in stored) == 400
     assert len(stored) <= 2 and {row["user_id"] for row in stored} == {app.dev["id"]}
+
+
+def send(process, action, **values):
+    process.child.stdin.write(json.dumps({"action": action, **values}) + "\n")
+    process.child.stdin.flush()
+
+
+def answer(process, wait=30):
+    """The process's next line, or None if it gives none within ``wait`` seconds."""
+    ready, _, _ = select.select([process.child.stdout], [], [], wait)
+    if not ready:
+        return None
+    line = process.child.stdout.readline()
+    assert line, "App process stopped: " + process.child.stderr.read()[-2000:]
+    return json.loads(line)
+
+
+def test_du_s7_a_report_lands_either_before_or_after_the_origin_is_recorded(app):
+    second = app.start()
+    # One moment for both copies, so the test can't cross an hour boundary.
+    at = datetime.now(timezone.utc).replace(minute=20).isoformat()
+    report = {"user_id": app.dev["id"], "at": at}
+
+    # A report still being written when the origin is recorded: the record
+    # waits for it, sees it, and leaves the hour unpriced.
+    send(app.first, "add_report", model="written-first", hold=True, **report)
+    assert answer(app.first) == {"held": True}
+    send(second, "record_origin", model="written-first", at=at)
+    assert answer(second, wait=2) is None
+    app.first.child.stdin.write("go\n")
+    app.first.child.stdin.flush()
+    assert answer(app.first)["ok"]
+    assert answer(second) == {"ok": True, "result": False}
+
+    # A report sent while the origin is being recorded waits for it, lands
+    # after it, and is priced as the model's own usage.
+    send(second, "record_origin", model="written-after", at=at, hold=True)
+    assert answer(second) == {"held": True}
+    send(app.first, "add_report", model="written-after", **report)
+    assert answer(app.first, wait=2) is None
+    second.child.stdin.write("go\n")
+    second.child.stdin.flush()
+    assert answer(second) == {"ok": True, "result": True}
+    assert answer(app.first)["ok"]
+    stored = {row["model_id"]: row for row in second.ask("rows")}
+    assert stored["written-first"]["requests"] == 1
+    assert stored["written-after"]["requests"] == 1

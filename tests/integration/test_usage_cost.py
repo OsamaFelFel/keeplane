@@ -1,6 +1,6 @@
 """Estimated cost in a developer's own usage, on the test SQLite database.
 
-Spec 009 ST31 (D186, D189), ADR 029, task 009-09. Cases DU-C1 to DU-C9 in
+Spec 009 ST31 (D186, D189), ADR 029, task 009-09. Cases DU-C1 to DU-C11 in
 developer-usage-cases.md. Models are added through Keeplane's real add flow:
 cloud models against the cloud-provider fixture, local ones from a runner,
 under a test price row.
@@ -99,9 +99,9 @@ def add_local(priced, name):
     assert status == 200, body
 
 
-def used(priced, model, input_tokens, output_tokens, requests=1, at=None):
+def used(priced, model, input_tokens, output_tokens, requests=1, at=None, by=None):
     totals.add(
-        priced.developer.id,
+        (by or priced.developer).id,
         model,
         {
             "input_tokens": input_tokens,
@@ -128,8 +128,10 @@ def test_du_c1_a_listed_cloud_model_shows_an_estimated_cost(priced, source):
         source,
         UPSTREAM[source],
     )
-    # Added at 15:20, so pricing starts with the 16:00 total.
-    used(priced, "cloud-coder", 1234, 567, at=NOW + timedelta(hours=1))
+    # Added at 15:20 under a name with no usage yet, so its first hour, 15:00,
+    # is priced too: the 15:25 total counts.
+    assert approval.origin_hour_priced
+    used(priced, "cloud-coder", 1234, 567, at=NOW + timedelta(minutes=5))
     priced.clock.now = NOW + timedelta(days=1)
     used(priced, "cloud-coder", 2_000_000, 10)
     body, found = models(priced)
@@ -207,6 +209,7 @@ def test_du_c5_usage_from_before_the_provider_was_recorded_is_not_priced(priced)
     priced.clock.now = NOW + timedelta(hours=1)
     used(priced, "reused", 1000, 1000)
     _, found = models(priced)
+    assert not ModelApproval.objects.get(pk="reused").origin_hour_priced
     item = found["reused"]
     assert item["cost_status"] == "estimate"
     assert item["this_month"]["input_tokens"] == 10_501_007
@@ -215,6 +218,23 @@ def test_du_c5_usage_from_before_the_provider_was_recorded_is_not_priced(priced)
     # so only totals from 16:00 on are priced: the 1,000 + 1,000 tokens.
     assert item["today"]["estimated_cost"] == "0.018000"
     assert item["this_month"]["estimated_cost"] == "0.018000"
+    assert item["today"]["cost_partial"] and item["this_month"]["cost_partial"]
+
+
+def test_du_c5_another_developers_usage_this_hour_keeps_the_hour_unpriced(priced):
+    # Another developer used the name at 15:05 under an earlier model; the
+    # hour is checked for every developer, so this developer's 15:25 tokens in
+    # the same hour are not priced either.
+    used(
+        priced, "reused", 1_000_000, 0, at=NOW - timedelta(minutes=15), by=priced.other
+    )
+    add_cloud(priced, "reused", "openai", "test-gpt")
+    assert not ModelApproval.objects.get(pk="reused").origin_hour_priced
+    used(priced, "reused", 1000, 1000, at=NOW + timedelta(minutes=5))
+    _, found = models(priced)
+    item = found["reused"]
+    assert item["today"]["input_tokens"] == 1000
+    assert item["today"]["estimated_cost"] == "0.000000"
     assert item["today"]["cost_partial"] and item["this_month"]["cost_partial"]
 
 
@@ -242,7 +262,11 @@ def test_du_c5_a_model_added_exactly_on_the_hour_is_priced_from_that_hour(priced
 def test_du_c6_setting_a_model_up_again_keeps_its_recorded_provider(priced):
     add_cloud(priced, "cloud-coder", "openai", "test-gpt")
     before = ModelApproval.objects.values(
-        "origin", "provider", "provider_model", "origin_recorded_at"
+        "origin",
+        "provider",
+        "provider_model",
+        "origin_recorded_at",
+        "origin_hour_priced",
     ).get(pk="cloud-coder")
     priced.clock.now = NOW + timedelta(hours=3)
     approval = ModelApproval.objects.get(pk="cloud-coder")
@@ -254,7 +278,11 @@ def test_du_c6_setting_a_model_up_again_keeps_its_recorded_provider(priced):
         key_choice="personal",
     )
     after = ModelApproval.objects.values(
-        "origin", "provider", "provider_model", "origin_recorded_at"
+        "origin",
+        "provider",
+        "provider_model",
+        "origin_recorded_at",
+        "origin_hour_priced",
     ).get(pk="cloud-coder")
     assert after == before
 
@@ -285,6 +313,80 @@ def test_du_c6_a_definition_replaced_outside_keeplane_loses_its_provider(priced)
         priced.stores.catalog.approve(
             "cloud-coder", [], "definition", added_from=("local", "", "")
         )
+
+
+def test_du_c10_a_new_name_is_priced_from_its_first_hour(priced):
+    # Usage in an earlier hour, under the name, doesn't matter: only the hour
+    # the provider is recorded in decides.
+    used(priced, "fresh", 1_000_000, 0, at=NOW - timedelta(hours=1))
+    add_cloud(priced, "fresh", "openai", "test-gpt")
+    approval = ModelApproval.objects.get(pk="fresh")
+    assert approval.origin_recorded_at == NOW and approval.origin_hour_priced
+    # A report that lands later in the same hour is this model's own usage.
+    used(priced, "fresh", 1000, 1000, at=NOW + timedelta(minutes=5))
+    used(priced, "fresh", 1000, 1000, at=NOW + timedelta(minutes=30))
+    _, found = models(priced)
+    item = found["fresh"]
+    assert item["today"]["estimated_cost"] == "0.036000"
+    # Only the 14:00 tokens are left out.
+    assert item["today"]["cost_partial"]
+    priced.clock.now = NOW + timedelta(days=1)
+    used(priced, "fresh", 1000, 1000)
+    _, found = models(priced)
+    item = found["fresh"]
+    assert item["today"]["estimated_cost"] == "0.018000"
+    assert not item["today"]["cost_partial"]
+    assert item["this_month"]["estimated_cost"] == "0.054000"
+
+
+def test_du_c10_a_name_used_by_nobody_this_hour_has_every_token_priced(priced):
+    add_cloud(priced, "fresh", "anthropic", "test-claude")
+    used(priced, "fresh", 1000, 1000, at=NOW + timedelta(minutes=1))
+    _, found = models(priced)
+    item = found["fresh"]
+    # $1 in, $5 out per million.
+    assert item["today"]["estimated_cost"] == "0.006000"
+    assert item["this_month"]["estimated_cost"] == "0.006000"
+    assert not item["today"]["cost_partial"]
+    assert not item["this_month"]["cost_partial"]
+
+
+def test_du_c10_a_name_re_added_in_the_same_hour_is_not_priced_from_it(priced):
+    # A model is added at 15:20 and used; it is replaced by another model
+    # under the same name later in the hour. The second record sees the first
+    # model's 15:25 tokens, so the hour is no longer priced.
+    add_cloud(priced, "reused", "openai", "test-gpt")
+    used(priced, "reused", 1000, 1000, at=NOW + timedelta(minutes=5))
+    approval = ModelApproval.objects.get(pk="reused")
+    priced.clock.now = NOW + timedelta(minutes=10)
+    priced.stores.catalog.approve(
+        "reused",
+        [],
+        approval.gateway_fingerprint,
+        owned_by_keeplane=True,
+        key_choice="personal",
+        added_from=("cloud", "anthropic", "test-claude"),
+    )
+    again = ModelApproval.objects.get(pk="reused")
+    assert again.origin_recorded_at == NOW + timedelta(minutes=10)
+    assert not again.origin_hour_priced
+    used(priced, "reused", 1000, 1000, at=NOW + timedelta(minutes=15))
+    _, found = models(priced)
+    item = found["reused"]
+    assert item["today"]["input_tokens"] == 2000
+    assert item["today"]["estimated_cost"] == "0.000000"
+    assert item["today"]["cost_partial"]
+
+
+def test_du_c10_clearing_the_origin_clears_the_first_hour(priced):
+    add_cloud(priced, "cloud-coder", "openai", "test-gpt")
+    approval = ModelApproval.objects.get(pk="cloud-coder")
+    assert approval.origin_hour_priced
+    priced.stores.catalog.approve(
+        "cloud-coder", [], approval.gateway_fingerprint, owned_by_keeplane=False
+    )
+    cleared = ModelApproval.objects.get(pk="cloud-coder")
+    assert (cleared.origin, cleared.origin_hour_priced) == ("", False)
 
 
 def test_du_c7_a_broken_shipped_list_shows_tokens_without_costs(priced, monkeypatch):
@@ -364,5 +466,39 @@ def test_du_c9_existing_approvals_keep_no_recorded_provider_after_the_upgrade():
                 "origin_recorded_at": None,
             }
         assert rows.count() == 2
+    finally:
+        MigrationExecutor(connection).migrate(latest)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_du_c11_origins_recorded_before_the_upgrade_keep_the_next_hour_rule():
+    before = [("model_registry", "0010_model_origin")]
+    after = [("model_registry", "0011_model_origin_hour")]
+    executor = MigrationExecutor(connection)
+    latest = executor.loader.graph.leaf_nodes()
+    origin = {
+        "key_choice": "personal",
+        "gateway_fingerprint": "definition",
+        "owned_by_keeplane": True,
+        "origin": "cloud",
+        "provider": "openai",
+        "provider_model": "test-gpt",
+        "origin_recorded_at": NOW,
+    }
+    try:
+        executor.migrate(before)
+        old_model = executor.loader.project_state(before).apps.get_model(
+            "model_registry", "ModelApproval"
+        )
+        old_model.objects.create(model_id="earlier", **origin)
+        upgraded = MigrationExecutor(connection)
+        upgraded.migrate(after)
+        new_model = upgraded.loader.project_state(after).apps.get_model(
+            "model_registry", "ModelApproval"
+        )
+        # An app copy from before the upgrade can still save an approval.
+        old_model.objects.create(model_id="older-copy", **origin)
+        rows = new_model.objects.values_list("model_id", "origin_hour_priced")
+        assert sorted(rows) == [("earlier", False), ("older-copy", False)]
     finally:
         MigrationExecutor(connection).migrate(latest)
