@@ -22,6 +22,7 @@ refuses any Kubernetes context but kind-keeplane and never prints a key.
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -33,7 +34,13 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import HTTPCookieProcessor, ProxyHandler, Request, build_opener
+from urllib.request import (
+    HTTPCookieProcessor,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 
 import pytest
 
@@ -278,6 +285,41 @@ class Developer:
             return False
 
 
+def guarded(token, project, model):
+    """One request straight to the public model path: (status or None, answer).
+
+    The opener is made here, with the release's test CA: an opener made
+    earlier keeps the CAs it loaded then.
+    """
+    context = ssl.create_default_context(cafile=str(CA))
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=context))
+    body = json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 8,
+        }
+    ).encode()
+    headers = {"Content-Type": "application/json", "X-Keeplane-Project-ID": project}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    try:
+        with opener.open(
+            Request(GATEWAY + "/chat/completions", body, headers), timeout=60
+        ) as response:
+            raw, status = response.read(8192), response.status
+    except HTTPError as error:
+        raw, status = error.read(8192), error.code
+        error.close()
+    except OSError:
+        return None, None
+    try:
+        answer = json.loads(raw)["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        answer = None
+    return status, answer
+
+
 def key_status(developer, cwd, model):
     code, out, _ = developer.run("keys", "list", cwd=cwd)
     try:
@@ -422,15 +464,8 @@ def run_cases():
                 shown = {row["id"] for row in json.loads(listed[1])["models"]}
             except (ValueError, KeyError, TypeError):
                 shown = set()
-            anonymous = preview.guarded(
-                None, project, shared_model, GATEWAY + "/chat/completions"
-            )
-            direct = preview.guarded(
-                saved.get("access_token"),
-                project,
-                shared_model,
-                GATEWAY + "/chat/completions",
-            )
+            anonymous = guarded(None, project, shared_model)
+            direct = guarded(saved.get("access_token"), project, shared_model)
             if binary is None:
                 not_run("KDEV-02")
             else:
