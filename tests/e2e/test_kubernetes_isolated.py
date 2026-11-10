@@ -71,8 +71,10 @@ MIRROR_CONTAINER = "keeplane-mirror"
 MIRRORED = RUNTIME / "mirror-images.json"
 NODE_IMAGE_IMAGES = RUNTIME / "node-image-images.json"
 APP_IMAGE = os.environ.get("KEEPLANE_ISOLATED_APP_IMAGE", "")
-# An image the node never had, for the registry pull check.
+# An image the node never had, for the registry pull check, and a pull
+# straight from its registry: ctr reads no hosts.toml unless told to.
 ABSENT_IMAGE = "registry.k8s.io/e2e-test-images/agnhost:2.53"
+OUTSIDE_PULL = ("ctr", "-n", "k8s.io", "images", "pull")
 
 # Runs in a pod: try each target and report "open", "open:<HTTP status>" or
 # "blocked:<error>", unwrapping urllib's URLError to the socket error under it
@@ -527,6 +529,36 @@ def wait_for_node():
         )
 
 
+def wait_for_restarted_pods(since, namespaces, until=lambda: True):
+    """Wait until every pod in the namespaces runs containers started after
+    `since` (an RFC 3339 UTC time) and is ready, and `until()` holds.
+
+    Right after a node restart the API still reports the pods' old status,
+    so a rollout status alone can pass before the node has restarted them.
+    """
+    deadline = time.monotonic() + 600
+    while True:
+        try:
+            found = [p for namespace in namespaces for p in pods(namespace)]
+            fresh = {
+                p["metadata"]["name"]: ready(p)
+                and all(
+                    c.get("state", {}).get("running", {}).get("startedAt", "") >= since
+                    for c in p["status"].get("containerStatuses", [{}])
+                )
+                for p in found
+            }
+            done = found and all(fresh.values()) and until()
+        except RuntimeError as error:
+            fresh, done = {"error": str(error)[:200]}, False
+        if done or time.monotonic() > deadline:
+            return fresh
+        time.sleep(10)
+
+
+RESTARTED = ("keeplane", "inside", "ingress-nginx", "kube-system")
+
+
 def wait_for_workloads(timeout="300s"):
     for kind_name in (
         "deployment/keeplane-app",
@@ -650,9 +682,10 @@ def run_cases():
         absent_before = (
             node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
         )
-        control_pull = node(
-            "timeout", "120", "crictl", "pull", ABSENT_IMAGE, timeout=180
-        )
+        # Both pulls go straight to the outside registry (ctr reads no
+        # registry hosts settings), not through the internal one, which does
+        # not hold this image.
+        control_pull = node("timeout", "120", *OUTSIDE_PULL, ABSENT_IMAGE, timeout=180)
         node("crictl", "rmi", ABSENT_IMAGE, timeout=60)
         forgotten = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
         closed = run("sudo", str(CLOSE), timeout=300)
@@ -672,7 +705,7 @@ def run_cases():
                 break
             time.sleep(5)
         reaches, code = node_reaches_registry()
-        pull = node("timeout", "90", "crictl", "pull", ABSENT_IMAGE)
+        pull = node("timeout", "90", *OUTSIDE_PULL, ABSENT_IMAGE)
         error = (pull.stderr.strip() or pull.stdout.strip())[-300:]
         reference_rejected = any(
             text in error.lower()
@@ -937,10 +970,14 @@ def run_cases():
         )
 
     def iso_09():
+        since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         run("docker", "restart", NODE, timeout=180)
         wait_for_node()
         wait_for_workloads()
-        return journey()
+        fresh = wait_for_restarted_pods(since, RESTARTED)
+        passed, observed = journey()
+        observed["pods_restarted_and_ready"] = fresh
+        return passed and all(fresh.values()), observed
 
     def iso_10():
         mirrored = json.loads(MIRRORED.read_text())
@@ -994,6 +1031,13 @@ def run_cases():
         run("docker", "restart", NODE, timeout=180)
         wait_for_node()
         wait_for_workloads()
+
+        def held(ref):
+            return node("crictl", "inspecti", ref, timeout=60).returncode == 0
+
+        fresh = wait_for_restarted_pods(
+            since, RESTARTED, until=lambda: all(held(ref) for ref in used)
+        )
         address = node_address()
         fetched = {
             (path, status)
@@ -1005,13 +1049,7 @@ def run_cases():
             registry, path, digest = mirror_key(ref)
             target = MIRROR_TOOL.mirror_path(registry, path)
             from_mirror[ref] = (f"/v2/{target}/manifests/{digest}", "200") in fetched
-        back = {
-            ref: node("crictl", "inspecti", ref, timeout=60).returncode == 0
-            for ref in used
-        }
-        everything = []
-        for namespace in ("keeplane", "inside", "ingress-nginx", "kube-system"):
-            everything += pods(namespace)
+        back = {ref: held(ref) for ref in used}
         reaches, code = node_reaches_registry()
         return (
             removed
@@ -1019,7 +1057,7 @@ def run_cases():
             and not still_held
             and all(from_mirror.values())
             and all(back.values())
-            and all(ready(p) for p in everything)
+            and all(fresh.values())
             and not reaches,
             {
                 "images_removed": len(removed),
@@ -1027,7 +1065,7 @@ def run_cases():
                 "still_held_after_removal": still_held,
                 "pulled_from_internal_registry": from_mirror,
                 "held_again": back,
-                "pods_ready": {p["metadata"]["name"]: ready(p) for p in everything},
+                "pods_restarted_and_ready": fresh,
                 "node_registry_status": code,
             },
         )
