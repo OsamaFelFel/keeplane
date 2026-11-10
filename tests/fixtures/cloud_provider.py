@@ -8,7 +8,8 @@ SHA-256 of each key it was sent, and never prints, stores or returns a key.
 
 With ``TLS_CERT_FILE`` and ``TLS_KEY_FILE`` it serves HTTPS on 18443, reading
 the certificate for each connection, so a renewed test certificate needs no
-restart. Without them it serves plain HTTP on 18082, as the kind preview does.
+restart; the Docker and kind previews do this. Without them it serves plain
+HTTP on 18082, for shared keys only, as the isolated-network run does.
 """
 
 import hashlib

@@ -1,4 +1,7 @@
 # Disposable authenticated model-provider fixture for the local kind preview.
+# It serves HTTPS with the test certificate kind-up.sh makes on every start
+# (Secret cloud-provider-tls); the app and gateway copies trust its CA through
+# trust.extraCaBundle in values.yaml.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,12 +25,17 @@ spec:
           env:
             - name: TRIAL_KEY_FILE
               value: /run/provider-key/key
+            - name: TLS_CERT_FILE
+              value: /run/tls/provider.pem
+            - name: TLS_KEY_FILE
+              value: /run/tls/provider.key
           ports:
-            - containerPort: 18082
+            - containerPort: 18443
           readinessProbe:
             httpGet:
               path: /health
-              port: 18082
+              port: 18443
+              scheme: HTTPS
             periodSeconds: 5
           volumeMounts:
             - name: fixture
@@ -36,6 +44,9 @@ spec:
             - name: provider-key
               mountPath: /run/provider-key
               readOnly: true
+            - name: tls
+              mountPath: /run/tls
+              readOnly: true
       volumes:
         - name: fixture
           configMap:
@@ -43,6 +54,9 @@ spec:
         - name: provider-key
           secret:
             secretName: cloud-provider-key
+        - name: tls
+          secret:
+            secretName: cloud-provider-tls
 ---
 apiVersion: v1
 kind: Service
@@ -52,6 +66,6 @@ spec:
   selector:
     app: cloud-provider
   ports:
-    - name: http
-      port: 18082
-      targetPort: 18082
+    - name: https
+      port: 18443
+      targetPort: 18443

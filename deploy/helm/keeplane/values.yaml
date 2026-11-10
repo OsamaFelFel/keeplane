@@ -146,6 +146,29 @@ gateway:
         cpu: 500m
         memory: 384Mi
 
+trust:
+  # Off by default. Extra CA certificates (one PEM certificate or a bundle)
+  # that the app copies and the managed gateway copies trust for their
+  # outbound HTTPS calls, such as a model endpoint behind a private CA. They
+  # are added to each image's system CAs, never instead of them, and change
+  # nothing else: a provider address still has to be HTTPS. Name one Secret
+  # or one ConfigMap in the release namespace, not both, and the key that
+  # holds the bundle; only that key is mounted, and only into an init step
+  # (app.image, so the gateway pods get app.imagePullSecrets) that checks it
+  # and writes the CAs for the app and the gateway. Helm refuses a malformed
+  # name or key, and the app and gateway pods don't start if the bundle holds
+  # no certificate, a damaged one or a private key. The gateway's
+  # SSL_CERT_FILE is set to its image's system CA file, which the chart pins
+  # to /etc/ssl/certs/ca-certificates.crt. The CAs are read when the pods start:
+  # after changing the bundle, restart the app and gateway copies. In existing
+  # mode only the app uses it (gateway.caSecret is the CA of the customer-run
+  # gateway itself). See
+  # docs/guide/kubernetes-installation-reference.md#extra-trusted-cas.
+  extraCaBundle:
+    secretName: ""
+    configMapName: ""
+    key: ca.crt
+
 networkPolicy:
   # Every policy here requires a Kubernetes CNI that enforces NetworkPolicy.
   # The local kindnet preview does not; keep them disabled in that preview.

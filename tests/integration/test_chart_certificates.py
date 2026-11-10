@@ -127,3 +127,224 @@ def test_co_h5_every_mounted_certificate_is_readable_by_the_user_that_reads_it(c
     assert ("keeplane-existing-gateway-preflight", "gateway-ca") in checked
     assert ("keeplane-app", "gateway-ca") in checked
     assert ("keeplane-accounts-migrate", "database-ca") in checked
+
+
+# --- trust.extraCaBundle: CO-H6 to CO-H11 --------------------------------------------
+
+BUNDLE = "/run/keeplane-trust/ca-bundle.pem"
+EXTRA = "/run/keeplane-extra-ca"
+SOURCE = "/run/keeplane-extra-ca-source"
+# The pinned gateway image's own system CA file; KCA-04 checks the image has it.
+GATEWAY_SYSTEM_CAS = "/etc/ssl/certs/ca-certificates.crt"
+
+
+@pytest.fixture(scope="module")
+def parse():
+    from tests.integration.test_chart_network_policies import parse
+
+    return parse
+
+
+def with_trust(values, **bundle):
+    values["trust"] = {"extraCaBundle": {"key": "ca.crt", **bundle}}
+    return values
+
+
+def pod_spec(chart, parse, output, kind, name):
+    return parse(workload(chart, output, kind, name))["spec"]["template"]["spec"]
+
+
+def named(entries, name):
+    return next(entry for entry in entries if entry["name"] == name)
+
+
+def file_mode(value):
+    """A rendered octal mode such as 0440, which the small reader keeps as digits."""
+    return int(str(value), 8)
+
+
+def env_values(container):
+    return {entry["name"]: entry.get("value") for entry in container.get("env", [])}
+
+
+def check_checking_step(spec, arguments, output, image):
+    """The init step that checks the source: app image, non-root, read-only."""
+    init = named(spec["initContainers"], "prepare-trust-bundle")
+    assert init["image"] == image
+    assert init["command"] == ["python", "/app/prepare_trust_bundle.py", *arguments]
+    assert init["securityContext"]["runAsUser"] == 65532
+    assert init["securityContext"]["runAsNonRoot"] is True
+    assert init["securityContext"]["readOnlyRootFilesystem"] is True
+    assert init["securityContext"]["allowPrivilegeEscalation"] is False
+    assert init["securityContext"]["capabilities"]["drop"] == ["ALL"]
+    assert init["volumeMounts"] == [
+        {"name": "keeplane-extra-ca-source", "mountPath": SOURCE, "readOnly": True},
+        {"name": output[0], "mountPath": output[1]},
+    ]
+
+
+def check_source(spec, source, source_name, key, mode):
+    volumes = {volume["name"]: volume for volume in spec["volumes"]}
+    origin = volumes["keeplane-extra-ca-source"][source]
+    assert origin["secretName" if source == "secret" else "name"] == source_name
+    # Only the named key is mounted, as ca.crt.
+    assert origin["items"] == [{"key": key, "path": "ca.crt"}]
+    assert file_mode(origin["defaultMode"]) == mode
+    return volumes
+
+
+def raw_source_only_in_the_init_step(spec):
+    for container in spec["containers"]:
+        assert all(mount["name"] != "keeplane-extra-ca-source"
+                   for mount in container.get("volumeMounts", [])), container["name"]
+
+
+def check_app_trusts_the_bundle(spec, source, source_name, key="ca.crt"):
+    app = named(spec["containers"], "app")
+    assert env_values(app)["SSL_CERT_FILE"] == BUNDLE
+    assert {"name": "keeplane-trust", "mountPath": "/run/keeplane-trust",
+            "readOnly": True} in app["volumeMounts"]
+    # The app never mounts the source itself, only the combined file.
+    raw_source_only_in_the_init_step(spec)
+    check_checking_step(spec, [SOURCE + "/ca.crt", BUNDLE],
+                        ("keeplane-trust", "/run/keeplane-trust"), app["image"])
+    # Readable by the init step through the pod's fsGroup.
+    volumes = check_source(spec, source, source_name, key, 0o440)
+    assert spec["securityContext"]["fsGroup"] == 65532
+    assert volumes["keeplane-trust"]["emptyDir"]["medium"] == "Memory"
+
+
+def check_gateway_trusts_the_bundle(spec, source, source_name, image, key="ca.crt"):
+    gateway = named(spec["containers"], "agentgateway")
+    variables = env_values(gateway)
+    # The chart names the image's system CA file itself, and the checked
+    # extra CAs come from the in-memory folder SSL_CERT_DIR names.
+    assert variables["SSL_CERT_FILE"] == GATEWAY_SYSTEM_CAS
+    assert variables["SSL_CERT_DIR"] == EXTRA
+    assert {"name": "keeplane-extra-ca", "mountPath": EXTRA,
+            "readOnly": True} in gateway["volumeMounts"]
+    raw_source_only_in_the_init_step(spec)
+    check_checking_step(spec, ["--extra-only", SOURCE + "/ca.crt", EXTRA + "/ca.crt"],
+                        ("keeplane-extra-ca", EXTRA), image)
+    # The gateway pod has no fsGroup, so the one public CA file is 0444.
+    volumes = check_source(spec, source, source_name, key, 0o444)
+    assert "fsGroup" not in (spec.get("securityContext") or {})
+    assert volumes["keeplane-extra-ca"]["emptyDir"]["medium"] == "Memory"
+    # The trust variables are the gateway's alone, the enroller's included.
+    for container in spec["containers"] + spec.get("initContainers", []):
+        if container["name"] != "agentgateway":
+            assert not {"SSL_CERT_DIR", "SSL_CERT_FILE"} & set(env_values(container))
+
+
+def test_co_h6_managed_mode_app_and_every_gateway_copy_add_the_extra_cas(
+        chart, parse, tmp_path):
+    values = with_trust(chart.postgres_values("managed"), secretName="model-endpoint-ca",
+                        key="bundle.pem")
+    values["app"]["imagePullSecrets"] = [{"name": "app-registry"}]
+    for copies, enroller in ((2, False), (3, True)):
+        values["gateway"]["copies"] = copies
+        if enroller:
+            from tests.integration.test_chart_model_enroller import with_enroller
+
+            values = with_enroller(values, copies=copies)
+        output = rendered(render(chart, tmp_path, values))
+        check_app_trusts_the_bundle(
+            pod_spec(chart, parse, output, "Deployment", "keeplane-app"),
+            "secret", "model-endpoint-ca", key="bundle.pem")
+        copy = pod_spec(chart, parse, output, "StatefulSet", "keeplane-gateway")
+        check_gateway_trusts_the_bundle(copy, "secret", "model-endpoint-ca",
+                                        chart.IMAGE, key="bundle.pem")
+        # The init step uses app.image, so the copies get its pull secret.
+        assert {"name": "app-registry"} in copy["imagePullSecrets"]
+        names = [item["name"] for item in copy["initContainers"]]
+        assert names == (["prepare-model-enroller", "prepare-trust-bundle"]
+                         if enroller else ["prepare-trust-bundle"])
+    # The chart only references the bundle; it never renders it.
+    assert all(chart.name_of(doc) != "model-endpoint-ca"
+               for doc in chart.of_kind(output, "Secret") + chart.of_kind(output, "ConfigMap"))
+
+
+def test_co_h7_existing_mode_only_the_app_adds_the_extra_cas(chart, parse, tmp_path):
+    values = with_trust(existing_with_ca(chart), configMapName="model-endpoint-ca")
+    output = rendered(render(chart, tmp_path, values))
+    check_app_trusts_the_bundle(
+        pod_spec(chart, parse, output, "Deployment", "keeplane-app"),
+        "configMap", "model-endpoint-ca")
+    assert not chart.of_kind(output, "StatefulSet")
+    # The customer-run gateway's own CA keeps its separate setting and file.
+    app = named(pod_spec(chart, parse, output, "Deployment", "keeplane-app")["containers"],
+                "app")
+    assert env_values(app)["KEEPLANE_GATEWAY_CA_FILE"] == "/run/keeplane-gateway-ca/ca.crt"
+    preflight = workload(chart, output, "Job", "keeplane-existing-gateway-preflight")
+    assert "SSL_CERT" not in preflight and "keeplane-extra-ca" not in preflight
+
+
+def test_co_h8_without_an_extra_bundle_nothing_changes(chart, tmp_path):
+    for values in (chart.postgres_values("managed"), chart.postgres_values("existing"),
+                   with_trust(chart.postgres_values("managed"))):
+        output = rendered(render(chart, tmp_path, values))
+        for absent in ("SSL_CERT_FILE", "SSL_CERT_DIR", "keeplane-extra-ca",
+                       "/etc/ssl/certs",
+                       "keeplane-trust", "prepare-trust-bundle"):
+            assert absent not in output, absent
+
+
+def test_co_h9_helm_refuses_a_malformed_reference(chart, tmp_path):
+    refusals = [
+        ({"secretName": "a-ca", "configMapName": "a-ca"},
+         "set secretName or configMapName, not both"),
+        ({"secretName": "Model_CA"}, "trust.extraCaBundle.secretName \"Model_CA\""),
+        ({"configMapName": "ca/bundle"}, "trust.extraCaBundle.configMapName \"ca/bundle\""),
+        ({"secretName": "-ca"}, "is not a Kubernetes object name"),
+        ({"secretName": "a" * 254}, "is not a Kubernetes object name"),
+        ({"secretName": "a-ca", "key": ""}, "trust.extraCaBundle.key \"\""),
+        ({"secretName": "a-ca", "key": "../ca.crt"}, "trust.extraCaBundle.key \"../ca.crt\""),
+        ({"secretName": "a-ca", "key": ".."}, "is not a Secret or ConfigMap key"),
+    ]
+    for bundle, message in refusals:
+        values = chart.postgres_values("managed")
+        values["trust"] = {"extraCaBundle": bundle}
+        result = render(chart, tmp_path, values)
+        assert result.returncode != 0, bundle
+        assert message in result.stderr, (bundle, result.stderr)
+    # The schema refuses unknown fields and other types before any template runs.
+    for bundle in ({"secret": "a-ca"}, {"secretName": ["a-ca"]}, {"key": 1}):
+        values = chart.postgres_values("managed")
+        values["trust"] = {"extraCaBundle": bundle}
+        result = render(chart, tmp_path, values)
+        assert result.returncode != 0 and "trust" in result.stderr, (bundle, result.stderr)
+
+
+def test_co_h10_the_gateway_s_system_cas_cannot_be_replaced_alongside_it(chart, tmp_path):
+    for name in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
+        values = with_trust(chart.postgres_values("managed"), secretName="model-endpoint-ca")
+        values["agentgateway-standalone"]["extraEnv"].append(
+            {"name": name, "value": "/run/elsewhere/ca.pem"})
+        result = render(chart, tmp_path, values)
+        assert result.returncode != 0
+        assert f"Leave {name} out of agentgateway-standalone.extraEnv" in result.stderr
+        # Existing mode runs no gateway, so the bundled chart's values don't matter.
+        values = with_trust(chart.postgres_values("existing"), secretName="model-endpoint-ca")
+        values["agentgateway-standalone"]["extraEnv"].append(
+            {"name": name, "value": "/run/elsewhere/ca.pem"})
+        rendered(render(chart, tmp_path, values))
+
+
+def test_co_h11_the_kind_preview_trusts_its_fixture_provider_over_https(chart, parse):
+    output = chart.render("keeplane", *chart.LOCAL)
+    # The local trial's app has a shell script the small YAML reader skips, so
+    # it is read line by line here.
+    app_pod = workload(chart, output, "Deployment", "keeplane-app")
+    app = next(item for item in chart.containers(app_pod)
+               if chart.scalar(item, "name") == "app")
+    variables = {name: value for name, value, _ in chart.env(app)}
+    assert variables["SSL_CERT_FILE"] == BUNDLE
+    assert variables["PREVIEW_OPENAI_BASE_URL"] == "https://cloud-provider:18443/v1"
+    assert variables["PREVIEW_ANTHROPIC_BASE_URL"] == "https://cloud-provider:18443/v1"
+    assert [chart.scalar(item, "name") for item in chart.containers(app_pod, "initContainers")
+            ][-1] == "prepare-trust-bundle"
+    assert chart.volumes(app_pod)["keeplane-extra-ca-source"][0] == "configMap"
+    assert 'name: "cloud-provider-ca"' in app_pod
+    copy = pod_spec(chart, parse, output, "StatefulSet", "keeplane-gateway")
+    check_gateway_trusts_the_bundle(copy, "configMap", "cloud-provider-ca",
+                                    "keeplane-preview:kind-local")

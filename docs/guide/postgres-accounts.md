@@ -244,6 +244,7 @@ any of these steps. Gateway keys are covered in
 | Database CA | `app.postgres.caSecret`, `ca.crt` | App copies and the migration Job | On the next database connection, no restart |
 | Signing secret | `app.postgres.identitySecret`, `signing-secret` | App copies at start; the migration Job | After the app copies restart |
 | First-admin password | `app.postgres.identitySecret`, `first-admin-password` | App copies at start | After the app copies restart |
+| Extra CA bundle (optional) | `trust.extraCaBundle`: its Secret or ConfigMap, and key | App copies and managed gateway copies at start | After both restart; see [model endpoints behind a private CA](certificate-operations.md#model-endpoints-behind-a-private-ca) |
 
 Kubernetes refreshes a mounted Secret file in each pod on its own schedule,
 usually within a minute or two. The chart mounts every credential without

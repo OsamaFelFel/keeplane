@@ -178,6 +178,11 @@ CALL_SITES = {
         {"database", "gateway"},
         "check_credentials builds the trust used for those handshakes",
     ),
+    "prepare_trust_bundle.py": (
+        {"ssl"},
+        set(),
+        "Builds the app pods' CA bundle (trust.extraCaBundle); opens no connection",
+    ),
     "integrations/gateway/adapter.py": (
         {"ssl", "urllib.request"},
         {"gateway", "gateway-loopback"},
