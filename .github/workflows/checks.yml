@@ -591,3 +591,105 @@ jobs:
           name: coding-runtime-${{ github.sha }}
           path: test-results/coding-runtime/
           retention-days: 30
+
+  release-journey:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Task 009-15 (ADR 022, ADR 028): the developer journey DEV-01 to DEV-08
+    # with the pinned coding runtime on two disposable release installs, each
+    # on PostgreSQL with two app copies behind one address: one with the
+    # customer's own gateway (existing mode), one with the managed gateway and
+    # its model enroller. Every case must run: a skip fails.
+    env:
+      RESULTS: ${{ github.workspace }}/test-results/release-journey
+      # The coding runtime the coding-runtime job pins.
+      RUNTIME_ARCHIVE_URL: https://registry.npmjs.org/@opencode/cli-linux-x64-baseline-musl/-/cli-linux-x64-baseline-musl-2.0.27.tgz
+      RUNTIME_ARCHIVE_SHA256: 19883929aff7834d777af1618a811d4d1352a46c02df3ba11aad8cafc2faf93e
+      RUNTIME_BINARY_SHA256: a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/package-lock.json
+      - name: Build the admin UI the app copies serve
+        working-directory: components/admin-ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Build the PostgreSQL app image with CLI sign-in
+        run: docker build --target postgres-cli-auth-trial -t keeplane-preview:postgres-cli-auth-local -f components/control-plane/Dockerfile .
+      - name: Pull the locked gateway, PostgreSQL and Python images
+        # The disposable installs pull nothing themselves.
+        run: |
+          for image in agentgateway postgres python_fixture; do
+            docker pull --quiet "$(python3 -c 'import json,sys; print(json.load(open("deploy/local/stack.lock.json"))["images"][sys.argv[1]])' "$image")"
+          done
+      - name: Download and check the pinned coding runtime
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/runtime.tgz" "$RUNTIME_ARCHIVE_URL"
+          echo "$RUNTIME_ARCHIVE_SHA256  $RUNNER_TEMP/runtime.tgz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/runtime"
+          tar -xzf "$RUNNER_TEMP/runtime.tgz" -C "$RUNNER_TEMP/runtime"
+          echo "$RUNTIME_BINARY_SHA256  $RUNNER_TEMP/runtime/package/bin/opencode" | sha256sum --check
+      - name: Developer journey DEV-01 to DEV-08 in both gateway modes (task 009-15)
+        # As in live-preview.yml: the runtime is built for musl, so the suite
+        # runs in Alpine with libstdc++. Host networking reaches the installs
+        # on loopback and lets the fixture model listen where they allow a
+        # host runner; the Docker socket starts and removes the installs. The
+        # checkout keeps its path, so the installs' files mount from it.
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/release-journey/cases
+        run: |
+          mkdir -p "$RESULTS"
+          docker run --rm --network host \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            -v "$RUNNER_TEMP/runtime/package/bin:/opt/runtime:ro" \
+            -e KEEPLANE_OPENCODE_V2_BIN=/opt/runtime/opencode \
+            -e KEEPLANE_TEST_REPORT_DIR -e RESULTS \
+            python:3.12.13-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 \
+            sh -euc '
+              apk add --no-cache libstdc++ git docker-cli docker-cli-compose openssl >/dev/null
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet -r tests/requirements.txt
+              /tmp/venv/bin/python -m pytest tests/e2e/test_developer_journey_release.py -m live \
+                --collect-only -q -p no:cacheprovider | grep "::" > "$RESULTS/expected-cases.txt"
+              cat "$RESULTS/expected-cases.txt"
+              /tmp/venv/bin/python -m pytest tests/e2e/test_developer_journey_release.py -m live \
+                -p no:cacheprovider -s -rs --junitxml="$RESULTS/junit.xml"
+            '
+      - name: Fail if a release journey case was skipped or did not run
+        if: ${{ !cancelled() }}
+        run: |
+          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/junit.xml" <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          # One node ID per line; IDs are matched exactly, never split on spaces.
+          expected = {line.strip() for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()}
+          ran, skipped = set(), set()
+          for case in ET.parse(sys.argv[2]).iter("testcase"):
+              node = case.get("classname", "").replace(".", "/") + ".py::" + case.get("name")
+              ran.add(node)
+              if case.find("skipped") is not None:
+                  skipped.add(node)
+          for node in sorted(expected - ran):
+              print(f"Case did not run: {node}", file=sys.stderr)
+          for node in sorted(skipped):
+              print(f"Case was skipped: {node}", file=sys.stderr)
+          print(f"{len(expected)} cases expected, {len(ran - skipped)} ran")
+          sys.exit(1 if expected - ran or skipped or not expected else 0)
+          EOF
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-journey-${{ github.sha }}
+          path: test-results/release-journey/
+          retention-days: 30

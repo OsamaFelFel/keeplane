@@ -149,11 +149,11 @@ def own_usage(token, model):
 class Cli:
     """The source-tree CLI, as a developer runs it, with a fixture browser."""
 
-    def __init__(self, home, username, password):
-        self.home = home
+    def __init__(self, home, username, password, server=BASE):
+        self.home, self.server = home, server
         login = home / "browser-login.json"
         login.write_text(
-            json.dumps({"server": BASE, "username": username, "password": password})
+            json.dumps({"server": server, "username": username, "password": password})
         )
         login.chmod(0o600)
         driver = home / "browser.py"
@@ -193,7 +193,7 @@ class Cli:
                 "login",
                 "--device",
                 "--server",
-                BASE,
+                self.server,
                 "--profile",
                 str(profile),
                 "--timeout",
@@ -206,7 +206,7 @@ class Cli:
         )
         try:
             announcement = process.stdout.readline().strip()
-            prefix = "Open " + BASE + "/oauth/confirm-device/ and enter code "
+            prefix = "Open " + self.server + "/oauth/confirm-device/ and enter code "
             assert announcement.startswith(prefix) and announcement.endswith(".")
             approved = self.approve_device(announcement[len(prefix) : -1])
             out, err = process.communicate(timeout=60)
@@ -222,7 +222,7 @@ class Cli:
         )
 
         def request(path, data=None, *, csrf=None, expected=200):
-            headers = {"Origin": BASE}
+            headers = {"Origin": self.server}
             payload = None
             if csrf:
                 headers.update(
@@ -238,7 +238,7 @@ class Cli:
                 payload = urlencode(data).encode()
             try:
                 response = opener.open(
-                    Request(BASE + path, payload, headers), timeout=10
+                    Request(self.server + path, payload, headers), timeout=10
                 )
             except HTTPError as error:
                 response = error
