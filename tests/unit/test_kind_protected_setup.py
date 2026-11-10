@@ -1,4 +1,4 @@
-"""The protected kind release's setup: cases KPS-01 to KPS-06.
+"""The protected kind release's setup: cases KPS-01 to KPS-06 and KPS-08.
 
 See kind-protected-setup-cases.md. KPS-01 to KPS-05 check
 deploy/local/kind_protected.py's own steps and KPS-06 the launcher's settings
@@ -188,3 +188,32 @@ def test_kps_06_the_launcher_checks_the_protected_setting_before_state_work(
     assert message in result.stderr
     assert "Traceback" not in result.stderr
     assert not runtime.exists()
+
+
+def test_kps_08_only_the_local_kind_cluster_is_changed(tmp_path, monkeypatch):
+    assert setup.context_refusal("kind-keeplane") is None
+    for other in ("prod-eu", "kind-keeplane-isolated", "kind-keeplane-netpol", ""):
+        assert "Refusing Kubernetes context" in setup.context_refusal(other)
+    # install() stops at the context check: no credential, build or kubectl change.
+    calls = []
+
+    def run(*command, **options):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, b"prod-eu\n", b"")
+
+    installer = setup.Installer(
+        str(tmp_path / "kubeconfig"), tmp_path / "runtime", "helm"
+    )
+    monkeypatch.setattr(installer, "run", run)
+    with pytest.raises(SystemExit, match="Refusing Kubernetes context 'prod-eu'"):
+        installer.install()
+    assert calls == [
+        (
+            "kubectl",
+            "--kubeconfig",
+            str(tmp_path / "kubeconfig"),
+            "config",
+            "current-context",
+        )
+    ]
+    assert not (tmp_path / "runtime").exists()

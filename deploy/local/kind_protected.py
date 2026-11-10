@@ -44,6 +44,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CLUSTER = "keeplane"
+# The only Kubernetes context this script changes: kind's name for the cluster.
+CONTEXT = "kind-" + CLUSTER
 NODE = CLUSTER + "-control-plane"
 NAMESPACE = "keeplane-protected"
 RELEASE = "keeplane"
@@ -161,6 +163,20 @@ def with_provider_host(corefile, address):
         "    }",
     ]
     return "\n".join(lines[: ready + 1] + block + lines[ready + 1 :])
+
+
+def context_refusal(context):
+    """Why this script won't change the cluster in `context`, or None for kind's.
+
+    It deletes a namespace and changes the cluster DNS, so it never runs
+    against any cluster but the local kind one, whatever the kubeconfig says.
+    """
+    if context == CONTEXT:
+        return None
+    return (
+        f"Refusing Kubernetes context {context!r}: the protected release installs "
+        f"only on the local kind cluster ({CONTEXT}). Check KEEPLANE_KUBECONFIG."
+    )
 
 
 def resolves_here(host=HOST):
@@ -512,7 +528,16 @@ class Installer:
             time.sleep(3)
         raise SystemExit(f"{PUBLIC_URL} did not become ready")
 
+    def own_cluster(self):
+        context = self.kubectl("config", "current-context", check=False)
+        refusal = context_refusal(context.stdout.decode().strip())
+        if refusal:
+            raise SystemExit(refusal)
+
     def install(self):
+        # Before anything changes: the namespace reset and the cluster DNS
+        # change below are for the local kind cluster only.
+        self.own_cluster()
         self.credentials()
         self.certificates()
         self.image()

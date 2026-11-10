@@ -3,7 +3,7 @@
 **Edition:** Open Source. The setup `deploy/local/kind_protected.py` runs for
 `KEEPLANE_KIND_PROTECTED=on deploy/local/kind-up.sh`, before the live
 [Kubernetes developer cases](../e2e/kubernetes-developer-cases.md). KPS-01 to
-KPS-06 are in `tests/unit/test_kind_protected_setup.py`; KPS-07 renders the
+KPS-06 and KPS-08 are in `tests/unit/test_kind_protected_setup.py`; KPS-07 renders the
 chart with Helm in `tests/integration/test_kind_protected_values.py` and is
 skipped without Helm.
 
@@ -16,3 +16,4 @@ skipped without Helm.
 | KPS-05 | Check whether `keeplane.kind.test` points to this computer. | Only loopback addresses count; a name that doesn't resolve doesn't. The refusal says which `/etc/hosts` line to add. |
 | KPS-06 | Start `kind-up.sh` with `KEEPLANE_KIND_PROTECTED=maybe`, and with `on` where `keeplane.kind.test` doesn't resolve here. | Both stop with exit 1 and a short message (the allowed values, or the `/etc/hosts` line to add) before any credential, build or cluster change. |
 | KPS-07 | Render `deploy/local/protected-values.yaml` as the setup installs it, with the app image by digest. | It renders: two Ingresses on `keeplane.kind.test`, the gateway copies with `prepare-model-enroller` and `model-enroller`, CLI sign-in and the per-copy guard check on the app, both CLI clients registered and both copies' status roles paired by the migration Job, and `KEEPLANE_GATEWAY_PUBLIC_URL` `https://keeplane.kind.test/v1`. Every image is pinned by digest. Every Secret and ConfigMap the release reads is one the setup makes. |
+| KPS-08 | Run the setup's install with a kubeconfig whose current context is another cluster, such as `prod-eu` or the isolated test cluster. | It stops with "Refusing Kubernetes context …" before making any credential, building anything or running any other command, so no other cluster's namespace or DNS is changed. Only `kind-keeplane` is accepted. |
