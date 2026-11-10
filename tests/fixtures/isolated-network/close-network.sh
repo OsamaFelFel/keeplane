@@ -6,7 +6,8 @@
 # restart.
 #
 #  - Nothing from the network is forwarded anywhere else: no internet, no
-#    registry, no other Docker network.
+#    registry, no other Docker network. The internal registry
+#    (172.30.0.200) is on the same bridge, so the node still pulls from it.
 #  - The runner itself answers the network only on the model port and on
 #    connections the runner opened (the published ingress and API ports).
 #  - No outside name lookups. The node's resolver is Docker's embedded DNS,
