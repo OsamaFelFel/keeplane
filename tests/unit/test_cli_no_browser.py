@@ -459,16 +459,15 @@ def test_nb_16_forget_when_signed_out_removes_a_usable_server(
         "Keeplane has no saved sign-in or server address, "
         "so there's nothing to forget.\n"
     )
-    monkeypatch.setattr("sys.argv", ["keeplane", "--help"])
-    with pytest.raises(SystemExit):
-        keeplane.main()
-    assert (
-        " ".join(capsys.readouterr().out.split()).count(
-            "Delete the sign-in saved on this machine, or, once signed out, "
-            "the saved server address."
-        )
-        == 1
+    decided = (
+        "Delete the sign-in saved on this machine, or, once signed out, "
+        "the saved server address."
     )
+    for arguments in (["--help"], ["forget", "--help"]):
+        monkeypatch.setattr("sys.argv", ["keeplane", *arguments])
+        with pytest.raises(SystemExit):
+            keeplane.main()
+        assert decided in " ".join(capsys.readouterr().out.split())
 
 
 # NB-17

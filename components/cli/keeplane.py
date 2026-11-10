@@ -192,7 +192,7 @@ def main():
         "models": "List the models this repo's project may use, marking the current one",
         "usage": "Show your own tokens and estimated cost per model, today and this month",
     }.items():
-        command = commands.add_parser(action, help=help_text)
+        command = commands.add_parser(action, help=help_text, description=help_text)
         command.add_argument("--profile", help="Default: ~/.config/keeplane/account")
         if action in {"register-project", "models"}:
             command.add_argument("--project", help="Default: worked out from the repo")
