@@ -270,7 +270,10 @@ runtime policy and package review. See [gateway modes](gateway-configuration.md)
 and [PostgreSQL configuration](postgres-accounts.md) before planning an install.
 
 The supplied gateway cannot read Keeplane's provider-key volume in another
-namespace, so shared-key registration is refused there. The bundled Qwen runner
+namespace, so only models that need no key can be set up there: shared keys and
+developers' own keys are both refused, as
+[provider keys on a customer-run gateway](gateway-configuration.md#provider-keys-on-a-customer-run-gateway)
+explains. The bundled Qwen runner
 has a 4,096-token active context and a 256-token output limit. Runner capacity and
 request sampling are separate; the admin UI does not configure them.
 

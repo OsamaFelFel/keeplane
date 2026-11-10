@@ -35,6 +35,16 @@ MAY_REMAIN_IN_GATEWAY = (
 )
 
 
+# Spec 004 D110 (decision of 10 November 2026): on a customer-run gateway
+# (GATEWAY_MODE=existing) only No key models are supported until Keeplane has a
+# supported way to deliver provider keys to that gateway. The runtime refuses
+# developers' own keys there too, so Add, Edit and Set up refuse both choices.
+EXISTING_GATEWAY_KEYS = {
+    "shared": "Shared provider keys need a supported delivery path to the customer-run gateway",
+    "personal": "Developers' own provider keys need a supported delivery path to the customer-run gateway",
+}
+
+
 def approval_not_saved(undone):
     # Spec 004 ST10 "[Model] wasn't added" and D170: cloud and local models
     # read the same, and "Nothing was saved." only when the gateway entry
@@ -281,12 +291,7 @@ class ModelManagement:
 
     def replace_shared_key(self, model_id, resource, previous, classes, replacement):
         if self.gateway_mode == "existing":
-            return self.reply(
-                422,
-                {
-                    "error": "Shared provider keys need a supported delivery path to the customer-run gateway"
-                },
-            )
+            return self.reply(422, {"error": EXISTING_GATEWAY_KEYS["shared"]})
         if not previous["owned_by_keeplane"] or resource.get("provider") not in (
             "openAI",
             "anthropic",
@@ -452,14 +457,10 @@ class ModelManagement:
             return self.reply(
                 400, {"error": "Each developer adds their own key in the CLI"}
             )
+        if key_choice in EXISTING_GATEWAY_KEYS and self.gateway_mode == "existing":
+            # Before any key is saved or the customer's gateway is touched.
+            return self.reply(422, {"error": EXISTING_GATEWAY_KEYS[key_choice]})
         if key_choice == "shared":
-            if self.gateway_mode == "existing":
-                return self.reply(
-                    422,
-                    {
-                        "error": "Shared provider keys need a supported delivery path to the customer-run gateway"
-                    },
-                )
             shared_key = body.get("shared_key")
             if (
                 not isinstance(shared_key, str)
@@ -563,6 +564,9 @@ class ModelManagement:
 
     def setup(self, model_id, body):
         choice = body.get("key_choice")
+        if choice == "personal" and self.gateway_mode == "existing":
+            # Edit and Set up, as Add: nothing is read, saved or changed.
+            return self.reply(422, {"error": EXISTING_GATEWAY_KEYS["personal"]})
         previous = self.catalog.get(model_id)
         if previous and previous["key_choice"] == "personal" and choice != "personal":
             return self.reply(

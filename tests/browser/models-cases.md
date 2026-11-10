@@ -20,5 +20,7 @@ These cases use the product team's Models, Add model and Edit model designs. The
 | MO-UI-09 | Choose Remove model for a model an admin-changed level uses. | The Remove model: in use dialog lists “Complexity level: Standard” and closes; no removal request is sent. |
 | MO-UI-10 | With no rules yet, open Add rule with the keyboard, choose Architect and a model, add it; narrow to 320px. | The Add persona rule dialog is at most 560px wide with 44px persona and model selects; the rule shows as “Persona is Architect” with the model and a notice; one protected request is sent; the page stays inside 320px. |
 | MO-UI-11 | Choose Remove model for a model a persona rule uses. | The Remove model: in use dialog lists “Persona rule: Architect” and closes; no removal request is sent. |
+| MO-UI-12 | On a customer-run gateway, try to add an OpenAI model set to each developer's own key. | The Add dialog stays open with “personal-coder wasn't added” and “Developers' own provider keys need a supported delivery path to the customer-run gateway”; the model and choice stay; no row is added. |
+| MO-UI-13 | On a customer-run gateway, save a model set to each developer's own key. | The Edit dialog stays open and shows the same refusal; nothing is reported as saved. |
 
 MO-UI-05 covers MODEL-01/EDIT-01 dialog behavior: set up an outside model, retain its class choices after a refused save, retry, edit its approvals and see the updated row. The Python API suites verify storage and authorization separately.

@@ -185,6 +185,46 @@ test('MO-UI-07: editing a Personal model preserves its key choice and explains t
   await expect(dialog).not.toBeVisible()
 })
 
+const OWN_KEYS_REFUSED = "Developers' own provider keys need a supported delivery path to the customer-run gateway"
+
+test('MO-UI-12: an own-key model refused by a customer-run gateway keeps the Add dialog and its entries', async ({ page }) => {
+  await mockModels(page)
+  await page.route('**/api/models', route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    expect(route.request().postDataJSON()).toEqual({ name: 'personal-coder', model: 'personal-coder', source: 'openai', key_choice: 'personal' })
+    return route.fulfill({ status: 422, json: { error: OWN_KEYS_REFUSED } })
+  })
+  await page.goto('/app/models')
+  await page.getByRole('button', { name: 'Add model' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Add model' })
+  await dialog.getByLabel('Provider').selectOption('openai')
+  await dialog.getByLabel('Model', { exact: true }).fill('personal-coder')
+  await dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true }).check()
+  await dialog.getByRole('button', { name: 'Add model', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText("personal-coder wasn't added")
+  await expect(dialog.getByRole('alert')).toContainText(OWN_KEYS_REFUSED)
+  await expect(dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true })).toBeChecked()
+  await expect(dialog.getByLabel('Model', { exact: true })).toHaveValue('personal-coder')
+  await expect(page.getByRole('row', { name: /personal-coder/ })).toHaveCount(0)
+})
+
+test('MO-UI-13: editing an own-key model on a customer-run gateway shows the refusal and keeps the dialog', async ({ page }) => {
+  const model: Model = { id: 'personal-coder', provider: 'OpenAI', kind: 'cloud', approved: true,
+    key_choice: 'personal', approved_classes: [], owned_by_keeplane: true }
+  await mockModels(page, [model])
+  await page.route('**/api/models/personal-coder/setup', route => {
+    expect(route.request().postDataJSON()).toEqual({ key_choice: 'personal' })
+    return route.fulfill({ status: 422, json: { error: OWN_KEYS_REFUSED } })
+  })
+  await page.goto('/app/models')
+  await page.getByRole('row', { name: /personal-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit personal-coder' })
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toHaveText(OWN_KEYS_REFUSED)
+  await expect(dialog).toBeVisible()
+  await expect(page.getByText('Saved personal-coder.')).toHaveCount(0)
+})
+
 type Level = { level: string; name: string; model_id: string | null; keeplane_pick: string | null; changed_by_admin: boolean; admin_model_id: string | null; admin_model_set_up: boolean | null }
 
 async function mockLevels(page: Page) {

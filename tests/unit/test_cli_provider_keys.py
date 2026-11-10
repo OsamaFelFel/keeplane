@@ -33,6 +33,7 @@ def api(tmp_path, monkeypatch):
         project=str(uuid.uuid4()),
         key_list=[],
         list_response=None,
+        write_error=None,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -74,6 +75,8 @@ def api(tmp_path, monkeypatch):
                 self.path == "/api/runtime/provider-keys"
                 and body["model_id"] == state.model
             )
+            if state.write_error:
+                return self.respond(state.write_status, {"error": state.write_error})
             state.stored = stored
             self.respond(
                 state.write_status,
@@ -272,3 +275,26 @@ def test_invalid_pipe_never_contacts_key_endpoint(api, monkeypatch, capsys, raw)
     assert command(api, monkeypatch, "set", "--key-stdin") == 1
     assert len(api.calls) == 1
     assert "valid provider key" in capsys.readouterr().err
+
+
+def test_kc_03_customer_run_gateway_refusal_is_explained(api, monkeypatch, capsys):
+    """Spec 004 D110: `keys set` on a customer-run gateway says why, not "unavailable"."""
+    from model_registry.registration import EXISTING_GATEWAY_KEYS
+
+    assert provider_keys.OWN_KEYS_UNSUPPORTED == EXISTING_GATEWAY_KEYS["personal"]
+    secret = "synthetic-provider-key-12"
+    monkeypatch.setattr(provider_keys.getpass, "getpass", lambda _: secret)
+    api.write_status, api.write_error = 403, provider_keys.OWN_KEYS_UNSUPPORTED
+    assert command(api, monkeypatch, "set") == 1
+    output = capsys.readouterr()
+    assert output.err.strip() == (
+        "Keeplane can't use developers' own keys with this installation's gateway, "
+        f"so your key for {api.model} wasn't saved. Ask your Keeplane admin which "
+        "models you can use."
+    )
+    assert secret not in output.out + output.err
+    assert sum(row[0] == "PUT" for row in api.calls) == 1
+    # Any other refusal keeps the generic message.
+    api.write_error = "This model does not accept developer keys"
+    assert command(api, monkeypatch, "set") == 1
+    assert capsys.readouterr().err.strip() == "The requested action is unavailable."

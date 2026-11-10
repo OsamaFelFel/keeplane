@@ -422,3 +422,88 @@ def test_actual_admin_api_keeps_roles_csrf_and_classes(
         assert len(provider["calls"]) == 1
     else:
         assert not provider["calls"] and not ModelApproval.objects.exists()
+
+
+OWN_REFUSED = "Developers' own provider keys need a supported delivery path to the customer-run gateway"
+
+
+@pytest.mark.parametrize("provider", [True], indirect=True)
+def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
+    provider, registrar, domain_services, monkeypatch
+):
+    """Spec 004 D110: only No key models on a customer-run gateway, for now."""
+    from audit.models import AuditRecord
+    from model_registry import use_cases
+
+    identity = domain_services.identity
+    monkeypatch.setattr("common.api.IDENTITY", identity)
+    monkeypatch.setattr(use_cases, "CATALOG", domain_services.catalog)
+    monkeypatch.setattr(use_cases, "DATA_CLASSES", domain_services.classes)
+    monkeypatch.setattr(use_cases, "MODEL_GATEWAY", registrar.gateway)
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    monkeypatch.setenv("PREVIEW_OPENAI_BASE_URL", provider["url"])
+    monkeypatch.setenv("SSL_CERT_FILE", provider["ca"])
+    domain_services.classes.set_enabled(True)
+    # A model set up for developers' own keys before this rule, and one only
+    # in the customer's gateway.
+    for model_id in ("legacy", "outside"):
+        value = definition(provider) | {"id": model_id, "name": model_id}
+        registrar.gateway.records[model_id] = {
+            "id": model_id,
+            "revision": 1,
+            "value": value,
+        }
+    domain_services.catalog.approve(
+        "legacy",
+        ["Public"],
+        fingerprint("legacy", [registrar.gateway.records["legacy"]]),
+        None,
+        owned_by_keeplane=True,
+        key_choice="personal",
+    )
+    client = Client(enforce_csrf_checks=True)
+    client.cookies["keeplane_session"] = identity.login(
+        "first-admin", "first-test-password-123"
+    )
+    csrf = client.get("/api/auth-options").json()["csrf_token"]
+    # After the sign-in, which is audited.
+    before = (
+        deepcopy(registrar.gateway.records),
+        list(ModelApproval.objects.values()),
+        AuditRecord.objects.count(),
+    )
+    calls = [
+        (
+            "/api/models",
+            {
+                "name": "personal",
+                "model": "upstream",
+                "source": "openai",
+                "key_choice": "personal",
+                "approved_classes": ["Public"],
+            },
+        ),
+        (
+            "/api/models/legacy/setup",
+            {"key_choice": "personal", "approved_classes": ["Internal"]},
+        ),
+        (
+            "/api/models/outside/setup",
+            {"key_choice": "personal", "approved_classes": ["Public"]},
+        ),
+    ]
+    for path, body in calls:
+        response = client.post(
+            path,
+            json.dumps(body),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+            HTTP_X_KEEPLANE_ACTION="1",
+        )
+        assert (response.status_code, response.json()) == (422, {"error": OWN_REFUSED})
+    assert not provider["calls"] and registrar.gateway.writes == []
+    assert before == (
+        registrar.gateway.records,
+        list(ModelApproval.objects.values()),
+        AuditRecord.objects.count(),
+    )

@@ -119,12 +119,32 @@ To repeat the React browser suite through a temporary port-forward:
 .venv/bin/python -m pytest tests/e2e/test_existing_gateway_browser.py -m live
 ```
 
-Shared cloud-provider keys are not proven in this mode: the supplied gateway
-runs in a different namespace and cannot read Keeplane's private provider-key
-PVC. The local app rejects shared-key registration before saving the key or
-changing the gateway, with an explicit error. The release gateway contract
-needs a supported secret-delivery mechanism for customer-run gateways before
-this mode handles shared or personal keys.
+### Provider keys on a customer-run gateway
+
+In `existing` mode Keeplane supports only models that need **No key**, such as
+a local runner, until it has a supported way to deliver provider keys to a
+customer-run gateway. The supplied gateway runs in a different namespace and
+cannot read Keeplane's private provider-key PVC, and Keeplane's runtime does
+not hand developers' own keys to it.
+
+So in `existing` mode **Add model**, **Edit** and **Set up** refuse both key
+choices for a cloud model, before saving anything or changing the gateway. The
+error stays in the dialog with your entries:
+
+| Key choice | Error |
+| --- | --- |
+| One shared key for the organization | Shared provider keys need a supported delivery path to the customer-run gateway |
+| Each developer adds their own key | Developers' own provider keys need a supported delivery path to the customer-run gateway |
+
+Choose a model that needs no key instead. A model set up for developers' own
+keys before this rule can't be edited in this mode; remove it from Keeplane in
+**Edit** if it is no longer wanted. Developers can't add or replace their own
+key for any model either: `keeplane keys set` stops with "Keeplane can't use
+developers' own keys with this installation's gateway, so your key for MODEL
+wasn't saved. Ask your Keeplane admin which models you can use." They can still
+list and remove saved keys. The release gateway contract needs a supported
+secret-delivery mechanism for customer-run gateways before this mode handles
+shared or personal keys.
 
 ## Keeplane's checks on a customer-run gateway
 

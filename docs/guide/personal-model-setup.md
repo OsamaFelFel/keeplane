@@ -6,6 +6,12 @@ Choose approved classes if they are enabled, then add the model. No shared key
 is needed. **Edit** keeps the Personal choice when you save its classes.
 Installed Personal coding remains separate work.
 
+This choice needs Keeplane's own gateway. When Keeplane uses a customer-run
+gateway (`GATEWAY_MODE=existing`), Add, Edit and Set up refuse it with
+"Developers' own provider keys need a supported delivery path to the
+customer-run gateway" (HTTP 422) before saving anything or changing the gateway;
+see [provider keys on a customer-run gateway](gateway-configuration.md#provider-keys-on-a-customer-run-gateway).
+
 The same setup is available through the admin API. Use an existing admin browser
 session and the normal CSRF and
 `X-Keeplane-Action: 1` mutation headers.

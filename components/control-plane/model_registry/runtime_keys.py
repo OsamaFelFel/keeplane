@@ -30,6 +30,11 @@ from .developer_keys import (
 from .key_validation import DjangoProviderKeyValidator
 from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
 from .policy import ModelPolicyUnavailable
+from .registration import EXISTING_GATEWAY_KEYS
+
+# The same reason Add, Edit and Set up give an admin; the CLI recognises it and
+# explains it to the developer.
+OWN_KEYS_UNSUPPORTED = EXISTING_GATEWAY_KEYS["personal"]
 
 
 def strict_object(pairs):
@@ -125,6 +130,12 @@ def provider_key_response(request, *, check_saved=False):
             or any(not 33 <= ord(c) <= 126 for c in key)
         ):
             return Response({"error": "Enter a valid provider key"}, status=400)
+    customer_gateway = os.environ.get("GATEWAY_MODE", "managed") != "managed"
+    if request.method == "PUT" and customer_gateway:
+        # Spec 004 D110: a customer-run gateway has no supported delivery path
+        # for developers' own keys, so the runtime could never use one. Refuse
+        # before the key reaches the gateway, the provider or storage.
+        return Response({"error": OWN_KEYS_UNSUPPORTED}, status=403)
     try:
         store = key_store(request, model_id)
         if check_saved:

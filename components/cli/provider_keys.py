@@ -16,6 +16,21 @@ else:
     from server_connection import ConnectionError, account, request
 
 
+# The server's refusal of `keys set` when Keeplane uses a customer-run gateway
+# (Spec 004 D110): no key can be used there, so none is saved.
+OWN_KEYS_UNSUPPORTED = (
+    "Developers' own provider keys need a supported delivery path to the customer-run gateway"
+)
+
+
+def own_keys_unsupported(model_id):
+    return (
+        f"Keeplane can't use developers' own keys with this installation's gateway, "
+        f"so your key for {model_id} wasn't saved. Ask your Keeplane admin which "
+        "models you can use."
+    )
+
+
 def read_key(*, key_stdin=False):
     if key_stdin:
         if sys.stdin.isatty():
@@ -211,6 +226,12 @@ def run(action, profile_path, model_id, *, key_stdin=False):
             )
             data = key_status(body, model_id, action)
         except ConnectionError as error:
+            if (
+                action == "set"
+                and error.status == 403
+                and error.detail == OWN_KEYS_UNSUPPORTED
+            ):
+                raise ConnectionError(own_keys_unsupported(model_id), 403) from None
             if action in {"set", "remove"} and error.status not in {400, 401, 403, 413, 415}:
                 raise ConnectionError(
                     "The key change may have completed. Check keys status before retrying.",

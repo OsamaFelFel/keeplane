@@ -32,6 +32,11 @@ or dispatch. GET contacts neither gateway nor provider. DELETE also works when
 the model changes or is withdrawn. `cleanup_pending` means old file deletion
 needs retry. DELETE also removes the active registration; it is not a cleanup-only command.
 
+When the installation uses a customer-run gateway (`GATEWAY_MODE` other than
+`managed`), PUT returns 403 with `{"error": "Developers' own provider keys need a
+supported delivery path to the customer-run gateway"}` before contacting the
+gateway or the provider, and the previous key stays. GET and DELETE still work.
+
 PUT checks the current approved `personal` model and its exact raw definition,
 tests the key with that provider, then rechecks the definition before saving.
 The narrow OpenAI/Anthropic validator requires HTTPS; loopback HTTP is enabled

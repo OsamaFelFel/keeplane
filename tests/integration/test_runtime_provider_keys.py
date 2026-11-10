@@ -321,3 +321,26 @@ def test_insecure_public_origin_refuses_runtime_key_admission(api):
     with override_settings(PUBLIC_ORIGIN="http://keeplane.example"):
         assert put(api).status_code == 503
     assert not api.provider["calls"]
+
+
+def test_pk_03_customer_run_gateway_refuses_own_keys_before_any_contact(
+    api, monkeypatch
+):
+    """Spec 004 D110: a customer-run gateway has no delivery path for own keys."""
+    safe(put(api))
+    calls, reads = len(api.provider["calls"]), api.gateway.reads
+    files = sorted(path.name for path in api.root.iterdir())
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    response = send(api, "put", body={"model_id": "model", "key": KEY + "-replacement"})
+    assert response.status_code == 403
+    assert response.json() == {"error": runtime_keys.OWN_KEYS_UNSUPPORTED}
+    assert runtime_keys.OWN_KEYS_UNSUPPORTED == (
+        "Developers' own provider keys need a supported delivery path to the "
+        "customer-run gateway"
+    )
+    assert KEY.encode() not in response.content
+    assert len(api.provider["calls"]) == calls and api.gateway.reads == reads
+    assert sorted(path.name for path in api.root.iterdir()) == files
+    # Status and removal still work, so an earlier key can be withdrawn.
+    safe(send(api, "get"))
+    safe(send(api, "delete"), "missing")
