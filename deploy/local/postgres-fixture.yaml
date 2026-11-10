@@ -31,9 +31,13 @@ spec:
               value: keeplane
           ports:
             - containerPort: 5432
+          # Check over TCP: on a fresh volume the image first runs a temporary
+          # server on its Unix socket only, then stops it and starts the real
+          # one. A socket check passes during that first server, so the pod
+          # could be Ready while the database is about to restart.
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "keeplane"]
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "keeplane", "-d", "keeplane"]
             periodSeconds: 5
           volumeMounts:
             - name: data

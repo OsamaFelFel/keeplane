@@ -180,7 +180,7 @@ app and preflight Job the keys that gateway accepts.
 | App, PostgreSQL mode | `GET /health/ready` on 3000 every 5 s; returns 503 while the database is unavailable or a known migration is pending | Liveness `GET /health/app` every 20 s, which does not depend on the database |
 | App, local trial | `GET /health/app` on 3000 every 5 s | Same liveness check |
 | App, with `app.personalDataDetection.enabled` | `GET /health/ready` in both modes; also returns 503 while the detector's language model loads for the first time, for at most 300 s | Same liveness check, which never waits for the model |
-| Managed gateway | `GET /healthz/ready` on 15021 every 10 s | Startup probe allows up to 60 s |
+| Managed gateway | `GET /healthz/ready` on 15021 every 10 s | Startup probe allows up to 60 s. A stopping copy keeps accepting new calls for 5 s after it is told to stop, while its readiness check already fails (`CONNECTION_MIN_TERMINATION_DEADLINE`, `5s`), so calls your nodes still route to it while they catch up are answered |
 
 The migration Job runs before install and upgrade, with no retry and a 180 s
 limit; a failure stops the Helm operation. In existing-gateway mode a preflight
