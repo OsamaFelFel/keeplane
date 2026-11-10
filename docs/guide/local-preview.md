@@ -9,6 +9,8 @@ Keeplane CLI uses. It keeps existing accounts and registered models.
 - Python 3.9 or newer.
 - Node.js 22.12 or newer, including npm.
 - Docker running, with Docker Compose supporting `up --wait`.
+- `openssl`, which makes the preview's test certificate (see
+  [The fixture cloud provider](#the-fixture-cloud-provider)).
 - Two free local ports: 3000 for the browser and 5000 for the guarded model
   gateway.
 - Internet access for the first dependency, image and model downloads. The model
@@ -57,6 +59,7 @@ or the `--runtime-port` you chose, set as `KEEPLANE_GATEWAY_PUBLIC_URL` in
 sequenceDiagram
   participant L as up.py
   participant D as Docker
+  L->>L: Make the fixture provider's test certificate
   L->>D: Build the app image (with the sign-in packages) and start it
   L->>D: Check the admin sign-in and the gateway
   L->>D: Fresh guarded gateway, migrate, register the CLI clients
@@ -103,6 +106,26 @@ python3 deploy/local/up.py
 
 This deletes every account, model setting and Audit record in the preview,
 along with the earlier files.
+
+### The fixture cloud provider
+
+Cloud models in the preview, OpenAI and Anthropic, go to a disposable fixture
+provider, `cloud-provider`, instead of the real ones. It accepts the preview's
+shared trial key (`cloud-provider-key` in the credential directory) and answers
+"mock cloud answer". Keeplane sends a provider key, the shared one or a
+developer's own, only over HTTPS, so the fixture serves HTTPS at
+`https://cloud-provider:18443/v1`, the provider address the preview's app uses.
+
+On every start, `up.py` makes a new test CA and a certificate for
+`cloud-provider` in `cloud-provider-tls/` in the credential directory, and
+deletes the CA's private key once it has signed the certificate. Only the
+preview's `app` and `gateway` containers trust that CA: `compose.yaml` mounts
+its `ca.pem` and names it in `SSL_CERT_FILE` for those two containers, and
+they trust nothing else. Nothing on your computer trusts it, and Keeplane's
+own defaults are unchanged: outside this preview, a provider address must be
+HTTPS with a publicly trusted certificate. The Kubernetes preview
+(`deploy/local/values.yaml`) still uses the plain-HTTP fixture, for shared keys
+only; it has no way to trust a test CA.
 
 ## Configuration
 
@@ -172,7 +195,7 @@ approved for their project; until you approve a model it serves nothing. See
 ### Try the developer half by hand
 
 This is what the [developer journey check](../../tests/e2e/developer-journey-cases.md)
-(DEV-01 to DEV-05, then DEV-06 to DEV-08) runs. You need OpenCode V2 2.0.27 on
+(DEV-01 to DEV-05, then DEV-06 to DEV-10) runs. You need OpenCode V2 2.0.27 on
 your `PATH` ([install the CLI](cli-install.md)) and a model approved for Public data, for
 example `demo-qwen` from [Try the application](#try-the-application). The small
 local Qwen often can't make the tool calls an edit needs, so expect an answer
@@ -237,6 +260,26 @@ always makes the same edit.
 9. The first admin can do the same from the CLI (DEV-08): sign in with
    `keeplane login` and run a task. They get the same models as a developer
    on that project, and the repo then lists them on **Projects** too.
+
+10. A cloud model can take each developer's own key (DEV-10). As the admin,
+    add an OpenAI model for developers' own keys and approve it for Public
+    data. By hand, the only key the fixture provider accepts is the preview's
+    trial key, so the developer saves that one as their own key (Keeplane
+    checks a key with the provider before saving it, and refuses one the
+    provider refuses), then runs a task on the model:
+
+    ```sh
+    keeplane keys set --model <model> --key-stdin < "<credential directory>/cloud-provider-key"
+    keeplane code --model <model> "Say hello"
+    keeplane keys list
+    ```
+
+    The answer is "mock cloud answer". If the provider later refuses a saved
+    key, as when it is revoked (DEV-09), the task stops with "The provider
+    refused your own key for <model>, so this task stopped. …" and
+    `keeplane keys list` shows the key as `refused`. The automated check gives
+    each developer a new key the fixture accepts, then has it refuse one. See
+    [provider key commands](cli-provider-key-commands.md).
 
 ## Isolated networks
 

@@ -35,9 +35,8 @@ SCENARIOS = {
 # Scenarios not proven yet. Only a check CI runs on the current revision proves
 # a scenario. The reason lives in the table only: its "Proven by" cell starts
 # "Not proven yet:" and says what is missing before naming any case.
-NOT_PROVEN = {
-    ("ST30", "Cloud models use API keys"),
-}
+# None today: DEV-10 proves ST30 "Cloud models use API keys".
+NOT_PROVEN = set()
 CASE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-[A-Z]?\d+\b")
 # The CI jobs that count as proof. "unit" and "integration" are the backend
 # shards of checks.yml; the others are named jobs that run listed test files.
@@ -485,8 +484,9 @@ def test_dcsm_07_a_check_ci_does_not_run_never_counts(monkeypatch):
     assert "ADM-INT-04" in read(ADMIN_TEST) and not is_tested(
         "ADM-INT-04", read(ADMIN_TEST)
     )
-    # A case the suite doesn't declare (DEV-09 is only proposed) isn't counted.
-    assert "DEV-09" not in declared_cases("DEV-01")
+    # A case the suite doesn't declare isn't counted; DEV-10 is its last one.
+    assert "DEV-10" in declared_cases("DEV-01")
+    assert "DEV-11" not in declared_cases("DEV-01")
     # A live or optional test is never counted as run by the shards.
     monkeypatch.setitem(
         CASE_SOURCES,

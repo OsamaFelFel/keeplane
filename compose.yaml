@@ -40,6 +40,9 @@ services:
     environment:
       GATEWAY_RUNTIME_KEY_HASH: ${GATEWAY_RUNTIME_KEY_HASH}
       GATEWAY_ADMIN_KEY_HASH: ${GATEWAY_ADMIN_KEY_HASH}
+      # Preview only: the gateway sends cloud requests, with the shared key or
+      # a developer's own key, to the HTTPS fixture and trusts just its test CA.
+      SSL_CERT_FILE: /run/preview-ca/ca.pem
     depends_on:
       volume-init:
         condition: service_completed_successfully
@@ -49,6 +52,7 @@ services:
       - ./integrations/gateway:/gateway-config:ro
       - gateway-data:/data
       - provider-keys:/provider-keys:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/cloud-provider-tls/ca.pem:/run/preview-ca/ca.pem:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -77,13 +81,19 @@ services:
     restart: unless-stopped
 
   cloud-provider:
+    # Disposable OpenAI/Anthropic fixture. It serves HTTPS with the test
+    # certificate deploy/local/up.py makes on every start: Keeplane sends a
+    # provider key only over HTTPS, the developer's own key included.
     image: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
     command: ["python", "/cloud_provider.py"]
     environment:
       TRIAL_KEY_FILE: /run/secrets/cloud-provider-key
+      TLS_CERT_FILE: /run/tls/provider.pem
+      TLS_KEY_FILE: /run/tls/provider.key
     volumes:
       - ./tests/fixtures/cloud_provider.py:/cloud_provider.py:ro
       - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/cloud-provider-key:/run/secrets/cloud-provider-key:ro
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/cloud-provider-tls:/run/tls:ro
     restart: unless-stopped
 
   app-migrate:
@@ -119,8 +129,10 @@ services:
       PROVIDER_KEY_DIR: /provider-keys
       GATEWAY_RUNTIME_KEY_FILE: /run/secrets/gateway-runtime-key
       GATEWAY_ADMIN_KEY_FILE: /run/secrets/gateway-admin-key
-      PREVIEW_OPENAI_BASE_URL: http://cloud-provider:18082/v1
-      PREVIEW_ANTHROPIC_BASE_URL: http://cloud-provider:18082/v1
+      PREVIEW_OPENAI_BASE_URL: https://cloud-provider:18443/v1
+      PREVIEW_ANTHROPIC_BASE_URL: https://cloud-provider:18443/v1
+      # Preview only: trust just the fixture's test CA (deploy/local/up.py).
+      SSL_CERT_FILE: /run/preview-ca/ca.pem
       # In its own folder, so the model enroller can mount only the database.
       KEEPLANE_SQLITE_PATH: /state/database/keeplane.sqlite3
     depends_on:
@@ -137,6 +149,7 @@ services:
       - ./integrations/gateway:/gateway-config:ro
       - account-data:/state
       - provider-keys:/provider-keys
+      - ${KEEPLANE_RUNTIME_DIR:-/private/tmp/keeplane-accounts-trial}/cloud-provider-tls/ca.pem:/run/preview-ca/ca.pem:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
