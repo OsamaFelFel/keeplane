@@ -28,6 +28,7 @@ EXPECTED_CASES = {
     "test_kind_private_ca": "KCA-01 KCA-02 KCA-03 KCA-04",
     "test_kind_protected": "KDEV-01 KDEV-02 KDEV-03 KDEV-04",
     "test_kubernetes_isolated": "ISO-01 ISO-02 ISO-03 ISO-04 ISO-05 ISO-06 ISO-07 ISO-08 ISO-09 ISO-10 ISO-11 ISO-12",
+    "test_kubernetes_isolated_protected": "ISO-13 ISO-14 ISO-15 ISO-16 ISO-17 ISO-18 ISO-19 ISO-20",
     "test_local": "LOCAL-01 LOCAL-02 LOCAL-03 LOCAL-04 LOCAL-05 LOCAL-08 LOCAL-11",
     "test_management_retry": "MGMT-01 MGMT-02 MGMT-03",
     "test_model_add": "ADD-01 ADD-02 ADD-03 ADD-04 ADD-05 ADD-06 ADD-07 ADD-08",

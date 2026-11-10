@@ -195,9 +195,11 @@ jobs:
           retention-days: 30
 
   # A second cluster that enforces NetworkPolicy (Calico) behind an ingress
-  # controller: it installs the chart while the registry is reachable, closes
-  # the cluster's outside access except one model provider, and runs the
-  # isolated-network cases. See tests/e2e/kubernetes-isolated-cases.md.
+  # controller: it installs the chart twice while the registry is reachable
+  # (the local-trial release, and the protected developer release with
+  # PostgreSQL, CLI sign-in and the model enroller), closes the cluster's
+  # outside access except the model providers, and runs the isolated-network
+  # cases. See tests/e2e/kubernetes-isolated-cases.md.
   isolated:
     name: Chart on an isolated kind network
     runs-on: ubuntu-24.04
@@ -229,10 +231,13 @@ jobs:
       REGISTRY_IMAGE: registry:3.1.1@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0
       CRANE_VERSION: v0.22.1
       CRANE_SHA256: 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0
-      # The live test file this job runs. tests/unit/test_self_hosting_scenario_map.py
+      # The live test files this job runs, in order: test_kubernetes_isolated
+      # closes the network and restarts the node from the internal registry;
+      # test_kubernetes_isolated_protected then runs the protected release's
+      # cases on the closed network. tests/unit/test_self_hosting_scenario_map.py
       # reads every LIVE_TESTS line in this workflow to know which cases CI
       # runs on the current revision.
-      LIVE_TESTS: tests/e2e/test_kubernetes_isolated.py
+      LIVE_TESTS: tests/e2e/test_kubernetes_isolated.py tests/e2e/test_kubernetes_isolated_protected.py
       RESULTS: test-results/kubernetes-isolated
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -289,10 +294,14 @@ jobs:
         run: |
           python3 -m venv .venv
           .venv/bin/pip install -r tests/requirements.txt
-      - name: Build the web UI and the app image
+      - name: Build the web UI and the app images
         run: |
           (cd components/admin-ui && npm ci && npm run build)
           docker build -f components/control-plane/Dockerfile -t keeplane-preview:kind-local .
+          # The protected developer release's image: PostgreSQL accounts and
+          # CLI sign-in, as deploy/local/kind_protected.py builds it.
+          docker build -f components/control-plane/Dockerfile --target postgres-cli-auth-trial \
+            -t keeplane-protected:kind-local .
       - name: Make the run's credentials and certificate
         run: |
           python3 - "$KEEPLANE_ISOLATED_RUNTIME" <<'PY'
@@ -330,6 +339,11 @@ jobs:
           openssl x509 -req -in tls.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 1 \
             -extfile tls.ext -out tls.crt 2>/dev/null
           echo "127.0.0.1 keeplane.isolated.test" | sudo tee -a /etc/hosts
+          # The protected release's certificates, from the same CA: its
+          # account database, its public address and its model provider.
+          cd "$GITHUB_WORKSPACE"
+          python3 tests/fixtures/isolated-network/protected.py certificates
+          echo "127.0.0.1 keeplane-protected.isolated.test" | sudo tee -a /etc/hosts
       - name: Start the model provider outside the cluster
         run: |
           TRIAL_KEY_FILE="$KEEPLANE_ISOLATED_RUNTIME/cloud-provider-key" \
@@ -363,15 +377,42 @@ jobs:
           [ -n "$digest" ]
           app_image="172.30.0.200:5000/keeplane/app@$digest"
           echo "KEEPLANE_ISOLATED_APP_IMAGE=$app_image" >> "$GITHUB_ENV"
+          docker tag keeplane-protected:kind-local "127.0.0.1:5001/keeplane/protected:$GITHUB_SHA"
+          docker push "127.0.0.1:5001/keeplane/protected:$GITHUB_SHA" | tee "$RUNNER_TEMP/protected-push.log"
+          digest=$(grep -o 'digest: sha256:[0-9a-f]\{64\}' "$RUNNER_TEMP/protected-push.log" | tail -n 1 | cut -d' ' -f2)
+          [ -n "$digest" ]
+          protected_image="172.30.0.200:5000/keeplane/protected@$digest"
+          echo "KEEPLANE_ISOLATED_PROTECTED_IMAGE=$protected_image" >> "$GITHUB_ENV"
           helm template keeplane deploy/helm/keeplane --namespace keeplane \
             -f tests/fixtures/isolated-network/values.yaml --set app.image="$app_image" \
             > "$RUNNER_TEMP/keeplane.yaml"
+          helm template keeplane deploy/helm/keeplane --namespace keeplane-protected \
+            -f deploy/local/protected-values.yaml -f tests/fixtures/isolated-network/protected-values.yaml \
+            --set app.image="$protected_image" > "$RUNNER_TEMP/keeplane-protected.yaml"
           # Every image the manifests the job applies name, and the probe
           # container the cases join to a gateway copy.
           python3 tests/fixtures/isolated-network/mirror.py fill "$KEEPLANE_ISOLATED_RUNTIME/mirror-images.json" \
             "$RUNNER_TEMP/calico.yaml" "$RUNNER_TEMP/ingress-nginx.yaml" "$RUNNER_TEMP/keeplane.yaml" \
+            "$RUNNER_TEMP/keeplane-protected.yaml" deploy/local/accounts-db-fixture.yaml \
             deploy/local/model-fixture.yaml deploy/local/postgres-fixture.yaml \
             tests/fixtures/isolated-network/inside.yaml --image "$PYTHON_IMAGE"
+      - name: Start the protected release's model provider outside the cluster
+        # HTTPS on the runner's address on the isolated network,
+        # 172.30.0.1:443, with a certificate for api.openai.com from the run's
+        # CA: the cluster DNS gives that name this address. Port 443 needs
+        # root; the provider reads only its key and certificate files.
+        run: |
+          state="$KEEPLANE_ISOLATED_RUNTIME/protected"
+          sudo env TRIAL_KEY_FILE="$KEEPLANE_ISOLATED_RUNTIME/cloud-provider-key" \
+            TLS_CERT_FILE="$state/provider.pem" TLS_KEY_FILE="$state/provider.key" \
+            OWN_KEYS_FILE="$RUNNER_TEMP/protected-own-keys.json" \
+            LISTEN_ADDRESS=172.30.0.1 LISTEN_PORT=443 \
+            nohup python3 tests/fixtures/cloud_provider.py > "$RUNNER_TEMP/protected-provider.log" 2>&1 &
+          for attempt in $(seq 1 20); do
+            curl --fail -sS --cacert "$KEEPLANE_ISOLATED_RUNTIME/ca.crt" https://172.30.0.1/health && exit 0
+            sleep 1
+          done
+          exit 1
       - name: Create the kind cluster with Calico and the ingress controller
         run: |
           kind create cluster --name keeplane-isolated --image "$KIND_NODE_IMAGE" \
@@ -428,10 +469,16 @@ jobs:
           kubectl -n inside create configmap keeplane-isolated-ca --from-file=ca.crt="$RUNTIME/ca.crt"
           kubectl -n inside apply -f tests/fixtures/isolated-network/inside.yaml
           kubectl -n inside wait --for=condition=Ready pod --all --timeout=180s
+      - name: Install the protected developer release while the registry is reachable
+        # PostgreSQL accounts with CLI sign-in, the managed gateway with the
+        # model enroller on both copies, at https://keeplane-protected.isolated.test,
+        # with every NetworkPolicy on (tests/fixtures/isolated-network/protected.py).
+        run: python3 tests/fixtures/isolated-network/protected.py install
       - name: Run the isolated-network cases
         # The cases close the network themselves (ISO-02), so they record the
         # same checks before and after, and then clear the node's images and
-        # start it again from the internal registry (ISO-11).
+        # start it again from the internal registry (ISO-11). The protected
+        # release's cases (ISO-13 to ISO-20) follow on the closed network.
         run: |
           .venv/bin/python -m pytest -m live -rA $LIVE_TESTS \
             --junitxml="$RESULTS/junit.xml"
@@ -472,13 +519,13 @@ jobs:
           kubectl get events -A --sort-by=.lastTimestamp > "$out/events.txt" 2>&1 || true
           cat "$out/resources.txt"
           tail -n 80 "$out/events.txt"
-          for ns in keeplane inside ingress-nginx; do
+          for ns in keeplane keeplane-protected inside ingress-nginx; do
             kubectl -n "$ns" describe pods > "$out/$ns-pods.txt" 2>&1 || true
             kubectl -n "$ns" logs --all-containers --prefix --tail=300 --selector '!job-name' > "$out/$ns-logs.txt" 2>&1 || true
           done
           sudo iptables -S > "$out/runner-iptables.txt" 2>&1 || true
           docker logs keeplane-mirror > "$out/internal-registry.log" 2>&1 || true
-          cp "$RUNNER_TEMP/cloud-provider.log" "$out/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/cloud-provider.log" "$RUNNER_TEMP/protected-provider.log" "$out/" 2>/dev/null || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}
         with:

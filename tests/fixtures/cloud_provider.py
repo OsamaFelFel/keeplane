@@ -9,7 +9,10 @@ SHA-256 of each key it was sent, and never prints, stores or returns a key.
 With ``TLS_CERT_FILE`` and ``TLS_KEY_FILE`` it serves HTTPS on 18443, reading
 the certificate for each connection, so a renewed test certificate needs no
 restart; the Docker and kind previews do this. Without them it serves plain
-HTTP on 18082, for shared keys only, as the isolated-network run does.
+HTTP on 18082, for shared keys only, as the isolated-network run's local-trial
+release does. ``LISTEN_ADDRESS`` and ``LISTEN_PORT`` change where it listens
+(0.0.0.0 and the port above by default); the isolated-network run serves its
+protected release over HTTPS on 172.30.0.1:443, as api.openai.com.
 """
 
 import hashlib
@@ -210,7 +213,9 @@ class TLSServer(ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
-    if CERT_FILE and KEY_FILE_TLS:
-        TLSServer(("0.0.0.0", 18443), Handler).serve_forever()
-    else:
-        ThreadingHTTPServer(("0.0.0.0", 18082), Handler).serve_forever()
+    tls = bool(CERT_FILE and KEY_FILE_TLS)
+    listen = (
+        os.environ.get("LISTEN_ADDRESS", "0.0.0.0"),
+        int(os.environ.get("LISTEN_PORT", "18443" if tls else "18082")),
+    )
+    (TLSServer if tls else ThreadingHTTPServer)(listen, Handler).serve_forever()

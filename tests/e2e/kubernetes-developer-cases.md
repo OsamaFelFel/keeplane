@@ -86,8 +86,10 @@ replaces the namespace.
 
 These cases run one ingress controller on one node, with kindnet, which
 doesn't enforce NetworkPolicy, so the chart's network policies are off here;
-the [isolated-network cases](kubernetes-isolated-cases.md) cover them with
-the SQLite trial. The provider is a fixture, not a real provider, and the
+the [isolated-network cases](kubernetes-isolated-cases.md) cover them, and
+run this release there too with every policy on and outside access closed:
+browser and device sign-in and protected calls through the public address
+(ISO-13 to ISO-20), without the coding runtime or own keys. The provider is a fixture, not a real provider, and the
 account database is a single disposable server.
 
 The report, `kind-protected.json`, records each case's observations without

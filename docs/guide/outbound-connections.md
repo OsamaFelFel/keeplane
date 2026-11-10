@@ -187,6 +187,10 @@ network policies on. Outside name lookups are closed too: neither the node nor
 any pod can resolve a public name such as `registry.k8s.io`, while names inside
 the cluster still resolve. The web UI opens through the ingress, an admin adds and
 asks a model on that provider and a model inside the cluster, and calls from
-the app and gateway pods to any other address fail. The node pulls every image
+the app and gateway pods to any other address fail. On the PostgreSQL install
+beside it, a developer's CLI outside the cluster signs in through the browser
+and device flows and calls a protected model through the public address, and
+the app, the gateway copies and their model enrollers reach only the provider
+and their databases (ISO-13 to ISO-20). The node pulls every image
 from a registry inside that network, and still starts Keeplane after every
 image it pulled is removed from it.
