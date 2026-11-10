@@ -165,6 +165,17 @@ spec:
             periodSeconds: 1
             successThreshold: 1
             timeoutSeconds: 2
+          {{- /* A stopping copy keeps serving for 5 s before it gets SIGTERM.
+          The gateway Service drops it as soon as the Pod starts terminating,
+          but each node's kube-proxy applies that a moment later; until then
+          new calls can still be sent to this copy. Without the delay the
+          gateway exits at once and those calls hang until they time out.
+          The delay is a kubelet sleep: the gateway image has no shell. It
+          fits in the default 30 s termination grace period. */}}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           {{- /* With the enroller the copy runs Keeplane's protected runtime:
           it starts from the trusted base the init container wrote into the
           guard, and the enroller then writes its guarded configuration
