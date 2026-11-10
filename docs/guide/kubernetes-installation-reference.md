@@ -35,19 +35,29 @@ On an isolated network, a node that has never held an image (a new node, or
 one whose disk was replaced) can only start Keeplane from a registry inside
 your network. Before you close any temporary access to outside registries:
 
-1. **List the images.** Render the chart with your values and read every
-   `image:` line, together with those of anything else you install with it
-   (network plugin, ingress controller, database):
+1. **List the images.** Set `app.image` to your app image by digest
+   (`repository@sha256:<digest>`); the chart's default is a local tag. Then
+   render the chart with your values and read every `image:` line, together
+   with those of anything else you install with it (network plugin, ingress
+   controller, database):
 
    ```sh
    helm template keeplane deploy/helm/keeplane -f values.yaml | grep 'image:'
    ```
 
-   Every Keeplane image is pinned by digest. Pin the others the same way.
+   The gateway and the other images the chart bundles are pinned by digest.
+   Pin the others the same way.
 2. **Copy each image by digest** into your internal registry, with a tool that
    keeps the digest, such as `crane copy` or
    `skopeo copy --all --preserve-digests`. A copy that converts or rebuilds an
-   image gets a new digest, and the pods would not find it.
+   image gets a new digest, and the pods would not find it. To use the
+   containerd setting in step 3, keep each image under its source registry's
+   host as the first part of its path, as the CI run does: for example
+   `cr.agentgateway.dev/agentgateway@sha256:…` goes to
+   `registry.internal.example/cr.agentgateway.dev/agentgateway@sha256:…`.
+   Docker Hub images go under `docker.io` (for example
+   `registry.internal.example/docker.io/library/postgres@sha256:…`); their
+   upstream server is `registry-1.docker.io`.
 3. **Point your nodes at it.** Either set `app.image` and
    `agentgateway-standalone.image` to the internal registry's names (same
    digests) and add `app.imagePullSecrets` if it needs credentials, or keep
@@ -63,10 +73,20 @@ your network. Before you close any temporary access to outside registries:
    [host."https://registry.internal.example/v2/cr.agentgateway.dev"]
      capabilities = ["pull", "resolve"]
      override_path = true
+     ca = "/etc/containerd/certs.d/cr.agentgateway.dev/internal-ca.crt"
    ```
-4. **Check a fresh node before closing.** On one node, remove the copied
-   images (`crictl rmi`), restart it, and check every pod starts and the
-   internal registry's log shows the pulls.
+
+   For Docker Hub the folder is `docker.io`, `server` is
+   `https://registry-1.docker.io` and the host path ends in `/v2/docker.io`.
+   Each node must trust your internal registry's certificate: put its CA on
+   the node and name it with `ca`, as above, unless the node's system trust
+   already includes it. The CI run uses a plain-HTTP registry inside its
+   test network; it does not cover a production registry's TLS or
+   credentials.
+4. **Check a fresh node before closing.** On one node, drain it or stop its
+   kubelet first, so nothing pulls an image back meanwhile, then remove the
+   copied images (`crictl rmi`) and restart it. Check every pod starts and
+   the internal registry's log shows the pulls.
 
 Once the images are on your nodes, Keeplane needs no registry to run: the
 gateway pull policy is `IfNotPresent` and every pinned image is named by
