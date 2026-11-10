@@ -51,6 +51,7 @@ CATALOGS = {
     "PR": ("integration/personal-data-routing-cases.md",),
     "PRJ-UI": ("browser/projects-cases.md",),
     "RT": ("integration/task-routing-cases.md",),
+    "XCM": ("integration/existing-gateway-class-mode-cases.md",),
 }
 
 

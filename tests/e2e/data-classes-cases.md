@@ -45,17 +45,18 @@ PRJ-UI the [Projects browser cases](../browser/projects-cases.md); PCL-LIVE the
 [task routing cases](../integration/task-routing-cases.md); CLI-CLASS the
 [signed-in coding cases](../unit/cli-signed-in-coding-cases.md); PR the
 [detection routing cases](../integration/personal-data-routing-cases.md); PD the
-[detection rule cases](../unit/personal-data-detection-cases.md); and PM the
-[detector model cases](../integration/personal-data-model-cases.md).
+[detection rule cases](../unit/personal-data-detection-cases.md); PM the
+[detector model cases](../integration/personal-data-model-cases.md); and XCM the
+[customer-run gateway class mode cases](../integration/existing-gateway-class-mode-cases.md).
 `tests/unit/test_data_class_scenario_map.py` fails if a scenario is missing here
 or a case named here has no row in its own catalog or no test.
 
 | Story | Scenario | Checked by |
 | --- | --- | --- |
-| ST18 | Off by default | DCA-01, CLASS-00, CLASS-10, DC-UI-01, DC-UI-03 |
-| ST18 | Starter classes | DCA-02, CLASS-01, CLASS-09, DC-UI-01 |
+| ST18 | Off by default | DCA-01, CLASS-00, CLASS-10, DC-UI-01, DC-UI-03, XCM-01, XCM-04 |
+| ST18 | Starter classes | DCA-02, CLASS-01, CLASS-09, DC-UI-01, XCM-02, XCM-05, XCM-06, XCM-07 |
 | ST18 | Add a class | DCA-03, CLASS-02, CLASS-04, DC-UI-11, DC-UI-02 |
-| ST18 | Change a class | DCA-04, CLASS-05, CLASS-06, DC-UI-12 |
+| ST18 | Change a class | DCA-04, CLASS-05, CLASS-06, DC-UI-12, XCM-03 |
 | ST18 | A class in use | DCA-05, DC-UI-13, PR-10 |
 | ST19 | Set a class | DCA-06, PRJ-UI-03, PRJ-UI-05, PCL-LIVE-01 |
 | ST19 | Only approved models | MC-07, MC-08, MC-20, RT-04, RT-05, RT-07, PCL-LIVE-02, PCL-LIVE-03 |
@@ -75,6 +76,9 @@ a request detection can't read or check within 200 ms is held; a held request
 needs a model approved for both the detection class and the project's class
 (PR-03); and a class detection uses can't be removed (PR-10).
 
+The XCM cases start their own customer-run gateway and Keeplane app in a
+disposable Docker network, on SQLite and on PostgreSQL; CI's PostgreSQL job
+runs them and fails if either is skipped.
 The CLASS, PCL-LIVE and PDL-LIVE cases need the running Docker preview. CI's
 **Live preview gateway checks** workflow runs the PCL-LIVE cases, and, in a
 separate job with the `detection` app image and

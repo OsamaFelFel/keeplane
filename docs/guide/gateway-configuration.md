@@ -158,6 +158,97 @@ calls only the first check still protects the model, but writes no
 retried request is recorded once per try, as on the managed gateway. A managed
 install refuses the backend check: its own gateway records instead.
 
+### Keep Keeplane's own model check working
+
+When an admin sets up a model, Keeplane sends one short request to that model
+through `gateway.url`, with the gateway's runtime key and no developer
+session. A backend check that runs for that request as if a developer sent it
+refuses it, and setup fails with "The model didn't answer. Nothing was
+saved." So mark developer traffic and let the backend check tell the two
+apart. Follow these rules:
+
+- Set the marker header on **every listener developers can reach**, before
+  routing, with `set` (never `add`), so it overwrites any value a developer
+  sends.
+- Keep the route check on the developer route.
+- On each model backend, run Keeplane's final check for marked requests.
+  Give unmarked requests their own check that admits only Keeplane's runtime
+  key, never no check. Keeplane has no endpoint for this check in `existing`
+  mode, so it runs on your side.
+- Developers must not be able to reach the address in `gateway.url`, the
+  unmarked path.
+- Remove the marker, `authorization`, `x-keeplane-gateway-credential` and
+  `x-keeplane-project-id` before the request goes to the provider.
+
+An agentgateway example, the way the
+[class mode cases](../../tests/integration/existing-gateway-class-mode-cases.md)
+run it. `keeplane-checks` is the private address that serves both
+backend paths, and `/key-check` is your check that compares the Bearer value
+with Keeplane's runtime key. Add the route check's `backendAuth` block to the
+backend check too:
+
+```yaml
+binds:
+  - port: 5000                       # the developer listener
+    listeners:
+      - name: developer-chat
+        protocol: HTTP
+        policies:                    # before routing, over any client value
+          transformations:
+            request:
+              set:
+                x-keeplane-developer-route: '"1"'
+        routes:
+          - matches: [{path: {exact: /v1/chat/completions}}]
+            backends: [{host: "127.0.0.1:4000"}]
+            policies:
+              extAuthz:              # the route check
+                host: keeplane-app:3000
+                failureMode: deny
+                includeRequestHeaders: [authorization]
+                policies:
+                  backendAuth:
+                    key:
+                      value: {file: /secrets/keeplane-gateway-credential}
+                      location: {header: {name: x-keeplane-gateway-credential, prefix: ""}}
+                protocol:
+                  http:
+                    path: '"/internal/runtime/authorize"'
+                    addRequestHeaders: {content-type: '"application/json"', ":method": '"POST"'}
+                    body: '{"project_id": request.headers["x-keeplane-project-id"], "model_id": json(request.body).model}'
+policies:
+  - name: {name: final-coder, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:coder", namespace: ""}}}
+    policy:
+      extAuthz:                      # marked: the final check; unmarked: the key-only check
+        host: keeplane-checks:3000
+        failureMode: deny
+        includeRequestHeaders: [authorization]
+        protocol:
+          http:
+            path: >-
+              "x-keeplane-developer-route" in request.headers
+              && request.headers["x-keeplane-developer-route"] == "1"
+              ? "/internal/runtime/authorize/selected" : "/key-check"
+            addRequestHeaders: {content-type: '"application/json"', ":method": '"POST"'}
+            body: >-
+              "x-keeplane-developer-route" in request.headers
+              && request.headers["x-keeplane-developer-route"] == "1"
+              ? {"project_id": request.headers["x-keeplane-project-id"], "model_id": "coder"} : "{}"
+llm:
+  models:
+    - id: coder
+      requestHeaders:                # nothing of Keeplane's reaches the provider
+        remove: [authorization, x-keeplane-gateway-credential, x-keeplane-project-id, x-keeplane-developer-route]
+```
+
+A check has one host, so the address that answers the final check must
+also answer `/key-check`. For example, use a small proxy in front of the
+Keeplane app that answers `/key-check` itself and passes every other path to
+Keeplane; the test fixture does the same. Both of Keeplane's checks read the data-class
+switch, the classes and the approvals on every call, so turning data classes
+off or on applies from the next request.
+
 ## Retry a model that is down
 
 When a model answers with a 5xx, times out, or answers 429 before its first
