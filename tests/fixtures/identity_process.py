@@ -11,6 +11,7 @@ import json
 import os
 import threading
 import time
+from urllib.parse import urlencode
 
 import django
 
@@ -46,6 +47,18 @@ def migrate():
     return {"migrated": True}
 
 
+def register_cli_clients():
+    """Register the CLI's two fixed sign-in clients, as the preview does."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    # Its confirmation must not reach stdout, which carries the answers.
+    call_command("register_cli_client", stdout=StringIO())
+    call_command("register_cli_client", device=True, stdout=StringIO())
+    return {"registered": True}
+
+
 def http(command):
     """One request from a browser holding the given cookies."""
     client = Client(enforce_csrf_checks=True, HTTP_HOST="127.0.0.1")
@@ -55,6 +68,15 @@ def http(command):
     method, path = command["method"], command["path"]
     if method == "GET":
         response = client.get(path, headers=headers)
+    elif command.get("form") is not None:
+        # A form-encoded body, as the CLI's grant requests are sent.
+        response = client.generic(
+            method,
+            path,
+            urlencode(command["form"]),
+            content_type="application/x-www-form-urlencoded",
+            headers=headers,
+        )
     else:
         response = client.generic(
             method,
@@ -185,6 +207,7 @@ def stored():
 
 ACTIONS = {
     "migrate": lambda command: migrate(),
+    "register_cli_clients": lambda command: register_cli_clients(),
     "http": http,
     "burst": burst,
     "routes": lambda command: routes(),

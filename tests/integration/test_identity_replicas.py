@@ -3,7 +3,8 @@
 Two separate control-plane processes share one database and one signing
 secret, as two replicas behind one address do. A browser's cookies stay with
 the test and go to either copy. Every case runs on a temporary SQLite file and,
-when configured, on PostgreSQL. The plain-English cases are in
+when configured, on PostgreSQL; the CLI sign-in variant of IDR-04 runs on
+SQLite in the CLI sign-in CI job. The plain-English cases are in
 identity-replicas-cases.md.
 """
 
@@ -13,6 +14,7 @@ import secrets
 import subprocess
 import sys
 import time
+from importlib.util import find_spec
 
 import pytest
 
@@ -45,6 +47,16 @@ BEARER_ONLY = {
     "/api/runtime/projects/unknown/model-alternatives",
     "/api/runtime/projects/unknown/task-model",
 }
+# With CLI sign-in switched on, the CLI's two grant endpoints skip CSRF too, but
+# only for a form-encoded POST: they read no browser cookie, so a session gives
+# them no authority. Every other method and body type still needs the token.
+FORM_ONLY = {
+    "/oauth/token/": "accounts.oauth_views.token",
+    "/oauth/device/": "accounts.oauth_device.start",
+}
+# A form body naming no client Keeplane knows. (An empty body would be sent
+# with no content type at all.)
+FORM_BODY = {"client_id": "unknown", "scope": "runtime"}
 
 database = persistence.database
 
@@ -87,7 +99,7 @@ class Browser:
     def __init__(self):
         self.cookies = {}
 
-    def call(self, app, method, path, body=None, token=True, headers=None):
+    def call(self, app, method, path, body=None, token=True, headers=None, form=None):
         sent = {"Origin": ORIGIN, "X-Keeplane-Action": "1", **(headers or {})}
         if token and method != "GET":
             sent.setdefault("X-CSRFToken", self.token)
@@ -96,6 +108,7 @@ class Browser:
             method=method,
             path=path,
             body=body or {},
+            form=form,
             cookies=self.cookies,
             headers=sent,
         )
@@ -123,8 +136,7 @@ class Browser:
         return answer
 
 
-@pytest.fixture
-def copies(database, tmp_path):
+def start_copies(database, tmp_path, cli_clients=False, **settings):
     signing = tmp_path / "signing"
     signing.write_text(secrets.token_urlsafe(48))
     password = tmp_path / "first-admin-password"
@@ -142,12 +154,28 @@ def copies(database, tmp_path):
         DJANGO_SECRET_KEY_FILE=str(signing),
         FIRST_ADMIN_PASSWORD_FILE=str(password),
         PUBLIC_ORIGIN=ORIGIN,
+        **settings,
     )
     first, second = AppCopy(env), AppCopy(env)
     first.ask("migrate")
+    if cli_clients:
+        first.ask("register_cli_clients")
     yield first, second, password.read_text().strip()
     for app in (first, second):
         app.stop()
+
+
+@pytest.fixture
+def copies(database, tmp_path):
+    # CLI sign-in stays off: the fixture drops KEEPLANE_* from the environment.
+    yield from start_copies(database, tmp_path)
+
+
+@pytest.fixture
+def cli_copies(database, tmp_path):
+    yield from start_copies(
+        database, tmp_path, cli_clients=True, KEEPLANE_CLI_OAUTH_ENABLED="1"
+    )
 
 
 def identity(browser, app):
@@ -265,7 +293,7 @@ def test_idr_03_csrf_tokens_are_shared_and_checked_by_both_copies(copies):
     )
 
 
-def test_idr_04_every_state_changing_route_refuses_a_request_without_a_token(copies):
+def check_every_route(copies, form_only):
     first, second, password = copies
     browser = Browser().open(first)
     browser.sign_in(first, "first-admin", password)
@@ -284,30 +312,109 @@ def test_idr_04_every_state_changing_route_refuses_a_request_without_a_token(cop
         "/api/edition-note",
         "/api/edition-note/consume",
         "/sign-out",
+        "/oauth/authorize/",
         "/oauth/confirm-device/",
     } <= paths
+    # The form-only exemptions are the reviewed views, at their routes.
+    views = {route["path"]: route["view"] for route in found}
+    assert {path: views[path] for path in FORM_ONLY} == FORM_ONLY
 
     before = first.ask("snapshot")
-    refused = 0
+    refused = exempt = 0
     for route in found:
         for app in (first, second):
             for method in UNSAFE:
-                answer = browser.call(app, method, route["path"], token=False)
-                where = (route["path"], method)
-                if route["bearer_only"]:
-                    # No CSRF check, but the session cookie opens nothing: these
-                    # need their own credential, and fail closed (503) where
-                    # that credential isn't configured.
-                    assert answer["status"] in (401, 403, 405, 503), where
-                    assert (answer["body"] or {}).get("code") != "csrf_failed", where
-                else:
-                    assert answer["status"] == 403, where
-                    assert answer["body"]["code"] == "csrf_failed", where
-                    refused += 1
-    assert refused == (len(found) - len(bearer_only)) * 2 * len(UNSAFE)
+                # A JSON body, then a form-encoded body, with no CSRF token.
+                for form in (None, FORM_BODY):
+                    answer = browser.call(
+                        app, method, route["path"], token=False, form=form
+                    )
+                    where = (
+                        route["path"],
+                        method,
+                        "form" if form is not None else "json",
+                    )
+                    if route["bearer_only"]:
+                        # No CSRF check, but the session cookie opens nothing:
+                        # these need their own credential, and fail closed (503)
+                        # where that credential isn't configured.
+                        assert answer["status"] in (401, 403, 405, 503), where
+                        assert (answer["body"] or {}).get("code") != "csrf_failed", (
+                            where
+                        )
+                    elif (
+                        route["path"] in form_only
+                        and method == "POST"
+                        and form is not None
+                    ):
+                        # The grant request is refused as a bad request,
+                        # exactly as it is from a client with no cookies at all.
+                        assert answer["status"] == 400, where
+                        assert answer["body"] == {"error": "invalid_request"}, where
+                        assert answer == cookieless(app, route["path"], form), where
+                        exempt += 1
+                    else:
+                        assert answer["status"] == 403, where
+                        assert answer["body"]["code"] == "csrf_failed", where
+                        refused += 1
+    assert exempt == len(form_only) * 2
+    assert refused == (len(found) - len(bearer_only)) * 2 * len(UNSAFE) * 2 - exempt
     after = first.ask("snapshot")
     assert after == before
     # The session survived every refused sign-out.
+    assert identity(browser, second)["status"] == 200
+    return browser
+
+
+def cookieless(app, path, form):
+    """The same form POST from a client that holds no cookie and no token."""
+    return app.ask(
+        "http",
+        method="POST",
+        path=path,
+        form=form,
+        cookies={},
+        headers={"Origin": ORIGIN, "X-Keeplane-Action": "1"},
+    )
+
+
+def test_idr_04_every_state_changing_route_refuses_a_request_without_a_token(copies):
+    check_every_route(copies, form_only=set())
+
+
+@pytest.mark.optional
+@pytest.mark.live
+@pytest.mark.skipif(
+    not find_spec("oauth2_provider"), reason="Install the pinned CLI sign-in packages"
+)
+# The CLI sign-in job has no PostgreSQL server; the route table and the CSRF
+# middleware do not depend on the database.
+@pytest.mark.parametrize("database", ["sqlite"], indirect=True)
+def test_idr_04_cli_sign_in_on_exempts_only_the_form_grant_requests(cli_copies):
+    first, second, _ = cli_copies
+    browser = check_every_route(cli_copies, form_only=set(FORM_ONLY))
+    session = browser.cookies["keeplane_session"]
+    before = first.ask("snapshot")
+    # The session cookie, even offered as the grant itself, is no credential.
+    for app in (first, second):
+        for grant in (
+            {
+                "grant_type": "refresh_token",
+                "client_id": "keeplane-cli",
+                "refresh_token": session,
+            },
+            {
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "client_id": "keeplane-cli-device",
+                "device_code": session,
+            },
+        ):
+            answer = browser.call(app, "POST", "/oauth/token/", token=False, form=grant)
+            assert answer["status"] == 400, grant["grant_type"]
+            # The clients exist, so the grant itself is what is refused.
+            assert answer["body"] == {"error": "invalid_grant"}, grant["grant_type"]
+            assert answer == cookieless(app, "/oauth/token/", grant)
+    assert first.ask("snapshot") == before
     assert identity(browser, second)["status"] == 200
 
 
