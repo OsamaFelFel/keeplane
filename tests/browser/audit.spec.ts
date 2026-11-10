@@ -135,15 +135,18 @@ test('AU-UI-07: held-back requests show as stored, new ones as designed', async 
   await mockAudit(page)
   // New records follow the design's row "Request held back by detection, handled as [Class]"; one stored before keeps its words.
   const fresh = 'Request HR-3f9a0c41d2e7 in payments-api held back by detection, handled as Confidential (Personal data detected); approved model gpt-4.1'
+  const unchecked = "Request HR-7c2d91e04ab5 in payments-api held back because detection couldn't check it, handled as Confidential (Detection was down); model gpt-4.1 isn't approved for it, nothing was sent"
   const older = 'Request HR-0b6e5d2a9c18 held back as Confidential (Personal data detected); project payments-api; approved model gpt-4.1'
   const stored = [
+    { id: 52, kind: 'held_requests', when: '2026-11-10T09:20:00+00:00', who: 'dev-one', what: unchecked },
     { id: 51, kind: 'held_requests', when: '2026-11-10T09:15:00+00:00', who: 'dev-one', what: fresh },
     { id: 50, kind: 'held_requests', when: '2026-11-09T09:15:00+00:00', who: 'dev-one', what: older },
   ]
   await page.route(url => url.pathname === '/api/audit/records' && url.searchParams.get('kind') === 'held_requests',
-    route => route.fulfill({ json: { records: stored, total: 2, page: 1, page_size: 25, has_more: false } }))
+    route => route.fulfill({ json: { records: stored, total: 3, page: 1, page_size: 25, has_more: false } }))
   await page.goto('/app/audit')
   await page.getByLabel('Show').selectOption('held_requests')
+  await expect(page.getByRole('cell', { name: unchecked, exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: fresh, exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: older, exact: true })).toBeVisible()
 })

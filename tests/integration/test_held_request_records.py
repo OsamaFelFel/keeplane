@@ -213,7 +213,12 @@ def test_hr_06_each_reason_is_named(managed, verdict, why):
     f.fake.verdict = verdict
     assert entry(f, "Refactor the parser").status_code == 200
     [row] = held(f)
-    assert f"handled as Confidential ({why});" in row["what"]
+    how = (
+        "by detection"
+        if why == "Personal data detected"
+        else "because detection couldn't check it"
+    )
+    assert f" in Callback held back {how}, handled as Confidential ({why}); " in row["what"]
 
 
 def test_hr_06_unreadable_parts_are_also_named(managed):
@@ -221,7 +226,10 @@ def test_hr_06_unreadable_parts_are_also_named(managed):
     switch_on(f)
     image = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "x"}}]}]
     assert send_managed(f, messages=image).status_code == 200
-    assert "(Request couldn't be read)" in held(f)[0]["what"]
+    assert (
+        "held back because detection couldn't check it, handled as Confidential "
+        "(Request couldn't be read)"
+    ) in held(f)[0]["what"]
 
 
 def test_hr_07_its_own_switch(managed):
@@ -409,8 +417,8 @@ def test_hr_16_records_are_stored_for_every_app_copy(start_process):
         rows[0]["what"],
     ), rows[0]["what"]
     assert re.fullmatch(
-        r"Request HR-[0-9a-f]{12} in payments-api held back by detection, handled "
-        r"as Public \(Detection was down\); a model Keeplane doesn't know isn't "
+        r"Request HR-[0-9a-f]{12} in payments-api held back because detection "
+        r"couldn't check it, handled as Public \(Detection was down\); a model Keeplane doesn't know isn't "
         r"approved for it, nothing was sent",
         rows[1]["what"],
     ), rows[1]["what"]
@@ -493,7 +501,10 @@ def test_hr_13_held_only_at_the_final_check_is_recorded(managed, monkeypatch, re
     assert selected(f, "Refactor the parser").status_code == 200
     [row] = held(f)
     why = held_request_records.REASONS[reason]
-    assert f"in Callback held back by detection, handled as Confidential ({why}); approved model private" in row["what"]
+    assert (
+        f"in Callback held back because detection couldn't check it, "
+        f"handled as Confidential ({why}); approved model private"
+    ) in row["what"]
     # Refused at the final check: recorded too, and still refused.
     f.stores.classes.set_detection({"enabled": True, "class_id": "public"})
     f.fake = Sequence([Verdict(True, reason)])
@@ -537,8 +548,12 @@ def test_hr_18_a_request_too_long_to_check_is_recorded_once(request, mode):
     for _ in range(3):
         assert final(f).status_code == 200
     [row] = held(f)
-    assert "(Detection took longer than 200 ms)" in row["what"]
-    assert "approved model private" in row["what"]
+    assert re.fullmatch(
+        r"Request HR-[0-9a-f]{12} in Callback held back because detection "
+        r"couldn't check it, handled as Confidential \(Detection took longer "
+        r"than 200 ms\); approved model private",
+        row["what"],
+    ), row["what"]
 
 
 def test_hr_15_customer_run_final_check_records_outage_holds(customer_run):
@@ -559,9 +574,21 @@ def test_description_holds_only_the_given_details():
         "Request HR-0123456789ab in payments-api held back by detection, "
         "handled as Confidential (Personal data detected); approved model gpt-4.1"
     )
+    # Any reason but a finding: detection couldn't check the request.
     assert held_request_records.description(
         "HR-0123456789ab", "Public", SLOW, "payments-api", None, False
-    ).endswith("a model Keeplane doesn't know isn't approved for it, nothing was sent")
+    ) == (
+        "Request HR-0123456789ab in payments-api held back because detection "
+        "couldn't check it, handled as Public (Detection took longer than 200 ms); "
+        "a model Keeplane doesn't know isn't approved for it, nothing was sent"
+    )
+    assert held_request_records.description(
+        "HR-0123456789ab", "Confidential", UNAVAILABLE, "payments-api", "gpt-4.1", True
+    ) == (
+        "Request HR-0123456789ab in payments-api held back because detection "
+        "couldn't check it, handled as Confidential (Detection was down); "
+        "approved model gpt-4.1"
+    )
     assert re.fullmatch(r"HR-[0-9a-f]{12}", held_request_records.reference())
 
 

@@ -49,9 +49,11 @@ REASON = {
     "down": "Detection was down",
 }
 RECORD = re.compile(
-    r"Request (?P<reference>HR-[0-9a-f]{12}) in (?P<project>.+) held back by "
-    r"detection, handled as (?P<held_as>\w+) \((?P<why>[^)]+)\); "
-    r"(?:approved model (\S+)|model (\S+) isn't approved for it, nothing was sent)"
+    r"Request (?P<reference>HR-[0-9a-f]{12}) in (?P<project>.+) held back "
+    r"(?P<how>by detection|because detection couldn't check it), "
+    r"handled as (?P<held_as>\w+) \((?P<why>[^)]+)\); "
+    r"(?:approved model (?P<approved>\S+)"
+    r"|model (?P<refused>\S+) isn't approved for it, nothing was sent)"
 )
 # Over the detector's 100 000-character limit, under the gateway's 1 MiB.
 LONG_REPEAT = 1200
@@ -270,7 +272,16 @@ def run_cases():
                 problems.append("unreadable record")
                 continue
             held_as, why, project_name = match.group("held_as", "why", "project")
-            approved, refused = match.group(5, 6)
+            approved, refused = match.group("approved", "refused")
+            # A finding reads "by detection"; any other reason, that
+            # detection couldn't check the request.
+            expected_how = (
+                "by detection"
+                if why == "Personal data detected"
+                else "because detection couldn't check it"
+            )
+            if match.group("how") != expected_how:
+                problems.append("wrong hold wording for its reason")
             found.append(
                 (approved or refused, approved is not None, why, project_name)
             )
@@ -285,7 +296,7 @@ def run_cases():
             ):
                 problems.append("request text in a record")
         references = [
-            match.group(1)
+            match.group("reference")
             for match in (RECORD.fullmatch(row["what"]) for row in rows)
             if match
         ]

@@ -81,9 +81,12 @@ flowchart LR
   stored to tell them apart (owner decision on PR #204: a rare duplicate is
   acceptable, a missing record isn't). The shared checks do not record on a
   managed install. The record's account is the developer whose session
-  made the request. Its description reads `Request [Reference] in [Project]
-  held back by detection, handled as [Class] ([Why]); [Outcome]`, the Audit
-  design's row with the details D178 requires. It gives a random reference
+  made the request. Its description is the Audit design's row with the
+  details D178 requires: `Request [Reference] in [Project] held back by
+  detection, handled as [Class] (Personal data detected); [Outcome]` when
+  detection found personal data, and `Request [Reference] in [Project] held
+  back because detection couldn't check it, handled as [Class] ([Why]);
+  [Outcome]` for every other reason. It gives a random reference
   (`HR-` and 12 hex digits, derived from nothing in the request), the class, the reason
   category (Personal data detected, Request couldn't be read, Detection was
   down, Detection took longer than 200 ms, Detection failed), the project and

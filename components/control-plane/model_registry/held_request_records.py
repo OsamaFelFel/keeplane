@@ -5,11 +5,14 @@ back to the detection class. While the "Held-back requests" switch is on, each
 held request gets one record with a reference, the time, the developer, the
 project, the class it was handled as, why it was held, and the model it was
 allowed to or refused for. It never holds the prompt, any other request text
-or anything detection found. It reads "Request [Reference] in [Project] held
-back by detection, handled as [Class] ([Why]); approved model [Model]", or
-"...; model [Model] isn't approved for it, nothing was sent", following the
-Audit design's row; records stored before keep their text and are never
-rewritten.
+or anything detection found. Following the Audit design's row, it reads
+"Request [Reference] in [Project] held back by detection, handled as [Class]
+(Personal data detected); approved model [Model]" when personal data was
+found, and "Request [Reference] in [Project] held back because detection
+couldn't check it, handled as [Class] ([Why]); approved model [Model]" for
+every other reason. Either form ends "model [Model] isn't approved for it,
+nothing was sent" when the model isn't approved for the class. Records stored
+before keep their text and are never rewritten.
 
 Every held request is recorded; duplicates are kept down. The gateway runs
 detection at its route (entry) check, once per request, and again at the
@@ -88,9 +91,11 @@ def description(ref, held_class, reason, project_name, model_id, allowed):
         else f"{model} isn't approved for it, nothing was sent"
     )
     # The approved Audit design's row, "Request held back by detection,
-    # handled as [Class]", with the details ST21 and D178 require.
+    # handled as [Class]", with the details ST21 and D178 require. A hold
+    # without a finding says detection couldn't check the request.
+    how = "by detection" if reason == FOUND else "because detection couldn't check it"
     return (
-        f"Request {ref} in {project_name} held back by detection, "
+        f"Request {ref} in {project_name} held back {how}, "
         f"handled as {held_class} ({why}); {outcome}"
     )
 

@@ -52,8 +52,11 @@ In every case "the decided message" is: "This request is handled as
 Confidential and <model> isn't approved for it, so nothing was sent. Run it
 with a model approved for Confidential, or ask your admin to approve one."
 A held-back record reads "Request HR-… in <project> held back by detection,
-handled as Confidential (<reason>); approved model <model>" or "…; model
-<model> isn't approved for it, nothing was sent", names the developer and a time, has its own
+handled as Confidential (Personal data detected); approved model <model>",
+or, for any other reason, "Request HR-… in <project> held back because
+detection couldn't check it, handled as Confidential (<reason>); approved
+model <model>"; either form ends "model <model> isn't approved for it,
+nothing was sent" when the model isn't approved for Confidential. It names the developer and a time, has its own
 reference and never contains the request text or the email, phone or card
 number in it.
 
