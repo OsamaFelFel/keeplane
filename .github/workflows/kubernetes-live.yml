@@ -146,7 +146,7 @@ jobs:
   isolated:
     name: Chart on an isolated kind network
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 60
     env:
       KIND_VERSION: v0.33.0
       KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
@@ -167,6 +167,13 @@ jobs:
       INGRESS_NGINX_VERSION: controller-v1.15.1
       INGRESS_NGINX_SHA256: 2a3ae008c8786431115502644e77ab398fdebfb721a5d1195ed3089cde3299df
       PYTHON_IMAGE: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      # The internal registry on the isolated network: the CNCF Distribution
+      # registry (Apache-2.0) 3.1.1 image by digest, and crane from
+      # go-containerregistry (Apache-2.0), which copies images into it, with
+      # the checksum from its release's checksums.txt.
+      REGISTRY_IMAGE: registry:3.1.1@sha256:325b4b29b041e82803abeb703e201655e4e23ab83264ec1a7c9ddb0a5b14a6e0
+      CRANE_VERSION: v0.22.1
+      CRANE_SHA256: 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0
       # The live test file this job runs. tests/unit/test_self_hosting_scenario_map.py
       # reads every LIVE_TESTS line in this workflow to know which cases CI
       # runs on the current revision.
@@ -190,7 +197,7 @@ jobs:
             echo "KEEPLANE_TEST_REPORT_DIR=$GITHUB_WORKSPACE/$RESULTS/reports"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Install pinned kind, kubectl and Helm and check their checksums
+      - name: Install pinned kind, kubectl, Helm and crane and check their checksums
         run: |
           cd "$RUNNER_TEMP"
           curl --fail --location -sS --output bin/kind "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64"
@@ -201,7 +208,11 @@ jobs:
           echo "$HELM_SHA256  helm.tar.gz" | sha256sum --check
           tar -xzf helm.tar.gz linux-amd64/helm
           mv linux-amd64/helm bin/helm
-          chmod 755 bin/kind bin/kubectl bin/helm
+          curl --fail --location -sS --output crane.tar.gz "https://github.com/google/go-containerregistry/releases/download/$CRANE_VERSION/go-containerregistry_Linux_x86_64.tar.gz"
+          echo "$CRANE_SHA256  crane.tar.gz" | sha256sum --check
+          tar -xzf crane.tar.gz -C bin crane
+          chmod 755 bin/kind bin/kubectl bin/helm bin/crane
+          crane version
       - name: Fetch the network plugin and ingress controller manifests and pin their images
         run: |
           cd "$RUNNER_TEMP"
@@ -273,14 +284,49 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Create the kind cluster with Calico and the ingress controller
+      - name: Start the internal registry and copy every image the install uses into it
         run: |
           # A fixed network and bridge name, so the model provider's address
-          # (172.30.0.1) and the closing rules are known before the install.
+          # (172.30.0.1), the internal registry's (172.30.0.200) and the
+          # closing rules are known before the install.
           docker network create --driver bridge --subnet 172.30.0.0/16 --gateway 172.30.0.1 \
             -o com.docker.network.bridge.name=kind-isolated kind
+          docker run -d --name keeplane-mirror --network kind --ip 172.30.0.200 \
+            -p 127.0.0.1:5001:5000 \
+            -v "$GITHUB_WORKSPACE/tests/fixtures/isolated-network/registry.yml:/etc/distribution/config.yml:ro" \
+            "$REGISTRY_IMAGE"
+          for attempt in $(seq 1 30); do
+            curl --fail -sS -o /dev/null http://127.0.0.1:5001/v2/ && break
+            [ "$attempt" = 30 ] && exit 1
+            sleep 1
+          done
+          # The app image goes to the internal registry only; the node pulls
+          # it from there by digest, like every other image.
+          docker tag keeplane-preview:kind-local "127.0.0.1:5001/keeplane/app:$GITHUB_SHA"
+          docker push "127.0.0.1:5001/keeplane/app:$GITHUB_SHA" | tee "$RUNNER_TEMP/app-push.log"
+          digest=$(grep -o 'digest: sha256:[0-9a-f]\{64\}' "$RUNNER_TEMP/app-push.log" | tail -n 1 | cut -d' ' -f2)
+          [ -n "$digest" ]
+          app_image="172.30.0.200:5000/keeplane/app@$digest"
+          echo "KEEPLANE_ISOLATED_APP_IMAGE=$app_image" >> "$GITHUB_ENV"
+          helm template keeplane deploy/helm/keeplane --namespace keeplane \
+            -f tests/fixtures/isolated-network/values.yaml --set app.image="$app_image" \
+            > "$RUNNER_TEMP/keeplane.yaml"
+          # Every image the manifests the job applies name, and the probe
+          # container the cases join to a gateway copy.
+          python3 tests/fixtures/isolated-network/mirror.py fill "$KEEPLANE_ISOLATED_RUNTIME/mirror-images.json" \
+            "$RUNNER_TEMP/calico.yaml" "$RUNNER_TEMP/ingress-nginx.yaml" "$RUNNER_TEMP/keeplane.yaml" \
+            deploy/local/model-fixture.yaml deploy/local/postgres-fixture.yaml \
+            tests/fixtures/isolated-network/inside.yaml --image "$PYTHON_IMAGE"
+      - name: Create the kind cluster with Calico and the ingress controller
+        run: |
           kind create cluster --name keeplane-isolated --image "$KIND_NODE_IMAGE" \
             --config tests/fixtures/isolated-network/kind.yaml --kubeconfig "$KEEPLANE_ISOLATED_KUBECONFIG"
+          # The images the node image itself holds (Kubernetes' own), before
+          # anything is installed: the fresh-node case (ISO-11) keeps only these.
+          docker exec keeplane-isolated-control-plane crictl images -o json \
+            > "$KEEPLANE_ISOLATED_RUNTIME/node-image-images.json"
+          # From here on the node pulls every registry through the internal one.
+          python3 tests/fixtures/isolated-network/mirror.py point-node "$KEEPLANE_ISOLATED_RUNTIME/mirror-images.json"
           export KUBECONFIG="$KEEPLANE_ISOLATED_KUBECONFIG"
           kubectl apply -f "$RUNNER_TEMP/calico.yaml"
           kubectl wait --for=condition=Ready node --all --timeout=300s
@@ -304,7 +350,6 @@ jobs:
         run: |
           export KUBECONFIG="$KEEPLANE_ISOLATED_KUBECONFIG"
           RUNTIME="$KEEPLANE_ISOLATED_RUNTIME"
-          kind load docker-image keeplane-preview:kind-local --name keeplane-isolated
           kubectl create namespace keeplane
           kubectl -n keeplane create secret generic keeplane-first-admin \
             --from-file=first-admin-password="$RUNTIME/first-admin-password"
@@ -322,14 +367,16 @@ jobs:
           kubectl -n keeplane rollout status deployment/model --timeout=240s
           kubectl -n keeplane rollout status deployment/postgres --timeout=240s
           helm upgrade --install keeplane deploy/helm/keeplane --namespace keeplane \
-            -f tests/fixtures/isolated-network/values.yaml --wait --timeout 300s
+            -f tests/fixtures/isolated-network/values.yaml --set app.image="$KEEPLANE_ISOLATED_APP_IMAGE" \
+            --wait --timeout 300s
           kubectl create namespace inside
           kubectl -n inside create configmap keeplane-isolated-ca --from-file=ca.crt="$RUNTIME/ca.crt"
           kubectl -n inside apply -f tests/fixtures/isolated-network/inside.yaml
           kubectl -n inside wait --for=condition=Ready pod --all --timeout=180s
       - name: Run the isolated-network cases
         # The cases close the network themselves (ISO-02), so they record the
-        # same checks before and after.
+        # same checks before and after, and then clear the node's images and
+        # start it again from the internal registry (ISO-11).
         run: |
           .venv/bin/python -m pytest -m live -rA $LIVE_TESTS \
             --junitxml="$RESULTS/junit.xml"
@@ -375,6 +422,7 @@ jobs:
             kubectl -n "$ns" logs --all-containers --prefix --tail=300 --selector '!job-name' > "$out/$ns-logs.txt" 2>&1 || true
           done
           sudo iptables -S > "$out/runner-iptables.txt" 2>&1 || true
+          docker logs keeplane-mirror > "$out/internal-registry.log" 2>&1 || true
           cp "$RUNNER_TEMP/cloud-provider.log" "$out/" 2>/dev/null || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}

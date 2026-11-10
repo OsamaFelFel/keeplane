@@ -3,9 +3,10 @@
 # destination is the model provider fixture on the runner, 172.30.0.1:18082,
 # the gateway address of the fixed "kind" Docker network the workflow creates.
 app:
-  image: keeplane-preview:kind-local
-  # The app image is loaded into the node; it is never pulled.
-  pullPolicy: Never
+  # The workflow sets app.image to the app image in the internal registry,
+  # 172.30.0.200:5000/keeplane/app@sha256:<digest>, which the node pulls like
+  # every other image (mirror.py).
+  pullPolicy: IfNotPresent
   localTrial:
     enabled: true
     firstAdminSecret: keeplane-first-admin

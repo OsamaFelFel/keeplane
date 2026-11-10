@@ -1,0 +1,27 @@
+# The internal registry on the isolated kind network
+# (tests/e2e/kubernetes-isolated-cases.md): a plain registry that holds a copy
+# of every image the install uses, and that the node pulls through. It never
+# connects anywhere itself. It keeps each image's index (so the digests the
+# manifests name stay the same) but only the linux/amd64 image under it, the
+# platform the runner and its node use: an index is accepted only when that
+# image is already in the registry.
+version: 0.1
+log:
+  fields:
+    service: registry
+  # One line per request on stdout, in Combined Log Format; the cases read it
+  # to see which images the node pulled from here.
+  accesslog:
+    disabled: false
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+http:
+  addr: :5000
+validation:
+  manifests:
+    indexes:
+      platforms: list
+      platformlist:
+        - architecture: amd64
+          os: linux

@@ -3,19 +3,23 @@
 The cluster is the disposable `keeplane-isolated` kind cluster the isolated
 network job of the Kubernetes live checks workflow creates: Calico enforces
 NetworkPolicy, ingress-nginx
-publishes Keeplane on https://keeplane.isolated.test, and the model provider
-fixture runs on the runner outside the cluster. The cases close the network's
-outside access and outside name lookups themselves (ISO-02), restart every
-Keeplane pod and then the node, and run the admin journey with only the model
-provider reachable.
+publishes Keeplane on https://keeplane.isolated.test, the model provider
+fixture runs on the runner outside the cluster, and an internal registry on
+the same network holds every image the install uses and the node pulls
+through it. The cases close the network's outside access and outside name
+lookups themselves (ISO-02), restart every Keeplane pod and then the node,
+clear the node's images and start it again from the internal registry
+(ISO-11), and run the admin journey with only the model provider reachable.
 
 They refuse any kubeconfig context other than kind-keeplane-isolated, and
 change the runner's firewall, so they run only in that workflow.
 """
 
 import http.cookiejar
+import importlib.util
 import json
 import os
+import re
 import socket
 import ssl
 import subprocess
@@ -53,8 +57,20 @@ PROVIDER_PORT = 18082
 PYTHON_IMAGE = (
     "python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a"
 )
-APP_IMAGE = "keeplane-preview:kind-local"
 CLOSE = ROOT / "tests/fixtures/isolated-network/close-network.sh"
+# The internal registry (tests/fixtures/isolated-network/mirror.py): its
+# container, its address on the isolated network, the images the workflow
+# copied into it and the images the node image itself held before the install.
+_spec = importlib.util.spec_from_file_location(
+    "isolated_mirror", ROOT / "tests/fixtures/isolated-network/mirror.py"
+)
+MIRROR_TOOL = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(MIRROR_TOOL)
+MIRROR = MIRROR_TOOL.MIRROR
+MIRROR_CONTAINER = "keeplane-mirror"
+MIRRORED = RUNTIME / "mirror-images.json"
+NODE_IMAGE_IMAGES = RUNTIME / "node-image-images.json"
+APP_IMAGE = os.environ.get("KEEPLANE_ISOLATED_APP_IMAGE", "")
 # An image the node never had, for the registry pull check.
 ABSENT_IMAGE = "registry.k8s.io/e2e-test-images/agnhost:2.53"
 
@@ -380,6 +396,137 @@ def ready(pod):
     )
 
 
+def mirror_key(ref):
+    """(registry, path, digest) of a pinned image, or None if not pinned."""
+    try:
+        registry, path, _, digest = MIRROR_TOOL.split(ref)
+    except SystemExit:
+        return None
+    return registry, path, digest
+
+
+def node_image():
+    """The names and IDs of the images the node image held before the install."""
+    images = json.loads(NODE_IMAGE_IMAGES.read_text())["images"]
+    names = {
+        name
+        for image in images
+        for name in image.get("repoTags", []) + image.get("repoDigests", [])
+    }
+    return names, {image["id"] for image in images}
+
+
+def installed_images(ephemeral=True):
+    """Every image a pod names that the node image did not already hold."""
+    names, _ = node_image()
+    found = set()
+    for pod in json.loads(kubectl("get", "pods", "-A", "-o", "json"))["items"]:
+        spec = pod["spec"]
+        containers = spec.get("initContainers", []) + spec["containers"]
+        if ephemeral:
+            containers += spec.get("ephemeralContainers", [])
+        found |= {c["image"] for c in containers if c["image"] not in names}
+    return found
+
+
+def node_manifest(path, digest):
+    """Ask the internal registry from the node for a manifest by digest."""
+    result = run(
+        "docker",
+        "exec",
+        NODE,
+        "curl",
+        "-sS",
+        "-I",
+        "-m",
+        "10",
+        "-H",
+        "Accept: " + MIRROR_TOOL.ACCEPT,
+        f"http://{MIRROR}/v2/{path}/manifests/{digest}",
+        check=False,
+        timeout=60,
+    )
+    lines = result.stdout.splitlines()
+    status = lines[0].split()[1] if lines and len(lines[0].split()) > 1 else "none"
+    served = next(
+        (
+            line.split(":", 1)[1].strip()
+            for line in lines
+            if line.lower().startswith("docker-content-digest:")
+        ),
+        None,
+    )
+    return served if status == "200" else f"status {status}"
+
+
+# One request in the internal registry's access log (Combined Log Format).
+ACCESS = re.compile(r'^(\S+) \S+ \S+ \[[^\]]+\] "(GET|HEAD) (\S+) HTTP/[\d.]+" (\d{3})')
+
+
+def mirror_requests(since):
+    """(client, path without query, status) of each request since a time."""
+    logs = run("docker", "logs", "--since", since, MIRROR_CONTAINER, timeout=60)
+    requests = []
+    for line in (logs.stdout + "\n" + logs.stderr).splitlines():
+        match = ACCESS.match(line.strip())
+        if match:
+            client, _, path, status = match.groups()
+            requests.append((client, path.split("?", 1)[0], status))
+    return requests
+
+
+def node_address():
+    return run(
+        "docker",
+        "inspect",
+        "-f",
+        '{{(index .NetworkSettings.Networks "kind").IPAddress}}',
+        NODE,
+    ).stdout.strip()
+
+
+def wait_for_node():
+    """Wait for the restarted node and its network plugin to be ready."""
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        nodes = run(
+            "kubectl",
+            "--kubeconfig",
+            KUBECONFIG,
+            "get",
+            "nodes",
+            "-o",
+            "json",
+            check=False,
+            timeout=30,
+        )
+        if nodes.returncode == 0 and all(
+            any(
+                c["type"] == "Ready" and c["status"] == "True"
+                for c in n["status"]["conditions"]
+            )
+            for n in json.loads(nodes.stdout)["items"]
+        ):
+            break
+        time.sleep(5)
+    else:
+        raise RuntimeError("The node did not come back Ready")
+    for namespace, workload in (
+        ("kube-system", "daemonset/calico-node"),
+        ("kube-system", "deployment/calico-kube-controllers"),
+        ("kube-system", "deployment/coredns"),
+    ):
+        kubectl(
+            "-n",
+            namespace,
+            "rollout",
+            "status",
+            workload,
+            "--timeout=300s",
+            timeout=400,
+        )
+
+
 def wait_for_workloads(timeout="300s"):
     for kind_name in (
         "deployment/keeplane-app",
@@ -452,9 +599,8 @@ def run_cases():
             spec = pod["spec"]
             for container in spec.get("initContainers", []) + spec["containers"]:
                 images[container["image"]] = container.get("imagePullPolicy")
-        pinned = all(
-            "@sha256:" in image or (image == APP_IMAGE and policy == "Never")
-            for image, policy in images.items()
+        pinned = all("@sha256:" in image for image in images) and (
+            APP_IMAGE.startswith(MIRROR + "/") and APP_IMAGE in images
         )
         # While the runner still forwards everything, only the egress
         # policy can stop the app and gateway reaching outside addresses:
@@ -751,42 +897,8 @@ def run_cases():
             {"visitor_in_inside": visitor, "unlabelled_pod_in_keeplane": neighbour},
         )
 
-    def iso_09():
-        run("docker", "restart", NODE, timeout=180)
-        deadline = time.monotonic() + 300
-        while time.monotonic() < deadline:
-            nodes = run(
-                "kubectl",
-                "--kubeconfig",
-                KUBECONFIG,
-                "get",
-                "nodes",
-                "-o",
-                "json",
-                check=False,
-                timeout=30,
-            )
-            if nodes.returncode == 0 and all(
-                any(
-                    c["type"] == "Ready" and c["status"] == "True"
-                    for c in n["status"]["conditions"]
-                )
-                for n in json.loads(nodes.stdout)["items"]
-            ):
-                break
-            time.sleep(5)
-        else:
-            raise RuntimeError("The node did not come back Ready")
-        kubectl(
-            "-n",
-            "kube-system",
-            "rollout",
-            "status",
-            "daemonset/calico-node",
-            "--timeout=300s",
-            timeout=400,
-        )
-        wait_for_workloads()
+    def journey():
+        """The web UI, sign-in and both models, with the network still closed."""
         status, page = fetch("/", attempts=60)
         opener = sign_in()
         cloud_status, cloud = ask(opener, "outside-cloud")
@@ -824,6 +936,115 @@ def run_cases():
             },
         )
 
+    def iso_09():
+        run("docker", "restart", NODE, timeout=180)
+        wait_for_node()
+        wait_for_workloads()
+        return journey()
+
+    def iso_10():
+        mirrored = json.loads(MIRRORED.read_text())
+        held = {
+            (e["registry"], e["path"].removeprefix(e["registry"] + "/"), e["digest"])
+            for e in mirrored
+        }
+        used = installed_images()
+        missing = sorted(ref for ref in used if mirror_key(ref) not in held)
+        # From the node, with the outside registries closed: every image the
+        # internal registry holds is served by its digest, and for an image
+        # index the linux/amd64 image under it too.
+        served = {}
+        for entry in mirrored:
+            for digest in filter(None, (entry["digest"], entry.get("platform_digest"))):
+                served[f"{entry['path']}@{digest}"] = (
+                    node_manifest(entry["path"], digest) == digest
+                )
+        reaches, code = node_reaches_registry()
+        return (
+            mirrored and used and not missing and all(served.values()) and not reaches,
+            {
+                "images_in_use_outside_the_node_image": sorted(used),
+                "not_in_internal_registry": missing,
+                "served_to_the_node": served,
+                "node_registry_status": code,
+            },
+        )
+
+    def iso_11():
+        _, node_ids = node_image()
+        used = installed_images(ephemeral=False)
+        # The node forgets every image the install brought: kubelet stops
+        # so it pulls nothing meanwhile, and every image the node image did
+        # not hold is removed. Only Kubernetes' own images stay.
+        node("systemctl", "stop", "kubelet")
+        listed = json.loads(node("crictl", "images", "-o", "json").stdout)["images"]
+        removed = []
+        for image in listed:
+            if image["id"] not in node_ids:
+                node("crictl", "rmi", image["id"], timeout=120)
+                removed += image.get("repoDigests") or image.get("repoTags") or []
+        left = json.loads(node("crictl", "images", "-o", "json").stdout)["images"]
+        extra = sorted(i["id"] for i in left if i["id"] not in node_ids)
+        still_held = sorted(
+            ref
+            for ref in used
+            if node("crictl", "inspecti", ref, timeout=60).returncode == 0
+        )
+        since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        run("docker", "restart", NODE, timeout=180)
+        wait_for_node()
+        wait_for_workloads()
+        address = node_address()
+        fetched = {
+            (path, status)
+            for client, path, status in mirror_requests(since)
+            if client == address
+        }
+        from_mirror = {}
+        for ref in used:
+            registry, path, digest = mirror_key(ref)
+            target = MIRROR_TOOL.mirror_path(registry, path)
+            from_mirror[ref] = (f"/v2/{target}/manifests/{digest}", "200") in fetched
+        back = {
+            ref: node("crictl", "inspecti", ref, timeout=60).returncode == 0
+            for ref in used
+        }
+        everything = []
+        for namespace in ("keeplane", "inside", "ingress-nginx", "kube-system"):
+            everything += pods(namespace)
+        reaches, code = node_reaches_registry()
+        return (
+            removed
+            and not extra
+            and not still_held
+            and all(from_mirror.values())
+            and all(back.values())
+            and all(ready(p) for p in everything)
+            and not reaches,
+            {
+                "images_removed": len(removed),
+                "left_beyond_the_node_image": extra,
+                "still_held_after_removal": still_held,
+                "pulled_from_internal_registry": from_mirror,
+                "held_again": back,
+                "pods_ready": {p["metadata"]["name"]: ready(p) for p in everything},
+                "node_registry_status": code,
+            },
+        )
+
+    def iso_12():
+        passed, observed = journey()
+        gateway = probe_gateway(
+            [MODEL, INTERNET, state.setdefault("registry", registry_target())]
+        )
+        observed["gateway_copy_0"] = gateway
+        return (
+            passed
+            and gateway["model"] == "open:200"
+            and blocked(gateway, "internet", "registry"),
+            observed,
+        )
+
     for identifier, step in (
         ("ISO-01", iso_01),
         ("ISO-02", iso_02),
@@ -834,6 +1055,9 @@ def run_cases():
         ("ISO-07", iso_07),
         ("ISO-08", iso_08),
         ("ISO-09", iso_09),
+        ("ISO-10", iso_10),
+        ("ISO-11", iso_11),
+        ("ISO-12", iso_12),
     ):
         case(identifier, step)
 
