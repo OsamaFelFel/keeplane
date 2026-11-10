@@ -388,9 +388,13 @@ def bundled_setting_cases(results):
     for label in ("managed-local-bare-tag", "managed-local-no-tag"):
         result = results[label]
         copies, bundled = gateway_pair(result.stdout)
+        # The gateway container itself; the local values' trust bundle adds an
+        # init step from app.image (chart-certificates-cases.md, CO-H11).
+        gateway = next((item for item in containers(copies)
+                        if scalar(item, "name") == "agentgateway"), "")
         pulled[label] = {
             "exit": result.returncode,
-            "copies": (images(copies), scalar(copies, "imagePullPolicy")),
+            "copies": (images(gateway), scalar(gateway, "imagePullPolicy")),
             "bundled": (images(bundled), scalar(bundled, "imagePullPolicy")),
         }
     restart = {}

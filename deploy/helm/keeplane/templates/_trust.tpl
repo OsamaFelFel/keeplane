@@ -3,14 +3,19 @@ trust.extraCaBundle: extra CA certificates (PEM) that the app copies and the
 managed gateway copies trust for their outbound HTTPS calls, such as a model
 endpoint behind a private CA, in addition to each image's system CAs, never
 instead of them. Off by default. Only the named key of the Secret or ConfigMap
-is mounted, as the file ca.crt.
+is mounted, as the file ca.crt, and only into an init container.
 
 - The app's init container prepare-trust-bundle writes the image's system CA
   file followed by these CAs to an in-memory folder, and the app's
-  SSL_CERT_FILE names the result. It refuses a bundle with no certificate, a
-  damaged one or a private key, so the pod doesn't start.
-- Each managed gateway copy keeps its image's SSL_CERT_FILE (the system CAs)
-  and also reads the folder named in SSL_CERT_DIR, which holds only ca.crt.
+  SSL_CERT_FILE names the result.
+- Each managed gateway copy's init container prepare-trust-bundle (app image)
+  checks the same source and writes only its CA certificates to an in-memory
+  folder. The gateway reads that folder through SSL_CERT_DIR, and its system
+  CA file through SSL_CERT_FILE, which the chart sets to the pinned image's
+  /etc/ssl/certs/ca-certificates.crt rather than relying on the image.
+- Either init container refuses a bundle with no certificate, a damaged one or
+  a private key, so that pod doesn't start; the raw source is never mounted
+  into the app or gateway container.
 
 Both read the CAs when they start, so a changed bundle takes effect after the
 app and gateway copies restart.
@@ -51,7 +56,7 @@ app and gateway copies restart.
 {{- /* The extra CA volume, given a dict with "root" and "mode" (file mode). */ -}}
 {{- define "keeplane.trust.sourceVolume" -}}
 {{- $bundle := .root.Values.trust.extraCaBundle -}}
-- name: keeplane-extra-ca
+- name: keeplane-extra-ca-source
   {{- if $bundle.secretName }}
   secret:
     secretName: {{ $bundle.secretName | quote }}
@@ -66,9 +71,35 @@ app and gateway copies restart.
 {{- end -}}
 
 {{- define "keeplane.trust.sourceMount" -}}
-- name: keeplane-extra-ca
-  mountPath: /run/keeplane-extra-ca
+- name: keeplane-extra-ca-source
+  mountPath: /run/keeplane-extra-ca-source
   readOnly: true
+{{- end -}}
+
+{{- /* The checking init container, given a dict with "root", "arguments"
+(after the script) and "output" (the volume it writes). */ -}}
+{{- define "keeplane.trust.checkingContainer" -}}
+- name: prepare-trust-bundle
+  image: {{ .root.Values.app.image | quote }}
+  imagePullPolicy: {{ .root.Values.app.pullPolicy }}
+  command:
+    - python
+    - /app/prepare_trust_bundle.py
+    {{- range .arguments }}
+    - {{ . }}
+    {{- end }}
+  volumeMounts:
+    {{- include "keeplane.trust.sourceMount" . | nindent 4 }}
+    - name: {{ .output.name }}
+      mountPath: {{ .output.path }}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
 {{- end -}}
 
 {{- /* App pods: the source (group read, through the pod's fsGroup) and the
@@ -100,34 +131,30 @@ in-memory folder for the combined bundle. */ -}}
 
 {{- define "keeplane.trust.initContainer" -}}
 {{- if include "keeplane.trust.on" . }}
-- name: prepare-trust-bundle
-  image: {{ .Values.app.image | quote }}
-  imagePullPolicy: {{ .Values.app.pullPolicy }}
-  command:
-    - python
-    - /app/prepare_trust_bundle.py
-    - /run/keeplane-extra-ca/ca.crt
-    - /run/keeplane-trust/ca-bundle.pem
-  volumeMounts:
-    {{- include "keeplane.trust.sourceMount" . | nindent 4 }}
-    - name: keeplane-trust
-      mountPath: /run/keeplane-trust
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65532
-    runAsGroup: 65532
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop: [ALL]
+{{ include "keeplane.trust.checkingContainer" (dict "root" . "arguments" (list "/run/keeplane-extra-ca-source/ca.crt" "/run/keeplane-trust/ca-bundle.pem") "output" (dict "name" "keeplane-trust" "path" "/run/keeplane-trust")) }}
 {{- end }}
 {{- end -}}
 
-{{- /* Managed gateway copies. The gateway runs without an fsGroup, so it can
-read only a file every user may read: the volume holds just the named key, a
-public CA certificate, with mode 0444. */ -}}
+{{- /* Managed gateway copies. The init container runs without the
+pod's fsGroup (the gateway has none), so the source holds just the named key,
+a public CA certificate, with mode 0444. The gateway container mounts only the
+checked output. */ -}}
+{{- define "keeplane.trust.gatewayInitContainer" -}}
+{{- if include "keeplane.trust.on" . }}
+{{ include "keeplane.trust.checkingContainer" (dict "root" . "arguments" (list "--extra-only" "/run/keeplane-extra-ca-source/ca.crt" "/run/keeplane-extra-ca/ca.crt") "output" (dict "name" "keeplane-extra-ca" "path" "/run/keeplane-extra-ca")) }}
+{{- end }}
+{{- end -}}
+
+{{- /* The pinned gateway image's system CA file (its own SSL_CERT_FILE);
+tests/e2e/test_kind_private_ca.py checks that the image still has it. */ -}}
+{{- define "keeplane.trust.gatewaySystemFile" -}}
+/etc/ssl/certs/ca-certificates.crt
+{{- end -}}
+
 {{- define "keeplane.trust.gatewayEnv" -}}
 {{- if include "keeplane.trust.on" . }}
+- name: SSL_CERT_FILE
+  value: {{ include "keeplane.trust.gatewaySystemFile" . }}
 - name: SSL_CERT_DIR
   value: /run/keeplane-extra-ca
 {{- end }}
@@ -135,12 +162,18 @@ public CA certificate, with mode 0444. */ -}}
 
 {{- define "keeplane.trust.gatewayMount" -}}
 {{- if include "keeplane.trust.on" . }}
-{{ include "keeplane.trust.sourceMount" . }}
+- name: keeplane-extra-ca
+  mountPath: /run/keeplane-extra-ca
+  readOnly: true
 {{- end }}
 {{- end -}}
 
 {{- define "keeplane.trust.gatewayVolume" -}}
 {{- if include "keeplane.trust.on" . }}
 {{ include "keeplane.trust.sourceVolume" (dict "root" . "mode" "0444") }}
+- name: keeplane-extra-ca
+  emptyDir:
+    medium: Memory
+    sizeLimit: 2Mi
 {{- end }}
 {{- end -}}

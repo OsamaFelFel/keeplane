@@ -248,16 +248,17 @@ Keeplane.
    kubectl -n "$NS" rollout status statefulset/"$RELEASE"-gateway
    ```
 
-   Each app pod's `prepare-trust-bundle` log says how many system CAs it kept
-   and how many it added: `kubectl -n "$NS" logs <pod> -c prepare-trust-bundle`.
+   Each pod's `prepare-trust-bundle` log says how many CAs it took: the app's
+   how many system CAs it kept and how many it added, a gateway copy's how many
+   it wrote for the gateway (`kubectl -n "$NS" logs <pod> -c prepare-trust-bundle`).
    In existing mode there is no `statefulset/"$RELEASE"-gateway` to restart.
 3. Switch the endpoints to certificates from the new CA, and check a model
    call.
 4. Put only `new-ca.crt` in the bundle, and restart both again as in step 2.
 
-**If a pod doesn't start.** An app pod stuck in `Init` names the problem in
-the `prepare-trust-bundle` log: for example "The extra CA bundle holds a
-private key." Fix the bundle; the next start reads it. A missing Secret or
+**If a pod doesn't start.** An app or gateway pod stuck in `Init` names the
+problem in its `prepare-trust-bundle` log: for example "The extra CA bundle
+holds a private key." Fix the bundle; the next start reads it. A missing Secret or
 ConfigMap, or a key it doesn't have, keeps the pod waiting with a
 `FailedMount` event.
 

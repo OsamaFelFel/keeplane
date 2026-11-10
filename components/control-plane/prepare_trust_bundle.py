@@ -3,8 +3,13 @@
 The chart runs this in an init container when ``trust.extraCaBundle`` is set,
 then points the app's ``SSL_CERT_FILE`` at the result. The extra CAs are added
 after every system CA, so the app keeps trusting everything the image trusts.
+
+With ``--extra-only`` it writes just the checked CA certificates, nothing else
+from the source: the managed gateway copies read that file from the folder
+their ``SSL_CERT_DIR`` names, beside their own system CA file.
+
 A bundle that holds no certificate, a broken one or a private key stops the
-pod before the app starts, with one line that says why.
+pod before the app or gateway starts, with one line that says why.
 """
 
 import base64
@@ -68,6 +73,21 @@ def system_bundle():
     return ssl.get_default_verify_paths().openssl_cafile
 
 
+def write(output, data):
+    target = Path(output)
+    partial = target.with_name(target.name + ".partial")
+    partial.write_bytes(data)
+    partial.chmod(0o444)
+    os.replace(partial, target)
+
+
+def build_extra_only(extra, output):
+    """Write only the checked extra CAs to ``output``; return how many."""
+    added = certificates(read(extra, "The extra CA bundle"), "The extra CA bundle")
+    write(output, "".join(added).encode())
+    return len(added)
+
+
 def build(extra, output, system=None):
     """Write system CAs then the extra CAs to ``output``; return both counts."""
     system = system or system_bundle()
@@ -79,24 +99,31 @@ def build(extra, output, system=None):
             f"The image's system CA file {system} holds no certificate."
         )
     added = certificates(read(extra, "The extra CA bundle"), "The extra CA bundle")
-    target = Path(output)
-    partial = target.with_name(target.name + ".partial")
-    partial.write_bytes(trusted.rstrip(b"\n") + b"\n" + "".join(added).encode())
-    partial.chmod(0o444)
-    os.replace(partial, target)
+    write(output, trusted.rstrip(b"\n") + b"\n" + "".join(added).encode())
     return count, len(added)
 
 
 def main(argv):
-    if len(argv) != 3:
-        print("Usage: prepare_trust_bundle.py EXTRA_BUNDLE OUTPUT", file=sys.stderr)
+    extra_only = argv[1:2] == ["--extra-only"]
+    paths = argv[2:] if extra_only else argv[1:]
+    if len(paths) != 2:
+        print(
+            "Usage: prepare_trust_bundle.py [--extra-only] EXTRA_BUNDLE OUTPUT",
+            file=sys.stderr,
+        )
         return 2
     try:
-        system, extra = build(argv[1], argv[2])
+        if extra_only:
+            added = build_extra_only(*paths)
+        else:
+            system, added = build(*paths)
     except BundleRefused as error:
         print(f"Keeplane can't use trust.extraCaBundle: {error}", file=sys.stderr)
         return 1
-    print(f"System CAs kept: {system}. Extra CAs added: {extra}.")
+    if extra_only:
+        print(f"Extra CAs written for the gateway: {added}.")
+    else:
+        print(f"System CAs kept: {system}. Extra CAs added: {added}.")
     return 0
 
 

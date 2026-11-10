@@ -1,6 +1,6 @@
-"""Cases CO-10 to CO-12 in certificate-operations-cases.md: the app's trust bundle.
+"""Cases CO-10 to CO-13 in certificate-operations-cases.md: the trust files.
 
-prepare_trust_bundle.py runs in the app pods' init container when the chart's
+prepare_trust_bundle.py runs in the app and gateway init containers when the chart's
 trust.extraCaBundle is set. Each case makes its own CAs with the openssl
 command; the "system" CA file is a stand-in for the image's own.
 """
@@ -161,3 +161,32 @@ def test_co_12_the_real_system_ca_file_is_kept_and_counted(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == f"System CAs kept: {count}. Extra CAs added: 1."
     assert output.read_bytes().startswith(system.rstrip(b"\n"))
+
+
+def test_co_13_the_gateway_s_copy_holds_only_the_checked_extra_cas(tmp_path):
+    private = make_ca(tmp_path, "private-ca")
+    second = make_ca(tmp_path, "second-private-ca")
+    extra = tmp_path / "extra.pem"
+    extra.write_bytes(b"# comment\n" + private.read_bytes() + second.read_bytes())
+    output = tmp_path / "ca.crt"
+    result = run("--extra-only", extra, output)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Extra CAs written for the gateway: 2."
+    written = output.read_bytes()
+    # Only the two certificates: no system CA, no comment, nothing else.
+    assert written.count(b"-----BEGIN CERTIFICATE-----") == 2
+    assert written.startswith(b"-----BEGIN CERTIFICATE-----")
+    assert b"# comment" not in written
+    assert oct(output.stat().st_mode & 0o777) == "0o444"
+    # A bundle with a private key stops the gateway's init step the same way,
+    # and nothing is written.
+    extra.write_text(private.read_text() + (tmp_path / "private-ca.key").read_text())
+    output.unlink()
+    result = run("--extra-only", extra, output)
+    assert result.returncode == 1
+    assert result.stderr.strip() == (
+        REFUSAL + "The extra CA bundle holds a private key. "
+        "Give only CA certificates, never a key."
+    )
+    assert not output.exists()
+    assert run("--extra-only", extra).returncode == 2
