@@ -4,7 +4,8 @@
 ADR 030, and Spec 004 ST26 (DEV-03b). This is the developer half of the MVP
 journey, DEV-01 to DEV-05 in order, with DEV-03b checked on DEV-03's task,
 then DEV-06 to DEV-08 (device sign-in, an expired sign-in, the first admin
-coding), against `python3 deploy/local/up.py` started with no options. The admin half
+coding), then DEV-09 and DEV-10 (a refused own key, a task on the developer's
+own key), against `python3 deploy/local/up.py` started with no options. The admin half
 is in [integrated-demo-cases.md](integrated-demo-cases.md). To try the
 same steps by hand, see
 [the local preview guide](../../docs/guide/local-preview.md#try-the-developer-half-by-hand).
@@ -22,8 +23,8 @@ The runtime is built for musl, so on most Linux machines it runs only in
 Alpine; the live-preview workflow runs the suite there, on the host network,
 after the other live gateway checks. Without `KEEPLANE_OPENCODE_V2_BIN`,
 DEV-01, DEV-02, DEV-05, DEV-06 and DEV-07 still run (DEV-07 needs an
-`opencode` on `PATH`, but never starts it), DEV-03, DEV-03b, DEV-04 and DEV-08
-are reported as not run, and the suite is skipped. The workflow fails on any skipped case. The
+`opencode` on `PATH`, but never starts it), DEV-03, DEV-03b, DEV-04, DEV-08,
+DEV-09 and DEV-10 are reported as not run, and the suite is skipped. The workflow fails on any skipped case. The
 suite also skips, with the reason, when the preview, its credentials, Docker,
 the model enroller or that port are not available.
 
@@ -50,10 +51,21 @@ the model enroller or that port are not available.
   with the preview's shared fixture key, approved for Public data. The
   `cloud-provider` fixture answers "mock cloud answer" with 2 input and 3
   output tokens. `gpt-5-mini` has a row in the shipped price list.
+- The same fixture as a model for developers' own keys: the admin adds
+  `gpt-4.1-mini` from OpenAI for developers' own keys (`key_choice` `personal`), approved for
+  Public data (each upstream model can be added once). The `cloud-provider`
+  fixture serves HTTPS on `https://cloud-provider:18443/v1` with a test
+  certificate `deploy/local/up.py` makes on every start; only the preview's
+  `app` and `gateway` containers trust its test CA, so Keeplane sends keys to
+  it as to a real provider, never over plain HTTP. Besides the shared key, it
+  accepts a developer key once the suite marks that key's SHA-256 as accepted
+  inside the fixture container, and refuses it once marked refused, as a
+  provider revoking it would. It records only a SHA-256 of each key it is
+  sent, with how many requests it accepted and refused; never a key.
 
-The admin adds both models through the same API the **Add model** screen uses,
+The admin adds the three models through the same API the **Add model** screen uses,
 and the suite waits until the model enroller reports them enrolled. Afterwards
-it signs both developers and the admin's CLI out, removes both models and
+it signs both developers and the admin's CLI out, removes the three models and
 both developers, and waits for the enroller to settle. The project stays on **Projects**.
 
 | ID | Plain-English action | Expected result |
@@ -68,23 +80,8 @@ both developers, and waits for the enroller to settle. The project stays on **Pr
 | DEV-06 | After DEV-05, on a machine with no browser (over SSH: `SSH_CONNECTION` is set, there is no `DISPLAY`, and the fixture browser is still named in `BROWSER`), the developer runs `keeplane login` with no options, then approves the code from another browser. | The first line is `No browser can open here, so sign in from another device.`, then `Open http://127.0.0.1:3000/oauth/confirm-device/ and enter code <code>.` (the server kept at sign-out is reused). Approving the code on Keeplane's device page signs the CLI in: `Signed in to Keeplane.`, exit 0, the saved sign-in is the device client's, and `whoami` names the developer. The fixture browser is never used (ADR 028: over SSH, always the device code). |
 | DEV-07 | The developer's CLI sign-in is expired on the server: its access token is aged past its end through Django's `oauth2_provider` models in the preview's `app` container. They run `keeplane code "anything"` in a script, then again in a terminal, where they answer yes to signing in again, approve the device code elsewhere, and answer no to starting the task. | In the script: exit 1, nothing on stdout, and only `Your Keeplane sign-in has expired, so nothing was sent. Run keeplane login to sign in again.` In the terminal: `Your Keeplane sign-in has expired, so nothing was sent. Sign in again now? [Y/n]`; after signing in, `Signed in. Start the task now? [Y/n]`; after no, `You're signed in. The task wasn't started, so nothing was sent. Run it again when you're ready.` and exit 1. Across both runs the fixture model receives nothing, the guarded gateway's log shows no new request, and the `cloud-provider` fixture's call count is unchanged. Afterwards `whoami` works: the new sign-in is saved. |
 | DEV-08 | The first admin signs in from the CLI (`keeplane login --server …`, browser flow) and, in their own clone of the sample repo, does DEV-02 and DEV-03: `keeplane models`, `keeplane code --model <a model on the admin's list that isn't approved, so the project doesn't allow it> "anything"`, `keeplane use` with the fixture model, and `keeplane code "Make the failing test pass"`. | The same limits as the developer: `models` lists exactly what the developer's `models` lists for that project, and a model outside them is refused with `This model is not currently allowed for the project.` and exit 1, with nothing sent to the model, the gateway or the cloud fixture. Then the task works as in DEV-03: at least 3 answers, `read` then `edit`, `calc.py` fixed and the only changed file, the test passes, the answer is shown, with `Using <model> for this task, as you chose with keeplane use.` and `Answered by <model>.` On **Projects** the same project, still not set up, now lists the first admin beside the developer. The admin's CLI sign-in is signed out afterwards. |
-
-DEV-09 (the provider refuses the developer's own key) and DEV-10 (a task sent
-on the developer's own key) are proposed own-key cases. They aren't yet in the
-task's DEV-01 to DEV-08 table, and they aren't in this suite. The default
-preview can't set up a model for developers' own keys: adding one fails with
-"OpenAI didn't answer. Nothing was saved." When an admin adds an own-key model,
-`provider_probe.py` refuses an address that isn't HTTPS; it sends no key.
-`key_validation.py` sends a developer's key only to an HTTPS address, when the
-key is saved, rechecked or used. The preview's `cloud-provider` fixture is
-plain HTTP inside Docker.
-
-Lead decision: the preview's fixture provider will get HTTPS, with a test
-certificate that only the preview app trusts. Plain HTTP for keys won't be
-allowed. That is a follow-up task, and DEV-09 and DEV-10 wait on it.
-Meanwhile RK-INT-01 to RK-INT-03 in
-[cli-refused-key-cases.md](../integration/cli-refused-key-cases.md) check the
-refused key against the real key routes.
+| DEV-09 | After DEV-08, the second developer saves a new key for the own-key model with `keeplane keys set --model <model> --key-stdin` (the fixture provider accepts it). Then the provider refuses that key, as when it is revoked, and they run `keeplane code --model <model> "Say hello"` in their clone, then `keeplane keys list`. | Before, `keys list` shows the model needs their own key and it is `missing`; `set` exits 0 with `added`. The task exits non-zero and says "The provider refused your own key for <model>, so this task stopped. Replace it with `keeplane keys set --model <model>`. Run `keeplane keys list` to see your keys." and not `Answered by`. `keys list` then shows the key as `refused`. The fixture saw that key only refused (the task's request and the server's recheck), never accepted, and neither its record nor the CLI's output holds the key. |
+| DEV-10 | The first developer saves their own new key for the same model the same way, then runs `keeplane code --model <model> "Say hello"` in their repo. | `set` exits 0 with `added`. The task exits 0, shows "mock cloud answer" and `Answered by <model>.` Every answer the fixture gave during the task was to that developer's key, by its hash: the shared key and no other key were sent. The fixture's record holds no key, only hashes. No subscription sign-in is involved: the runtime keeps no provider sign-in of its own in the developer's home (`~/.local/share/opencode/auth.json`, `~/.config/opencode/auth.json`), before or after. `keys list` still shows `added`. |
 
 The report, `developer-journey.json`, records each case's observations without
 any credential, under `test-results/` (not kept in Git).

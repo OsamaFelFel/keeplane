@@ -9,6 +9,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -52,10 +53,124 @@ def run(command, *, cwd=REPO, verbose=False, env=None):
     return result.stdout or ""
 
 
+# The preview's fixture provider serves HTTPS, so developers' own keys reach it
+# the way they reach a real provider: Keeplane never sends a key over plain
+# HTTP. Only the preview's app and gateway containers trust this test CA
+# (SSL_CERT_FILE in compose.yaml); nothing else does.
+TLS_CONFIG = """[req]
+distinguished_name = name
+prompt = no
+[name]
+CN = {name}
+[ca]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+[provider]
+subjectAltName = DNS:cloud-provider
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+"""
+
+
+def preview_tls(directory, days=90):
+    """A new test CA and certificate for `cloud-provider` on every start.
+
+    The CA's private key is used once and deleted with its temporary folder;
+    the app and gateway are recreated on every start, and the fixture reads
+    its certificate for each connection, so they all see the new pair.
+    """
+    directory.mkdir(mode=0o700, exist_ok=True)
+    directory.chmod(0o700)
+    with tempfile.TemporaryDirectory(prefix="keeplane-preview-tls-") as work:
+        work = Path(work)
+        for name, cn in (
+            ("ca", "Keeplane preview test CA"),
+            ("provider", "cloud-provider"),
+        ):
+            (work / f"{name}.cnf").write_text(TLS_CONFIG.format(name=cn))
+
+        def openssl(*arguments):
+            result = subprocess.run(
+                ["openssl", *arguments],
+                cwd=work,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            if result.returncode:
+                raise RuntimeError(
+                    "Could not make the preview's test certificate: "
+                    + (result.stderr.strip().splitlines() or ["openssl failed"])[-1]
+                )
+
+        common = ["-newkey", "rsa:2048", "-nodes", "-sha256"]
+        openssl(
+            "req",
+            "-x509",
+            *common,
+            "-keyout",
+            "ca.key",
+            "-out",
+            "ca.pem",
+            "-days",
+            str(days),
+            "-config",
+            "ca.cnf",
+            "-extensions",
+            "ca",
+        )
+        openssl(
+            "req",
+            "-new",
+            *common,
+            "-keyout",
+            "provider.key",
+            "-out",
+            "provider.csr",
+            "-config",
+            "provider.cnf",
+        )
+        openssl(
+            "x509",
+            "-req",
+            "-in",
+            "provider.csr",
+            "-CA",
+            "ca.pem",
+            "-CAkey",
+            "ca.key",
+            "-CAcreateserial",
+            "-out",
+            "provider.pem",
+            "-days",
+            str(days),
+            "-sha256",
+            "-extfile",
+            "provider.cnf",
+            "-extensions",
+            "provider",
+        )
+        # Written in place, so a running container's file mount sees them.
+        for name, mode in (
+            ("provider.key", 0o600),
+            ("provider.pem", 0o644),
+            ("ca.pem", 0o644),
+        ):
+            target = directory / name
+            target.touch(mode=mode)
+            target.chmod(mode)
+            target.write_bytes((work / name).read_bytes())
+
+
 def prerequisites(verbose=False):
     if sys.version_info < (3, 9):
         raise RuntimeError("Python 3.9 or newer is required.")
-    for tool in ("node", "npm", "docker"):
+    for tool in ("node", "npm", "docker", "openssl"):
         if not shutil.which(tool):
             raise RuntimeError(
                 f"{tool} is missing. See docs/guide/local-preview.md for prerequisites."
@@ -115,6 +230,7 @@ def prepare(port=3000, context_size=4096, runtime_port=5000):
         path = RUNTIME / name
         if not path.exists():
             save_private(path, secrets.token_urlsafe(32) + "\n")
+    preview_tls(RUNTIME / "cloud-provider-tls")
     key_hashes = {
         name: hashlib.sha256((RUNTIME / name).read_text().strip().encode()).hexdigest()
         for name in ("gateway-runtime-key", "gateway-admin-key")

@@ -1,7 +1,8 @@
 """Spec 009: the developer half of the MVP journey on the default preview.
 
 Runs DEV-01 to DEV-05 in order (task 009-13), then DEV-06 to DEV-08
-(``later_cases``), against the Docker preview started by
+(``later_cases``) and DEV-09 and DEV-10 on developers' own keys
+(``own_key_cases``), against the Docker preview started by
 ``python3 deploy/local/up.py`` with no flags. A temporary developer signs in
 from the source-tree CLI through the browser flow, lists and chooses a model in
 a sample Git repo with a failing test, and runs ``keeplane code`` with the real
@@ -13,7 +14,9 @@ maximum output for that model in their CLI settings file, and the fixture
 checks they arrive unchanged (DEV-03b, Spec 004 ST26). DEV-04 adds the
 preview's fixture cloud model on a shared key for the estimated cost. A second developer runs one task, and neither
 developer's totals include the other's. Then the developer signs out and
-nothing more is sent. Afterwards it removes what it created.
+nothing more is sent. DEV-09 and DEV-10 send tasks on developers' own keys
+to the HTTPS fixture provider: a refused key stops the task, and an accepted
+one answers it. Afterwards it removes what it created.
 
 The runtime comes from ``KEEPLANE_OPENCODE_V2_BIN`` (the hash-pinned binary the
 ``coding-runtime`` check downloads). Without it, DEV-03 and DEV-04 are recorded
@@ -74,6 +77,8 @@ CASES = (
     "DEV-06",
     "DEV-07",
     "DEV-08",
+    "DEV-09",
+    "DEV-10",
 )
 # Spec 004 ST26: what the developer saves for the model reaches it unchanged.
 REQUEST_SETTINGS = {"temperature": 0.37, "max_tokens": 777}
@@ -81,6 +86,8 @@ REQUEST_SETTINGS = {"temperature": 0.37, "max_tokens": 777}
 RUNTIME_SHA256 = "a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d"
 # A priced row in the shipped list, served by the preview's cloud fixture.
 CLOUD_UPSTREAM = "gpt-5-mini"
+# DEV-09 and DEV-10: another fixture-served name, as each upstream is added once.
+OWN_KEY_UPSTREAM = "gpt-4.1-mini"
 FAILING = "def add(a, b):\n    return a - b\n"
 FIXED = "def add(a, b):\n    return a + b\n"
 TEST_FILE = (
@@ -152,11 +159,12 @@ class Developer(preview.Cli):
             (tools / "opencode").symlink_to(runtime)
             self.env["PATH"] = str(tools) + os.pathsep + self.env.get("PATH", "")
 
-    def run(self, *arguments, cwd=None, timeout=300):
+    def run(self, *arguments, cwd=None, timeout=300, stdin=None):
         result = subprocess.run(
             [sys.executable, str(preview.CLI), *arguments],
             env=self.env,
             cwd=cwd or self.home,
+            input=stdin,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -212,6 +220,7 @@ def run_cases():
     suffix = uuid.uuid4().hex[:8]
     coder_model, coder_upstream = "journey-coder-" + suffix, "journey-up-" + suffix
     cloud_model = "journey-cloud-" + suffix
+    own_model = "journey-own-" + suffix
     remote = f"https://git.example.test/journey/sample-{suffix}.git"
     project_name = f"journey/sample-{suffix}"
     project_id = project_identity.remote_project(remote).id
@@ -283,6 +292,14 @@ def run_cases():
                     "shared_key": cloud_key,
                     "approved_classes": ["Public"],
                 },
+                # DEV-09 and DEV-10: the same fixture model on developers' own keys.
+                {
+                    "name": own_model,
+                    "model": OWN_KEY_UPSTREAM,
+                    "source": "openai",
+                    "key_choice": "personal",
+                    "approved_classes": ["Public"],
+                },
             ):
                 status, result, _ = admin.fetch("/api/models", payload, method="POST")
                 if status != 200:
@@ -291,9 +308,9 @@ def run_cases():
                     )
                 state["models"].append(payload["name"])
             if not preview.wait_for_report(
-                preview.settled(len(approved_before) + 2), timeout=120
+                preview.settled(len(approved_before) + 3), timeout=120
             ):
-                raise RuntimeError("The model enroller did not enroll the two models")
+                raise RuntimeError("The model enroller did not enroll the three models")
             _, listing, _ = admin.fetch("/api/models")
             approved = {row["id"] for row in listing["models"] if row.get("approved")}
             unapproved = {
@@ -629,24 +646,27 @@ def run_cases():
                     else seen_probe - seen_after,
                 },
             )
-            later_cases(
-                record,
-                {
-                    "first": first,
-                    "coder": coder,
-                    "repo": repo,
-                    "root": root,
-                    "remote": remote,
-                    "binary": binary,
-                    "password": password,
-                    "names": names,
-                    "coder_model": coder_model,
-                    "project_name": project_name,
-                    "project_id": project_id,
-                    "admin": admin,
-                    "failures": failures,
-                },
-            )
+            context = {
+                "first": first,
+                "second": second,
+                "clone": clone,
+                "own_model": own_model,
+                "cloud_key": cloud_key,
+                "coder": coder,
+                "repo": repo,
+                "root": root,
+                "remote": remote,
+                "binary": binary,
+                "password": password,
+                "names": names,
+                "coder_model": coder_model,
+                "project_name": project_name,
+                "project_id": project_id,
+                "admin": admin,
+                "failures": failures,
+            }
+            later_cases(record, context)
+            own_key_cases(record, context)
         finally:
             for developer in (first, second):
                 signed_in = (developer.profile() / "credential.json").exists()
@@ -659,7 +679,7 @@ def run_cases():
                 failures.append("the model enroller did not settle after clean-up")
     cleanup = "complete" if not failures else "; ".join(failures)
     report = {
-        "suite": "Spec 009 developer journey DEV-01 to DEV-08 on the default preview",
+        "suite": "Spec 009 developer journey DEV-01 to DEV-10 on the default preview",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": "OpenCode 2.0.27 (pinned)" if binary else None,
         "cases": cases,
@@ -687,10 +707,26 @@ from oauth2_provider.models import AccessToken
 print(AccessToken.objects.filter(user__username={username!r}).update(
     expires=timezone.now() - timedelta(seconds=1)))
 """
+# The fixture serves HTTPS with the preview's test certificate (up.py).
 CALLS_SCRIPT = (
-    "import urllib.request; print(urllib.request.urlopen("
-    "'http://127.0.0.1:18082/calls', timeout=10).read().decode())"
+    "import ssl, urllib.request; print(urllib.request.urlopen("
+    "'https://cloud-provider:18443/calls', timeout=10, context="
+    "ssl.create_default_context(cafile='/run/tls/ca.pem')).read().decode())"
 )
+# Marks one developer key, by its SHA-256 only, as the fixture provider
+# accepting or refusing it, as a real provider would after issuing or revoking it.
+MARK_KEY_SCRIPT = """
+import json, sys
+from pathlib import Path
+path = Path("/tmp/own-keys.json")
+try:
+    marked = json.loads(path.read_text())
+except (OSError, ValueError):
+    marked = {}
+marked[sys.argv[1]] = sys.argv[2]
+path.write_text(json.dumps(marked))
+print("marked")
+"""
 
 
 def approve(developer, code):
@@ -801,15 +837,70 @@ def expire_sign_in(username):
     return int(lines[-1]) if not result.returncode and lines else None
 
 
-def cloud_calls():
-    """How many requests the cloud-provider fixture answered, or None."""
+def cloud_state():
+    """The cloud-provider fixture's record: answers, and key hashes it was sent."""
     result = classes.compose(
         "exec", "-T", "cloud-provider", "python", "-c", CALLS_SCRIPT, timeout=60
     )
     try:
-        return json.loads(result.stdout)["count"] if not result.returncode else None
-    except (ValueError, KeyError, TypeError):
+        data = json.loads(result.stdout) if not result.returncode else None
+    except ValueError:
         return None
+    if not isinstance(data, dict) or not isinstance(data.get("keys"), dict):
+        return None
+    return data, result.stdout
+
+
+def cloud_calls():
+    """How many requests the cloud-provider fixture answered, or None."""
+    state = cloud_state()
+    try:
+        return state[0]["count"] if state else None
+    except (KeyError, TypeError):
+        return None
+
+
+def key_hash(key):
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def mark_key(key, verdict):
+    """Tell the fixture provider to accept or refuse a key; only its hash is sent."""
+    result = classes.compose(
+        "exec",
+        "-T",
+        "cloud-provider",
+        "python",
+        "-c",
+        MARK_KEY_SCRIPT,
+        key_hash(key),
+        verdict,
+        timeout=60,
+    )
+    if result.returncode or result.stdout.strip() != "marked":
+        raise RuntimeError("Could not set the fixture provider's answer for a key")
+
+
+def key_calls(state, key):
+    """Accepted and refused requests the fixture saw with this key, by its hash."""
+    seen = (state or {}).get("keys", {}).get(key_hash(key), {})
+    return seen.get("accepted", 0), seen.get("refused", 0)
+
+
+def key_list_status(developer, cwd, model):
+    """`keeplane keys list` in the repo: its exit and the model's key status."""
+    code, out, _ = developer.run("keys", "list", cwd=cwd)
+    try:
+        rows = json.loads(out)["models"]
+        row = next(row for row in rows if row["id"] == model)
+        return code, row["own_key_required"], row["status"]
+    except (ValueError, KeyError, TypeError, StopIteration):
+        return code, None, None
+
+
+# Where the pinned runtime would keep a provider sign-in of its own (a
+# subscription login); DEV-10 checks the developer has none.
+RUNTIME_SIGN_INS = (".local/share/opencode/auth.json", ".config/opencode/auth.json")
 
 
 def sign_in_client(developer):
@@ -1030,6 +1121,132 @@ def later_cases(record, context):
         signed_in = (admin_cli.profile() / "credential.json").exists()
         if signed_in and admin_cli.run("logout")[0]:
             context["failures"].append("first-admin CLI logout failed")
+
+
+def own_key_cases(record, context):
+    """DEV-09 and DEV-10: tasks on a cloud model that takes developers' own keys.
+
+    The fixture provider serves HTTPS with the preview's test certificate, so
+    Keeplane sends it a developer's key as it would a real provider. Each key
+    is a fresh random one the fixture accepts once its hash is marked; DEV-09
+    then marks the second developer's key refused, as a revoked key.
+    """
+    if context["binary"] is None:
+        for identifier in ("DEV-09", "DEV-10"):
+            record(
+                identifier,
+                "not-run",
+                {"reason": "KEEPLANE_OPENCODE_V2_BIN does not name the pinned runtime"},
+            )
+        return
+    model, shared = context["own_model"], context["cloud_key"]
+
+    def own_key(developer, cwd):
+        """A new key the provider accepts, saved with `keeplane keys set`."""
+        key = "own-" + uuid.uuid4().hex + uuid.uuid4().hex
+        mark_key(key, "accepted")
+        before = key_list_status(developer, cwd, model)
+        saved = developer.run(
+            "keys", "set", "--model", model, "--key-stdin", cwd=cwd, stdin=key + "\n"
+        )
+        return key, before, saved
+
+    # DEV-09: the provider refuses the second developer's own key during a task.
+    second, clone = context["second"], context["clone"]
+    key, listed_before, saved = own_key(second, clone)
+    mark_key(key, "refused")
+    before, _ = cloud_state() or ({}, "")
+    task = second.run("code", "--model", model, "Say hello", cwd=clone)
+    after, raw = cloud_state() or ({}, "")
+    listed = key_list_status(second, clone, model)
+    refused_message = coding.KEY_REFUSED.format(model=model)
+    accepted_delta = key_calls(after, key)[0] - key_calls(before, key)[0]
+    refused_delta = key_calls(after, key)[1] - key_calls(before, key)[1]
+    record(
+        "DEV-09",
+        "pass"
+        if listed_before[1:] == (True, "missing")
+        and saved[0] == 0
+        and json.loads(saved[1] or "{}").get("status") == "added"
+        and task[0] != 0
+        and refused_message in task[2]
+        and coding.ANSWERED_BY.format(models=model) not in task[2]
+        and listed == (0, True, "refused")
+        and accepted_delta == 0
+        and refused_delta >= 1
+        and key not in raw
+        and key not in task[1] + task[2]
+        else "fail",
+        {
+            "status_before": listed_before[2],
+            "set_exit": saved[0],
+            "code_exit": task[0],
+            "refused_message_shown": refused_message in task[2],
+            "cli_messages": [line for line in task[2].splitlines() if line.strip()],
+            "keys_list": dict(zip(("exit", "own_key_required", "status"), listed)),
+            "provider_accepted_key": accepted_delta,
+            "provider_refused_key": refused_delta,
+            "key_in_output": key in raw or key in task[1] + task[2],
+        },
+    )
+
+    # DEV-10: the first developer's task runs on their own key. The fixture
+    # sees that key's hash, not the shared key's, and no sign-in of any
+    # subscription is anywhere: only the API key the server holds.
+    first, repo = context["first"], context["repo"]
+    key, listed_before, saved = own_key(first, repo)
+    sign_ins = [name for name in RUNTIME_SIGN_INS if (first.home / name).exists()]
+    before, _ = cloud_state() or ({}, "")
+    task = first.run("code", "--model", model, "Say hello", cwd=repo)
+    after, raw = cloud_state() or ({}, "")
+    sign_ins += [name for name in RUNTIME_SIGN_INS if (first.home / name).exists()]
+    listed = key_list_status(first, repo, model)
+    own_delta = [a - b for a, b in zip(key_calls(after, key), key_calls(before, key))]
+    shared_delta = [
+        a - b for a, b in zip(key_calls(after, shared), key_calls(before, shared))
+    ]
+    other_keys = sorted(
+        digest
+        for digest, seen in after.get("keys", {}).items()
+        if digest not in (key_hash(key),) and seen != before.get("keys", {}).get(digest)
+    )
+    answers = after.get("count", 0) - before.get("count", 0)
+    record(
+        "DEV-10",
+        "pass"
+        if listed_before[1:] == (True, "missing")
+        and saved[0] == 0
+        and json.loads(saved[1] or "{}").get("status") == "added"
+        and task[0] == 0
+        and "mock cloud answer" in task[1]
+        and coding.ANSWERED_BY.format(models=model) in task[2]
+        and own_delta[0] >= 1
+        and own_delta[1] == 0
+        and answers == own_delta[0]
+        and shared_delta == [0, 0]
+        and not other_keys
+        and not sign_ins
+        and listed == (0, True, "added")
+        and key not in raw
+        and shared not in raw
+        and key not in task[1] + task[2]
+        else "fail",
+        {
+            "status_before": listed_before[2],
+            "set_exit": saved[0],
+            "code_exit": task[0],
+            "answer_shown": "mock cloud answer" in task[1],
+            "cli_messages": [line for line in task[2].splitlines() if line.strip()],
+            "provider_answers": answers,
+            "own_key_requests": dict(zip(("accepted", "refused"), own_delta)),
+            "shared_key_requests": dict(zip(("accepted", "refused"), shared_delta)),
+            "other_keys_seen": len(other_keys),
+            "fixture_records_only_hashes": key not in raw and shared not in raw,
+            "runtime_sign_ins": sign_ins,
+            "keys_list": dict(zip(("exit", "own_key_required", "status"), listed)),
+            "runtime_errors": task[1].splitlines()[-3:] if task[0] else [],
+        },
+    )
 
 
 def restore(password, state, failures):
