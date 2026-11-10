@@ -3,6 +3,11 @@
 # at once, with no forward, as a DNS server on an isolated network with no
 # upstream does. A server failure would make the pods' resolvers stop at the
 # first outside search domain, before trying the cluster name itself.
+#
+# The one outside name that resolves is the protected release's model
+# provider, api.openai.com, which points to the provider fixture on the runner
+# (172.30.0.1), as an isolated network's own DNS answers for the one provider
+# it allows. Its own block wins over "." for that name.
 cluster.local:53 in-addr.arpa:53 ip6.arpa:53 {
     errors
     health {
@@ -23,5 +28,11 @@ cluster.local:53 in-addr.arpa:53 ip6.arpa:53 {
     errors
     template ANY ANY {
        rcode NXDOMAIN
+    }
+}
+api.openai.com:53 {
+    errors
+    hosts {
+        172.30.0.1 api.openai.com
     }
 }

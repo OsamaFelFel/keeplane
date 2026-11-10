@@ -217,3 +217,65 @@ def test_kps_08_only_the_local_kind_cluster_is_changed(tmp_path, monkeypatch):
         )
     ]
     assert not (tmp_path / "runtime").exists()
+
+
+isolated_spec = importlib.util.spec_from_file_location(
+    "isolated_protected", ROOT / "tests/fixtures/isolated-network/protected.py"
+)
+isolated = importlib.util.module_from_spec(isolated_spec)
+isolated_spec.loader.exec_module(isolated)
+
+
+def test_kps_09_the_isolated_run_reuses_the_steps_on_its_own_cluster(
+    tmp_path, monkeypatch
+):
+    installer = isolated.IsolatedInstaller(
+        str(tmp_path / "kubeconfig"), tmp_path / "runtime", "helm", ""
+    )
+    # Only the isolated run's cluster is accepted, and the local one is refused.
+    assert setup.context_refusal("kind-keeplane-isolated", installer.context) is None
+    for other in ("kind-keeplane", "prod-eu", ""):
+        assert "Refusing Kubernetes context" in setup.context_refusal(
+            other, installer.context
+        )
+    calls = []
+
+    def run(*command, **options):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, b"kind-keeplane\n", b"")
+
+    monkeypatch.setattr(installer, "run", run)
+    with pytest.raises(SystemExit, match="Refusing Kubernetes context 'kind-keeplane'"):
+        installer.install()
+    assert [command[3:] for command in calls] == [("config", "current-context")]
+    assert not (tmp_path / "runtime").exists()
+    # The app image must be the internal registry's, by digest.
+    digest = "sha256:" + "a" * 64
+    assert (
+        isolated.image_refusal(f"172.30.0.200:5000/keeplane/protected@{digest}") is None
+    )
+    for image in (
+        "",
+        "172.30.0.200:5000/keeplane/protected:latest",
+        f"docker.io/library/keeplane-protected@{digest}",
+        f"172.30.0.200:5000/keeplane/protected@{digest} --set x=y",
+    ):
+        assert "internal registry by digest" in isolated.image_refusal(image)
+    # The provider is the runner outside the cluster, by its address on the
+    # network; the address and both values files are the isolated run's.
+    assert installer.provider_address() == "172.30.0.1"
+    assert installer.public_url == "https://keeplane-protected.isolated.test"
+    assert installer.values == (
+        "deploy/local/protected-values.yaml",
+        "tests/fixtures/isolated-network/protected-values.yaml",
+    )
+    assert set(isolated.CERTIFICATES) == {"db", "public", "provider"}
+    assert isolated.CERTIFICATES["provider"] == ("DNS:api.openai.com", "IP:172.30.0.1")
+    # No provider runs in the namespace: only the CA the release trusts is made.
+    made = []
+    installer.tls = {"ca.pem": b"CA"}
+    monkeypatch.setattr(installer, "configmap", lambda *a: made.append(("cm", *a)))
+    monkeypatch.setattr(installer, "secret", lambda *a, **k: made.append(("s", *a)))
+    monkeypatch.setattr(installer, "kube", lambda *a, **k: made.append(("kube", *a)))
+    installer.provider_fixture()
+    assert made == [("cm", "cloud-provider-ca", {"ca.crt": "CA"})]

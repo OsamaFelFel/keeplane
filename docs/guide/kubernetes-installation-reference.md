@@ -98,12 +98,16 @@ registry on every start.
 CI checks this on every revision: the
 [isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md) copy
 every image the install uses into a registry on the cluster's network, point
-the node's containerd at it and install the chart from it. They then close
+the node's containerd at it and install the chart from it twice: the
+local-trial release, and the PostgreSQL release with CLI sign-in and the
+model enroller, whose app image is pushed there and named by digest. They then close
 every outside connection but one model provider, and outside name lookups
 too, restart every Keeplane pod and the node, and finally remove every image
 the install brought from the node and start it again: every pod pulls its
 image from the internal registry, and an admin signs in and asks both models
-(ISO-10 to ISO-12). Names inside the cluster still resolve.
+(ISO-10 to ISO-12). The PostgreSQL release comes back on that node too, and a
+developer signs in from the CLI and calls a protected model through its
+public address (ISO-13 to ISO-17). Names inside the cluster still resolve.
 
 ## Secrets
 
@@ -491,8 +495,14 @@ cluster with Calico and ingress-nginx, and checks they are enforced: only the
 ingress controller reaches the app, only the app reaches the gateway copies,
 and the app and gateway copies reach the listed model endpoints and nothing
 else (the [isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md),
-ISO-07 and ISO-08). That is one network plugin and one controller; check
-yours the same way. Set `publicEntry` to both your controller's namespace and
+ISO-07 and ISO-08). The same run installs the PostgreSQL release with CLI
+sign-in and the [model enroller](#model-enroller) beside it with every policy
+on, and checks that its app reaches only the provider, its account database
+and its gateway copies, that the copies (and the enroller in each copy's Pod)
+reach only the provider, both databases and the app, and that only the
+ingress controller reaches the app and the protected model port, also after
+the node restarts (ISO-18 to ISO-20). That is one network plugin and one
+controller; check yours the same way. Set `publicEntry` to both your controller's namespace and
 its pod labels, as that run does, so other pods in the controller's namespace
 are not admitted.
 
@@ -564,7 +574,11 @@ check the pod address behind a Service, not the Service address. Use `cidr` for
 destinations outside the cluster. NetworkPolicy cannot match host names: if a
 model provider has no fixed addresses, you must either allow a wide range on
 port 443 or send the gateway copies' traffic through an egress proxy you run,
-and list the proxy instead. A proxy is not enough for the app: its
+and list the proxy instead. The pods still look the provider up by its name
+(`api.openai.com` for an OpenAI model on the PostgreSQL install), so on a
+network with no outside name lookups your cluster DNS must answer that name
+with the address you listed; the CI run gives CoreDNS a `hosts` entry for it
+and answers no other outside name. A proxy is not enough for the app: its
 provider-key checks and Personal provider probes always connect directly to
 the provider, so the app egress policy still needs that provider's addresses
 (see [proxies](outbound-connections.md#proxies)).
@@ -965,7 +979,11 @@ the init step writes. The
 run the enroller live in CI, with the real gateway image, on a kind cluster:
 two copies with PostgreSQL and the roles above, the chart's migration Job, and
 developers' calls through the protected path. That cluster doesn't enforce
-NetworkPolicy, so the network policies above stay off there.
+NetworkPolicy, so the network policies above stay off there. The
+[isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md) run the
+same release with every policy on and outside access closed, with browser and
+device sign-in from the CLI and protected calls through the public address,
+before and after a node restart (ISO-13 to ISO-20).
 
 ### How developers reach protected models
 

@@ -165,17 +165,18 @@ def with_provider_host(corefile, address):
     return "\n".join(lines[: ready + 1] + block + lines[ready + 1 :])
 
 
-def context_refusal(context):
+def context_refusal(context, expected=CONTEXT):
     """Why this script won't change the cluster in `context`, or None for kind's.
 
     It deletes a namespace and changes the cluster DNS, so it never runs
-    against any cluster but the local kind one, whatever the kubeconfig says.
+    against any cluster but the local kind one (or, for the isolated-network
+    run, that run's kind cluster), whatever the kubeconfig says.
     """
-    if context == CONTEXT:
+    if context == expected:
         return None
     return (
         f"Refusing Kubernetes context {context!r}: the protected release installs "
-        f"only on the local kind cluster ({CONTEXT}). Check KEEPLANE_KUBECONFIG."
+        f"only on the local kind cluster ({expected}). Check KEEPLANE_KUBECONFIG."
     )
 
 
@@ -188,6 +189,14 @@ def resolves_here(host=HOST):
 
 
 class Installer:
+    """The install steps. tests/fixtures/isolated-network/protected.py
+    reuses them on the isolated kind network, with its own cluster, address,
+    certificates, image, provider and values."""
+
+    context = CONTEXT
+    public_url = PUBLIC_URL
+    values = ("deploy/local/protected-values.yaml",)
+
     def __init__(self, kubeconfig, runtime, helm):
         self.kubeconfig, self.runtime, self.helm = kubeconfig, Path(runtime), helm
         self.state = self.runtime / "kind-protected"
@@ -347,6 +356,16 @@ class Installer:
         self.kubectl("create", "namespace", NAMESPACE)
 
     def fixtures(self):
+        self.release_fixtures()
+        self.provider_fixture()
+        for deployment in ("db", "postgres"):
+            self.kube(
+                "rollout", "status", f"deployment/{deployment}", "--timeout=240s",
+                timeout=260,
+            )  # fmt: skip
+
+    def release_fixtures(self):
+        """The release's Secrets, its account and gateway databases."""
         runtime = self.runtime
         first_admin = (runtime / "first-admin-password").read_bytes()
         keys = {
@@ -395,8 +414,26 @@ class Installer:
             {"tls.crt": tls["public.pem"], "tls.key": tls["public.key"]},
             kind="kubernetes.io/tls",
         )
+        self.apply(
+            {
+                "apiVersion": "v1",
+                "kind": "PersistentVolumeClaim",
+                "metadata": {"name": "keeplane-provider-keys"},
+                "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "resources": {"requests": {"storage": "1Gi"}},
+                },
+            }
+        )
+        for manifest in ("accounts-db-fixture.yaml", "postgres-fixture.yaml"):
+            self.kube("apply", "-f", str(ROOT / "deploy/local" / manifest))
+
+    def provider_fixture(self):
+        """The HTTPS fixture provider in the namespace, and its CA for the release."""
+        tls = self.tls
         self.secret(
-            "cloud-provider-key", {"key": (runtime / "cloud-provider-key").read_bytes()}
+            "cloud-provider-key",
+            {"key": (self.runtime / "cloud-provider-key").read_bytes()},
         )
         self.secret(
             "cloud-provider-tls",
@@ -415,28 +452,11 @@ class Installer:
                 ).read_text()
             },
         )
-        self.apply(
-            {
-                "apiVersion": "v1",
-                "kind": "PersistentVolumeClaim",
-                "metadata": {"name": "keeplane-provider-keys"},
-                "spec": {
-                    "accessModes": ["ReadWriteOnce"],
-                    "resources": {"requests": {"storage": "1Gi"}},
-                },
-            }
-        )
-        for manifest in (
-            "accounts-db-fixture.yaml",
-            "postgres-fixture.yaml",
-            "cloud-provider-fixture.yaml",
-        ):
-            self.kube("apply", "-f", str(ROOT / "deploy/local" / manifest))
-        for deployment in ("db", "postgres", "cloud-provider"):
-            self.kube(
-                "rollout", "status", f"deployment/{deployment}", "--timeout=240s",
-                timeout=260,
-            )  # fmt: skip
+        self.kube("apply", "-f", str(ROOT / "deploy/local/cloud-provider-fixture.yaml"))
+        self.kube(
+            "rollout", "status", "deployment/cloud-provider", "--timeout=240s",
+            timeout=260,
+        )  # fmt: skip
 
     def sql(self, statements, database):
         self.kube(
@@ -450,10 +470,14 @@ class Installer:
         self.sql(roles_sql(roles), "postgres")
         self.sql(SCHEMA_SQL, "keeplane")
 
-    def provider_dns(self):
-        address = json.loads(
+    def provider_address(self):
+        """The address the cluster DNS gives PROVIDER_HOST."""
+        return json.loads(
             self.kube("get", "service", "cloud-provider", "-o", "json").stdout
         )["spec"]["clusterIP"]
+
+    def provider_dns(self):
+        address = self.provider_address()
         dns = json.loads(
             self.kubectl(
                 "-n", "kube-system", "get", "configmap", "coredns", "-o", "json"
@@ -504,11 +528,12 @@ class Installer:
         )
 
     def chart(self):
+        values = [option for path in self.values for option in ("-f", path)]
         self.run(
             self.helm, "upgrade", "--install", RELEASE, "deploy/helm/keeplane",
-            "--kubeconfig", self.kubeconfig, "--namespace", NAMESPACE,
-            "-f", "deploy/local/protected-values.yaml", "--set", "app.image=" + self.pinned,
-            "--wait", "--timeout", "480s", timeout=540,
+            "--kubeconfig", self.kubeconfig, "--namespace", NAMESPACE, *values,
+            "--set", "app.image=" + self.pinned, "--wait", "--timeout", "480s",
+            timeout=540,
         )  # fmt: skip
 
     def wait_ready(self):
@@ -520,17 +545,19 @@ class Installer:
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             try:
-                with opener.open(PUBLIC_URL + "/health/ready", timeout=10) as response:
+                with opener.open(
+                    self.public_url + "/health/ready", timeout=10
+                ) as response:
                     if response.status == 200:
                         return
             except (urllib.error.URLError, OSError):
                 pass
             time.sleep(3)
-        raise SystemExit(f"{PUBLIC_URL} did not become ready")
+        raise SystemExit(f"{self.public_url} did not become ready")
 
     def own_cluster(self):
         context = self.kubectl("config", "current-context", check=False)
-        refusal = context_refusal(context.stdout.decode().strip())
+        refusal = context_refusal(context.stdout.decode().strip(), self.context)
         if refusal:
             raise SystemExit(refusal)
 

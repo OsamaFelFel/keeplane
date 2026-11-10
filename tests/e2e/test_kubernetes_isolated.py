@@ -203,11 +203,20 @@ POD_EXEC = {
     "app": ("-n", "keeplane", "exec", "deploy/keeplane-app", "-c", "app"),
     "model": ("-n", "keeplane", "exec", "deploy/model"),
     "visitor": ("-n", "inside", "exec", "visitor"),
+    # The protected release's app (test_kubernetes_isolated_protected.py).
+    "protected_app": (
+        "-n",
+        "keeplane-protected",
+        "exec",
+        "deploy/keeplane-app",
+        "-c",
+        "app",
+    ),
 }
 
 
 def probe(where, targets):
-    """Probe from a pod: ("app" | "model" | "visitor")."""
+    """Probe from a pod: ("app" | "model" | "visitor" | "protected_app")."""
     output = kubectl(*POD_EXEC[where], "--", "python", "-c", PROBE, json.dumps(targets))
     return json.loads(output)
 
@@ -244,11 +253,12 @@ def unresolved(observed, *names):
 GATEWAY_PROBES = [0]
 
 
-def probe_gateway(targets):
+def probe_gateway(targets, namespace="keeplane"):
     """Probe from inside gateway copy 0's network with an ephemeral container.
 
     The gateway image has no shell or Python, so a pinned Python container
-    joins the Pod; the Pod's NetworkPolicy applies to it as to the gateway.
+    joins the Pod; the Pod's NetworkPolicy applies to it as to the gateway,
+    and to the model enroller beside it in the protected release's copies.
     """
     GATEWAY_PROBES[0] += 1
     name = f"probe-{int(time.time())}-{GATEWAY_PROBES[0]}"
@@ -259,7 +269,7 @@ def probe_gateway(targets):
     try:
         kubectl(
             "-n",
-            "keeplane",
+            namespace,
             "debug",
             "pod/keeplane-gateway-0",
             "--image=" + PYTHON_IMAGE,
@@ -278,12 +288,12 @@ def probe_gateway(targets):
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         pod = json.loads(
-            kubectl("-n", "keeplane", "get", "pod", "keeplane-gateway-0", "-o", "json")
+            kubectl("-n", namespace, "get", "pod", "keeplane-gateway-0", "-o", "json")
         )
         for status in pod["status"].get("ephemeralContainerStatuses", []):
             if status["name"] == name and "terminated" in status.get("state", {}):
                 logs = kubectl(
-                    "-n", "keeplane", "logs", "pod/keeplane-gateway-0", "-c", name
+                    "-n", namespace, "logs", "pod/keeplane-gateway-0", "-c", name
                 )
                 return json.loads(logs.strip().splitlines()[-1])
         time.sleep(2)
@@ -556,7 +566,14 @@ def wait_for_restarted_pods(since, namespaces, until=lambda: True):
         time.sleep(10)
 
 
-RESTARTED = ("keeplane", "inside", "ingress-nginx", "kube-system")
+# The protected release (ISO-13 to ISO-20) restarts with the node too.
+RESTARTED = (
+    "keeplane",
+    "keeplane-protected",
+    "inside",
+    "ingress-nginx",
+    "kube-system",
+)
 
 
 def wait_for_workloads(timeout="300s"):

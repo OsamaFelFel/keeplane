@@ -1,0 +1,43 @@
+# The protected developer release on the isolated-network kind run
+# (tests/e2e/kubernetes-isolated-cases.md, ISO-13 to ISO-19), on top of
+# deploy/local/protected-values.yaml: PostgreSQL accounts with CLI sign-in,
+# the managed gateway with the model enroller on both copies, and one public
+# HTTPS address through the ingress controller. protected.py installs it in
+# namespace keeplane-protected, beside the local-trial release.
+app:
+  # protected.py sets app.image to the postgres-cli-auth-trial image in the
+  # internal registry, 172.30.0.200:5000/keeplane/protected@sha256:<digest>,
+  # which the node pulls like every other image (mirror.py).
+  pullPolicy: IfNotPresent
+
+ingress:
+  host: keeplane-protected.isolated.test
+
+# Every opt-in policy is on, as for the local-trial release.
+networkPolicy:
+  gatewayIngressEnabled: true
+  appIngressEnabled: true
+  publicEntry:
+    namespaceSelector:
+      kubernetes.io/metadata.name: ingress-nginx
+    podSelector:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/component: controller
+  egressEnabled: true
+  egress:
+    modelEndpoints:
+      # The model provider outside the cluster, on the runner. The cluster
+      # DNS answers api.openai.com with this address and no other outside
+      # name (Corefile).
+      - cidr: 172.30.0.1/32
+        ports: [443]
+    # The account database (accounts-db-fixture.yaml), for the app, the
+    # migration Job and the model enroller beside each gateway copy.
+    postgres:
+      - podSelector:
+          app: db
+        ports: [5432]
+    gatewayDatabase:
+      - podSelector:
+          app: postgres
+        ports: [5432]

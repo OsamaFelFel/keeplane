@@ -1,6 +1,8 @@
 #!/bin/sh
 # Close the isolated kind network's outside access on the runner, keeping
-# only the model provider fixture (tests/e2e/kubernetes-isolated-cases.md).
+# only the model provider fixtures (tests/e2e/kubernetes-isolated-cases.md):
+# plain HTTP on 18082 for the local-trial release and HTTPS on 443 for the
+# protected release.
 # Run as root after the install. The bridge belongs to the fixed "kind"
 # Docker network the workflow creates, so the rules hold across a node
 # restart.
@@ -8,7 +10,7 @@
 #  - Nothing from the network is forwarded anywhere else: no internet, no
 #    registry, no other Docker network. The internal registry
 #    (172.30.0.200) is on the same bridge, so the node still pulls from it.
-#  - The runner itself answers the network only on the model port and on
+#  - The runner itself answers the network only on the model ports and on
 #    connections the runner opened (the published ingress and API ports).
 #  - No outside name lookups. The node's resolver is Docker's embedded DNS,
 #    which kind publishes on the node's gateway address and which looks names
@@ -17,17 +19,20 @@
 #    it) is refused; a systemd unit in the node adds the rules again on every
 #    boot, so they hold across a node restart too. CoreDNS gets the closed
 #    Corefile next to this script: no forward, cluster names as before, and
-#    "no such name" for everything else. It is restarted, so it holds no name
+#    "no such name" for everything else but the protected release's model
+#    provider (api.openai.com, the runner). It is restarted, so it holds no name
 #    it looked up before closing.
 set -eu
 BRIDGE=kind-isolated
-MODEL_PORT=18082
+MODEL_PORTS="18082 443"
 NODE=keeplane-isolated-control-plane
 HERE=$(dirname "$0")
 ip link show "$BRIDGE" >/dev/null
 iptables -I DOCKER-USER 1 -i "$BRIDGE" ! -o "$BRIDGE" -j DROP
 iptables -I INPUT 1 -i "$BRIDGE" -j DROP
-iptables -I INPUT 1 -i "$BRIDGE" -p tcp --dport "$MODEL_PORT" -j ACCEPT
+for port in $MODEL_PORTS; do
+  iptables -I INPUT 1 -i "$BRIDGE" -p tcp --dport "$port" -j ACCEPT
+done
 iptables -I INPUT 1 -i "$BRIDGE" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -S DOCKER-USER
 iptables -S INPUT | grep -- "$BRIDGE"

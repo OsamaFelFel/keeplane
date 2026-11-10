@@ -2,7 +2,9 @@
 # (kind_protected.py, protected-values.yaml). It accepts only TLS connections
 # with a password, using the test certificate in Secret db-tls (name "db"),
 # and local connections inside the pod for kind_protected.py's role setup.
-# Its data lives in the container and is lost when the pod is replaced.
+# Its data lives in an emptyDir volume: it survives a container or node
+# restart (the isolated-network run restarts the node) and is lost when the
+# pod is replaced.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -68,6 +70,8 @@ spec:
             - name: hba
               mountPath: /hba
               readOnly: true
+            - name: data
+              mountPath: /var/lib/postgresql/data
       volumes:
         - name: tls
           secret:
@@ -76,6 +80,8 @@ spec:
         - name: hba
           configMap:
             name: db-hba
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
