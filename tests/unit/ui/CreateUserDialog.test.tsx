@@ -207,7 +207,7 @@ test('UI-10: Check that gets no answer stays in No answer with "Check again", an
   expect(onCreated).not.toHaveBeenCalled()
 })
 
-test('UI-11: while saving, the dialog is busy, the button spins, a screen-reader status says Saving, everything is off and Escape does not close', async () => {
+test('UI-11: while saving, the dialog and button are busy, the button spins, a screen-reader status says Saving, everything is off and Escape does not close', async () => {
   let answer: (value: object) => void = () => {}
   const request = fixture(() => new Promise(resolve => { answer = resolve }))
   const user = userEvent.setup()
@@ -219,6 +219,7 @@ test('UI-11: while saving, the dialog is busy, the button spins, a screen-reader
   expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('true')
   const button = screen.getByRole('button', { name: 'Create user' })
   expect(button).toHaveProperty('disabled', true)
+  expect(button.getAttribute('aria-busy')).toBe('true')
   expect(button.querySelector('svg.animate-spin')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty('disabled', true)
   expect(screen.getByLabelText('Username')).toHaveProperty('disabled', true)
