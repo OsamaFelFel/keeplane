@@ -496,7 +496,9 @@ Keeplane isn't available right now, so nothing was sent. Try again in a few minu
 ```
 
 "Cannot reach Keeplane securely; check the server and certificate
-configuration." is kept for a TLS or certificate problem. The
+configuration." is kept for a TLS or certificate problem. A secure connection
+that is cut while Keeplane answers, for example because it is restarting, is
+an outage and gets the message above. The
 [restart and outage cases](../../tests/e2e/sign-in-restart-outage-cases.md)
 show each one.
 

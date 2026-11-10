@@ -269,7 +269,7 @@ def test_repo_09_no_usable_pick_stops_before_the_runtime(
     sample, fake_runtime, monkeypatch, capsys, pick, status
 ):
     sample.server.task_model, sample.server.task_model_status = pick, status
-    # The gateway answers, so a 503 is Keeplane's own (OUT-11 has the other case).
+    # The gateway answers, so a 503 is Keeplane's own (OUT-13 has the other case).
     monkeypatch.setattr(coding, "gateway_answers", lambda gateway: True)
     assert (
         run(monkeypatch, "code", "--gateway", "https://gateway.test/v1", "Fix it") == 1

@@ -1,6 +1,6 @@
 """Task 009-15: a coding task stopped by an outage says so, not that the model is down.
 
-Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-14).
+Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-16).
 """
 
 import dataclasses
@@ -287,13 +287,161 @@ def test_out_10_a_certificate_problem_keeps_its_own_message(monkeypatch):
     )
 
 
+def body_only(status, body):
+    """The runtime's error event when the gateway's answer isn't a model error."""
+    return {
+        "type": "error",
+        "error": {
+            "name": "APIError",
+            "data": {
+                "message": "Forbidden",
+                "statusCode": status,
+                "responseBody": body,
+            },
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "event,refused",
+    [
+        (api_error(403, "external authorization failed"), True),
+        (body_only(403, "external authorization failed"), True),
+        (body_only(503, '{"error": "Gateway authorization is unavailable"}'), True),
+        # A model's own error that merely mentions one of the phrases.
+        (api_error(503, "Upstream: gateway authorization is unavailable"), False),
+        (
+            body_only(
+                503, '{"error": {"message": "see external authorization failed"}}'
+            ),
+            False,
+        ),
+        # The phrase in a field that isn't the error's message or body.
+        (
+            {
+                "type": "error",
+                "error": {
+                    "name": "APIError",
+                    "data": {
+                        "message": "Service Unavailable",
+                        "statusCode": 503,
+                        "metadata": {"hint": "Keeplane storage is unavailable"},
+                    },
+                },
+            },
+            False,
+        ),
+        # Not an error event.
+        ({"type": "text", "text": "external authorization failed"}, False),
+    ],
+)
+def test_out_11_only_the_gateway_s_own_reason_counts(event, refused):
+    assert coding.check_refused(json.dumps(event) + "\n") is refused
+
+
+@pytest.mark.parametrize("down", [503, None])
+def test_out_11_a_model_error_mentioning_a_refusal_keeps_its_st16_message(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+    down,
+):
+    err = with_keeplane_down(
+        connected,
+        runtime,
+        monkeypatch,
+        tmp_path,
+        capsys,
+        api_error(503, "Provider note: Keeplane storage is unavailable elsewhere"),
+        down,
+    )
+    assert "coder is unavailable right now" in err
+    assert "Keeplane isn't available" not in err
+
+
+def answering_then(monkeypatch, failure):
+    """Keeplane's TLS handshake succeeds; reading the answer raises ``failure``."""
+
+    class Response:
+        status = 200
+
+        class headers:
+            @staticmethod
+            def get_content_type():
+                return "application/json"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self, *args):
+            raise failure
+
+    class Opener:
+        def open(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(server_connection, "build_opener", lambda *a: Opener())
+
+
+SECURELY = (
+    "Cannot reach Keeplane securely; check the server and certificate configuration."
+)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ssl.SSLEOFError("EOF occurred in violation of protocol"),
+        ssl.SSLZeroReturnError("TLS/SSL connection has been closed"),
+        ssl.SSLSyscallError("Some I/O error occurred"),
+    ],
+    ids=["eof", "closed", "syscall"],
+)
+def test_out_12_a_tls_connection_cut_while_reading_is_an_outage(monkeypatch, failure):
+    answering_then(monkeypatch, failure)
+    with pytest.raises(server_connection.Unreachable):
+        server_connection.account("https://keeplane.example", "kpc_" + "a" * 43)
+
+
+@pytest.mark.parametrize(
+    "where,failure",
+    [
+        ("reading", ssl.SSLError("decryption failed or bad record mac")),
+        ("reading", ssl.SSLCertVerificationError("certificate verify failed")),
+        ("handshake", URLError(ssl.SSLError("wrong version number"))),
+    ],
+    ids=["bad-record", "certificate", "handshake"],
+)
+def test_out_12_any_other_tls_error_keeps_the_secure_message(
+    monkeypatch, where, failure
+):
+    if where == "reading":
+        answering_then(monkeypatch, failure)
+    else:
+
+        class Opener:
+            def open(self, *args, **kwargs):
+                raise failure
+
+        monkeypatch.setattr(server_connection, "build_opener", lambda *a: Opener())
+    with pytest.raises(server_connection.ConnectionError) as error:
+        server_connection.account("https://keeplane.example", "kpc_" + "a" * 43)
+    assert not isinstance(error.value, server_connection.Unreachable)
+    assert str(error.value) == SECURELY
+
+
 # Before the task starts, nothing at all was sent.
 GATEWAY_DOWN_AT_START = GATEWAY_DOWN
 
 
 @pytest.mark.parametrize("route", ["models", "choice"])
 @pytest.mark.parametrize("gateway_up", [False, True])
-def test_out_11_keeplane_cant_choose_a_model_because_the_gateway_is_down(
+def test_out_13_keeplane_cant_choose_a_model_because_the_gateway_is_down(
     connected,  # noqa: F811 - imported pytest fixture
     runtime,  # noqa: F811 - imported pytest fixture
     monkeypatch,
@@ -316,7 +464,7 @@ def test_out_11_keeplane_cant_choose_a_model_because_the_gateway_is_down(
     assert not runtime[1]
 
 
-def test_out_12_keeplane_down_from_the_sign_in_check_never_blames_the_gateway(
+def test_out_14_keeplane_down_from_the_sign_in_check_never_blames_the_gateway(
     connected,  # noqa: F811 - imported pytest fixture
     runtime,  # noqa: F811 - imported pytest fixture
     monkeypatch,
@@ -329,7 +477,7 @@ def test_out_12_keeplane_down_from_the_sign_in_check_never_blames_the_gateway(
     assert capsys.readouterr().err == START_UNAVAILABLE
 
 
-def test_out_13_keeplanes_gateway_reason_is_enough_without_a_probe(monkeypatch):
+def test_out_15_keeplanes_gateway_reason_is_enough_without_a_probe(monkeypatch):
     monkeypatch.setattr(coding, "gateway_answers", lambda gateway: True)
     error = server_connection.KeeplaneUnavailable("x", 503, coding.GATEWAY_REASON)
     assert coding.start_outage(error, "https://gw.test/v1", True) + "\n" == (
@@ -348,7 +496,7 @@ def test_out_13_keeplanes_gateway_reason_is_enough_without_a_probe(monkeypatch):
         )
 
 
-def test_out_14_the_gateway_probe_only_connects():
+def test_out_16_the_gateway_probe_only_connects():
     with socket.socket() as listening:
         listening.bind(("127.0.0.1", 0))
         listening.listen()

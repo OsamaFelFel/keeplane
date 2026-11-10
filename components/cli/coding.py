@@ -488,18 +488,34 @@ def error_statuses(stdout):
     }
 
 
+def _reason(text):
+    """The gateway's reason in an error field: plain text, or its JSON ``error``."""
+    try:
+        data = json.loads(text)
+    except (ValueError, RecursionError):
+        data = text
+    if isinstance(data, dict):
+        data = data.get("error")
+        if isinstance(data, dict):
+            data = data.get("message")
+    return data.strip().lower() if isinstance(data, str) else ""
+
+
 def check_refused(stdout):
     """Whether an error event is the gateway's refusal before any model was tried.
 
     The gateway answers so when Keeplane's route check can't run: its own
     "external authorization failed" when the app doesn't answer, or Keeplane's
-    reason, passed on, when its storage is down.
+    reason, passed on, when its storage is down. Only the error's message, or
+    the answer's body the runtime keeps beside it, counts, and only when the
+    reason starts with one of these: a model's error that merely mentions one
+    is not Keeplane being down.
     """
-    text = " ".join(
-        value.lower()
+    return any(
+        _reason(value).startswith(CHECK_REFUSALS)
         for event in _events(stdout) if event.get("type") == "error"
-        for _, value in _walk(event) if isinstance(value, str))
-    return any(sign in text for sign in CHECK_REFUSALS)
+        for key, value in _walk(event)
+        if key in ("message", "responseBody") and isinstance(value, str))
 
 
 def outage(result, issuer, credential):

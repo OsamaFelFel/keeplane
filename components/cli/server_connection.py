@@ -131,6 +131,13 @@ def request(server, path, credential, *, method="GET", expected=200, payload=Non
             # A certificate or TLS problem, not an outage.
             raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
         raise Unreachable("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
+    except (ssl.SSLEOFError, ssl.SSLZeroReturnError, ssl.SSLSyscallError):
+        # The TLS connection was cut after a valid handshake, while the answer
+        # was read: Keeplane or a proxy stopped, not a certificate problem.
+        raise Unreachable("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
+    except ssl.SSLError:
+        # Any other TLS error, during or after the handshake, is a TLS problem.
+        raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
     except OSError:
         raise Unreachable("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
     except ValueError:

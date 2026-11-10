@@ -179,7 +179,7 @@ different Keeplane checks on the same host:
 | Request on the model backend | Keeplane check | Admits |
 | --- | --- | --- |
 | Marked: a developer's request from the developer listener | `POST /internal/runtime/authorize/selected` | The developer's current access to the project and model, as above |
-| Unmarked: Keeplane's own setup request on `gateway.url` | `POST /internal/runtime/authorize/runtime-key` | Only `Authorization: Bearer <runtime key>`, the `runtime-key` in `gateway.keysSecret` |
+| Unmarked: Keeplane's own setup request on `gateway.url` | `POST /internal/runtime/authorize/runtime-key` | Only `Authorization: Bearer <runtime key>`, the `runtime-key` in `gateway.keysSecret`, with the gateway credential in `X-Keeplane-Gateway-Credential` |
 
 The key-only check compares the Bearer value with the runtime key Keeplane
 holds, and the gateway credential with Keeplane's, both in constant time.
