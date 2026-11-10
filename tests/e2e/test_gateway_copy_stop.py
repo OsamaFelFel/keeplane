@@ -2,9 +2,11 @@
 
 Spec 002 ST4 "One gateway copy stops": a reply already streaming from the
 stopped copy fails visibly and the same request, retried, is answered by the
-surviving copy (K8S-18). While the copy is down, withdrawing access is saved at
-once (K8S-19) and adding or widening access is refused with the admin's
-copy-readback message (K8S-20); once the copy is back the add works (K8S-21).
+surviving copy (K8S-18). While the copy is down, withdrawing access is saved and
+applies at once (K8S-19) and adding or widening access is refused with the
+admin's copy-readback message (K8S-20). The copy comes back with the current
+state, not the one it had when it stopped (K8S-22), and then the add and the
+widening work (K8S-21).
 The plain-English cases are in kubernetes-cases.md.
 
 The copy is stopped by scaling the managed gateway StatefulSet down by one and
@@ -263,6 +265,13 @@ def run_cases():
         )
         return status, body
 
+    def ask(name):
+        """One model call through Keeplane, as the admin's Ask does."""
+        status, body, _ = browser.fetch(
+            "/api/ask", {"model": name, "prompt": "fixture"}, method="POST"
+        )
+        return status, body or {}
+
     results = []
 
     def check(case, okay, observed):
@@ -393,6 +402,14 @@ def run_cases():
         (remove_status, removed), remove_seconds = timed(remove, REMOVE)
         models = listing()
         expected_removal = removed_but_listed(REMOVE, readback)
+        # The withdrawal applies at once: straight after the answers, a call
+        # for the removed model is refused, the narrowed model still answers
+        # and the surviving copy no longer lists the removed model.
+        removed_call_status, removed_call = ask(REMOVE)
+        narrowed_call_status, narrowed_call = ask(WITHDRAW)
+        survivor = f"{COPIES}-0"
+        survivor_ip = copy_pods()[survivor]["status"]["podIP"]
+        survivor_lists_removed = REMOVE in copy_models(survivor_ip)
         check(
             "K8S-19",
             narrow_status == 200
@@ -402,7 +419,11 @@ def run_cases():
             and removed == expected_removal
             and not models.get(REMOVE, {}).get("approved")
             and narrow_seconds < 10
-            and remove_seconds < 10,
+            and remove_seconds < 10
+            and removed_call_status == 403
+            and narrowed_call_status == 200
+            and narrowed_call.get("answer") == "mock answer"
+            and not survivor_lists_removed,
             {
                 "narrow_status": narrow_status,
                 "narrow_seconds": narrow_seconds,
@@ -413,6 +434,16 @@ def run_cases():
                 "remove_seconds": remove_seconds,
                 "remove_message": removed,
                 "removed_still_set_up": bool(models.get(REMOVE, {}).get("approved")),
+                "removed_model_call": {
+                    "status": removed_call_status,
+                    "error": removed_call.get("error"),
+                },
+                "narrowed_model_call": {
+                    "status": narrowed_call_status,
+                    "answer": narrowed_call.get("answer"),
+                },
+                "surviving_copy": survivor,
+                "removed_model_on_surviving_copy": survivor_lists_removed,
             },
         )
 
@@ -422,8 +453,6 @@ def run_cases():
         models = listing()
         # Nothing was saved: the surviving first copy does not list the model
         # either (allowing it a moment to drop the undone registration).
-        survivor = f"{COPIES}-0"
-        survivor_ip = copy_pods()[survivor]["status"]["podIP"]
         survivor_lists_add = True
         deadline = time.monotonic() + 30
         while survivor_lists_add and time.monotonic() < deadline:
@@ -471,7 +500,53 @@ def run_cases():
             stdout=subprocess.DEVNULL,
         )
         scaled_down = False
-        ready = sorted(name for name, pod in copy_pods().items() if is_ready(pod))
+        pods = copy_pods()
+        ready = sorted(name for name, pod in pods.items() if is_ready(pod))
+
+        # K8S-22: the copy that comes back holds the current state. Before any
+        # further change, every copy, read directly, lists the narrowed model
+        # and neither the removed model nor the refused add; the returned copy
+        # streams the narrowed model's whole answer and refuses the removed one.
+        listed = {
+            name: copy_models(pod["status"]["podIP"])
+            for name, pod in sorted(pods.items())
+            if is_ready(pod)
+        }
+        returned_ip = pods[stopped]["status"]["podIP"] if stopped in pods else None
+        kept_stream = stream_once(returned_ip, WITHDRAW) if returned_ip else None
+        removed_stream = stream_once(returned_ip, REMOVE) if returned_ip else None
+        check(
+            "K8S-22",
+            len(listed) == total
+            and all(
+                WITHDRAW in ids and REMOVE not in ids and ADD not in ids
+                for ids in listed.values()
+            )
+            and kept_stream is not None
+            and kept_stream["status"] == 200
+            and kept_stream["done"]
+            and kept_stream["content"] == full
+            and removed_stream is not None
+            and removed_stream["status"] == 404
+            and removed_stream["content"] == "",
+            {
+                "returned_copy": stopped,
+                "copies_read": sorted(listed),
+                "check_models_listed": {
+                    name: sorted(m for m in ids if m in (WITHDRAW, REMOVE, ADD))
+                    for name, ids in listed.items()
+                },
+                "narrowed_model_stream": {
+                    key: (kept_stream or {}).get(key)
+                    for key in ("status", "done", "finish", "error")
+                }
+                | {"complete_answer": (kept_stream or {}).get("content") == full},
+                "removed_model_stream": {
+                    key: (removed_stream or {}).get(key) for key in ("status", "error")
+                },
+            },
+        )
+
         add_status, add_body = add(ADD, [first])
         widen_status, widen_body = set_up(WITHDRAW, [first, second])
         models = listing()

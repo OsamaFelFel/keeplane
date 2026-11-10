@@ -597,6 +597,36 @@ Each copy's Pod name is also its name in the gateway guard-status table, which
 the private model enroller for that copy writes; see
 [model enroller](#model-enroller).
 
+### When a gateway copy stops
+
+With two or more managed copies, one copy stopping (a crash, a deleted Pod, a
+node drain) doesn't stop model calls:
+
+- **New model calls** go to the other copies once the gateway Service stops
+  offering the stopped copy, normally within seconds. A call sent to it
+  in that moment may fail; send it again.
+- **A reply already streaming from that copy** is cut off. The developer's tool
+  sees a connection error, or the stream ends without its final `[DONE]`; it is
+  never handed a shorter answer marked complete. Keeplane and the gateway don't
+  resume or resend it, because part of the answer has already been delivered.
+  The developer sends the request again and another copy answers it in full.
+  In a rolling restart a copy first gets 30 seconds to finish what it has
+  started, so only longer replies are cut.
+- **Admin changes** while the copy is down: narrowing a model's data classes,
+  moving it to each developer's own key and removing it apply at once. Adding
+  a model or widening its access is refused with "Not every gateway copy
+  confirmed it: 1 of 2 did. Nothing was saved." (or "… confirmed the change …");
+  try again once every copy is ready. A removal stands but says Keeplane
+  couldn't confirm it's gone from every copy.
+- **When the copy comes back** it reads the models from the gateway database
+  the copies share, so it serves the current setup, including changes made
+  while it was down. Nothing needs to be redone.
+
+Check which copies are ready with
+`kubectl -n "$NS" get pods -l app.kubernetes.io/component=standalone`. CI runs
+these cases on a kind cluster on every change (K8S-03, K8S-18 to K8S-22 in the
+[local Kubernetes cases](../../tests/e2e/kubernetes-cases.md)).
+
 **Existing mode.** If the customer-run gateway serves through several copies,
 list each copy's own management origin in `gateway.copyUrls`:
 

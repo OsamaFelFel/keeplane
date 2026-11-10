@@ -200,9 +200,10 @@ def test_shm_05_the_map_links_every_catalog_it_names():
 def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     cases = live_ci_cases()
     # The replica, customer-run gateway, preflight and gateway-down cases,
-    # and the copy-stop cases (a stream cut short, access changes).
+    # and the copy-stop cases (a stream cut short, access changes, the
+    # returned copy's state).
     assert {f"K8S-{n:02d}" for n in range(1, 14)} | {
-        f"K8S-{n:02d}" for n in range(17, 22)
+        f"K8S-{n:02d}" for n in range(17, 23)
     } <= cases
     # The simulated preflight retries (K8S-14 to K8S-16) are in another test
     # file this workflow does not run, so they never count through it.
