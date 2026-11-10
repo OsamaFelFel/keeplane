@@ -6,7 +6,8 @@ name: Live preview gateway checks
 # fresh default start (task 009-01), Spec 005 ST19 project classes through the
 # guarded endpoint (task 005-02) and Spec 004 ST16 retry of a model that is
 # down (task 004-04). Last, the developer half of the MVP journey, DEV-01 to
-# DEV-05 (task 009-13), runs with the hash-pinned coding runtime.
+# DEV-05 (task 009-13), then DEV-06 to DEV-08, runs with the hash-pinned
+# coding runtime.
 # A second job, in parallel, builds the `detection` app image and runs Spec 005
 # ST20 personal-data detection and Spec 006 ST21 held-back request records
 # through the same guarded endpoint (tasks 005-03 and 006-02).
@@ -85,7 +86,7 @@ jobs:
           mkdir "$RUNNER_TEMP/runtime"
           tar -xzf "$RUNNER_TEMP/runtime.tgz" -C "$RUNNER_TEMP/runtime"
           echo "$RUNTIME_BINARY_SHA256  $RUNNER_TEMP/runtime/package/bin/opencode" | sha256sum --check
-      - name: Developer journey DEV-01 to DEV-05 with the pinned runtime (Spec 009, task 009-13)
+      - name: Developer journey DEV-01 to DEV-08 with the pinned runtime (Spec 009, task 009-13)
         if: ${{ !cancelled() }}
         # The runtime is built for musl, so the suite runs in Alpine with
         # libstdc++. Host networking reaches the preview on loopback and lets

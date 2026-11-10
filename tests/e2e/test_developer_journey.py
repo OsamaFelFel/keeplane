@@ -1,7 +1,8 @@
 """Spec 009: the developer half of the MVP journey on the default preview.
 
-Runs DEV-01 to DEV-05 in order (task 009-13) against the Docker preview started
-by ``python3 deploy/local/up.py`` with no flags. A temporary developer signs in
+Runs DEV-01 to DEV-05 in order (task 009-13), then DEV-06 to DEV-08
+(``later_cases``), against the Docker preview started by
+``python3 deploy/local/up.py`` with no flags. A temporary developer signs in
 from the source-tree CLI through the browser flow, lists and chooses a model in
 a sample Git repo with a failing test, and runs ``keeplane code`` with the real
 pinned OpenCode 2.0.27 runtime through the guarded gateway. The model is a
@@ -25,6 +26,9 @@ import hashlib
 import importlib.util
 import json
 import os
+import pty
+import re
+import select
 import subprocess
 import sys
 import tempfile
@@ -38,7 +42,16 @@ from urllib.parse import urlencode
 
 import pytest
 
-from components.cli import coding, project_identity, settings_file, usage
+from components.cli import (
+    browser_login,
+    coding,
+    device_login,
+    project_identity,
+    server_connection,
+    settings_file,
+    sign_in_again,
+    usage,
+)
 from components.cli.keeplane import SWITCHED
 from components.cli.sign_in_again import SIGNED_OUT
 from tests.e2e import test_preview_sign_in_live as preview
@@ -51,7 +64,17 @@ from tests.support.reporting import report_path
 pytestmark = [pytest.mark.live, pytest.mark.docker_only]
 
 REPORT = report_path("developer-journey.json")
-CASES = ("DEV-01", "DEV-02", "DEV-03", "DEV-03b", "DEV-04", "DEV-05")
+CASES = (
+    "DEV-01",
+    "DEV-02",
+    "DEV-03",
+    "DEV-03b",
+    "DEV-04",
+    "DEV-05",
+    "DEV-06",
+    "DEV-07",
+    "DEV-08",
+)
 # Spec 004 ST26: what the developer saves for the model reaches it unchanged.
 REQUEST_SETTINGS = {"temperature": 0.37, "max_tokens": 777}
 # The binary the ADR 007 trials recorded and the coding-runtime check pins.
@@ -606,6 +629,24 @@ def run_cases():
                     else seen_probe - seen_after,
                 },
             )
+            later_cases(
+                record,
+                {
+                    "first": first,
+                    "coder": coder,
+                    "repo": repo,
+                    "root": root,
+                    "remote": remote,
+                    "binary": binary,
+                    "password": password,
+                    "names": names,
+                    "coder_model": coder_model,
+                    "project_name": project_name,
+                    "project_id": project_id,
+                    "admin": admin,
+                    "failures": failures,
+                },
+            )
         finally:
             for developer in (first, second):
                 signed_in = (developer.profile() / "credential.json").exists()
@@ -618,7 +659,7 @@ def run_cases():
                 failures.append("the model enroller did not settle after clean-up")
     cleanup = "complete" if not failures else "; ".join(failures)
     report = {
-        "suite": "Spec 009 developer journey DEV-01 to DEV-05 on the default preview",
+        "suite": "Spec 009 developer journey DEV-01 to DEV-08 on the default preview",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": "OpenCode 2.0.27 (pinned)" if binary else None,
         "cases": cases,
@@ -634,6 +675,361 @@ def run_cases():
     for case in cases:
         print(case["id"], case["verdict"], json.dumps(case["observed"]))
     return report
+
+
+# DEV-06 to DEV-08 (task 009 "Developer journey cases"), after the MVP journey.
+DEVICE_PREFIX = "Open " + BASE + "/oauth/confirm-device/ and enter code "
+# Ages one account's CLI access tokens past their end, as the clock would.
+EXPIRE_SCRIPT = """
+from datetime import timedelta
+from django.utils import timezone
+from oauth2_provider.models import AccessToken
+print(AccessToken.objects.filter(user__username={username!r}).update(
+    expires=timezone.now() - timedelta(seconds=1)))
+"""
+CALLS_SCRIPT = (
+    "import urllib.request; print(urllib.request.urlopen("
+    "'http://127.0.0.1:18082/calls', timeout=10).read().decode())"
+)
+
+
+def approve(developer, code):
+    """Approve a device code from another browser, as the developer."""
+    try:
+        return developer.approve_device(code)
+    except (AssertionError, OSError, KeyError, ValueError):
+        return False
+
+
+def device_code(text):
+    found = re.search(re.escape(DEVICE_PREFIX) + r"(\S+)\.", text)
+    return found.group(1) if found else None
+
+
+def no_browser_login(developer):
+    """`keeplane login` over SSH, approved from another browser.
+
+    The fixture browser stays set in ``BROWSER``: over SSH the CLI must not
+    use it (ADR 028), so only the device code can sign it in.
+    """
+    env = dict(developer.env, SSH_CONNECTION="203.0.113.7 50022 127.0.0.1 22")
+    env.pop("DISPLAY", None)
+    env.pop("WAYLAND_DISPLAY", None)
+    process = subprocess.Popen(
+        [sys.executable, str(preview.CLI), "login", "--timeout", "60"],
+        env=env,
+        cwd=developer.home,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        lines = [process.stdout.readline().strip() for _ in range(2)]
+        code = device_code(lines[1])
+        approved = code is not None and approve(developer, code)
+        out, err = process.communicate(timeout=90)
+        return process.returncode, lines, approved, out.strip(), err.strip()
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def in_terminal(developer, arguments, cwd, replies, timeout=180):
+    """Run the CLI on a terminal, answering each prompt in ``replies`` in order.
+
+    A device code shown on the way is approved from another browser. Returns
+    the exit code, what the terminal showed, and whether a code was approved.
+    """
+    master, slave = pty.openpty()
+    process = subprocess.Popen(
+        [sys.executable, str(preview.CLI), *arguments],
+        env=developer.env,
+        cwd=cwd,
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        close_fds=True,
+    )
+    os.close(slave)
+    shown, seen, replies, approved = "", 0, list(replies), None
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.5)
+            if not ready:
+                if process.poll() is not None:
+                    break
+                continue
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:  # The terminal closes when the CLI exits.
+                break
+            if not chunk:
+                break
+            shown += chunk.decode(errors="replace").replace("\r\n", "\n")
+            code = device_code(shown)
+            if code and approved is None:
+                approved = approve(developer, code)
+            while replies and replies[0][0] in shown[seen:]:
+                prompt, reply = replies.pop(0)
+                seen = shown.index(prompt, seen) + len(prompt)
+                os.write(master, reply.encode())
+        returncode = process.wait(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        os.close(master)
+    return returncode, shown, approved
+
+
+def expire_sign_in(username):
+    """Expire the account's CLI sign-in on the server; how many were expired."""
+    result = classes.compose(
+        "exec",
+        "-T",
+        "app",
+        "python",
+        "manage.py",
+        "shell",
+        "-c",
+        EXPIRE_SCRIPT.format(username=username),
+        timeout=60,
+    )
+    lines = result.stdout.split()
+    return int(lines[-1]) if not result.returncode and lines else None
+
+
+def cloud_calls():
+    """How many requests the cloud-provider fixture answered, or None."""
+    result = classes.compose(
+        "exec", "-T", "cloud-provider", "python", "-c", CALLS_SCRIPT, timeout=60
+    )
+    try:
+        return json.loads(result.stdout)["count"] if not result.returncode else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def sign_in_client(developer):
+    """Which sign-in client the developer's saved sign-in came from, or None."""
+    try:
+        saved = json.loads((developer.profile() / "credential.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return saved.get("client_id") if isinstance(saved, dict) else None
+
+
+def sent_counts(coder):
+    return coder.served(), gateway_requests(), cloud_calls()
+
+
+def later_cases(record, context):
+    """DEV-06 to DEV-08 after DEV-05, with the same preview, models and repo.
+
+    DEV-06: the signed-out developer signs in over SSH with the device code.
+    DEV-07: their sign-in is expired on the server; `code` in a script and in
+    a terminal sends nothing, and the terminal offers to sign in again.
+    DEV-08: the first admin signs in from the CLI and does DEV-02 and DEV-03.
+    """
+    first, coder, repo = context["first"], context["coder"], context["repo"]
+    coder_model, names = context["coder_model"], context["names"]
+
+    # DEV-06: no browser can open here (SSH), so the device code signs in.
+    code, lines, approved, out, err = no_browser_login(first)
+    who = first.run("whoami")
+    record(
+        "DEV-06",
+        "pass"
+        if code == 0
+        and lines[0] == browser_login.NO_BROWSER
+        and device_code(lines[1]) is not None
+        and approved
+        and out == "Signed in to Keeplane."
+        and who[0] == 0
+        and names["first"] in who[1]
+        and sign_in_client(first) == device_login.CLIENT_ID
+        else "fail",
+        {
+            "login_exit": code,
+            "first_line": lines[0],
+            "code_shown": device_code(lines[1]) is not None,
+            "approved_elsewhere": approved,
+            "login_output": out,
+            "login_errors": bool(err),
+            "sign_in_client": sign_in_client(first),
+            "whoami_exit": who[0],
+            "whoami_output": who[1],
+        },
+    )
+
+    # DEV-07: the server ends the sign-in; `code` sends nothing, in a script
+    # and in a terminal, where it offers to sign in again.
+    expired = expire_sign_in(names["first"])
+    before = sent_counts(coder)
+    script = first.run("code", "anything", cwd=repo)
+    terminal = in_terminal(
+        first,
+        ["code", "anything"],
+        repo,
+        [
+            (server_connection.EXPIRED + " " + sign_in_again.OFFER, "y\n"),
+            (sign_in_again.START, "n\n"),
+        ],
+    )
+    time.sleep(2)  # Let the gateway write any request it received.
+    after = sent_counts(coder)
+    who = first.run("whoami")
+    record(
+        "DEV-07",
+        "pass"
+        if expired
+        and script[0] == 1
+        and script[1] == ""
+        and script[2]
+        == server_connection.EXPIRED + " " + server_connection.SIGN_IN_AGAIN
+        and terminal[0] == 1
+        and server_connection.EXPIRED + " " + sign_in_again.OFFER in terminal[1]
+        and terminal[2]
+        and sign_in_again.START in terminal[1]
+        and sign_in_again.NOT_STARTED in terminal[1]
+        and None not in before
+        and after == before
+        and who[0] == 0
+        and names["first"] in who[1]
+        else "fail",
+        {
+            "sign_ins_expired": expired,
+            "script_exit": script[0],
+            "script_output": script[1],
+            "script_message": script[2],
+            "terminal_exit": terminal[0],
+            "terminal_shown": [
+                line
+                for line in terminal[1].splitlines()
+                if line.strip() and device_code(line) is None
+            ],
+            "signed_in_again_elsewhere": terminal[2],
+            "sent_before": dict(zip(("model", "gateway", "cloud"), before)),
+            "sent_after": dict(zip(("model", "gateway", "cloud"), after)),
+            "whoami_after": who[0],
+        },
+    )
+
+    # DEV-08: the first admin signs in from the CLI and does DEV-02 and
+    # DEV-03 in their own clone, within the developer's limits.
+    if context["binary"] is None:
+        record(
+            "DEV-08",
+            "not-run",
+            {"reason": "KEEPLANE_OPENCODE_V2_BIN does not name the pinned runtime"},
+        )
+        return
+    root = context["root"]
+    admin_cli = Developer(
+        root / "admin", "first-admin", context["password"], context["binary"]
+    )
+    clone = sample_repo(root / "admin/sample", context["remote"])
+    try:
+        signed = admin_cli.run("login", "--server", BASE, "--timeout", "60")
+        who = admin_cli.run("whoami")
+        listed = admin_cli.run("models", cwd=clone)
+        theirs = first.run("models", cwd=repo)
+        try:
+            shown = sorted(row["id"] for row in json.loads(listed[1])["models"])
+            expected = sorted(row["id"] for row in json.loads(theirs[1])["models"])
+        except (ValueError, KeyError, TypeError):
+            shown, expected = None, []
+        # A real model the admin's list shows as not approved, so the
+        # project doesn't allow it.
+        _, models, _ = context["admin"].fetch("/api/models")
+        unapproved = sorted(
+            row["id"]
+            for row in (models or {}).get("models", [])
+            if not row.get("approved")
+        )
+        unlisted = unapproved[0] if unapproved else None
+        before = sent_counts(coder)
+        outside = (
+            admin_cli.run("code", "--model", unlisted, "anything", cwd=clone)
+            if unlisted
+            else (None, "", "")
+        )
+        time.sleep(2)
+        refused_sent = sent_counts(coder)
+        chosen = admin_cli.run("use", coder_model, cwd=clone)
+        coder.target = clone / "calc.py"
+        tools_before, served_before = len(coder.tools), coder.served()
+        failing_before = not sample_tests_pass(clone)
+        task = admin_cli.run("code", TASK, cwd=clone)
+        answers = coder.served() - served_before
+        entry = project_entry(context["admin"], context["project_name"])
+        users = sorted(row["username"] for row in (entry or {}).get("users", []))
+        record(
+            "DEV-08",
+            "pass"
+            if signed[0] == 0
+            and signed[1].endswith("Signed in to Keeplane.")
+            and who[0] == 0
+            and "first-admin" in who[1]
+            and listed[0] == 0
+            and shown is not None
+            and shown == expected
+            and coder_model in shown
+            and unlisted is not None
+            and unlisted not in shown
+            and outside[0] == 1
+            and outside[2] == coding.NOT_ALLOWED
+            and None not in before
+            and refused_sent == before
+            and chosen[0] == 0
+            and chosen[1] == SWITCHED.format(model=coder_model)
+            and failing_before
+            and task[0] == 0
+            and answers >= 3
+            and coder.tools[tools_before:] == ["read", "edit"]
+            and (clone / "calc.py").read_text() == FIXED
+            and changed_files(clone) == ["calc.py"]
+            and sample_tests_pass(clone)
+            and ANSWER in task[1]
+            and coding.USING_SWITCH.format(model=coder_model) in task[2]
+            and coding.ANSWERED_BY.format(models=coder_model) in task[2]
+            and entry is not None
+            and entry["id"] == context["project_id"]
+            and entry["initialized"] is False
+            and "first-admin" in users
+            and names["first"] in users
+            else "fail",
+            {
+                "login_exit": signed[0],
+                "whoami_output": who[1],
+                "models_exit": listed[0],
+                "listed": shown,
+                "developer_listed": expected,
+                "unapproved_model": unlisted,
+                "unlisted_model_exit": outside[0],
+                "unlisted_model_message": outside[2],
+                "sent_for_unlisted_model": [
+                    None if a is None or b is None else b - a
+                    for a, b in zip(before, refused_sent)
+                ],
+                "use_output": chosen[1],
+                "test_failed_before": failing_before,
+                "code_exit": task[0],
+                "model_answers": answers,
+                "tool_calls": coder.tools[tools_before:],
+                "changed_files": changed_files(clone),
+                "test_passes_after": sample_tests_pass(clone),
+                "cli_messages": task[2].splitlines(),
+                "project_users": users,
+                "runtime_errors": task[1].splitlines()[-3:] if task[0] else [],
+            },
+        )
+    finally:
+        signed_in = (admin_cli.profile() / "credential.json").exists()
+        if signed_in and admin_cli.run("logout")[0]:
+            context["failures"].append("first-admin CLI logout failed")
 
 
 def restore(password, state, failures):
