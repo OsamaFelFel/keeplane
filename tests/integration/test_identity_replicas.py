@@ -35,6 +35,7 @@ BEARER_ONLY = {
     "/internal/runtime/installed-provider-token",
     "/internal/runtime/authorize",
     "/internal/runtime/authorize/selected",
+    "/internal/runtime/authorize/runtime-key",
     "/internal/runtime/installed/entry",
     "/internal/runtime/installed/selected",
     "/internal/runtime/installed/operator-validation",

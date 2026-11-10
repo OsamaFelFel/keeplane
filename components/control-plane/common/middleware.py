@@ -69,14 +69,18 @@ class BrowserCsrfMiddleware(CsrfViewMiddleware):
             return None
         if getattr(callback, "runtime_bearer_only", False):
             from accounts.authentication import RuntimeSessionAuthentication
-            from model_registry.runtime_callback import OperatorValidationAuthentication
             from model_registry.personal_transport import GatewayTransportAuthentication
+            from model_registry.runtime_callback import (
+                OperatorValidationAuthentication,
+                RuntimeKeyAuthentication,
+            )
             from rest_framework.permissions import IsAuthenticated
 
             view = getattr(callback, "cls", None)
             if tuple(getattr(view, "authentication_classes", ())) in (
                 (RuntimeSessionAuthentication,),
                 (OperatorValidationAuthentication,),
+                (RuntimeKeyAuthentication,),
                 (GatewayTransportAuthentication,),
             ) and tuple(getattr(view, "permission_classes", ())) == (IsAuthenticated,):
                 # These views accept an explicit bearer credential only, never

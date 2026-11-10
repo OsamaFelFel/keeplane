@@ -128,9 +128,10 @@ this mode handles shared or personal keys.
 
 ## Keeplane's checks on a customer-run gateway
 
-A customer-run gateway asks Keeplane before each model call. Point both checks
-at the Keeplane app over the private network, with the developer's session as
-the Bearer credential and the private gateway credential in
+A customer-run gateway asks Keeplane before each model call. Point every check
+at the Keeplane app over the private network, with the request's Bearer
+credential (the developer's session, or Keeplane's runtime key on its own
+setup request) and the private gateway credential in
 `X-Keeplane-Gateway-Credential`
 ([contract](../architecture/runtime-authorization.md)):
 
@@ -138,8 +139,9 @@ the Bearer credential and the private gateway credential in
 | --- | --- | --- |
 | The route that carries developer model traffic | `POST /internal/runtime/authorize` | One per request detection holds back, when **Held-back requests** is on |
 | Each model backend, after the gateway picks the model | `POST /internal/runtime/authorize/selected` | One per request sent, when **Model answers** is on; and one per request detection holds back here because it was down, too slow or failed, when **Held-back requests** is on |
+| Each model backend, for Keeplane's own setup request, which the developer listener never marks | `POST /internal/runtime/authorize/runtime-key`, the [key-only check](#keep-keeplanes-own-model-check-working) | Never |
 
-Both send only `project_id` and `model_id`, never the prompt, unless the
+The two developer checks send only `project_id` and `model_id`, never the prompt, unless the
 install is set up for
 [personal-data detection](data-classes-local.md#install-detection)
 (`KEEPLANE_PERSONAL_DATA_DETECTION=1`). Then both also send the request's
@@ -164,17 +166,34 @@ When an admin sets up a model, Keeplane sends one short request to that model
 through `gateway.url`, with the gateway's runtime key and no developer
 session. A backend check that runs for that request as if a developer sent it
 refuses it, and setup fails with "The model didn't answer. Nothing was
-saved." So mark developer traffic and let the backend check tell the two
-apart. Follow these rules:
+saved." So mark developer traffic and let the backend check send the two to
+different Keeplane checks on the same host:
+
+| Request on the model backend | Keeplane check | Admits |
+| --- | --- | --- |
+| Marked: a developer's request from the developer listener | `POST /internal/runtime/authorize/selected` | The developer's current access to the project and model, as above |
+| Unmarked: Keeplane's own setup request on `gateway.url` | `POST /internal/runtime/authorize/runtime-key` | Only `Authorization: Bearer <runtime key>`, the `runtime-key` in `gateway.keysSecret` |
+
+The key-only check compares the Bearer value with the runtime key Keeplane
+holds, and the gateway credential with Keeplane's, both in constant time.
+The runtime key must be 32 to 256 letters, digits, `-` or `_`, as in
+[gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
+It refuses everything else with 403: no key or the wrong one, a developer's
+session, a CLI sign-in or a browser cookie. It reads no body and records
+nothing in Audit. It answers only when Keeplane is installed with
+`gateway.mode: existing`; a managed install refuses it. If Keeplane can't read
+either key it refuses with 503, and the gateway, with `failureMode: deny`,
+refuses the request. Follow these rules:
 
 - Set the marker header on **every listener developers can reach**, before
   routing, with `set` (never `add`), so it overwrites any value a developer
   sends.
 - Keep the route check on the developer route.
-- On each model backend, run Keeplane's final check for marked requests.
-  Give unmarked requests their own check that admits only Keeplane's runtime
-  key, never no check. Keeplane has no endpoint for this check in `existing`
-  mode, so it runs on your side.
+- On each model backend, send marked requests to the final check and
+  unmarked requests to the key-only check. Never leave unmarked requests
+  without a check.
+- Send both the `authorization` header and the gateway credential
+  (`backendAuth`) to both checks.
 - Developers must not be able to reach the address in `gateway.url`, the
   unmarked path.
 - Remove the marker, `authorization`, `x-keeplane-gateway-credential` and
@@ -182,10 +201,8 @@ apart. Follow these rules:
 
 An agentgateway example, the way the
 [class mode cases](../../tests/integration/existing-gateway-class-mode-cases.md)
-run it. `keeplane-checks` is the private address that serves both
-backend paths, and `/key-check` is your check that compares the Bearer value
-with Keeplane's runtime key. Add the route check's `backendAuth` block to the
-backend check too:
+run it. `keeplane-app:3000` is the Keeplane app's private address, and
+`/secrets/keeplane-gateway-credential` holds the gateway credential:
 
 ```yaml
 binds:
@@ -221,15 +238,21 @@ policies:
     target: {backend: {backend: {name: "llm:model:coder", namespace: ""}}}
     policy:
       extAuthz:                      # marked: the final check; unmarked: the key-only check
-        host: keeplane-checks:3000
+        host: keeplane-app:3000
         failureMode: deny
         includeRequestHeaders: [authorization]
+        policies:
+          backendAuth:
+            key:
+              value: {file: /secrets/keeplane-gateway-credential}
+              location: {header: {name: x-keeplane-gateway-credential, prefix: ""}}
         protocol:
           http:
             path: >-
               "x-keeplane-developer-route" in request.headers
               && request.headers["x-keeplane-developer-route"] == "1"
-              ? "/internal/runtime/authorize/selected" : "/key-check"
+              ? "/internal/runtime/authorize/selected"
+              : "/internal/runtime/authorize/runtime-key"
             addRequestHeaders: {content-type: '"application/json"', ":method": '"POST"'}
             body: >-
               "x-keeplane-developer-route" in request.headers
@@ -242,12 +265,10 @@ llm:
         remove: [authorization, x-keeplane-gateway-credential, x-keeplane-project-id, x-keeplane-developer-route]
 ```
 
-A check has one host, so the address that answers the final check must
-also answer `/key-check`. For example, use a small proxy in front of the
-Keeplane app that answers `/key-check` itself and passes every other path to
-Keeplane; the test fixture does the same. Both of Keeplane's checks read the data-class
-switch, the classes and the approvals on every call, so turning data classes
-off or on applies from the next request.
+Repeat the `final-<model>` policy for each model Keeplane sets up, with that
+model's ID in the body. Both of Keeplane's developer checks read the
+data-class switch, the classes and the approvals on every call, so turning
+data classes off or on applies from the next request.
 
 ## Retry a model that is down
 
@@ -486,7 +507,11 @@ refused calls:
    ```
 
 3. Wait until every app pod reads the new files. Both keys still work, so
-   compare file hashes rather than relying on the check:
+   compare file hashes rather than relying on the check. Until every pod has
+   the new runtime key, the
+   [key-only check](#keep-keeplanes-own-model-check-working) on one pod can
+   refuse another pod's setup request, so an admin's model setup may fail
+   once; it works again when the pods agree:
 
    ```sh
    for pod in $(kubectl -n "$NS" get pods -l app="$RELEASE"-app -o name); do

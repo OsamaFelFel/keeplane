@@ -2,7 +2,7 @@
 
 For the data-class mode cases (tests/integration/existing-gateway-class-mode-cases.md);
 never use for deployment. `serve` runs the real Django app with
-GATEWAY_MODE=existing on 127.0.0.1:8090, where the customer-run gateway's two
+GATEWAY_MODE=existing on 127.0.0.1:8090, where the customer-run gateway's
 checks reach it, and a mock provider on 127.0.0.1:18080. Every other action
 runs in its own process: `admin` makes one signed-in admin request to the
 served app over HTTP, as the admin's browser does, so the switch and the
@@ -41,9 +41,9 @@ APP = "http://127.0.0.1:8090"
 # Models the customer registers on its own gateway. Keeplane sets them up
 # (or not) through its admin API; it never adds them to the gateway here.
 MODELS = ("coder", "reviewer", "late-coder")
-# The gateway's own setup check for Keeplane's model probe, which carries the
-# gateway's runtime key rather than a developer session (see the cases).
-SETUP_PROBE = "/internal/fixture/setup-probe"
+# Keeplane's key-only check, which the gateway's final check on each model
+# calls for unmarked requests: Keeplane's own setup probe (see the cases).
+KEY_ONLY = "/internal/runtime/authorize/runtime-key"
 FORWARD_NEVER = (
     "authorization",
     "x-keeplane-gateway-credential",
@@ -150,23 +150,21 @@ def migrate():
 
 
 def wrap(application):
-    admin_key = Path(os.environ["GATEWAY_RUNTIME_KEY_FILE"]).read_text().strip()
+    """Record what Keeplane's checks decided; the app itself answers them."""
 
     def recorded(environ, start_response):
         path = environ.get("PATH_INFO", "")
-        raw = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
-        environ["wsgi.input"] = io.BytesIO(raw)
-        if path == SETUP_PROBE:
-            # Only the app's own probe, with the gateway's runtime key.
-            allowed = environ.get("HTTP_AUTHORIZATION") == "Bearer " + admin_key
-            append("setup_probes", allowed)
-            start_response(
-                "200 OK" if allowed else "403 Forbidden",
-                [("Content-Type", "application/json"), ("Content-Length", "2")],
-            )
-            return [b"{}"]
+        if path == KEY_ONLY:
+
+            def probe(status, headers, exc_info=None):
+                append("setup_probes", status.startswith("200 "))
+                return start_response(status, headers, exc_info)
+
+            return application(environ, probe)
         if not path.startswith("/internal/runtime/authorize"):
             return application(environ, start_response)
+        raw = environ["wsgi.input"].read(int(environ.get("CONTENT_LENGTH") or 0))
+        environ["wsgi.input"] = io.BytesIO(raw)
         metadata = json.loads(raw or b"{}")
 
         def record(status, headers, exc_info=None):
