@@ -43,8 +43,11 @@ time it lets a developer's request through to a model: the last check before
 the gateway sends the request on. Choose **Model answers** under **Show** to
 list only these. Each record shows the developer's username, the time, and the
 model and project, for example
-`Request sent to model gpt-4.1; project payments-api`. Search finds the
-developer, model or project.
+`Request in payments-api sent to gpt-4.1`. Search finds the
+developer, model or project. Records written before 10 November 2026 keep the
+words they were stored with, for example
+`Request sent to model gpt-4.1; project payments-api`; upgrading doesn't
+rewrite them.
 
 A record means the request was sent, not that the model answered it: a
 provider error after the check is still recorded. One coding task usually

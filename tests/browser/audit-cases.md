@@ -9,5 +9,6 @@ These cases use a real Chromium browser and the locally built React UI. Audit AP
 | AU-UI-03 | Search records, filter to break-glass sign-ins, page through records, then narrow the window to 320px. | The table follows the API results; only its own frame scrolls horizontally, fields stay at least 44px tall, and desktop/narrow screenshots remain stable. |
 | AU-UI-04 | Make an optional switch write fail, then make a filtered records read fail. | The switch returns to its confirmed value, an error appears, and the table does not present old rows as filtered results. |
 | AU-UI-05 | As soon as Audit records appear, click Next and wait for the initial search timer to settle. | Page 2 remains selected; the timer cannot return the table to page 1. |
+| AU-UI-06 | Choose **Model answers** under Show when the API returns a new record and one stored before 10 November. | The new record reads "Request in payments-api sent to gpt-4.1" as `Audit.dc.html` shows it; the older one still reads "Request sent to model gpt-4.1; project payments-api", exactly as stored (D179). |
 
 The live API, persistence, access, and sign-in storage cases are in [Audit cases](../e2e/audit-cases.md).

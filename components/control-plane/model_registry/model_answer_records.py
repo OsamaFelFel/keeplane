@@ -3,10 +3,12 @@
 Owner decision (governance issue #36): a record is written each time the final
 selected-model check lets a developer's request through to a model, in either
 gateway mode: the managed installed check or the customer-run shared
-`/internal/runtime/authorize/selected` check (never both). It names
-the time, the developer, the project and the model, and nothing else: no
-prompt or answer text, no session, gateway or provider key. A failed write
-never blocks the developer; it is logged and the request stays allowed.
+`/internal/runtime/authorize/selected` check (never both). It names the time,
+the developer, the project and the model, and nothing else: no prompt or
+answer text, no session, gateway or provider key. It reads "Request in
+[Project] sent to [Model]" (D179, 10 November 2026); records stored before
+keep their text and are never rewritten. A failed write never blocks the
+developer; it is logged and the request stays allowed.
 """
 
 import logging
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def description(model_id, project_name):
-    return f"Request sent to model {model_id}; project {project_name}"
+    return f"Request in {project_name} sent to {model_id}"
 
 
 def record_sent_request(decision, audit=None):
