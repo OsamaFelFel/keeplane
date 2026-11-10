@@ -44,6 +44,13 @@
   coder's context and no other model is allowed for this project. Make the task
   smaller, or ask your admin to set up a model with a larger context.” (governance
   issue #57).
+- CODE-07 The local runner's context refusal: the llama.cpp server answers a task
+  bigger than its context with a 400, “request (N tokens) exceeds the available
+  context size (M tokens), try increasing it” and the type
+  `exceed_context_size_error`. Whether the runtime's error event carries that
+  message or only the raw body, `code` prints the CODE-05 message, or the CODE-06
+  one when no other model is allowed. Before this case such a task got no ST16
+  message at all.
 - An older server (404), an unavailable server (503) or a malformed list: the
   reason still shows and points to `keeplane models`; no list is printed.
 - A 400 or 403 error, an error without a status, or a successful turn asks

@@ -36,6 +36,18 @@ def api_error(status, message="Service Unavailable"):
 TOO_BIG = api_error(
     400, "This model's maximum context length is 8 tokens. (context_length_exceeded)"
 )
+# The pinned llama.cpp server (compose.yaml), Keeplane's local runner, refusing
+# a 630-token request with a 256-token context, as recorded on 10 November 2026.
+LOCAL_TOO_BIG_BODY = {
+    "error": {
+        "code": 400,
+        "message": "request (630 tokens) exceeds the available context size "
+        "(256 tokens), try increasing it",
+        "type": "exceed_context_size_error",
+        "n_prompt_tokens": 630,
+        "n_ctx": 256,
+    }
+}
 
 
 @pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
@@ -121,6 +133,51 @@ def test_code_06_too_big_without_an_alternative_says_no_other_model_is_allowed(
     connected, runtime, monkeypatch, tmp_path, capsys  # noqa: F811
 ):
     failed_turn(monkeypatch, runtime, TOO_BIG)
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert capsys.readouterr().err.endswith(
+        "This task is too big for coder's context and no other model is allowed for "
+        "this project. Make the task smaller, or ask your admin to set up a model with "
+        "a larger context.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        api_error(400, LOCAL_TOO_BIG_BODY["error"]["message"]),
+        {
+            "type": "error",
+            "error": {
+                "name": "APIError",
+                "data": {
+                    "message": "Bad Request",
+                    "statusCode": 400,
+                    "responseBody": json.dumps(LOCAL_TOO_BIG_BODY),
+                },
+            },
+        },
+    ],
+    ids=["message", "body-only"],
+)
+def test_code_07_a_local_runner_s_context_refusal_is_a_task_too_big(
+    connected, runtime, monkeypatch, tmp_path, capsys, event  # noqa: F811
+):
+    connected.model_ids = ["coder", "large"]
+    connected.alternatives = ["large"]
+    failed_turn(monkeypatch, runtime, event)
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert len(runtime[1]) == 1 and native_model(runtime) == "keeplane/coder"
+    assert capsys.readouterr().err.endswith(
+        "This task is too big for coder's context, so it stopped. Make the task "
+        "smaller, or run `keeplane use <model>` with another model allowed for this "
+        "project: large.\n"
+    )
+
+
+def test_code_07_a_local_runner_s_context_refusal_with_no_other_model(
+    connected, runtime, monkeypatch, tmp_path, capsys  # noqa: F811
+):
+    failed_turn(monkeypatch, runtime, api_error(400, LOCAL_TOO_BIG_BODY["error"]["message"]))
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
     assert capsys.readouterr().err.endswith(
         "This task is too big for coder's context and no other model is allowed for "

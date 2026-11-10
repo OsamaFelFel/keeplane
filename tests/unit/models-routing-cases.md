@@ -104,9 +104,9 @@ or a case named here has no row in its own catalog or no test.
 | ST15 | The rule applies | RT-01, PR-05, RT-14; no client sends a persona yet (there is no Agents spec), so it is proven at the server |
 | ST16 | A model is down | RETRY-01, OUT-01, OUT-02, OUT-03, OUT-07, OUT-10, CODE-03, ALT-01, ALT-02 |
 | ST16 | The model answers on a retry | OUT-04, OUT-05, OUT-06 |
-| ST16 | A task too big for the model | RETRY-02, OUT-08, CODE-05 |
+| ST16 | A task too big for the model | RETRY-02, OUT-08, OUT-11 (local runner), CODE-05, CODE-07 |
 | ST16 | Down, and no other model allowed | ALT-03, CODE-04 |
-| ST16 | Too big, and no other model allowed | CODE-06 |
+| ST16 | Too big, and no other model allowed | CODE-06, CODE-07 |
 | ST17 | See the model | Not built yet: the CLI doesn't show which model answered. The Developer CLI waits for Spec 009 (governance issue #28). |
 | ST17 | Switch the model | Not built yet: the CLI has no switch; `--model` names one task's model. It waits for Spec 009 (governance issue #28). |
 | ST17 | My switch beats Keeplane's picks | Not built yet: the server's order (RT-02, RT-07, PR-05) is on main; the CLI switch waits for Spec 009 (governance issue #28). |

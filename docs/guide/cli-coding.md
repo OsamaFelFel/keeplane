@@ -434,7 +434,9 @@ coder is unavailable right now and no other model is allowed for this project. W
 ```
 
 When the model refuses a task as too big for its context, nothing is retried
-and `code` prints:
+and `code` prints the following. This also covers a local model served by
+llama.cpp, which refuses a request bigger than its context size (its
+`--ctx-size`; 4096 tokens in the Docker preview):
 
 ```text
 This task is too big for coder's context, so it stopped. Make the task smaller, or run `keeplane use <model>` with another model allowed for this project: large.

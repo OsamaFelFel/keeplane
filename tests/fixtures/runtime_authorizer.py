@@ -58,13 +58,26 @@ CONTEXT_TOO_BIG = {
         "code": "context_length_exceeded",
     }
 }
+# The pinned llama.cpp server's own context-size refusal (OUT-11), as it
+# answered a 630-token request with a 256-token context on 10 November 2026.
+LOCAL_CONTEXT_TOO_BIG = {
+    "error": {
+        "code": 400,
+        "message": "request (630 tokens) exceeds the available context size "
+        "(256 tokens), try increasing it",
+        "type": "exceed_context_size_error",
+        "n_prompt_tokens": 630,
+        "n_ctx": 256,
+    }
+}
 
 
 def outage_step(handler, body):
     """Play the next scripted provider failure; return True if it answered.
 
     Steps are an HTTP status such as "503", "slow" (answer after the gateway's
-    per-attempt timeout), "context" (a context-length refusal), "mid" (drop a
+    per-attempt timeout), "context" (a context-length refusal), "local-context"
+    (the local runner's context-size refusal), "mid" (drop a
     stream after its first event) or "ok" (answer normally).
     """
     script = STATE / "outage-script"
@@ -85,7 +98,8 @@ def outage_step(handler, body):
 
         send_failed_stream(handler, body, "mid")
         return True
-    status, data = (400, CONTEXT_TOO_BIG) if step == "context" else (int(step), None)
+    refusals = {"context": CONTEXT_TOO_BIG, "local-context": LOCAL_CONTEXT_TOO_BIG}
+    status, data = (400, refusals[step]) if step in refusals else (int(step), None)
     data = json.dumps(
         data or {"error": {"message": "Synthetic outage", "type": "server_error"}}
     ).encode()
@@ -531,7 +545,7 @@ def command(action, arguments):
             time.sleep(0.1)
     elif action == "outage":
         steps = json.loads(arguments)
-        allowed = {"ok", "slow", "context", "mid", "429"} | {
+        allowed = {"ok", "slow", "context", "local-context", "mid", "429"} | {
             str(code) for code in range(500, 600)
         }
         assert isinstance(steps, list) and set(steps) <= allowed

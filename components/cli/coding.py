@@ -76,8 +76,13 @@ NO_OTHER_MODEL = {
                 "allowed for this project. Make the task smaller, or ask your admin "
                 "to set up a model with a larger context."),
 }
+# How providers and runners word a context-length refusal. The llama.cpp
+# server, Keeplane's local runner, answers "request (N tokens) exceeds the
+# available context size (M tokens), try increasing it" with the error type
+# "exceed_context_size_error".
 CONTEXT_SIGNS = ("context_length_exceeded", "maximum context length", "context window",
-                 "contextoverflow", "prompt is too long", "too many tokens")
+                 "contextoverflow", "prompt is too long", "too many tokens",
+                 "exceeds the available context size", "exceed_context_size_error")
 
 REASONS = {
     "missing": "No provider key is added for {requested}",
