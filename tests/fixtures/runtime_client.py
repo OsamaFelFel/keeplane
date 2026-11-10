@@ -71,8 +71,14 @@ try:
             )
             raise SystemExit(0)
 except HTTPError as error:
-    error.read()
+    raw = error.read(65537)
     status = error.code
+    if options.get("observe_error"):
+        # The error body as the gateway passed it on, for the outage cases.
+        if len(raw) > 65536:
+            raise RuntimeError("Disposable error response is too large")
+        print(json.dumps({"status": status, "body": raw.decode("utf-8", "replace")}))
+        raise SystemExit(0)
     if options.get("observe_credentials"):
         print(
             json.dumps(

@@ -29,8 +29,10 @@ python -m pytest tests/integration/test_native_runtime_protocol.py -m live -q
 ```
 
 The failure cases check that a failed stream is visible and goes nowhere else.
-This gateway path has no fallback configured, so they do not show a task moving
-to another model when its model is down; that behaviour is still open (task 004-04).
+This gateway path has no fallback configured, and none is wanted: by the owner's
+decision of 31 October 2026 (Spec 004 ST16), Keeplane never moves a task to
+another model when its model is down. The retries and the stop are in the
+[outage cases](native-runtime-outage-cases.md).
 
 The fixture removes its temporary containers, networks and databases on failure.
 Generated reports stay outside Git. This proves bounded protocol transport and

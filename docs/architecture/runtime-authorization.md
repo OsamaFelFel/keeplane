@@ -588,8 +588,12 @@ timeout, with no other timeout set. It normalises only the native spelling:
 codes as numbers, text or text with a reason phrase, and durations such as
 `500ms`, `0.5s`, `1m0s` or seconds and nanoseconds. Anything else is refused.
 
-After the retries, the CLI reads the runtime's error event. A remaining 429 or
-5xx, or a context-length refusal, makes it ask
+After the retries, the CLI reads the runtime's error event. A context-length
+refusal is recognised by the providers' own wording in that event, such as
+`context_length_exceeded`, "maximum context length" or "prompt is too long", and
+llama.cpp's "exceeds the available context size" (`exceed_context_size_error`)
+for a local model; it wins over the status. A remaining 429 or 5xx, or a
+context-length refusal, makes it ask
 `GET /api/runtime/projects/{project_id}/model-alternatives?model_id=ID`. The
 server authorizes the developer, project and requested model, then calls
 `next_allowed` repeatedly, each time skipping every model already listed, so

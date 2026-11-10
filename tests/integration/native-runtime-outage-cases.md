@@ -17,7 +17,8 @@ allowed for the project's class and up, so any switch would be visible.
 | OUT-05 | 429, then an answer | 200 after two contacts. |
 | OUT-06 | 503, then an answer, while streaming | 200 stream after two contacts: no byte had been sent. The answer arrives whole, with its final event. |
 | OUT-07 | No headers within the attempt timeout, three times | 504 after three contacts with Private only. |
-| OUT-08 | A context-length refusal (400) | 400 at once, one contact, no retry. |
+| OUT-08 | A context-length refusal (400) | 400 at once, one contact, no retry. The CLI reads the body the gateway passes on as a task too big for the model. |
+| OUT-11 | The local runner's context-size refusal: llama.cpp's own 400 body, "request (630 tokens) exceeds the available context size (256 tokens), try increasing it" (`exceed_context_size_error`), recorded from the pinned image | 400 at once, one contact, no retry, and the CLI reads it as too big, never as down. |
 | OUT-09 | A stream fails after its first event | The client sees the partial answer, never shown as finished: the stream breaks or ends with no final event. One contact, nothing sent again. |
 | OUT-10 | Private's address refuses connections | A 5xx after three selected-model checks for Private; no provider answers and Public receives nothing. |
 
@@ -26,7 +27,8 @@ decision with the gateway policy that asked for it (entry or selected model);
 the label is set by the gateway configuration, never by the client. Every
 contact had exactly one allowed selected-model check for Private, and the entry
 check allowed the request, and no developer session reaches the provider. The
-report records statuses, model names and script steps only.
+report records statuses, model names and script steps only, and for OUT-08 and
+OUT-11 how the CLI reads the refusal (`cli_problem`).
 
 Use the [native fixture prerequisites](native-runtime-authorization-cases.md),
 then run:

@@ -10,6 +10,7 @@ import json
 import pytest
 from integrations.gateway.runtime_config import RETRY_ATTEMPTS, outage_retry
 
+from components.cli import coding
 from tests.integration.test_native_runtime_authorization import gateway_config
 from tests.support.native_runtime_trial import native_runtime_trial
 
@@ -79,6 +80,7 @@ CASES = {
     "stream-recovers": (["503", "ok"], True, {200}, 2),
     "timeout": (["slow"] * 3, False, {504}, 3),
     "too-big": (["context"], False, {400}, 1),
+    "too-big-local": (["local-context"], False, {400}, 1),
 }
 # The case each scenario reports, from native-runtime-outage-cases.md.
 CASE_IDS = {
@@ -90,7 +92,22 @@ CASE_IDS = {
     "stream-recovers": "OUT-06",
     "timeout": "OUT-07",
     "too-big": "OUT-08",
+    "too-big-local": "OUT-11",
 }
+
+
+def runtime_error(body):
+    """The coding runtime's error event for a refused request, as CODE-05 models it."""
+    message = json.loads(body)["error"]["message"]
+    return json.dumps(
+        {
+            "type": "error",
+            "error": {
+                "name": "APIError",
+                "data": {"message": message, "statusCode": 400, "responseBody": body},
+            },
+        }
+    )
 
 
 @pytest.mark.live
@@ -122,7 +139,10 @@ def test_a_down_model_is_retried_twice_and_never_switched(
         # Public is allowed and up: it must still receive nothing.
         trial.call("allow_public")
         trial.call("outage", json.dumps(script))
-        response = trial.probe({"body": body, "timeout": 20, "observe_protocol": stream})
+        too_big = case.startswith("too-big")
+        response = trial.probe(
+            {"body": body, "timeout": 20, "observe_protocol": stream, "observe_error": too_big}
+        )
         status = response if isinstance(response, int) else response["status"]
         observed = trial.call("summary")
         report.update(
@@ -153,6 +173,12 @@ def test_a_down_model_is_retried_twice_and_never_switched(
         if stream:
             # The answer after the retry arrives whole, with its final event.
             assert finished_stream(response)
+        if too_big:
+            # The gateway passes the refusal on, and the CLI reads it as a task
+            # too big for the model, not as a model that is down.
+            problem = coding.model_problem(runtime_error(response["body"]))
+            report["cli_problem"] = problem
+            assert problem == "too_big"
         report["passed"] = True
         save_report()
 
