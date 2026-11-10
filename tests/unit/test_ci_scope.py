@@ -180,6 +180,26 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("paths-ignore:", text)
         self.assertNotIn("pull_request_target:", text)
 
+    def test_listed_sign_in_and_runtime_files_must_report_cases(self):
+        text = (ROOT / ".github/workflows/checks.yml").read_text()
+        sign_in = text.split("\n  cli-sign-in:\n", 1)[1].split(
+            "\n  coding-runtime:\n", 1
+        )
+        job, runtime = sign_in
+        # One list of files: the container gets it, pytest runs it, and the
+        # last step fails if a file on it reports no case.
+        self.assertIn("      SIGN_IN_TESTS: >-\n", job)
+        self.assertIn("            -e SIGN_IN_TESTS \\\n", job)
+        self.assertIn("                $SIGN_IN_TESTS \\\n", job)
+        self.assertIn('os.environ["SIGN_IN_TESTS"].split()', job)
+        self.assertIn("sys.exit(1 if skipped or empty else 0)", job)
+        listed = job.split("SIGN_IN_TESTS: >-\n", 1)[1].split("    steps:", 1)[0]
+        for name in listed.split():
+            self.assertTrue((ROOT / name).is_file(), name)
+        # Every test the coding-runtime file defines must run.
+        self.assertIn("python3 - tests/e2e/test_cli_runtime.py", runtime)
+        self.assertIn("sys.exit(1 if defined - ran or not defined else 0)", runtime)
+
 
 if __name__ == "__main__":
     unittest.main()

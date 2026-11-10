@@ -426,6 +426,19 @@ jobs:
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      # The files this job runs. The last step fails if one reports no case.
+      SIGN_IN_TESTS: >-
+        tests/integration/test_cli_oauth_identity.py
+        tests/integration/test_cli_oauth_browser.py
+        tests/integration/test_cli_oauth_device.py
+        tests/integration/test_cli_oauth_journey.py
+        tests/integration/test_cli_oauth_key_journey.py
+        tests/integration/test_cli_device_journey.py
+        tests/integration/test_cli_admin_sign_in.py
+        tests/integration/test_cli_sign_in_again.py
+        tests/integration/test_cli_sign_in_readiness.py
+        tests/integration/test_developer_usage.py
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -445,6 +458,7 @@ jobs:
             -e KEEPLANE_CLI_OAUTH_ENABLED=1 \
             -e KEEPLANE_DEVICE_JOURNEY_REQUIRED=1 \
             -e KEEPLANE_TEST_REPORT_DIR=/tmp/reports \
+            -e SIGN_IN_TESTS \
             --entrypoint sh \
             python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a \
             -euc '
@@ -452,26 +466,31 @@ jobs:
               /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r tests/requirements.txt
               /tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --no-deps -r components/control-plane/requirements-cli-auth.txt
               /tmp/venv/bin/python -m pytest -m "optional and live" -p no:cacheprovider -rs \
-                tests/integration/test_cli_oauth_identity.py \
-                tests/integration/test_cli_oauth_browser.py \
-                tests/integration/test_cli_oauth_device.py \
-                tests/integration/test_cli_oauth_journey.py \
-                tests/integration/test_cli_oauth_key_journey.py \
-                tests/integration/test_cli_device_journey.py \
-                tests/integration/test_cli_admin_sign_in.py \
-                tests/integration/test_cli_sign_in_again.py \
-                tests/integration/test_cli_sign_in_readiness.py \
-                tests/integration/test_developer_usage.py \
+                $SIGN_IN_TESTS \
                 --junitxml=test-results/cli-sign-in/junit.xml
             '
-      - name: Fail if a sign-in case was skipped
+      - name: Fail if a sign-in case was skipped or a file ran no case
         # Only the full coding journey may skip: it needs the native runtime,
-        # which the coding-runtime job checks.
+        # which the coding-runtime job checks. A file whose tests the -m
+        # expression deselects, or that collects none, fails.
         run: |
           python3 - test-results/cli-sign-in/junit.xml <<'EOF'
+          import os
           import sys
           import xml.etree.ElementTree as ET
 
+          ran = {case.get("classname", "") for case in ET.parse(sys.argv[1]).iter("testcase")}
+          empty = [
+              name
+              for name in os.environ["SIGN_IN_TESTS"].split()
+              if not any(
+                  module == name[:-3].replace("/", ".")
+                  or module.startswith(name[:-3].replace("/", ".") + ".")
+                  for module in ran
+              )
+          ]
+          for name in empty:
+              print(f"No sign-in case ran from {name}", file=sys.stderr)
           skipped = [
               case.get("name")
               for case in ET.parse(sys.argv[1]).iter("testcase")
@@ -482,7 +501,7 @@ jobs:
           ]
           for name in skipped:
               print(f"Sign-in case was skipped: {name}", file=sys.stderr)
-          sys.exit(1 if skipped else 0)
+          sys.exit(1 if skipped or empty else 0)
           EOF
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -531,12 +550,25 @@ jobs:
               /tmp/venv/bin/python -m pytest tests/e2e/test_cli_runtime.py -m optional \
                 -p no:cacheprovider -s -rs -v --junitxml=test-results/coding-runtime/junit.xml
             '
-      - name: Fail if a coding-runtime case was skipped
+      - name: Fail if a coding-runtime case was skipped or did not run
+        # Every test the file defines must run, so none can be deselected.
         run: |
           if grep -q '<skipped' test-results/coding-runtime/junit.xml; then
             echo "A coding-runtime case was skipped" >&2
             exit 1
           fi
+          python3 - tests/e2e/test_cli_runtime.py test-results/coding-runtime/junit.xml <<'EOF'
+          import ast
+          import sys
+          import xml.etree.ElementTree as ET
+
+          tree = ast.parse(open(sys.argv[1]).read())
+          defined = {n.name for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")}
+          ran = {c.get("name", "").split("[")[0] for c in ET.parse(sys.argv[2]).iter("testcase")}
+          for name in sorted(defined - ran):
+              print(f"Coding-runtime case did not run: {name}", file=sys.stderr)
+          sys.exit(1 if defined - ran or not defined else 0)
+          EOF
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
