@@ -14,6 +14,7 @@ from model_registry import runtime_keys
 from model_registry.fingerprints import fingerprint
 from model_registry.key_validation import DjangoProviderKeyValidator
 from model_registry.models import DeveloperProviderKey, ModelApproval
+from model_registry.registration import EXISTING_GATEWAY_KEYS
 
 from tests.integration.test_provider_key_validation import KEY, setup
 from tests.integration.test_provider_key_validation import provider as provider
@@ -334,10 +335,7 @@ def test_pk_03_customer_run_gateway_refuses_own_keys_before_any_contact(
     response = send(api, "put", body={"model_id": "model", "key": KEY + "-replacement"})
     assert response.status_code == 403
     assert response.json() == {"error": runtime_keys.OWN_KEYS_UNSUPPORTED}
-    assert runtime_keys.OWN_KEYS_UNSUPPORTED == (
-        "Developers' own provider keys need a supported delivery path to the "
-        "customer-run gateway"
-    )
+    assert runtime_keys.OWN_KEYS_UNSUPPORTED == EXISTING_GATEWAY_KEYS["personal"]
     assert KEY.encode() not in response.content
     assert len(api.provider["calls"]) == calls and api.gateway.reads == reads
     assert sorted(path.name for path in api.root.iterdir()) == files

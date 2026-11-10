@@ -30,11 +30,14 @@ from .developer_keys import (
 from .key_validation import DjangoProviderKeyValidator
 from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
 from .policy import ModelPolicyUnavailable
-from .registration import EXISTING_GATEWAY_KEYS
 
-# The same reason Add, Edit and Set up give an admin; the CLI recognises it and
-# explains it to the developer.
-OWN_KEYS_UNSUPPORTED = EXISTING_GATEWAY_KEYS["personal"]
+# The same reason Add, Edit and Set up give an admin (registration.py, kept
+# separate so this module imports no gateway call site); the CLI recognises it
+# and explains it to the developer.
+OWN_KEYS_UNSUPPORTED = (
+    "Developers' own provider keys need a supported delivery path to the "
+    "customer-run gateway"
+)
 
 
 def strict_object(pairs):
