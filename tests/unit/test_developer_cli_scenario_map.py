@@ -47,6 +47,7 @@ JOBS = {
     "cli-sign-in": CHECKS,
     "coding-runtime": CHECKS,
     "live-gateway": LIVE_PREVIEW,
+    "release-journey": CHECKS,
     "kind": KUBERNETES_LIVE,
 }
 # Each case prefix's catalog, the test file that runs it and the CI job that
@@ -58,6 +59,11 @@ SOURCES = {
         "e2e/developer-journey-cases.md",
         "e2e/test_developer_journey.py",
         "live-gateway",
+    ),
+    "DJR": (
+        "e2e/developer-journey-release-cases.md",
+        "e2e/test_developer_journey_release.py",
+        "release-journey",
     ),
     "PSI-LIVE": (
         "e2e/preview-sign-in-live-cases.md",
@@ -131,6 +137,7 @@ CASE_SOURCES = {
 # that runs them and, where the suite declares them, its list of cases.
 SUITE_TESTS = {
     "DEV": ("test_developer_journey", "CASES"),
+    "DJR": ("test_developer_journey_release", "INSTALLS"),
     "PSI-LIVE": ("test_preview_sign_in_live", "CASES"),
     "KDEV": ("test_kind_protected", "CASES"),
     "KEY-09": ("test_native_api_keys_only", None),

@@ -1,6 +1,7 @@
 """Real Git changes and workflow failure behavior for documentation selection."""
 
 import json
+import re
 import runpy
 import subprocess
 import tempfile
@@ -172,6 +173,7 @@ class WorkflowTests(unittest.TestCase):
             "cli-sign-in",
             "sign-in-outage",
             "coding-runtime",
+            "release-journey",
         ):
             self.assertIn("  " + job + ":\n    needs: scope\n    " + gate, text)
         # The backend check reports the shards' result under its own name.
@@ -200,6 +202,22 @@ class WorkflowTests(unittest.TestCase):
         # Every test the coding-runtime file defines must run.
         self.assertIn("python3 - tests/e2e/test_cli_runtime.py", runtime)
         self.assertIn("sys.exit(1 if defined - ran or not defined else 0)", runtime)
+
+    def test_release_journey_runs_every_case_with_the_runtime(self):
+        text = (ROOT / ".github/workflows/checks.yml").read_text()
+        job = re.split(
+            r"\n  [a-z-]+:\n    needs:", text.split("\n  release-journey:\n", 1)[1]
+        )[0]
+        # Task 009-15: both gateway modes, with the pinned runtime, and the
+        # last check fails if a case was skipped or did not run.
+        self.assertIn("tests/e2e/test_developer_journey_release.py -m live", job)
+        self.assertIn("--collect-only", job)
+        self.assertIn("-e KEEPLANE_OPENCODE_V2_BIN=/opt/runtime/opencode", job)
+        self.assertIn("RUNTIME_BINARY_SHA256: a2dee30005064075", job)
+        self.assertIn("--target postgres-cli-auth-trial", job)
+        self.assertIn(
+            "sys.exit(1 if expected - ran or skipped or not expected else 0)", job
+        )
 
     def test_restart_and_outage_cases_fail_on_skip_or_a_missing_case(self):
         text = (ROOT / ".github/workflows/checks.yml").read_text()
