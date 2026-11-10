@@ -610,22 +610,31 @@ node drain) doesn't stop model calls:
   never handed a shorter answer marked complete. Keeplane and the gateway don't
   resume or resend it, because part of the answer has already been delivered.
   The developer sends the request again and another copy answers it in full.
-  In a rolling restart a copy first gets 30 seconds to finish what it has
-  started, so only longer replies are cut.
+  In a rolling restart a copy can finish what it has started within
+  Kubernetes' default shutdown period (30 seconds; the chart doesn't change
+  it), so only longer replies are cut. The tests stop copies abruptly and
+  don't check this period.
 - **Admin changes** while the copy is down: narrowing a model's data classes,
   moving it to each developer's own key and removing it apply at once. Adding
-  a model or widening its access is refused with "Not every gateway copy
-  confirmed it: 1 of 2 did. Nothing was saved." (or "… confirmed the change …");
-  try again once every copy is ready. A removal stands but says Keeplane
-  couldn't confirm it's gone from every copy.
-- **When the copy comes back** it reads the models from the gateway database
-  the copies share, so it serves the current setup, including changes made
-  while it was down. Nothing needs to be redone.
+  a model is refused with "Not every gateway copy confirmed it: 1 of 2 did.
+  Nothing was saved. Check the gateway and try again." Widening a model's
+  access is refused with "Not every gateway copy confirmed the change: 1 of 2
+  did. Nothing was saved, and its earlier setup stays. Check the gateway and
+  try again." Try again once every copy is ready. A removal stands but says
+  Keeplane couldn't confirm it's gone from every copy.
+- **When the copy comes back**, Kubernetes starts a new copy in its place, and
+  it reads the models from the gateway database the copies share. It serves
+  the current setup, including changes made while the old copy was down.
+  Nothing needs to be redone.
 
 Check which copies are ready with
 `kubectl -n "$NS" get pods -l app.kubernetes.io/component=standalone`. CI runs
 these cases on a kind cluster on every change (K8S-03, K8S-18 to K8S-22 in the
-[local Kubernetes cases](../../tests/e2e/kubernetes-cases.md)).
+[local Kubernetes cases](../../tests/e2e/kubernetes-cases.md)): new calls, a
+cut-off stream, narrowing, removal, refused adds and widenings, and the
+returned copy. Moving a model to each developer's own key while a copy is down
+is covered by the unit case GC-17 in the
+[gateway copy cases](../../tests/unit/gateway-copy-cases.md), not on a cluster.
 
 **Existing mode.** If the customer-run gateway serves through several copies,
 list each copy's own management origin in `gateway.copyUrls`:
