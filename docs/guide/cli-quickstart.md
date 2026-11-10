@@ -4,7 +4,10 @@ This guide takes a developer from nothing to a first coding task on the local
 preview: sign in, choose a model, code in your repo, see your usage and sign
 out. Your repo needs no setup in Keeplane. The same steps are checked
 automatically as DEV-01 to DEV-05 in the
-[developer journey cases](../../tests/e2e/developer-journey-cases.md).
+[developer journey cases](../../tests/e2e/developer-journey-cases.md). The
+[Developer CLI scenario map](../../tests/e2e/developer-cli-cases.md#spec-009-scenarios-st29st31)
+names, for each Spec 009 scenario, the checks that prove it and what isn't
+proven yet.
 
 ## Before you start
 
