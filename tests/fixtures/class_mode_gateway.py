@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
 from urllib.error import HTTPError
-from urllib.request import HTTPCookieProcessor, Request, build_opener
+from urllib.request import HTTPCookieProcessor, ProxyHandler, Request, build_opener
 from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -44,6 +44,12 @@ MODELS = ("coder", "reviewer", "late-coder")
 # The gateway's own setup check for Keeplane's model probe, which carries the
 # gateway's runtime key rather than a developer session (see the cases).
 SETUP_PROBE = "/internal/fixture/setup-probe"
+FORWARD_NEVER = (
+    "authorization",
+    "x-keeplane-gateway-credential",
+    "x-keeplane-project-id",
+    "x-keeplane-developer-route",
+)
 
 
 def append(name, value):
@@ -64,6 +70,15 @@ class Provider(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         append("calls", body["model"])
+        # Keeplane's headers must be removed before the provider.
+        append(
+            "forwarded",
+            sorted(
+                name
+                for name in FORWARD_NEVER
+                if name in {key.lower() for key in self.headers}
+            ),
+        )
         data = json.dumps(
             {
                 "id": "fixture",
@@ -250,6 +265,36 @@ def admin(request):
     return {"status": status, "body": body}
 
 
+def direct(request):
+    """The developer's own session sent straight to the gateway's model port.
+
+    Only Keeplane and the gateway share this network namespace; a developer
+    can't reach it. This shows what the port's own check does if one could.
+    """
+    stored = json.loads((STATE / "credential").read_text())
+    headers = {
+        "Authorization": "Bearer " + stored["token"],
+        "Content-Type": "application/json",
+        "X-Keeplane-Project-ID": stored["classed"],
+        **request.get("headers", {}),
+    }
+    sent = Request(
+        "http://127.0.0.1:4000/v1/chat/completions",
+        json.dumps(
+            {
+                "model": request["model"],
+                "messages": [{"role": "user", "content": "synthetic"}],
+            }
+        ).encode(),
+        headers,
+    )
+    try:
+        with build_opener(ProxyHandler({})).open(sent, timeout=10) as response:
+            return {"status": response.status}
+    except HTTPError as error:
+        return {"status": error.code}
+
+
 def command(action, argument):
     if action == "admin":
         return admin(json.loads(argument))
@@ -258,9 +303,12 @@ def command(action, argument):
             "calls": rows("calls"),
             "decisions": rows("decisions"),
             "setup_probes": rows("setup_probes"),
+            "forwarded": rows("forwarded"),
         }
+    if action == "direct":
+        return direct(json.loads(argument))
     if action == "reset":
-        for name in ("calls", "decisions", "setup_probes"):
+        for name in ("calls", "decisions", "setup_probes", "forwarded"):
             (STATE / name).unlink(missing_ok=True)
         return {"reset": True}
     if action == "projects":

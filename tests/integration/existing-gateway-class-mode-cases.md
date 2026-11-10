@@ -37,6 +37,7 @@ only the project and the model, never the prompt.
 | XCM-05 | Turn data classes on again and repeat the requests. | The same four classes, with the same IDs, names and approved models, and Payments is Confidential again. `coder` is sent; `late-coder` is refused for Payments and sent for Docs site; the changed request is refused at the final check; `reviewer` is not sent. |
 | XCM-06 | Turn data classes off and on a second time. | Exactly what XCM-05 found: no starter class is added again and nothing is approved by the switch. |
 | XCM-07 | After all of the above, check `customer-owned`. | It was never set up and no class lists it. It is refused for both projects, as it was in every state above. |
+| XCM-08 | With classes on, send Payments' request for `coder` that the gateway changes to `reviewer`, three times, with the developer marker forged as `0`, empty and left out. Send an allowed `coder` request with the marker forged. Then send the developer's own session straight to the gateway's model port (`gateway.url`), first from the developer's network and then from inside the gateway's own network. | All three changed requests pass the route check for `coder`, and the final check refuses `reviewer`, so nothing is sent: the developer listener sets the marker over any value. The allowed request is sent, and none of the marker, the session, the gateway credential or the project header reaches the provider. The model port can't be reached from the developer's network; from inside, the unmarked request goes to the key-only check, which refuses it, and nothing is sent. |
 
 Run it with Docker, the locked images and the PostgreSQL app image
 (`keeplane-preview:postgres-local`, or the image in
@@ -52,13 +53,21 @@ CI's PostgreSQL job runs both databases after building that image and fails
 if either is skipped. The run writes one small JSON report per database under
 `test-results/`.
 
-What the gateway checks on each model must not do: Keeplane's own model setup
-sends one short request through the gateway's model address (`gateway.url`)
-with the gateway's runtime key and no developer session. A final check that
-also runs for that request refuses it, and setup fails with "The model didn't
-answer. Nothing was saved." This test's gateway marks developer traffic on its
-developer listener and sends only marked requests to the final check, as
-Keeplane's managed gateway does.
+Keeplane's own model setup sends one short request through the gateway's
+model address (`gateway.url`) with the gateway's runtime key and no developer
+session. A final check that also runs for that request refuses it, and setup
+fails with "The model didn't answer. Nothing was saved." So this test's
+gateway follows the rules in
+[keep Keeplane's own model check working](../../docs/guide/gateway-configuration.md#keep-keeplanes-own-model-check-working),
+as Keeplane's managed gateway does:
+
+- The developer listener sets the marker with `set`, before routing.
+- The final check on each model runs for marked requests.
+- Unmarked requests get the fixture's key-only check, which admits only
+  Keeplane's runtime key.
+- Each model removes the marker and Keeplane's headers before the provider.
+
+XCM-08 checks that a developer can't use this to skip the final check.
 
 Not covered here: the kind cluster install (the
 [existing-gateway cases](../e2e/existing-gateway-cases.md)), shared provider

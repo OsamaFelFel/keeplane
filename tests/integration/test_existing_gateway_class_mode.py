@@ -1,6 +1,6 @@
 """Spec 005 ST18 data-class mode on a customer-run gateway, on SQLite and PostgreSQL.
 
-Cases: tests/integration/existing-gateway-class-mode-cases.md (XCM-01 to XCM-07).
+Cases: tests/integration/existing-gateway-class-mode-cases.md (XCM-01 to XCM-08).
 A real pinned agentgateway, configured as a customer would run it, calls
 Keeplane's shared route and final checks; the admin turns data classes off and
 on through Keeplane's admin API in separate processes.
@@ -318,11 +318,14 @@ def trial(request, tmp_path):
         result = fixture("admin", {"method": method, "path": path, "body": body})
         return result["status"], result["body"]
 
-    def ask(model, project="classed", rewrite=False):
+    def ask(model, project="classed", rewrite=False, marker=None):
         """A developer request through the gateway's developer route."""
         headers = {"X-Keeplane-Project-ID": projects[project]}
         if rewrite:
             headers["x-fixture-rewrite"] = "reviewer"
+        if marker is not None:
+            # A developer's own value for the gateway's developer marker.
+            headers["x-keeplane-developer-route"] = marker
         fixture("reset")
         status = json.loads(
             dc(
@@ -351,6 +354,40 @@ def trial(request, tmp_path):
                 for row in seen["decisions"]
             ],
             "keys": sorted({tuple(row["keys"]) for row in seen["decisions"]}),
+            "forwarded": seen["forwarded"],
+        }
+
+    def direct(model, headers=None):
+        """A developer's session sent straight to the gateway's model port."""
+        fixture("reset")
+        reached = json.loads(
+            dc(
+                "exec",
+                "-T",
+                "client",
+                "python",
+                "-c",
+                "import json, urllib.request\n"
+                "try:\n"
+                " urllib.request.urlopen('http://gateway:4000/v1/chat/completions', b'{}', timeout=2)\n"
+                " print(json.dumps(True))\n"
+                "except urllib.error.HTTPError:\n"
+                " print(json.dumps(True))\n"
+                "except OSError:\n"
+                " print(json.dumps(False))",
+            )
+        )
+        status = fixture("direct", {"model": model, "headers": headers or {}})["status"]
+        seen = fixture("summary")
+        return {
+            "reachable_from_client": reached,
+            "status": status,
+            "sent_to": seen["calls"],
+            "checks": [
+                (row["check"], row["model_id"], row["status"])
+                for row in seen["decisions"]
+            ],
+            "key_only_check": seen["setup_probes"],
         }
 
     projects = {}
@@ -383,6 +420,7 @@ def trial(request, tmp_path):
                 "admin": staticmethod(admin),
                 "ask": staticmethod(ask),
                 "fixture": staticmethod(fixture),
+                "direct": staticmethod(direct),
                 "projects": projects,
             },
         )
@@ -582,4 +620,27 @@ def test_class_mode_on_off_on_through_a_customer_run_gateway(trial, report_file)
         "customer-owned"
     )
     observed["XCM-07"] = "pass"
+
+    # XCM-08: a developer can't skip the final check. The listener sets the
+    # marker over any value the client sends, and the model port's check
+    # for unmarked requests admits only Keeplane's runtime key.
+    for marker in ("0", None, ""):
+        assert outcome(trial.ask("coder", rewrite=True, marker=marker)) == {
+            "status": 403,
+            "sent_to": [],
+            "checks": [("route", "coder", 200), ("final", "reviewer", 403)],
+        }, marker
+    allowed = trial.ask("coder", marker="0")
+    assert outcome(allowed) == sent("coder")
+    # Neither the marker nor Keeplane's credentials reach the provider.
+    assert allowed["forwarded"] == [[]]
+    straight = trial.direct("coder")
+    assert straight == {
+        "reachable_from_client": False,
+        "status": 403,
+        "sent_to": [],
+        "checks": [],
+        "key_only_check": [False],
+    }
+    observed["XCM-08"] = "pass"
     report_file.write_text(json.dumps(observed, indent=2) + "\n")
