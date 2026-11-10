@@ -38,7 +38,7 @@ removed are not admin changes and add no record.
 
 ### Which model requests are recorded
 
-While **Which model answered each task** is on, Keeplane adds one record each
+While **Which model each request was sent to** is on, Keeplane adds one record each
 time it lets a developer's request through to a model: the last check before
 the gateway sends the request on. Choose **Model answers** under **Show** to
 list only these. Each record shows the developer's username, the time, and the

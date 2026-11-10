@@ -38,6 +38,7 @@ CATALOGS = {
     "MA": "integration/model-answer-record-cases.md",
     "PDL-LIVE": "e2e/personal-data-live-cases.md",
     "SC": "integration/settings-change-record-cases.md",
+    "UI-AUD": "unit/ui/cases.md",
 }
 
 

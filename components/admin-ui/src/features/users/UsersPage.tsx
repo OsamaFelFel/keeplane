@@ -45,10 +45,11 @@ export function UsersPage() {
       .finally(() => { if (!cancelled) setBusy(false) })
     return () => { cancelled = true }
   }, [page, search, refresh])
+  const focusChangeRole = (id: string) =>
+    Array.from(tableFrame.current?.querySelectorAll<HTMLButtonElement>('[data-role-for]') ?? []).find(button => button.dataset.roleFor === id)?.focus()
   useEffect(() => {
     if (busy || !roleFocus.current) return
-    const id = roleFocus.current
-    Array.from(tableFrame.current?.querySelectorAll<HTMLButtonElement>('[data-role-for]') ?? []).find(button => button.dataset.roleFor === id)?.focus()
+    focusChangeRole(roleFocus.current)
     roleFocus.current = null
   }, [busy, users])
   useEffect(() => {
@@ -96,6 +97,7 @@ export function UsersPage() {
       <div className="flex gap-3"><Button variant="outline" disabled={page === 1 || busy} onClick={() => setPage(value => value - 1)}>Previous</Button><Button variant="outline" disabled={!hasMore || busy} onClick={() => setPage(value => value + 1)}>Next</Button></div>
     </div>
     <CreateUserDialog open={creating} onOpenChange={setCreating} onCreated={created} returnFocusRef={createTrigger} />
-    <ChangeRoleDialog key={changing?.id ?? "closed"} user={changing} onOpenChange={open => { if (!open) setChanging(null) }} onChanged={changed} />
+    <ChangeRoleDialog key={changing?.id ?? "closed"} user={changing} onOpenChange={open => { if (!open) setChanging(null) }} onChanged={changed}
+      returnFocus={() => { if (changing) focusChangeRole(changing.id) }} />
   </>
 }

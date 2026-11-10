@@ -33,6 +33,7 @@ colocated tests.
 | UI-USERS-02 | Choose Next, then search. | Next asks for page 2; search asks the server for matches from page 1, 25 at a time. |
 | UI-USERS-03 | Change a role from Users. | Users shows the change, and focus goes back to that row's Change role after the table reloads. |
 | UI-USERS-04 | Create a user from Users when Keeplane saves it but the answer is lost, then choose Check, which finds it. | The dialog closes, Users shows the new user with the chosen role, and the user was sent once. |
+| UI-USERS-05 | Open Change role from a row, choose Cancel, open it again with the keyboard, then press Escape. | The dialog opens with focus on the role the user has now. Each time it closes, focus goes back to that row's Change role, as Dialog states asks, and no change is sent. |
 | UI-CSRF-01 | Submit a browser change. | A fresh masked token is sent with same-origin credentials and the original JSON headers. |
 | UI-CSRF-02 | Fail token bootstrap. | No mutation request is sent. |
 | UI-CSRF-03 | Refuse or disconnect a mutation. | The write is not repeated automatically. |
@@ -97,3 +98,14 @@ API; the 1280px and 320px looks are in the
 | DC-UI-10 | Open Data classes with classes on, then with classes off. | With classes on, the page ends with "When Audit records settings changes and held-back requests, every change here and every request detection holds back is recorded." With classes off, that line is hidden with the rest of the class settings. |
 
 The sign-in card title's size, `page-title` 28px on 36px at 600, is checked in a real browser by BR-13 in `tests/browser/users-cases.md`; the rest of the card's look and the failure message's look by BR-15 and BR-16.
+
+## Audit (`AuditPage.test.tsx`)
+
+Spec 006 ST21. The fake server answers like the Audit API with every optional
+kind off; the 1280px and 320px looks are in the
+[browser cases](../../browser/audit-cases.md) (AU-UI-03).
+
+| Case | Plain-English action | Expected result |
+| --- | --- | --- |
+| UI-AUD-01 | Open Audit. | Each record switch reads as `Audit.dc.html` shows it: "Changes to models, routing and data classes" ("Who changed what, and when."), "Requests held back by personal-data detection" ("A reference to the request, whose it was, its project, the class it was handled as and why. The prompt is never stored."), "Which model each request was sent to" ("The model, the developer and the project, when a request is sent. No prompt or answer text.") and "Sign-ins with the break-glass admin" ("When someone signed in with it."). There are no other switches. |
+| UI-AUD-02 | Read the What is recorded section. | Nothing says a model answered or names a task: a Model answers record is written when the request is sent, so a request that later fails still has one (governance issue #36). |
