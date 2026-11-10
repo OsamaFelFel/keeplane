@@ -210,6 +210,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn(suite + " -m live --collect-only -q", job)
         self.assertIn(suite + " -m live -rs --junitxml", job)
         self.assertIn("sys.exit(1 if expected - ran or skipped or not expected else 0)", job)
+        self.assertIn(".read_text().splitlines()", job)
+        self.assertNotIn(".read_text().split())", job)
         self.assertIn("--target postgres-cli-auth-trial -t keeplane-preview:postgres-cli-auth-local", job)
 
 

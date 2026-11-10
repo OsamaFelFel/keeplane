@@ -46,10 +46,7 @@ EXPIRED_CODE = (
 )
 SERVER_DOWN_MORE = coding.SERVER_DOWN.format(more="more ")
 GATEWAY_DOWN_MORE = coding.GATEWAY_DOWN.format(more="more ")
-BUSY = "Keeplane is temporarily unavailable; retry later.\n"
-CANNOT_REACH = (
-    "Cannot reach Keeplane securely; check the server and certificate configuration.\n"
-)
+START_UNAVAILABLE = coding.START_UNAVAILABLE + "\n"
 
 
 def unavailable_reason():
@@ -510,15 +507,20 @@ def test_a_restart_between_two_calls_of_a_task(stack, developer, service):
 
 
 @pytest.mark.parametrize(
-    ("service", "message", "status"),
+    ("service", "message", "statuses"),
     [
-        ("app", SERVER_DOWN_MORE, 403),
-        ("database", SERVER_DOWN_MORE, 503),
-        ("gateway", GATEWAY_DOWN_MORE, 502),
+        ("app", SERVER_DOWN_MORE, {403}),
+        # Keeplane's check answers 503 with PostgreSQL down. When that answer
+        # comes later than the gateway waits for its check, the gateway
+        # refuses the call itself (403, failureMode: deny). Either way no model
+        # is tried.
+        ("database", SERVER_DOWN_MORE, {403, 503}),
+        ("gateway", GATEWAY_DOWN_MORE, {502}),
     ],
+    ids=["app", "database", "gateway"],
 )
 def test_a_task_stops_clearly_when_a_service_goes_down(
-    stack, developer, service, message, status
+    stack, developer, service, message, statuses
 ):
     """SRO-14, SRO-15 and SRO-16."""
     before = signed_in(developer)
@@ -529,7 +531,8 @@ def test_a_task_stops_clearly_when_a_service_goes_down(
         )
     finally:
         stack.start(service)
-    assert (code, sent) == (1, [200, status]), err
+    assert code == 1 and len(sent) == 2 and sent[0] == 200, err
+    assert sent[1] in statuses, (sent, err)
     lines = err.splitlines()
     assert message in lines, err
     # Not mistaken for an expired sign-in, a refused key or a model that is down.
@@ -558,13 +561,13 @@ def test_a_task_with_the_gateway_or_app_down_from_the_start(stack, developer):
         stack.start("gateway")
     # Keeplane's choice of model asks the gateway which models it can use,
     # so the CLI stops before the runtime starts.
-    assert (code, err, sent) == (1, BUSY, [])
+    assert (code, err, sent) == (1, START_UNAVAILABLE, [])
     stack.stop("app")
     try:
         code, out, err, sent = developer.code()
     finally:
         stack.start("app")
     # The CLI checks the sign-in first, so the runtime never starts.
-    assert (code, out, err, sent) == (1, "", CANNOT_REACH, [])
+    assert (code, out, err, sent) == (1, "", START_UNAVAILABLE, [])
     assert stack.provider_calls() == calls
     REPORT["SRO-17"] = "pass"

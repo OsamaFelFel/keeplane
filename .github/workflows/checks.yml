@@ -568,7 +568,8 @@ jobs:
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
-          expected = set(Path(sys.argv[1]).read_text().split())
+          # One node ID per line; IDs are matched exactly, never split on spaces.
+          expected = {line.strip() for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()}
           ran, skipped = set(), set()
           for case in ET.parse(sys.argv[2]).iter("testcase"):
               node = case.get("classname", "").replace(".", "/") + ".py::" + case.get("name")
