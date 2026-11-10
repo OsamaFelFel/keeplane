@@ -16,7 +16,7 @@ from data_classes.models import DataClass, ProjectClass, Settings
 from model_registry import runtime_views
 from model_registry.fingerprints import fingerprint
 from model_registry.models import ModelApproval
-from model_registry.policy import DjangoModelPolicy
+from model_registry.policy import GATEWAY_UNREACHABLE, DjangoModelPolicy
 from projects.models import ProjectUse
 from projects.services import DjangoProjectStore
 
@@ -173,7 +173,10 @@ def test_unknown_context_is_denied(catalog, context):
 def test_gateway_and_storage_outages_do_not_return_stale_catalog(catalog, monkeypatch):
     assert get(catalog).status_code == 200
     catalog.state.status = 503
-    assert get(catalog).status_code == 503
+    response = get(catalog)
+    # The gateway is the cause, so the developer's client can say so.
+    assert response.status_code == 503
+    assert response.json() == GATEWAY_UNREACHABLE
 
     def unavailable(*args, **kwargs):
         raise DatabaseError("Unavailable database")

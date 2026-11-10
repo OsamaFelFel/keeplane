@@ -19,7 +19,7 @@ own key), `public` and `outside`, with no known context windows.
 | RT-08 Switch without own key | The developer switched to `private` but their key is missing | The task goes to the Architect rule's model with reason “missing”; without a persona, to the first allowed model. |
 | RT-09 Nothing allowed | The only model needs the developer's missing key | No model. |
 | RT-10 Invalid requests | Unknown persona or level, an empty model, an unknown field, two personas | 400. |
-| RT-11 Session, project, policy | Invalid session, policy outage, an unregistered or malformed project | 401, 503 “Model routing is unavailable”, 403, 403. |
+| RT-11 Session, project, policy | Invalid session, gateway outage, another policy outage, an unregistered or malformed project | 401, 503 `{"error": "Keeplane's gateway can't be reached", "code": "gateway_unreachable"}` when the gateway can't be read, 503 “Model routing is unavailable”, 403, 403. |
 | RT-12 Project refused | The deployment's access policy refuses the project for this developer | 403 with no model named. |
 | RT-13 No secrets | Any answer | No key, fingerprint, session or key directory appears. |
 | RT-14 Gateway still decides | The routed model is sent through the gateway entry check | It is admitted. |

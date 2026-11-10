@@ -9,7 +9,11 @@ from data_classes.models import ProjectClass
 from model_registry import model_choice, runtime_views
 from model_registry.fingerprints import fingerprint
 from model_registry.models import DeveloperProviderKey, ModelApproval
-from model_registry.policy import DjangoModelPolicy
+from model_registry.policy import (
+    GATEWAY_UNREACHABLE,
+    DjangoModelPolicy,
+    ModelPolicyUnavailable,
+)
 from projects.access import organization_project_access
 
 from tests.integration.test_installed_personal_runtime import KEY
@@ -253,10 +257,21 @@ def test_signed_out_or_unknown_project_is_refused(choice):
     assert ask(choice).status_code == 403
 
 
-def test_policy_outage_returns_no_choice(choice):
+def broken_policy(*args, **kwargs):
+    """Keeplane's own policy can't decide (the gateway answered)."""
+    raise ModelPolicyUnavailable("Model setup is incomplete")
+
+
+def test_policy_outage_returns_no_choice(choice, monkeypatch):
     choice.install("public")
     choice.store.remove("private")
     choice.state.status = 503
+    response = ask(choice)
+    # The gateway is the cause, so the developer's client can say so.
+    assert response.status_code == 503
+    assert response.json() == GATEWAY_UNREACHABLE
+    choice.state.status = 200
+    monkeypatch.setattr(DjangoModelPolicy, "_decide", broken_policy)
     response = ask(choice)
     assert response.status_code == 503
     assert response.json() == {"error": "Model choice is unavailable"}

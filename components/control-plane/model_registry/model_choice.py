@@ -31,7 +31,7 @@ from .authorization import DjangoModelAuthorization, ModelAccessDenied
 from .guard_status import confirmed_everywhere, per_copy_check
 from .installed_runtime import DjangoInstalledRuntimeGate
 from .models import DeveloperProviderKey, ModelApproval, ProviderKeyChoice
-from .policy import ModelPolicyUnavailable
+from .policy import GatewayUnavailable, ModelPolicyUnavailable
 from .provider_keys import DjangoSharedKeyAvailability
 
 
@@ -251,6 +251,8 @@ def project_model_alternatives(request, project_id):
         result = chooser().alternatives(request.auth, project_id, model_id)
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
+    except GatewayUnavailable:
+        return runtime_views.gateway_unreachable()
     except (ModelPolicyUnavailable, StorageUnavailable, DatabaseError):
         return Response({"error": "Model alternatives are unavailable"}, status=503)
     return Response(result)
@@ -274,6 +276,8 @@ def project_model_choice(request, project_id):
         result = chooser().choose(request.auth, project_id, model_id)
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
+    except GatewayUnavailable:
+        return runtime_views.gateway_unreachable()
     except (ModelPolicyUnavailable, StorageUnavailable, DatabaseError):
         return Response({"error": "Model choice is unavailable"}, status=503)
     return Response(result)

@@ -21,7 +21,17 @@ from common.api import IDENTITY, MODEL_GATEWAY
 from common.errors import StorageUnavailable
 from projects.access import organization_project_access
 from projects.services import DjangoProjectStore, ProjectError
-from .policy import DjangoModelPolicy, ModelPolicyUnavailable
+from .policy import (
+    GATEWAY_UNREACHABLE,
+    DjangoModelPolicy,
+    GatewayUnavailable,
+    ModelPolicyUnavailable,
+)
+
+
+def gateway_unreachable():
+    """503 naming the gateway as the cause, so the CLI can say so (ST30)."""
+    return Response(dict(GATEWAY_UNREACHABLE), status=503)
 
 
 def model_policy():
@@ -41,6 +51,8 @@ def project_models(request, project_id):
         return Response({"error": "This project is unavailable"}, status=403)
     try:
         models = model_policy().eligible_model_ids(project_id)
+    except GatewayUnavailable:
+        return gateway_unreachable()
     except (ModelPolicyUnavailable, StorageUnavailable):
         return Response({"error": "Model policy is unavailable"}, status=503)
     return Response(

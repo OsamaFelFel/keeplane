@@ -43,7 +43,8 @@ from . import model_choice
 from .authorization import ModelAccessDenied
 from .levels import LEVEL_NAMES, level_rows
 from .persona_rules import PERSONA_NAMES
-from .policy import ModelPolicyUnavailable
+from .policy import GatewayUnavailable, ModelPolicyUnavailable
+from .runtime_views import gateway_unreachable
 
 DEVELOPER, PERSONA_RULE, LEVEL, FIRST_ALLOWED = (
     "developer",
@@ -193,6 +194,8 @@ def project_task_model(request, project_id):
         result = router().route(request.auth, project_id, **query)
     except ModelAccessDenied as error:
         return Response({"error": error.message}, status=error.status)
+    except GatewayUnavailable:
+        return gateway_unreachable()
     except (ModelPolicyUnavailable, StorageUnavailable, DatabaseError):
         return Response({"error": "Model routing is unavailable"}, status=503)
     return Response(result)

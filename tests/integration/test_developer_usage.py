@@ -1,6 +1,6 @@
 """A developer's own usage over HTTP, on the test SQLite database.
 
-Spec 009 ST31 (D191, ADR 029). Cases DU-01 to DU-18 in developer-usage-cases.md;
+Spec 009 ST31 (D191, ADR 029). Cases DU-01 to DU-21 in developer-usage-cases.md;
 the separate-process SQLite and PostgreSQL cases are in
 test_developer_usage_storage.py.
 """
@@ -14,13 +14,15 @@ from types import SimpleNamespace
 import pytest
 from accounts import authentication
 from accounts.models import User
+from data_classes.models import ProjectClass, Settings
 from django.apps import apps
 from django.db import DatabaseError
 from django.test import Client, override_settings
 from django.urls import URLResolver, get_resolver
 from model_registry import prices, runtime_views
 from model_registry.fingerprints import fingerprint
-from model_registry.policy import DjangoModelPolicy
+from model_registry.models import ModelApproval
+from model_registry.policy import DjangoModelPolicy, ModelPolicyUnavailable
 from projects.services import DjangoProjectStore
 from usage import totals
 from usage.models import UsageTotal
@@ -49,10 +51,10 @@ def usage(domain_services, monkeypatch):
     )
     resources = [{"id": name, "revision": 1} for name in ("coder", "outside")]
     stores.catalog.approve("coder", [], fingerprint("coder", resources))
-    state = SimpleNamespace(status=200)
+    state = SimpleNamespace(models=200, resources=200)
     gateway = SimpleNamespace(
-        models=lambda: (state.status, {"data": [{"id": r["id"]} for r in resources]}),
-        resources=lambda: (state.status, {"resources": resources}),
+        models=lambda: (state.models, {"data": [{"id": r["id"]} for r in resources]}),
+        resources=lambda: (state.resources, {"resources": resources}),
     )
     monkeypatch.setattr(authentication, "IDENTITY", stores.identity)
     monkeypatch.setattr(
@@ -68,6 +70,7 @@ def usage(domain_services, monkeypatch):
             other=other,
             project=project,
             state=state,
+            resources=resources,
             stores=stores,
             clock=clock,
         )
@@ -85,8 +88,8 @@ def report(**changes):
     return body
 
 
-def post(usage, body, token=None):
-    body = {"project_id": usage.project, **body}
+def post(usage, body, token=None, project=None):
+    body = {"project_id": project or usage.project, **body}
     return usage.client.post(
         PATH,
         data=json.dumps(body),
@@ -221,8 +224,69 @@ def test_du_05_a_model_or_project_the_developer_may_not_use_is_refused(
     assert not UsageTotal.objects.exists()
 
 
-def test_du_06_a_model_policy_outage_records_nothing(usage):
-    usage.state.status = 503
+@pytest.mark.parametrize("down", ["models", "resources"])
+def test_du_06_usage_is_recorded_while_the_gateway_is_down(usage, down):
+    """A turn that ran before the gateway went down is still counted."""
+    setattr(usage.state, down, 503)
+    assert post(usage, report()).status_code == 204
+    assert UsageTotal.objects.get().requests == 3
+
+
+@pytest.mark.parametrize(
+    "model", ["outside", "never-set-up", "unsaved-definition", "restricted"]
+)
+def test_du_19_with_the_gateway_down_keeplanes_own_policy_still_refuses(usage, model):
+    """Only set-up models allowed for the project's class, from Keeplane's data."""
+    usage.state.models = 503
+    usage.stores.classes.set_enabled(True)
+    ProjectClass.objects.create(project_id=usage.project, data_class_id="confidential")
+    # An approval whose gateway definition was cleared, as when a model stops
+    # being owned by Keeplane.
+    usage.stores.catalog.approve("unsaved-definition", [], "saved-definition")
+    ModelApproval.objects.filter(pk="unsaved-definition").update(gateway_fingerprint="")
+    usage.stores.catalog.approve("restricted", ["Public"], "saved-definition")
+    response = post(usage, report(model=model))
+    assert response.status_code == 403
+    assert response.json() == {"error": "This model is not eligible for the project"}
+    # The class rule holds for an approved model too.
+    assert post(usage, report()).status_code == 403
+    assert not UsageTotal.objects.exists()
+    other = str(uuid.uuid4())
+    assert post(usage, report(), project=other).status_code == 403
+    assert not UsageTotal.objects.exists()
+
+
+def test_du_20_with_the_gateway_answering_its_current_definition_still_counts(
+    usage,
+):
+    """The gateway's definition is checked whenever the gateway can be read."""
+    usage.resources[0]["revision"] = 2  # Changed outside Keeplane.
+    assert post(usage, report()).status_code == 403
+    assert not UsageTotal.objects.exists()
+    usage.state.models = 503
+    # Without the gateway that comparison can't be made; a report sends nothing.
+    assert post(usage, report()).status_code == 204
+
+
+def test_du_21_a_policy_problem_not_from_the_gateway_records_nothing(
+    usage, monkeypatch
+):
+    usage.state.models = 503
+
+    def broken(*args, **kwargs):
+        raise ModelPolicyUnavailable("Model setup is incomplete")
+
+    monkeypatch.setattr(DjangoModelPolicy, "_decide", broken)
+    response = post(usage, report())
+    assert response.status_code == 503
+    assert response.json() == {"error": "Model policy is unavailable"}
+    monkeypatch.undo()
+    usage.state.models = 503
+
+    def database_down(*args, **kwargs):
+        raise DatabaseError("Unavailable database")
+
+    monkeypatch.setattr(Settings.objects, "select_for_update", database_down)
     assert post(usage, report()).status_code == 503
     assert not UsageTotal.objects.exists()
 

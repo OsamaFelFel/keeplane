@@ -47,6 +47,8 @@ EXPIRED_CODE = (
 SERVER_DOWN_MORE = coding.SERVER_DOWN.format(more="more ")
 GATEWAY_DOWN_MORE = coding.GATEWAY_DOWN.format(more="more ")
 START_UNAVAILABLE = coding.START_UNAVAILABLE + "\n"
+GATEWAY_DOWN_AT_START = coding.GATEWAY_DOWN.format(more="") + "\n"
+NOT_RECORDED = "couldn't record this task's usage"
 
 
 def unavailable_reason():
@@ -258,6 +260,16 @@ def live_tokens(stack, username):
             ("accesstoken", ""),
             # A rotated refresh token stays, marked revoked.
             ("refreshtoken", " AND t.revoked IS NULL"),
+        )
+    )
+
+
+def recorded_requests(stack, username):
+    """How many model requests Keeplane has recorded as the developer's usage."""
+    return int(
+        stack.sql(
+            "SELECT coalesce(sum(t.requests), 0) FROM usage_usagetotal t JOIN "
+            f"accounts_user u ON u.id = t.user_id WHERE u.username = '{username}'"
         )
     )
 
@@ -541,6 +553,13 @@ def test_a_task_stops_clearly_when_a_service_goes_down(
         for text in ("expired", "refused your own key", "is unavailable right now")
     ), err
     assert stack.provider_calls() == calls + 1
+    if service == "gateway":
+        # Usage doesn't need the gateway: the call it answered is counted.
+        assert NOT_RECORDED not in err, err
+        assert recorded_requests(stack, developer.username) == 1
+    else:
+        # Keeplane itself is down, so the CLI says it couldn't record usage.
+        assert NOT_RECORDED in err, err
     # The sign-in still works once the service is back.
     assert developer.credential() == before
     code, _, err, sent = developer.code()
@@ -559,9 +578,10 @@ def test_a_task_with_the_gateway_or_app_down_from_the_start(stack, developer):
         code, _, err, sent = developer.code()
     finally:
         stack.start("gateway")
-    # Keeplane's choice of model asks the gateway which models it can use,
-    # so the CLI stops before the runtime starts.
-    assert (code, err, sent) == (1, START_UNAVAILABLE, [])
+    # Keeplane's choice of model asks the gateway which models it can use, so
+    # Keeplane answers 503 naming the gateway, and the CLI stops before the
+    # runtime starts and says the gateway is the cause.
+    assert (code, err, sent) == (1, GATEWAY_DOWN_AT_START, [])
     stack.stop("app")
     try:
         code, out, err, sent = developer.code()

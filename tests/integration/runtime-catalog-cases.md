@@ -8,5 +8,5 @@ Run `python -m pytest tests/integration/test_runtime_catalog.py` against isolate
 - Admin status does not bypass the stored project class. Changed gateway definitions disappear; classes off restores the set-up set.
 - CAT-01 With no registered models (Spec 004 ST12), including models listed only by the gateway, the catalog returns 200 with an empty list whether classes are on or off, so the CLI can say no models are available yet.
 - CAT-02 A fresh installation, where no admin has saved a data-class or model setting yet, returns 200 with an empty list, not 503, and writes no settings. A database failure there still returns 503.
-- Unknown project contexts return 403. Database/gateway failure returns 503 rather than cached results.
+- Unknown project contexts return 403. Database/gateway failure returns 503 rather than cached results; a gateway failure says so: `{"error": "Keeplane's gateway can't be reached", "code": "gateway_unreachable"}`.
 - Credentials are not accepted on a non-loopback HTTP installation. Responses contain no credential and are not cached.

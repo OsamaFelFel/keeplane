@@ -133,6 +133,7 @@ flowchart LR
 | CLI | The Keeplane server given to `keeplane login --server` | Sign-in, refresh, `whoami`, project registration, `models`, `keys`, the checks before a coding turn, and sign-out |
 | CLI | Its own one-time listener on `127.0.0.1` | Browser sign-in only: the server's sign-in page sends the browser back to it. Nothing outside the computer connects to it |
 | Browser | The Keeplane server's sign-in page | Browser sign-in; `keeplane login --device` shows a code to use in any browser instead |
+| CLI | The gateway address the server gave at sign-in, or the one given to `keeplane code --gateway` | Only when Keeplane says it can't choose a model (503) before a coding turn: the CLI opens a connection and closes it at once, sending nothing, to tell whether the gateway can be reached |
 | Coding runtime | The CLI's usage relay on `127.0.0.1`, a port picked for each turn | Each model call in a coding turn |
 | Usage relay (in the CLI) | The gateway address the server gave at sign-in, or the one given to `keeplane code --gateway` | Each model call in a coding turn, sent on unchanged. The relay adds no credential and reads only the token counts in each answer, for [usage](cli-usage.md). Nothing outside the computer connects to it; another local user can reach its port during a turn, but a request without that turn's grant is refused (403) and never sent on |
 

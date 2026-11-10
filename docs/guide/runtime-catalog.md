@@ -31,6 +31,12 @@ model restrictions. Cookies and client user, role or class claims are ignored.
 | 403 | Project context is unknown or unavailable |
 | 503 | Current identity, gateway or policy cannot be verified |
 
+When the gateway is the cause, the 503 says so, here and on the task-model,
+model-choice and model-alternatives routes:
+`{"error": "Keeplane's gateway can't be reached", "code": "gateway_unreachable"}`.
+`keeplane code` then says the gateway can't be reached, not that Keeplane is
+unavailable.
+
 Responses are not cached. The credential currently resolves through Django's
 database session support. No provider key is returned, and this endpoint sends
 no model traffic. Final gateway enforcement remains separate work.
@@ -93,7 +99,9 @@ Success returns 204. The account comes from the credential; any other field,
 such as an account ID, prompt or path, is ignored and never stored. A model that
 isn't eligible for the project, or a project you can't use, returns 403; counts
 that aren't whole numbers of 0 or more, or zero requests, return 400; an
-unavailable model policy returns 503. Large numbers are capped.
+unavailable model policy returns 503. While the gateway is down, Keeplane's own
+model setup and project classes decide, so usage is still recorded. Large
+numbers are capped.
 
 Read your totals for today and this month in your own time zone:
 

@@ -53,7 +53,9 @@ def record(request):
     if not allowed:
         return Response({"error": "This project is unavailable"}, status=403)
     try:
-        eligible = runtime_views.model_policy().eligible_model_ids(project_id)
+        # Keeplane's own policy decides when the gateway is down, so a turn
+        # that ran before it went down is still counted.
+        eligible = runtime_views.model_policy().recordable_model_ids(project_id)
     except (ModelPolicyUnavailable, StorageUnavailable):
         return Response({"error": "Model policy is unavailable"}, status=503)
     if model_id not in eligible:
