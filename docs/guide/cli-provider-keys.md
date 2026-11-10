@@ -12,6 +12,7 @@ owner IDs do not authorize these operations.
 | Method and path | Input |
 | --- | --- |
 | `GET /api/runtime/provider-keys?model_id=...` | Exactly one URL-encoded model ID; no body. |
+| `GET /api/runtime/provider-keys/support` | No body or query. |
 | `PUT /api/runtime/provider-keys` | JSON containing exactly `model_id` and `key`. |
 | `DELETE /api/runtime/provider-keys` | JSON containing exactly `model_id`. |
 
@@ -31,6 +32,14 @@ including old/unbound records; it does not promise eligibility, a usable key fil
 or dispatch. GET contacts neither gateway nor provider. DELETE also works when
 the model changes or is withdrawn. `cleanup_pending` means old file deletion
 needs retry. DELETE also removes the active registration; it is not a cleanup-only command.
+
+`GET /api/runtime/provider-keys/support` (no body or query) returns
+`{"own_keys": true}`, or `false` when the installation uses a customer-run
+gateway (`GATEWAY_MODE` other than `managed`), which can't use developers' own
+keys. The CLI asks it before prompting for a key. In that mode PUT also returns
+403 with `{"error": "Keeplane can't pass developers' own keys to a gateway it
+doesn't run yet, so use No key for this model."}` before contacting the gateway
+or the provider, and the previous key stays. GET and DELETE still work.
 
 PUT checks the current approved `personal` model and its exact raw definition,
 tests the key with that provider, then rechecks the definition before saving.

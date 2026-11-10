@@ -158,39 +158,64 @@ def run_cases():
 
         before_files = provider_key_files()
         before_models = sorted(model_rows)
-        proposed = "unsupported-shared-" + uuid.uuid4().hex[:10]
-        rejected_status, rejected, _ = admin.fetch(
-            "/api/models",
-            {
-                "name": proposed,
-                "model": "mock-cloud",
-                "source": "openai",
-                "key_choice": "shared",
-                "shared_key": "disposable-fixture-key",
-                "approved_classes": [],
-            },
-            method="POST",
-        )
+        # Spec 004 D110: only No key models on a customer-run gateway, so a
+        # shared key and developers' own keys are both refused, before any key
+        # file or gateway model is created.
+        refusals = {
+            "shared": "Keeplane can't pass a shared key to a gateway it doesn't "
+            "run yet, so use No key for this model. Nothing was saved.",
+            "personal": "Keeplane can't pass developers' own keys to a gateway it "
+            "doesn't run yet, so use No key for this model. Nothing was saved.",
+        }
+        attempts = {}
+        for key_choice in ("shared", "personal"):
+            proposed = f"unsupported-{key_choice}-" + uuid.uuid4().hex[:10]
+            rejected_status, rejected, _ = admin.fetch(
+                "/api/models",
+                {
+                    "name": proposed,
+                    "model": "mock-cloud",
+                    "source": "openai",
+                    "key_choice": key_choice,
+                    **(
+                        {"shared_key": "disposable-fixture-key"}
+                        if key_choice == "shared"
+                        else {}
+                    ),
+                    "approved_classes": [],
+                },
+                method="POST",
+            )
+            attempts[key_choice] = (proposed, rejected_status, rejected)
         after_status, after, _ = admin.fetch("/api/models")
-        after_models = sorted(item["id"] for item in (after or {}).get("models", []))
+        after_rows = (after or {}).get("models", [])
+        after_models = sorted(item["id"] for item in after_rows)
         after_files = provider_key_files()
         still_answers, _, _ = admin.fetch(
             "/api/ask",
             {"model": "customer-managed", "prompt": "fixture"},
             method="POST",
         )
+        refused = {
+            key_choice: status == 422
+            and (body or {}).get("error") == refusals[key_choice]
+            and proposed not in after_models
+            for key_choice, (proposed, status, body) in attempts.items()
+        }
         rows.append(
             case(
                 "EXIST-04",
-                rejected_status == 422
-                and "delivery path" in (rejected or {}).get("error", "")
+                all(refused.values())
                 and after_status == 200
-                and proposed not in after_models
                 and before_models == after_models
                 and before_files == after_files
                 and still_answers == 200,
                 {
-                    "rejected_status": rejected_status,
+                    "rejected_status": {
+                        key_choice: status
+                        for key_choice, (_, status, _) in attempts.items()
+                    },
+                    "refused_with_reason": refused,
                     "gateway_catalog_unchanged": before_models == after_models,
                     "key_files_unchanged": before_files == after_files,
                     "existing_answer_status": still_answers,

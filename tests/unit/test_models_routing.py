@@ -553,3 +553,116 @@ def test_mrs_14_when_the_previous_key_cannot_be_restored_keeplane_says_to_check_
     status, result = replace_key(gateway(), catalog(), tmp_path, monkeypatch)
     assert (status, result) == (503, {"error": error})
     assert "previous key is still active" not in error
+
+
+SHARED_REFUSED = (
+    "Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key "
+    "for this model. Nothing was saved."
+)
+OWN_REFUSED = (
+    "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use "
+    "No key for this model. Nothing was saved."
+)
+
+
+def watched(gateway):
+    """Record every gateway call, reads included."""
+    calls, original = [], gateway.request
+
+    def request(path, body=None, method=None, **options):
+        calls.append((method or ("POST" if body is not None else "GET"), path))
+        return original(path, body, method, **options)
+
+    gateway.request = request
+    return calls
+
+
+@pytest.mark.parametrize("source", ["openai", "anthropic"])
+@pytest.mark.parametrize(
+    "key_choice,error", [("shared", SHARED_REFUSED), ("personal", OWN_REFUSED)]
+)
+def test_mrs_15_the_customers_gateway_refuses_shared_and_own_keys_on_add(
+    tmp_path, monkeypatch, source, key_choice, error
+):
+    customer, catalog = Gateway(), Catalog()
+    calls = watched(customer)
+    status, body = management(
+        customer, catalog, tmp_path, monkeypatch, classes_on=True, mode="existing"
+    ).add(cloud(source=source, key_choice=key_choice, approved_classes=["Public"]))
+    assert (status, body) == (422, {"error": error})
+    assert calls == [] and customer.records == {}
+    assert catalog.rows == {} and key_files(tmp_path) == []
+
+
+def test_mrs_16_the_customers_gateway_refuses_own_keys_on_edit_and_set_up(
+    tmp_path, monkeypatch
+):
+    customer = Gateway()
+    customer.put(
+        {"id": "coder", "name": "coder", "provider": "openAI", "params": {"model": "coder"}}
+    )
+    revision = fingerprint("coder", customer.resources()[1]["resources"])
+    saved = {
+        "approved_classes": ["Public"],
+        "gateway_fingerprint": revision,
+        "key_choice": "personal",
+        "owned_by_keeplane": True,
+    }
+    # Edit: a model set up for developers' own keys before this rule.
+    # Set up: a model only in the customer's gateway.
+    for rows, model_id in (({"coder": dict(saved)}, "coder"), ({}, "coder")):
+        catalog = Catalog(copy.deepcopy(rows))
+        calls = watched(customer)
+        status, body = management(
+            customer, catalog, tmp_path, monkeypatch, classes_on=True, mode="existing"
+        ).setup(model_id, {"key_choice": "personal", "approved_classes": ["Internal"]})
+        assert (status, body) == (422, {"error": OWN_REFUSED})
+        assert calls == [] and catalog.rows == rows
+        assert customer.writes == [] and customer.records["coder"]["revision"] == 1
+    # A No key setup on the same gateway still works.
+    status, _ = management(
+        customer, Catalog(), tmp_path, monkeypatch, classes_on=True, mode="existing"
+    ).setup("coder", {"key_choice": "none", "approved_classes": ["Public"]})
+    assert status == 200
+
+
+def test_mrs_18_an_earlier_own_key_model_can_only_move_to_no_key(tmp_path, monkeypatch):
+    """The move may change its classes too (APO decision, 10 November 2026)."""
+    customer = Gateway()
+    customer.put(
+        {"id": "coder", "name": "coder", "provider": "openAI", "params": {"model": "coder"}}
+    )
+    revision = fingerprint("coder", customer.resources()[1]["resources"])
+    saved = {
+        "approved_classes": ["Public"],
+        "gateway_fingerprint": revision,
+        "key_choice": "personal",
+        "owned_by_keeplane": True,
+    }
+    catalog = Catalog({"coder": dict(saved)})
+    manager = management(
+        customer, catalog, tmp_path, monkeypatch, classes_on=True, mode="existing"
+    )
+    calls = watched(customer)
+    # Any other choice: a shared key, or keeping developers' own keys.
+    for body in (
+        {"key_choice": "shared", "approved_classes": ["Public"]},
+        {"key_choice": "personal", "approved_classes": ["Public"]},
+    ):
+        assert manager.setup("coder", body) == (422, {"error": OWN_REFUSED})
+    assert calls == [] and catalog.rows == {"coder": saved}
+    # Moving it to No key is saved with its class change, after the model answers.
+    status, result = manager.setup(
+        "coder", {"key_choice": "none", "approved_classes": ["Public", "Internal"]}
+    )
+    assert status == 200
+    assert result == saved | {"key_choice": "none", "approved_classes": ["Public", "Internal"]}
+    assert customer.writes == [] and customer.asked == ["coder"]
+
+
+def test_mrs_17_a_managed_gateway_still_takes_developers_own_keys(tmp_path, monkeypatch):
+    gateway, catalog = Gateway(), Catalog()
+    manager = management(gateway, catalog, tmp_path, monkeypatch, classes_on=False)
+    monkeypatch.setattr(manager, "provider_probe", lambda *a, **k: True)
+    status, body = manager.add(cloud(key_choice="personal"))
+    assert status == 200 and body["key_choice"] == "personal"

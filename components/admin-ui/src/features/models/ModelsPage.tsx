@@ -33,6 +33,19 @@ type InUse = { model: string; levels: string[]; personaRules: string[] }
 type Classes = { enabled: boolean; classes: { name: string }[] }
 type RunnerModels = { models: string[]; runtime?: Record<string, { active_context_tokens?: number; training_context_tokens?: number }> }
 
+// Spec 004 ST10 and D110: the key choices Edit can save. A model keeps its own
+// choice; one with no key may move to developers' own keys if it is a cloud
+// model; one on developers' own keys may move to No key only on a customer-run
+// gateway. A shared key can't be chosen here: Edit has no step to enter one.
+function keyChoices(model: Model, customerRunGateway: boolean): Record<ProviderKeyChoice, boolean> {
+  const current = model.key_choice ?? 'none'
+  return {
+    shared: current === 'shared',
+    personal: current === 'personal' || (current === 'none' && model.kind === 'cloud'),
+    none: current === 'none' || (current === 'personal' && customerRunGateway),
+  }
+}
+
 const selectStyle = 'h-11 w-full rounded-[6px] border border-input bg-background px-3 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 function ClassChoices({ choices, selected, onChange }: {
@@ -57,6 +70,8 @@ export function ModelsPage() {
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState('')
   const [addFailure, setAddFailure] = useState<{ title: string; reason: string } | null>(null)
+  const [editKeyChoice, setEditKeyChoice] = useState<ProviderKeyChoice>('none')
+  const [customerRunGateway, setCustomerRunGateway] = useState(false)
   const [duplicate, setDuplicate] = useState('')
   const [source, setSource] = useState<'runner' | 'openai' | 'anthropic'>('runner')
   const [runnerAddress, setRunnerAddress] = useState('')
@@ -80,12 +95,13 @@ export function ModelsPage() {
   const refresh = useCallback(async () => {
     try {
       const [catalog, classListing] = await Promise.all([
-        api<{ models: Model[]; levels?: Level[]; persona_rules?: PersonaRule[]; personas?: Persona[] }>('/api/models'), api<Classes>('/api/data-classes'),
+        api<{ models: Model[]; levels?: Level[]; persona_rules?: PersonaRule[]; personas?: Persona[]; customer_run_gateway?: boolean }>('/api/models'), api<Classes>('/api/data-classes'),
       ])
       setModels(catalog.models.filter(model => model.kind !== 'endpoint-trial' || model.approved !== undefined))
       setLevels(catalog.levels ?? [])
       setRules(catalog.persona_rules ?? [])
       setPersonas(catalog.personas ?? [])
+      setCustomerRunGateway(catalog.customer_run_gateway === true)
       setClasses(classListing)
       setError('')
       return catalog.models
@@ -145,7 +161,7 @@ export function ModelsPage() {
   }
 
   function openEdit(model: Model) {
-    setEditing(model); setDialogError(''); setReplacementKey('')
+    setEditing(model); setDialogError(''); setReplacementKey(''); setEditKeyChoice(model.key_choice ?? 'none')
     setApprovedClasses(model.approved_classes || [])
   }
 
@@ -155,14 +171,18 @@ export function ModelsPage() {
     setBusy(true); setDialogError('')
     try {
       await action(`/api/models/${encodeURIComponent(editing.id)}/setup`, 'POST', {
-        key_choice: editing.key_choice ?? 'none',
+        key_choice: editKeyChoice,
         ...(classes?.enabled ? { approved_classes: approvedClasses } : {}),
-        ...(replacementKey ? { replace_shared_key: replacementKey } : {}),
+        ...(replacementKey && editKeyChoice === 'shared' ? { replace_shared_key: replacementKey } : {}),
       })
       setNotice(`${editing.approved ? 'Saved' : 'Set up'} ${editing.id}.`)
       setEditing(null); setReplacementKey('')
       await refresh()
-    } catch (cause) { setDialogError((cause as Error).message) }
+    } catch (cause) {
+      const message = (cause as Error).message
+      // Spec 004 ST10: a refusal that saved nothing asks to check the details.
+      setDialogError(message.endsWith('Nothing was saved.') ? `${message} Check the details and try again.` : message)
+    }
     finally { setBusy(false) }
   }
 
@@ -352,10 +372,22 @@ export function ModelsPage() {
     <Dialog open={!!editing} onOpenChange={open => { if (!open && !busy) setEditing(null) }}>
       <DialogContent showCloseButton={false}><DialogHeader><DialogTitle>{editing?.approved ? `Edit ${editing.id}` : `Set up ${editing?.id}`}</DialogTitle></DialogHeader>
         <form className="grid gap-5" onSubmit={event => void save(event)}>
-          <p className="text-[15px] text-muted-foreground">{editing?.provider} · {editing?.kind === 'cloud' ? 'Cloud' : 'Local'}. Keeplane checks that the {editing?.key_choice === 'personal' ? 'provider' : 'model'} answers before saving.</p>
-          <div><Label className="keeplane-field-label">Provider key</Label><p className="text-[15px]">{editing?.key_choice === 'shared' ? 'Shared key' : editing?.key_choice === 'personal' ? "Each developer adds their own key" : 'No key needed'}</p>
-            {editing?.key_choice === 'personal' && <p className="text-[14px] leading-5 text-muted-foreground">Developers add their own keys from the CLI. Keys are never shown again.</p>}</div>
-          {editing?.key_choice === 'shared' && editing.owned_by_keeplane && editing.kind === 'cloud' && <div><Label htmlFor="replacement-key" className="keeplane-field-label">Replace shared key</Label><Input id="replacement-key" type="password" autoComplete="new-password" value={replacementKey} disabled={busy} onChange={event => setReplacementKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Leave it empty to keep the current key.</p></div>}
+          <p className="text-[15px] text-muted-foreground">{editing?.provider} · {editing?.kind === 'cloud' ? 'Cloud' : 'Local'}. Keeplane checks that the {editKeyChoice === 'personal' ? 'provider' : 'model'} answers before saving.</p>
+          {editing && (() => {
+            const available = keyChoices(editing, customerRunGateway)
+            const choice = (value: ProviderKeyChoice, label: string) => <label className={`flex min-h-9 items-center gap-2 text-[15px]${available[value] ? '' : ' text-muted-foreground'}`}>
+              <input type="radio" name="edit-provider-key" checked={editKeyChoice === value} disabled={busy || !available[value]} onChange={() => setEditKeyChoice(value)} />{label}</label>
+            // Until Edit can make every key move, say how to reach a greyed-out one.
+            const greyedOut = !Object.values(available).every(Boolean)
+            return <fieldset role="radiogroup" aria-describedby={greyedOut ? 'edit-provider-key-unavailable' : undefined}><legend className="keeplane-field-label">Provider key</legend>
+              {choice('shared', 'One shared key for the organization')}
+              {choice('personal', 'Each developer adds their own key')}
+              {choice('none', 'No key needed')}
+              {editKeyChoice === 'personal' && <p className="text-[14px] leading-5 text-muted-foreground">Developers add their own keys from the CLI. Keys are never shown again.</p>}
+              {greyedOut && <p id="edit-provider-key-unavailable" className="text-[14px] leading-5 text-muted-foreground">To use a choice that's greyed out, remove the model and add it again with that key choice.</p>}
+            </fieldset>
+          })()}
+          {editKeyChoice === 'shared' && editing?.key_choice === 'shared' && editing.owned_by_keeplane && editing.kind === 'cloud' && <div><Label htmlFor="replacement-key" className="keeplane-field-label">Replace shared key</Label><Input id="replacement-key" type="password" autoComplete="new-password" value={replacementKey} disabled={busy} onChange={event => setReplacementKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Leave it empty to keep the current key.</p></div>}
           {classes?.enabled && <ClassChoices choices={classes.classes.map(item => item.name)} selected={approvedClasses} onChange={setApprovedClasses} />}
           {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}
           <div className="flex flex-wrap justify-end gap-3">{editing?.approved && <Button type="button" variant="outline" className="mr-auto" disabled={busy} onClick={startRemove}>{editing.owned_by_keeplane ? 'Remove model' : 'Remove setup'}</Button>}

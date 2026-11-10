@@ -32,6 +32,14 @@ Add or replace a key with a hidden prompt:
 keeplane keys set --profile ~/.config/keeplane/dev --model coder
 ```
 
+If your Keeplane installation uses a customer-run gateway, it can't use
+developers' own keys yet. `set` checks this before asking for the key, and
+stops:
+
+```text
+Keeplane can't use developers' own keys with this installation's gateway, so your key for coder wasn't saved. Ask your Keeplane admin which models you can use.
+```
+
 If you run `keeplane code` with a model that needs your own key and you have not
 added one, removed it, or it was refused, the task goes to another model you are
 allowed to use for that project. Before the runtime starts, the CLI says why:

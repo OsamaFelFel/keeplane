@@ -124,14 +124,43 @@ To repeat the React browser suite through a temporary port-forward:
 .venv/bin/python -m pytest tests/e2e/test_existing_gateway_browser.py -m live
 ```
 
-This mode currently supports only **No key** models. Keeplane's shared key
-and developers' own keys aren't supported yet: the supplied gateway runs in a
-different namespace and cannot read Keeplane's private provider-key PVC, and
-there is no supported way yet to deliver keys to a customer-run gateway. The
-app refuses a shared-key setup before saving the key or changing the gateway,
-with an explicit error. A cloud model whose key your own gateway
+### Provider keys on a customer-run gateway
+
+In `existing` mode Keeplane supports only models that need **No key**, such as
+a local runner, until it has a supported way to deliver provider keys to a
+customer-run gateway. The supplied gateway runs in a different namespace and
+cannot read Keeplane's private provider-key PVC, and Keeplane's runtime does
+not hand developers' own keys to it.
+
+So in `existing` mode **Add model**, **Edit** and **Set up** refuse both key
+choices for a cloud model, before saving anything or changing the gateway. Add
+shows "[Model] wasn't added" with the reason, then "Nothing was saved. Check the
+details and try again.", and keeps your entries:
+
+| Key choice | Reason |
+| --- | --- |
+| One shared key for the organization | Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key for this model. |
+| Each developer adds their own key | Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. |
+
+Choose **No key needed** instead: a cloud model whose key your own gateway
 holds is set up with **No key**; see
 [Keeplane's checks on a customer-run gateway](#keeplanes-checks-on-a-customer-run-gateway).
+A model set up for developers' own keys before
+this rule can only move to No key: in **Edit**, choose **No key needed** and
+save, with any change to its approved classes; it saves once the model answers
+through your gateway. Saving with **Each developer adds their own key** still
+chosen shows the reason above with "Nothing was saved. Check the details and try
+again." **Remove model** still works. Choices Edit can't save are greyed out,
+with "To use a choice that's greyed out, remove the model and add it again with
+that key choice."
+
+Developers can't add or replace their own key for any model either.
+`keeplane keys set` asks Keeplane before it prompts for a key and stops with
+"Keeplane can't use developers' own keys with this installation's gateway, so
+your key for MODEL wasn't saved. Ask your Keeplane admin which models you can
+use." They can still list and remove saved keys. The release gateway contract
+needs a supported secret-delivery mechanism for customer-run gateways before
+this mode handles shared or personal keys.
 
 ## Keeplane's checks on a customer-run gateway
 

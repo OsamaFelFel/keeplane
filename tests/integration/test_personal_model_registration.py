@@ -422,3 +422,136 @@ def test_actual_admin_api_keeps_roles_csrf_and_classes(
         assert len(provider["calls"]) == 1
     else:
         assert not provider["calls"] and not ModelApproval.objects.exists()
+
+
+OWN_REFUSED = (
+    "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, "
+    "so use No key for this model. Nothing was saved."
+)
+
+
+@pytest.mark.parametrize("provider", [True], indirect=True)
+def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
+    provider, registrar, domain_services, monkeypatch
+):
+    """Spec 004 D110: only No key models on a customer-run gateway, for now."""
+    from audit.models import AuditRecord
+    from model_registry import use_cases
+
+    identity = domain_services.identity
+    monkeypatch.setattr("common.api.IDENTITY", identity)
+    monkeypatch.setattr(use_cases, "CATALOG", domain_services.catalog)
+    monkeypatch.setattr(use_cases, "DATA_CLASSES", domain_services.classes)
+    monkeypatch.setattr(use_cases, "MODEL_GATEWAY", registrar.gateway)
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    monkeypatch.setenv("PREVIEW_OPENAI_BASE_URL", provider["url"])
+    monkeypatch.setenv("SSL_CERT_FILE", provider["ca"])
+    domain_services.classes.set_enabled(True)
+    # Models set up for developers' own keys before this rule, and one only
+    # in the customer's gateway.
+    for model_id in ("legacy", "outside", "retired"):
+        value = definition(provider) | {"id": model_id, "name": model_id}
+        registrar.gateway.records[model_id] = {
+            "id": model_id,
+            "revision": 1,
+            "value": value,
+        }
+    for model_id in ("legacy", "retired"):
+        domain_services.catalog.approve(
+            model_id,
+            ["Public"],
+            fingerprint(model_id, [registrar.gateway.records[model_id]]),
+            None,
+            # Removing "retired" then leaves its gateway entry in place.
+            owned_by_keeplane=model_id == "legacy",
+            key_choice="personal",
+        )
+    client = Client(enforce_csrf_checks=True)
+    client.cookies["keeplane_session"] = identity.login(
+        "first-admin", "first-test-password-123"
+    )
+    csrf = client.get("/api/auth-options").json()["csrf_token"]
+    # After the sign-in, which is audited.
+    before = (
+        deepcopy(registrar.gateway.records),
+        list(ModelApproval.objects.values()),
+        AuditRecord.objects.count(),
+    )
+    calls = [
+        (
+            "/api/models",
+            {
+                "name": "personal",
+                "model": "upstream",
+                "source": "openai",
+                "key_choice": "personal",
+                "approved_classes": ["Public"],
+            },
+        ),
+        (
+            "/api/models/legacy/setup",
+            {"key_choice": "personal", "approved_classes": ["Internal"]},
+        ),
+        (
+            "/api/models/outside/setup",
+            {"key_choice": "personal", "approved_classes": ["Public"]},
+        ),
+    ]
+    for path, body in calls:
+        response = client.post(
+            path,
+            json.dumps(body),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+            HTTP_X_KEEPLANE_ACTION="1",
+        )
+        assert (response.status_code, response.json()) == (422, {"error": OWN_REFUSED})
+    assert not provider["calls"] and registrar.gateway.writes == []
+    assert before == (
+        registrar.gateway.records,
+        list(ModelApproval.objects.values()),
+        AuditRecord.objects.count(),
+    )
+
+    def send(path, body=None, method="post"):
+        return getattr(client, method)(
+            path,
+            json.dumps(body if body is not None else {}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+            HTTP_X_KEEPLANE_ACTION="1",
+        )
+
+    # A shared key is refused with the same reason.
+    response = send(
+        "/api/models/legacy/setup",
+        {"key_choice": "shared", "approved_classes": ["Public"]},
+    )
+    assert (response.status_code, response.json()) == (422, {"error": OWN_REFUSED})
+    # Moving the earlier model to No key is saved with its class change once
+    # the model answers through the gateway.
+    registrar.gateway.request = Gateway.request.__get__(registrar.gateway)
+    response = send(
+        "/api/models/legacy/setup",
+        {"key_choice": "none", "approved_classes": ["Public", "Internal"]},
+    )
+    assert response.status_code == 200, response.json()
+    approval = ModelApproval.objects.get(pk="legacy")
+    assert approval.key_choice == "none"
+    assert sorted(approval.approved_classes) == ["Internal", "Public"]
+    assert not provider["calls"] and registrar.gateway.writes == []
+    # Remove still works for an earlier own-key model.
+    from model_registry import views
+
+    monkeypatch.setattr(views, "CATALOG", domain_services.catalog)
+    monkeypatch.setattr(views, "MODEL_GATEWAY", registrar.gateway)
+    # Models and routing tells Edit which gateway Keeplane uses.
+    monkeypatch.setattr(views, "list_models", lambda *a: (200, {"models": []}))
+    monkeypatch.setattr(registrar.gateway, "models", None, raising=False)
+    assert client.get("/api/models").json()["customer_run_gateway"] is True
+    monkeypatch.setenv("GATEWAY_MODE", "managed")
+    assert client.get("/api/models").json()["customer_run_gateway"] is False
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
+    removed = send("/api/models/retired/setup", method="delete")
+    assert removed.status_code == 200, removed.json()
+    assert not ModelApproval.objects.filter(pk="retired").exists()

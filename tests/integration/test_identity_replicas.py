@@ -44,6 +44,7 @@ BEARER_ONLY = {
     "/api/runtime/provider-keys",
     "/api/runtime/projects/unknown/provider-keys",
     "/api/runtime/provider-keys/check",
+    "/api/runtime/provider-keys/support",
     "/api/runtime/projects/unknown/model-choice",
     "/api/runtime/projects/unknown/model-alternatives",
     "/api/runtime/projects/unknown/task-model",

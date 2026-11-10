@@ -26,6 +26,10 @@ Docker, gateway or provider is used.
 | MRS-12 | Add a local model and a cloud model while Keeplane can't save the approval; then again when it can't remove the gateway entry either. | 503 with the same words for both: “Keeplane couldn't save the model approval. Nothing was saved.”; the gateway entry and the key file are removed. When the entry can't be removed, the message doesn't say “Nothing was saved” but “Keeplane couldn't save the model approval. The model may remain in the gateway without Keeplane approval. Check Models.” |
 | MRS-13 | Add a cloud model and a local model that the gateway doesn't register, and a cloud model the provider refuses or doesn't answer, each time when Keeplane can't remove its gateway entry. | 503 with “The gateway didn't register it.”, “[Provider] refused the key.” or “[Provider] didn't answer.”, then “The model may remain in the gateway without Keeplane approval. Check Models.”, never “Nothing was saved”; nothing is approved. |
 | MRS-14 | Replace a model's shared key when the key check model can't be removed, when the model doesn't confirm the new key and when Keeplane can't save the change, each time with the previous key not restored. | 503 with “The replacement key didn't answer through the gateway. A verification model may need cleanup. Check Models.”, “The replacement key didn't work. The model may need admin attention. Check Models.” or “Keeplane couldn't save the change. The model may need admin attention. Check Models.”; none says the previous key is still active. |
+| MRS-15 | While Keeplane uses the customer's gateway, add an OpenAI or Anthropic model with one shared key, then with each developer's own key. | 422 with “Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key for this model. Nothing was saved.” or “Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved.” The gateway is not contacted, and nothing is saved in the catalog or the key folder. |
+| MRS-16 | While Keeplane uses the customer's gateway, edit a model set up for each developer's own key, keeping that choice, then set up a model added outside Keeplane with that choice. | Both get 422 with “Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved.”; the gateway is not contacted and the catalog is unchanged. Setting the outside model up with No key still works. |
+| MRS-18 | While Keeplane uses the customer's gateway, edit a model set up earlier for each developer's own key: to a shared key, keeping developers' own keys, then to No key with a class added. | The first two get 422 with the own-key reason and change nothing; the gateway is not contacted. The move to No key is saved with the new classes once the model answers; nothing is written to the gateway. |
+| MRS-17 | With Keeplane's own gateway, add a model set to each developer's own key. | It is added with that choice: the refusal applies only to the customer's gateway. |
 
 The same add and set-up rules on every gateway copy are the
 [gateway copy cases](gateway-copy-cases.md); the live versions are the
@@ -84,11 +88,11 @@ or a case named here has no row in its own catalog or no test.
 | --- | --- | --- |
 | ST10 | Add a cloud model | MRS-01, ML-01, CADD-02, CADD-03, CADD-06 |
 | ST10 | Data classes are off | MO-UI-02 (no class asked), MRS-02, MP-01 (every project) |
-| ST10 | The customer runs its own gateway | MRS-03, EXIST-03 |
+| ST10 | The customer runs its own gateway | MRS-03, MRS-15, MRS-16, MRS-18 (only No key models; shared and own keys are refused; an earlier own-key model can move to No key), PMR-03, MOD-UI-11, MOD-UI-12, MOD-UI-14, MO-UI-03, MO-UI-12, MO-UI-13, PK-03, KC-03, KC-04, EXIST-03 |
 | ST10 | Add a model from a local runner | MRS-04, ML-05 (listed as Local), MO-UI-02 |
 | ST10 | The model doesn't answer | MRS-05, MRS-11, MRS-12, MRS-13, MOD-UI-02, MOD-UI-08, MO-UI-03, MO-UI-06, CADD-05 |
 | ST10 | The gateway doesn't register the model | MRS-06, MRS-13, MOD-UI-07 |
-| ST10 | Each developer adds their own key | PMR-01, PMR-02, MO-UI-06, PK-02 (the developer's key, in the CLI) |
+| ST10 | Each developer adds their own key | PMR-01, PMR-02, MRS-17, MO-UI-06, PK-02 (the developer's key, in the CLI) |
 | ST10 | Already added | MRS-07, MOD-UI-03, CADD-04 |
 | ST11 | A shared key | CADD-02, MA-06, MA-07 (tied to the developer) |
 | ST11 | See my keys | KL-01, KL-02 |

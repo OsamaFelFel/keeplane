@@ -33,6 +33,9 @@ def api(tmp_path, monkeypatch):
         project=str(uuid.uuid4()),
         key_list=[],
         list_response=None,
+        write_error=None,
+        own_keys=True,
+        support_calls=0,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -40,6 +43,12 @@ def api(tmp_path, monkeypatch):
             pass
 
         def do_GET(self):
+            if self.path == "/api/runtime/provider-keys/support":
+                # Counted apart, so the other cases' call lists stay as they were.
+                state.support_calls += 1
+                if state.own_keys is None:
+                    return self.respond(404, {"error": "Not found"})
+                return self.respond(200, {"own_keys": state.own_keys})
             state.calls.append((self.command, self.path, dict(self.headers), None))
             if self.path == "/api/runtime/session":
                 self.respond(
@@ -74,6 +83,8 @@ def api(tmp_path, monkeypatch):
                 self.path == "/api/runtime/provider-keys"
                 and body["model_id"] == state.model
             )
+            if state.write_error:
+                return self.respond(state.write_status, {"error": state.write_error})
             state.stored = stored
             self.respond(
                 state.write_status,
@@ -144,6 +155,7 @@ def test_kc_01_hidden_key_set_status_remove_and_cleanup_metadata(api, monkeypatc
     assert json.loads(capsys.readouterr().out)["cleanup_pending"] is True
     assert command(api, monkeypatch, "remove") == 0
     assert json.loads(capsys.readouterr().out)["status"] == "missing"
+    assert api.support_calls == 1
     assert [row[0] for row in api.calls] == [
         "GET",
         "PUT",
@@ -272,3 +284,70 @@ def test_invalid_pipe_never_contacts_key_endpoint(api, monkeypatch, capsys, raw)
     assert command(api, monkeypatch, "set", "--key-stdin") == 1
     assert len(api.calls) == 1
     assert "valid provider key" in capsys.readouterr().err
+
+
+def test_kc_03_customer_run_gateway_refuses_before_the_key_prompt(
+    api, monkeypatch, capsys
+):
+    """Spec 004 D110: `keys set` asks the server first and never prompts for a key."""
+    from model_registry.registration import EXISTING_GATEWAY_KEYS
+
+    assert provider_keys.OWN_KEYS_UNSUPPORTED == EXISTING_GATEWAY_KEYS["personal"]
+    monkeypatch.setattr(
+        provider_keys.getpass,
+        "getpass",
+        lambda _: pytest.fail("No key prompt on a customer-run gateway"),
+    )
+    api.own_keys = False
+    assert command(api, monkeypatch, "set") == 1
+    output = capsys.readouterr()
+    assert output.err.strip() == (
+        "Keeplane can't use developers' own keys with this installation's gateway, "
+        f"so your key for {api.model} wasn't saved. Ask your Keeplane admin which "
+        "models you can use."
+    )
+    assert output.out == ""
+    assert [row[1] for row in api.calls] == ["/api/runtime/session"]
+    assert api.support_calls == 1
+    # Listing, status and removal don't ask and still work.
+    assert command(api, monkeypatch, "status") == 0
+    assert command(api, monkeypatch, "remove") == 0
+    assert api.support_calls == 1
+
+
+def test_kc_04_the_server_refusal_is_explained_after_the_prompt_too(
+    api, monkeypatch, capsys
+):
+    """The PUT refusal stays the backstop, as for a server that can't be asked first."""
+    secret = "synthetic-provider-key-12"
+    monkeypatch.setattr(provider_keys.getpass, "getpass", lambda _: secret)
+    api.own_keys = None  # A server from before the check: 404, so the CLI prompts.
+    api.write_status, api.write_error = 403, provider_keys.OWN_KEYS_UNSUPPORTED
+    assert command(api, monkeypatch, "set") == 1
+    output = capsys.readouterr()
+    assert output.err.strip() == (
+        "Keeplane can't use developers' own keys with this installation's gateway, "
+        f"so your key for {api.model} wasn't saved. Ask your Keeplane admin which "
+        "models you can use."
+    )
+    assert secret not in output.out + output.err
+    assert sum(row[0] == "PUT" for row in api.calls) == 1
+    # A server that answers the check but still refuses the PUT reads the same.
+    api.own_keys = True
+    assert command(api, monkeypatch, "set") == 1
+    assert "wasn't saved" in capsys.readouterr().err
+    # Any other refusal keeps the generic message.
+    api.write_error = "This model does not accept developer keys"
+    assert command(api, monkeypatch, "set") == 1
+    assert capsys.readouterr().err.strip() == "The requested action is unavailable."
+
+
+@pytest.mark.parametrize("answer", ["no", 0, []])
+def test_an_invalid_support_answer_stops_before_the_prompt(api, monkeypatch, capsys, answer):
+    monkeypatch.setattr(
+        provider_keys.getpass, "getpass", lambda _: pytest.fail("No key prompt")
+    )
+    api.own_keys = answer
+    assert command(api, monkeypatch, "set") == 1
+    assert "invalid key answer" in capsys.readouterr().err
+    assert not any(row[0] == "PUT" for row in api.calls)

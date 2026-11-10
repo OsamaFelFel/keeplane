@@ -37,11 +37,12 @@ working replacements. The [cloud add run](https://github.com/OsamaFelFel/keeplan
 and [key rotation run](https://github.com/OsamaFelFel/keeplane/blob/de0aba5f8052fbbec55a2060309812812f09588e/tests/e2e/runs/2026-10-09-key-rotation.json)
 are versioned.
 
-The separate customer-run gateway trial supports no-key models but rejects a
-shared cloud key before saving it, because the customer-run gateway cannot
-read Keeplane's provider-key volume. The error stays in the Add dialog. See
-the [gateway mode guide](gateway-configuration.md) for the remaining key-delivery
-requirement.
+The separate customer-run gateway trial supports only no-key models. It
+rejects a shared cloud key, and a model set to each developer's own key, before
+saving anything, because Keeplane has no supported way yet to deliver provider
+keys to the customer-run gateway. The error stays in the Add dialog. See the
+[gateway mode guide](gateway-configuration.md#provider-keys-on-a-customer-run-gateway)
+for the messages and the remaining key-delivery requirement.
 
 A gateway write that cannot be verified may leave an unapproved model visible;
 the error names that possibility so an admin can inspect it.

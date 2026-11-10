@@ -58,6 +58,10 @@ def models(request):
             listing["levels"] = complexity_levels(CATALOG, set_up)
             listing["persona_rules"] = persona_rule_rows(CATALOG.persona_rules(), set_up)
             listing["personas"] = persona_choices()
+            # Spec 004 D110: Edit offers No key for an own-key model only here.
+            listing["customer_run_gateway"] = (
+                os.environ.get("GATEWAY_MODE", "managed") == "existing"
+            )
         return Response(listing, status=status)
     except StorageUnavailable:
         return failure(503, "Keeplane settings storage is unavailable")

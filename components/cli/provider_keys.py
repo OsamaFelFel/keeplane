@@ -16,6 +16,49 @@ else:
     from server_connection import ConnectionError, account, request
 
 
+# The server's refusal of `keys set` when Keeplane uses a customer-run gateway
+# (Spec 004 D110): no key can be used there, so none is saved. The CLI asks
+# first (own_keys_supported) and this refusal is the server's backstop.
+OWN_KEYS_UNSUPPORTED = (
+    "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, "
+    "so use No key for this model."
+)
+
+
+def own_keys_unsupported(model_id):
+    return (
+        f"Keeplane can't use developers' own keys with this installation's gateway, "
+        f"so your key for {model_id} wasn't saved. Ask your Keeplane admin which "
+        "models you can use."
+    )
+
+
+def own_keys_supported(issuer, access_token):
+    """Ask the server whether it can use developers' own keys, before any prompt.
+
+    A server from before this check answers 404; it is asked nothing more and
+    its PUT decides, as before.
+    """
+    try:
+        body = request(issuer, "/api/runtime/provider-keys/support", access_token)
+    except ConnectionError as error:
+        if error.status == 404:
+            return True
+        raise
+    try:
+        data = json.loads(body, object_pairs_hook=unique)
+        if (
+            len(body) > 4096
+            or not isinstance(data, dict)
+            or set(data) != {"own_keys"}
+            or type(data["own_keys"]) is not bool
+        ):
+            raise ValueError
+    except (ValueError, TypeError, RecursionError):
+        raise ConnectionError("Keeplane returned an invalid key answer.") from None
+    return data["own_keys"]
+
+
 def read_key(*, key_stdin=False):
     if key_stdin:
         if sys.stdin.isatty():
@@ -189,6 +232,10 @@ def run(action, profile_path, model_id, *, key_stdin=False):
         actor = account(credential.issuer, credential.access_token)
         if actor["id"] != credential.actor_id:
             raise ProfileError("The server account changed; sign in again.")
+        if action == "set" and not own_keys_supported(
+            credential.issuer, credential.access_token
+        ):
+            raise ConnectionError(own_keys_unsupported(model_id), 403)
         key = read_key(key_stdin=key_stdin) if action == "set" else None
         if key is not None and key in {
             credential.access_token,
@@ -211,6 +258,12 @@ def run(action, profile_path, model_id, *, key_stdin=False):
             )
             data = key_status(body, model_id, action)
         except ConnectionError as error:
+            if (
+                action == "set"
+                and error.status == 403
+                and error.detail == OWN_KEYS_UNSUPPORTED
+            ):
+                raise ConnectionError(own_keys_unsupported(model_id), 403) from None
             if action in {"set", "remove"} and error.status not in {400, 401, 403, 413, 415}:
                 raise ConnectionError(
                     "The key change may have completed. Check keys status before retrying.",
