@@ -510,11 +510,21 @@ def run_cases():
         node("crictl", "rmi", ABSENT_IMAGE, timeout=60)
         forgotten = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
         closed = run("sudo", str(CLOSE), timeout=300)
-        names = {
-            "node": lookup("node", [REGISTRY_HOST]),
-            "app": lookup("app", [REGISTRY_HOST, APP_NAME]),
-            "visitor": lookup("visitor", [REGISTRY_HOST, INSIDE_NAME]),
-        }
+        # A CoreDNS replica that is still stopping can answer from its cache
+        # (30 s) for a moment, so wait up to 90 s for outside names to go.
+        started = time.monotonic()
+        while True:
+            names = {
+                "node": lookup("node", [REGISTRY_HOST]),
+                "app": lookup("app", [REGISTRY_HOST, APP_NAME]),
+                "visitor": lookup("visitor", [REGISTRY_HOST, INSIDE_NAME]),
+            }
+            waited = round(time.monotonic() - started)
+            if waited > 90 or all(
+                unresolved(found, REGISTRY_HOST) for found in names.values()
+            ):
+                break
+            time.sleep(5)
         reaches, code = node_reaches_registry()
         pull = node("timeout", "90", "crictl", "pull", ABSENT_IMAGE)
         error = (pull.stderr.strip() or pull.stdout.strip())[-300:]
@@ -544,6 +554,7 @@ def run_cases():
                 "image_removed_after_control": forgotten,
                 "rules": closed.stdout.strip().splitlines(),
                 "lookups_after_closing": names,
+                "seconds_until_outside_names_failed": waited,
                 "node_registry_status": code,
                 "node_pull_exit": pull.returncode,
                 "node_pull_error": error,
