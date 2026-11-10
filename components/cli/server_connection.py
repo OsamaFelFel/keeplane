@@ -58,6 +58,10 @@ class SignInExpired(ConnectionError):
         self.result = result
 
 
+class Unreachable(ConnectionError):
+    """Nothing answered: Keeplane is down, restarting or out of reach."""
+
+
 class NoRedirects(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
@@ -116,7 +120,9 @@ def request(server, path, credential, *, method="GET", expected=200, payload=Non
                     403: "The requested action is unavailable.", 503: "Keeplane is temporarily unavailable; retry later."}
         raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code,
                               detail) from None
-    except (URLError, OSError, ValueError):
+    except (URLError, OSError):
+        raise Unreachable("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
+    except ValueError:
         raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
     if len(body) > LIMIT:
         raise ConnectionError("The server response exceeds the supported size.")

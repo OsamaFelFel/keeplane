@@ -17,6 +17,7 @@ if __package__:
     from .server_connection import (
         ConnectionError,
         SignInExpired,
+        Unreachable,
         account,
         gateway_endpoint,
         model_alternatives,
@@ -35,6 +36,7 @@ else:
     from server_connection import (
         ConnectionError,
         SignInExpired,
+        Unreachable,
         account,
         gateway_endpoint,
         model_alternatives,
@@ -128,6 +130,16 @@ SWITCH_UNAVAILABLE = ("{model} is approved for this project but can't be used ri
 UNMARKED = "Your `keeplane use` choice isn't shown in this list until the file is fixed."
 OWN_KEY_MOVED = ("Your own key for {model} {state}, so {task} uses {other}. "
                  "Run `keeplane keys list` to see your keys.")
+
+# 009-15 (ADR 028): an outage, not the model, stopped the turn. Either the
+# gateway didn't answer, or it refused because Keeplane's check couldn't run
+# (the app or its database down or restarting). The sign-in still works.
+GATEWAY_DOWN = ("Keeplane's gateway can't be reached right now, so this task stopped "
+                "and nothing {more}was sent. Try again in a few minutes, or ask your "
+                "admin to check the gateway.")
+SERVER_DOWN = ("Keeplane isn't available right now, so this task stopped and nothing "
+               "{more}was sent. Try again in a few minutes, or ask your admin to check "
+               "Keeplane.")
 
 # Spec 004 ST11 (ADR 030): the provider refused the developer's own key during
 # a task, and the server's recheck confirmed it.
@@ -446,6 +458,41 @@ def model_problem(stdout):
     return None
 
 
+def error_statuses(stdout):
+    """Every HTTP status in the runtime's error events."""
+    return {
+        value
+        for event in _events(stdout) if event.get("type") == "error"
+        for key, value in _walk(event)
+        if key in ("statusCode", "status") and type(value) is int
+    }
+
+
+def outage(result, issuer, credential):
+    """GATEWAY_DOWN or SERVER_DOWN when an outage stopped a failed turn, else None.
+
+    The relay says when the gateway didn't answer. A refusal (403) or 5xx from
+    the gateway is an outage only when Keeplane itself doesn't answer, or
+    answers with a 5xx, straight afterwards.
+    """
+    more = "more " if any(
+        isinstance(row, dict) and row.get("requests")
+        for row in (getattr(result, "usage", None) or {}).values()) else ""
+    if getattr(result, "gateway_unreachable", 0):
+        return GATEWAY_DOWN.format(more=more)
+    if not any(status == 403 or 500 <= status <= 599
+               for status in error_statuses(result.stdout)):
+        return None
+    try:
+        account(issuer, credential)
+    except Unreachable:
+        return SERVER_DOWN.format(more=more)
+    except ConnectionError as error:
+        if error.status is not None and 500 <= error.status <= 599:
+            return SERVER_DOWN.format(more=more)
+    return None
+
+
 def problem_message(problem, model, alternatives):
     """Tell the developer what happened and which allowed models they may choose."""
     message = STOPPED[problem].format(model=model)
@@ -541,10 +588,14 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
                 result.stdout = result.stdout.replace(secret, "[redacted]")
                 result.stderr = result.stderr.replace(secret, "[redacted]")
             raise SignInExpired(more=refused, result=result)
-        problem = (model_problem(result.stdout)
+        stopped = (outage(result, credential.issuer, credential.access_token)
                    if result.returncode and not key_refused else None)
+        problem = (model_problem(result.stdout)
+                   if result.returncode and not key_refused and not stopped else None)
         if key_refused:
             result.stderr += KEY_REFUSED.format(model=model) + "\n"
+        elif stopped:
+            result.stderr += stopped + "\n"
         elif problem:
             try:
                 alternatives = model_alternatives(

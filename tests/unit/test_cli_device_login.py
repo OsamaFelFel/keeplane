@@ -154,3 +154,49 @@ def test_duplicate_pending_error_does_not_extend_wait(issuer, clock, tmp_path): 
     with pytest.raises(ConnectionError, match="refused"):
         device_login.login(issuer.url, tmp_path / "duplicate")
     assert clock == [5]
+
+
+def test_device_sign_in_keeps_waiting_while_keeplane_restarts(
+    issuer,  # noqa: F811 - imported pytest fixture
+    clock,
+    tmp_path,
+    monkeypatch,
+):
+    """009-15: polls that get no answer, or a 5xx, are asked again."""
+    real = device_login.exchange
+    outages = [None, 503]
+
+    def restarting(server, form, **kwargs):
+        if outages:
+            down = outages.pop(0)
+            # A closed port answers nothing; the app's own 503 is a 5xx.
+            if down is None:
+                return real("http://127.0.0.1:9", form, **kwargs)
+            issuer.token_status = down
+            try:
+                return real(server, form, **kwargs)
+            finally:
+                issuer.token_status = 200
+        return real(server, form, **kwargs)
+
+    monkeypatch.setattr(device_login, "exchange", restarting)
+    path = tmp_path / "profile"
+    device_login.login(issuer.url, path, announce=lambda _: None)
+    assert clock == [5, 5, 5] and len(issuer.device_polls) == 2
+    with opened(path) as profile:
+        assert profile.load().access_token == issuer.access
+
+
+def test_device_sign_in_that_cant_start_says_keeplane_is_unavailable(
+    issuer,  # noqa: F811 - imported pytest fixture
+    clock,
+    tmp_path,
+):
+    issuer.device_status = 503
+    with pytest.raises(ConnectionError) as error:
+        device_login.login(issuer.url, tmp_path / "busy")
+    assert "isn't available right now" in str(error.value)
+    with pytest.raises(ConnectionError) as error:
+        device_login.login("http://127.0.0.1:9", tmp_path / "gone")
+    assert "isn't available right now" in str(error.value)
+    assert not (tmp_path / "busy" / "credential.json").exists()

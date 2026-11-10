@@ -79,6 +79,18 @@ the browser times out or is refused, `login` says "The sign-in in your browser
 didn't finish, so you aren't signed in. Run `keeplane login` to try again, or
 `keeplane login --device` to sign in from another device." and exits 1.
 
+An app or database restart while the sign-in page is open doesn't matter: allow
+access once the page answers again and the sign-in finishes. If Keeplane is down
+at the moment the CLI exchanges the sign-in, nothing is saved, on your machine or
+at the server, and `login` exits 1 with:
+
+```text
+Keeplane isn't available right now, so you aren't signed in. Run `keeplane login` to try again in a few minutes.
+```
+
+The CLI never sends the same sign-in twice; `keeplane login` starts a new one
+([SRO-01 to SRO-04](../../tests/e2e/sign-in-restart-outage-cases.md)).
+
 Use the [coding command](cli-coding.md) for account-bound turns and resume.
 Use explicit [refresh](cli-account-profile.md) when needed; refresh is not
 automatic and does not happen during a coding turn. This trial does not select

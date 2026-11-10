@@ -1,13 +1,20 @@
 """Explicit one-shot pair rotation; never retry an ambiguous token exchange."""
 
 if __package__:
-    from .browser_login import exchange
+    from .browser_login import ServerUnavailable, exchange
     from .credential_profile import Credential, ProfileError, opened
-    from .server_connection import ConnectionError, logout, session
+    from .server_connection import ConnectionError, SignInExpired, logout, session
 else:
-    from browser_login import exchange
+    from browser_login import ServerUnavailable, exchange
     from credential_profile import Credential, ProfileError, opened
-    from server_connection import ConnectionError, logout, session
+    from server_connection import ConnectionError, SignInExpired, logout, session
+
+# 009-15: Keeplane was down or restarting, so nothing was rotated and the
+# saved sign-in still works; a later `keeplane refresh` rotates it.
+UNAVAILABLE = (
+    "Keeplane isn't available right now, so your sign-in wasn't refreshed. "
+    "It's kept as it was. Run `keeplane refresh` again in a few minutes."
+)
 
 
 def refresh(path):
@@ -22,7 +29,14 @@ def refresh(path):
                     "refresh_token": old.refresh_token,
                 },
             )
-        except ConnectionError:
+        except ServerUnavailable:
+            raise ConnectionError(UNAVAILABLE) from None
+        except ConnectionError as error:
+            if error.status in (400, 401):
+                # The server no longer accepts this pair: it expired, was
+                # withdrawn, or was used once already (the whole sign-in is
+                # then withdrawn). Only a new sign-in helps.
+                raise SignInExpired() from None
             raise ConnectionError(
                 "Refresh did not complete; the old local profile was retained. "
                 "The server may have rotated it. Sign in again after recovery."

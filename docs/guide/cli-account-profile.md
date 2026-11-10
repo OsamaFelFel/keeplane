@@ -21,11 +21,26 @@ python3 components/cli/keeplane.py refresh --profile /private/keeplane-account
 Refresh makes one exchange with the saved issuer and sign-in client, checks that
 the new credential belongs to the same current account, then atomically replaces
 the pair. It can refresh an expired access token while its refresh token remains
-valid. There is no automatic retry or refresh during a coding turn. An uncertain
-exchange retains the old local profile, but the server may already have rotated
-it; recover with logout or operator withdrawal and sign in again. Do not blindly
-retry a lost rotation response: the server withdraws the rotated family
-when a previously used refresh token is replayed.
+valid. There is no automatic retry or refresh during a coding turn.
+
+If Keeplane doesn't answer, or answers with a server error, because the app or
+its database is restarting, nothing was rotated. `refresh` exits 1 and says:
+
+```text
+Keeplane isn't available right now, so your sign-in wasn't refreshed. It's kept as it was. Run `keeplane refresh` again in a few minutes.
+```
+
+Your sign-in keeps working, and a later `refresh` rotates it. Refresh doesn't
+need the gateway, so it works while the gateway is down. If Keeplane refuses the
+pair, because it has expired, was withdrawn, or was already used once, `refresh`
+exits 1 with "Your Keeplane sign-in has expired. Run `keeplane login` to sign in
+again." Using a refresh token a second time withdraws the whole sign-in, the pair
+it was exchanged for included, so an answer lost after the server rotated the pair
+ends in that message too, and never in two working sign-ins
+([SRO-07 to SRO-10](../../tests/e2e/sign-in-restart-outage-cases.md)). Any other
+unexpected answer keeps the old local profile and warns that the server may
+already have rotated it; recover with logout or operator withdrawal and sign in
+again.
 
 New profiles store only the fixed browser or device client ID and, when the
 server gives one at sign-in or refresh, its gateway address (format v3; v2

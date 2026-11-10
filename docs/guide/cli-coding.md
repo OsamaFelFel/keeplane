@@ -454,6 +454,34 @@ the message then points to `keeplane models` instead. The missing-key case
 above is different: there `code` does switch to another allowed model and says
 so before it starts.
 
+### When Keeplane or the gateway is down
+
+Your sign-in is kept in Keeplane's database, so a restart of the app, its
+database or the gateway doesn't sign you out: a task that runs across a restart
+carries on with the same sign-in. If one of them is down when a task's next model
+call goes out, the task stops and nothing more is sent. `code` exits 1 and says
+which, instead of blaming the model:
+
+```text
+Keeplane's gateway can't be reached right now, so this task stopped and nothing more was sent. Try again in a few minutes, or ask your admin to check the gateway.
+```
+
+```text
+Keeplane isn't available right now, so this task stopped and nothing more was sent. Try again in a few minutes, or ask your admin to check Keeplane.
+```
+
+The second one means the gateway couldn't ask Keeplane whether the call is
+allowed, because the app or its database is down. Both say "nothing was sent"
+when the first call couldn't go out. Run the task again once they're back; review
+any edits from the earlier steps first. While the gateway is down, Keeplane can't
+record the task's usage either, and `code` says so. A task started while Keeplane
+is down stops before anything is sent, with "Cannot reach Keeplane securely; check
+the server and certificate configuration." (or "Keeplane is temporarily
+unavailable; retry later." when Keeplane answers but can't choose a model, for
+example while the gateway is down). The
+[restart and outage cases](../../tests/e2e/sign-in-restart-outage-cases.md)
+show each one.
+
 ### When the provider refuses your own key
 
 A model set up for each developer's own key sends your saved key to the
