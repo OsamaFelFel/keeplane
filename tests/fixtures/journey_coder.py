@@ -6,7 +6,8 @@ turn that offers tools gets the same two tool calls every time: read the
 sample repo's file, then edit ``return a - b`` to ``return a + b``. After the
 tool results it answers with a fixed sentence. Every answer reports the same
 token usage, so the journey can check the totals exactly. It also keeps the
-request settings (Spec 004 ST26) each request carried, as received. Standard library
+request settings (Spec 004 ST26) each request carried, as received, and the
+names of any of Keeplane's own headers that reached it. Standard library
 only; it sends no outbound requests.
 """
 
@@ -20,6 +21,14 @@ OLD, NEW = "return a - b", "return a + b"
 USAGE = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
 # The request settings kept from each request, by the name they arrived under.
 SETTINGS = ("temperature", "top_p", "max_tokens", "max_completion_tokens")
+# Keeplane's own headers, which a gateway must never pass on to a model.
+KEEPLANE_HEADERS = (
+    "authorization",
+    "x-keeplane-gateway-credential",
+    "x-keeplane-project-id",
+    "x-keeplane-developer-route",
+    "x-keeplane-installed-runtime",
+)
 
 
 class JourneyCoder:
@@ -29,6 +38,7 @@ class JourneyCoder:
         self.answers = 0  # Answers served, each with USAGE.
         self.tools = []  # Tool calls sent, in order.
         self.received = []  # Each request's SETTINGS, in order.
+        self.forwarded = []  # Each request's KEEPLANE_HEADERS, by name only.
         self.lock = threading.Lock()
         coder = self
 
@@ -61,8 +71,12 @@ class JourneyCoder:
                 ):
                     self.reply(404, {"error": "unknown model or path"})
                     return
+                sent = {name.lower() for name in self.headers}
                 with coder.lock:
                     coder.received.append({name: body.get(name) for name in SETTINGS})
+                    coder.forwarded.append(
+                        [name for name in KEEPLANE_HEADERS if name in sent]
+                    )
                 message, finish = coder.next_message(body)
                 streamed = bool(body.get("stream"))
                 wants_usage = (body.get("stream_options") or {}).get(

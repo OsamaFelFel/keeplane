@@ -18,6 +18,10 @@ nothing more is sent. DEV-09 and DEV-10 send tasks on developers' own keys
 to the HTTPS fixture provider: a refused key stops the task, and an accepted
 one answers it. Afterwards it removes what it created.
 
+``run_cases`` takes the install to run on. By default it is the preview
+(``PreviewInstall``); test_developer_journey_release.py runs DEV-01 to DEV-08
+on release installs in both gateway modes (task 009-15).
+
 The runtime comes from ``KEEPLANE_OPENCODE_V2_BIN`` (the hash-pinned binary the
 ``coding-runtime`` check downloads). Without it, DEV-03 and DEV-04 are recorded
 as not run and the test is skipped, so CI fails. DEV-03b is also not run until
@@ -150,9 +154,9 @@ def changed_files(directory):
 class Developer(preview.Cli):
     """A developer at their own machine: own home folder, CLI and runtime on PATH."""
 
-    def __init__(self, home, username, password, runtime):
+    def __init__(self, home, username, password, runtime, server=BASE):
         home.mkdir()
-        super().__init__(home, username, password)
+        super().__init__(home, username, password, server)
         if runtime is not None:
             tools = home / "bin"
             tools.mkdir()
@@ -179,28 +183,80 @@ class Developer(preview.Cli):
         return preview.access_token(self.profile())
 
 
-def gateway_requests():
-    """How many requests the guarded gateway's listener has logged, or None."""
-    logs = classes.compose(
-        "--profile",
-        "runtime",
-        "logs",
-        "--no-color",
-        "--no-log-prefix",
-        "gateway",
-        runtime=True,
-        timeout=60,
-    )
-    if logs.returncode:
-        return None
-    return sum(
-        "request" in line.split() and "listener=keeplane-runtime" in line.split()
-        for line in logs.stdout.splitlines()
-    )
+class PreviewInstall:
+    """The default Docker preview (``deploy/local/up.py``): SQLite, one app copy.
+
+    The journey reads an install only through these attributes and methods;
+    tests/fixtures/release_journey.py has the same ones for the release
+    installs (task 009-15).
+    """
+
+    name = "the default preview"
+    base = BASE
+    gateway = preview.GATEWAY
+    runner_port = classes.RUNNER_PORT
+    runner_address = classes.RUNNER_ADDRESS
+    # A new random suffix for the models each run; a release install names
+    # its models before its gateway starts.
+    suffix = None
+    # The preview's gateway sends the shared key Keeplane keeps.
+    shared_cloud_key = True
+    # The preview stays after the run, so the journey restores it.
+    disposable = False
+
+    def secret(self, name):
+        return (RUNTIME / name).read_text().strip()
+
+    def exec(self, service, *arguments, timeout=60):
+        return classes.compose("exec", "-T", service, *arguments, timeout=timeout)
+
+    def gateway_requests(self):
+        """How many requests the guarded gateway's listener has logged, or None."""
+        logs = classes.compose(
+            "--profile",
+            "runtime",
+            "logs",
+            "--no-color",
+            "--no-log-prefix",
+            "gateway",
+            runtime=True,
+            timeout=60,
+        )
+        if logs.returncode:
+            return None
+        return sum(
+            "request" in line.split() and "listener=keeplane-runtime" in line.split()
+            for line in logs.stdout.splitlines()
+        )
+
+    def settled(self, expected, timeout):
+        return preview.wait_for_report(expected, timeout)
 
 
-def usage_rows(token):
-    data, _ = usage.fetch(BASE, token, None)
+PREVIEW = PreviewInstall()
+
+
+def cloud_payload(install, name, key):
+    """DEV-04's priced cloud model, as the admin adds it on this install.
+
+    Keeplane keeps a shared key only for a gateway it runs. A customer-run
+    gateway holds its own provider key, so there Keeplane adds the model
+    with no key (Spec 004, docs/guide/gateway-configuration.md).
+    """
+    payload = {
+        "name": name,
+        "model": CLOUD_UPSTREAM,
+        "source": "openai",
+        "key_choice": "none",
+        "approved_classes": ["Public"],
+    }
+    if install.shared_cloud_key:
+        payload.update(key_choice="shared", shared_key=key)
+    return payload
+
+
+def usage_rows(base, token):
+    data, _ = usage.fetch(base, token, None)
     return data, {row["model"]: row for row in data["models"]}
 
 
@@ -215,23 +271,24 @@ def project_entry(admin, name):
     return next((row for row in listing["projects"] if row["name"] == name), None)
 
 
-def run_cases():
+def run_cases(install=PREVIEW, expected=CASES, report_file=REPORT):
+    """Run the journey's cases on ``install``; ``expected`` names the cases."""
     binary = runtime_binary()
-    suffix = uuid.uuid4().hex[:8]
+    suffix = install.suffix or uuid.uuid4().hex[:8]
     coder_model, coder_upstream = "journey-coder-" + suffix, "journey-up-" + suffix
     cloud_model = "journey-cloud-" + suffix
     own_model = "journey-own-" + suffix
     remote = f"https://git.example.test/journey/sample-{suffix}.git"
     project_name = f"journey/sample-{suffix}"
     project_id = project_identity.remote_project(remote).id
-    password = (RUNTIME / "first-admin-password").read_text().strip()
-    cloud_key = (RUNTIME / "cloud-provider-key").read_text().strip()
+    password = install.secret("first-admin-password")
+    cloud_key = install.secret("cloud-provider-key")
     names = {"first": "journey-dev-" + suffix, "second": "journey-second-" + suffix}
     secrets = {key: uuid.uuid4().hex + uuid.uuid4().hex for key in names}
     cases, failures = [], []
     state = {"users": [], "models": []}
     approved_before = []
-    admin = Browser()
+    admin = Browser(install.base)
 
     def record(identifier, verdict, observed):
         cases.append({"id": identifier, "verdict": verdict, "observed": observed})
@@ -245,11 +302,15 @@ def run_cases():
 
     with (
         tempfile.TemporaryDirectory(prefix="keeplane-journey-") as directory,
-        JourneyCoder([coder_upstream], port=classes.RUNNER_PORT) as coder,
+        JourneyCoder([coder_upstream], port=install.runner_port) as coder,
     ):
         root = Path(directory)
-        first = Developer(root / "first", names["first"], secrets["first"], binary)
-        second = Developer(root / "second", names["second"], secrets["second"], binary)
+        first = Developer(
+            root / "first", names["first"], secrets["first"], binary, install.base
+        )
+        second = Developer(
+            root / "second", names["second"], secrets["second"], binary, install.base
+        )
         repo = sample_repo(root / "first/sample", remote)
         clone = sample_repo(root / "second/sample", remote)
         try:
@@ -258,9 +319,7 @@ def run_cases():
             approved_before = sorted(
                 row["id"] for row in listing["models"] if row.get("approved")
             )
-            if not preview.wait_for_report(
-                preview.settled(len(approved_before)), timeout=300
-            ):
+            if not install.settled(preview.settled(len(approved_before)), 300):
                 raise RuntimeError("The model enroller did not settle before the cases")
             for key in ("first", "second"):
                 status, user, _ = admin.fetch(
@@ -275,24 +334,18 @@ def run_cases():
                 if status != 201:
                     raise RuntimeError(f"Creating a developer returned {status}")
                 state["users"].append(user["id"])
-            # The admin adds and approves the two models, as in Models and routing.
-            for payload in (
+            # The admin adds and approves the models, as in Models and routing:
+            # the coder and the cloud model, and for DEV-09 and DEV-10 a cloud
+            # model on developers' own keys.
+            added = (
                 {
                     "name": coder_model,
                     "model": coder_upstream,
                     "source": "runner",
-                    "address": classes.RUNNER_ADDRESS,
+                    "address": install.runner_address,
                     "approved_classes": ["Public"],
                 },
-                {
-                    "name": cloud_model,
-                    "model": CLOUD_UPSTREAM,
-                    "source": "openai",
-                    "key_choice": "shared",
-                    "shared_key": cloud_key,
-                    "approved_classes": ["Public"],
-                },
-                # DEV-09 and DEV-10: the same fixture model on developers' own keys.
+                cloud_payload(install, cloud_model, cloud_key),
                 {
                     "name": own_model,
                     "model": OWN_KEY_UPSTREAM,
@@ -300,17 +353,18 @@ def run_cases():
                     "key_choice": "personal",
                     "approved_classes": ["Public"],
                 },
-            ):
+            )
+            for payload in added[: 3 if "DEV-09" in expected else 2]:
                 status, result, _ = admin.fetch("/api/models", payload, method="POST")
                 if status != 200:
                     raise RuntimeError(
                         f"Adding {payload['name']} returned {status}: {result}"
                     )
                 state["models"].append(payload["name"])
-            if not preview.wait_for_report(
-                preview.settled(len(approved_before) + 3), timeout=120
+            if not install.settled(
+                preview.settled(len(approved_before) + len(state["models"])), 120
             ):
-                raise RuntimeError("The model enroller did not enroll the three models")
+                raise RuntimeError("The model enroller did not enroll the new models")
             _, listing, _ = admin.fetch("/api/models")
             approved = {row["id"] for row in listing["models"] if row.get("approved")}
             unapproved = {
@@ -318,7 +372,9 @@ def run_cases():
             }
 
             # DEV-01: browser sign-in with the CLI's defaults, then whoami.
-            code, out, err = first.run("login", "--server", BASE, "--timeout", "60")
+            code, out, err = first.run(
+                "login", "--server", install.base, "--timeout", "60"
+            )
             who = first.run("whoami")
             record(
                 "DEV-01",
@@ -397,6 +453,11 @@ def run_cases():
                 code, out, err = first.run("code", TASK, cwd=repo)
                 answers = coder.served() - before
                 received = coder.received[received_before:]
+                # Nothing of Keeplane's reaches the model: not the developer's
+                # sign-in, the project or the gateway's markers.
+                leaked = sorted(
+                    {name for row in coder.forwarded[received_before:] for name in row}
+                )
                 first_turns.append(answers)
                 entry = project_entry(admin, project_name)
                 users = [row["username"] for row in (entry or {}).get("users", [])]
@@ -419,6 +480,7 @@ def run_cases():
                     and entry["id"] == project_id
                     and entry["initialized"] is False
                     and users == [names["first"]]
+                    and not leaked
                     else "fail",
                     {
                         "test_failed_before": failing_before,
@@ -432,6 +494,7 @@ def run_cases():
                         "cli_messages": err.splitlines(),
                         "project": entry,
                         "runtime_errors": out.splitlines()[-3:] if code else [],
+                        "keeplane_headers_at_model": leaked,
                     },
                 )
 
@@ -471,7 +534,9 @@ def run_cases():
             if binary is None:
                 not_run("DEV-04")
             else:
-                code, _, _ = second.run("login", "--server", BASE, "--timeout", "60")
+                code, _, _ = second.run(
+                    "login", "--server", install.base, "--timeout", "60"
+                )
                 if code:
                     raise RuntimeError("The second developer could not sign in")
                 coder.target = clone / "calc.py"
@@ -484,8 +549,8 @@ def run_cases():
                     "code", "--model", cloud_model, "Say hello", cwd=repo
                 )
                 shown = first.run("usage", cwd=repo)
-                data, mine = usage_rows(first.token())
-                _, theirs = usage_rows(second.token())
+                data, mine = usage_rows(install.base, first.token())
+                _, theirs = usage_rows(install.base, second.token())
 
                 def tokens(answers, per):
                     return {
@@ -601,17 +666,17 @@ def run_cases():
             token = first.token()
             out = first.run("logout")
             before = coder.served()
-            seen_before = gateway_requests()
+            seen_before = install.gateway_requests()
             attempt = first.run("code", "anything", cwd=repo)
             listed = first.run("models", cwd=repo)
             time.sleep(2)  # Let the gateway write any request it received.
-            seen_after = gateway_requests()
-            replay = preview.guarded(token, project_id, coder_model)
+            seen_after = install.gateway_requests()
+            replay = preview.guarded(token, project_id, coder_model, install.gateway)
             deadline = time.monotonic() + 15
-            seen_probe = gateway_requests()
+            seen_probe = install.gateway_requests()
             while seen_probe == seen_after and time.monotonic() < deadline:
                 time.sleep(1)
-                seen_probe = gateway_requests()
+                seen_probe = install.gateway_requests()
             record(
                 "DEV-05",
                 "pass"
@@ -647,6 +712,7 @@ def run_cases():
                 },
             )
             context = {
+                "install": install,
                 "first": first,
                 "second": second,
                 "clone": clone,
@@ -666,20 +732,25 @@ def run_cases():
                 "failures": failures,
             }
             later_cases(record, context)
-            own_key_cases(record, context)
+            if "DEV-09" in expected:
+                own_key_cases(record, context)
         finally:
             for developer in (first, second):
                 signed_in = (developer.profile() / "credential.json").exists()
                 if signed_in and developer.run("logout")[0]:
                     failures.append(f"{developer.username} logout failed")
-            restore(password, state, failures)
-            if state["models"] and not preview.wait_for_report(
-                preview.settled(len(approved_before)), timeout=300
+            restore(install, password, state, failures)
+            # A disposable install is removed after the run, enroller and all.
+            if (
+                state["models"]
+                and not install.disposable
+                and not install.settled(preview.settled(len(approved_before)), 300)
             ):
                 failures.append("the model enroller did not settle after clean-up")
     cleanup = "complete" if not failures else "; ".join(failures)
     report = {
-        "suite": "Spec 009 developer journey DEV-01 to DEV-10 on the default preview",
+        "suite": f"Spec 009 developer journey {expected[0]} to {expected[-1]} on "
+        + install.name,
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "runtime": "OpenCode 2.0.27 (pinned)" if binary else None,
         "cases": cases,
@@ -688,9 +759,10 @@ def run_cases():
         "failed": sum(case["verdict"] == "fail" for case in cases),
         "not_run": [case["id"] for case in cases if case["verdict"] == "not-run"],
     }
-    REPORT.write_text(json.dumps(report, indent=2) + "\n")
+    report_file.write_text(json.dumps(report, indent=2) + "\n")
     print(
-        f"{report['passed']} passed, {report['failed']} failed; cleanup {cleanup}; {REPORT}"
+        f"{report['passed']} passed, {report['failed']} failed; "
+        f"cleanup {cleanup}; {report_file}"
     )
     for case in cases:
         print(case["id"], case["verdict"], json.dumps(case["observed"]))
@@ -698,7 +770,10 @@ def run_cases():
 
 
 # DEV-06 to DEV-08 (task 009 "Developer journey cases"), after the MVP journey.
-DEVICE_PREFIX = "Open " + BASE + "/oauth/confirm-device/ and enter code "
+def device_prefix(base):
+    return "Open " + base + "/oauth/confirm-device/ and enter code "
+
+
 # Ages one account's CLI access tokens past their end, as the clock would.
 EXPIRE_SCRIPT = """
 from datetime import timedelta
@@ -737,8 +812,8 @@ def approve(developer, code):
         return False
 
 
-def device_code(text):
-    found = re.search(re.escape(DEVICE_PREFIX) + r"(\S+)\.", text)
+def device_code(text, base=BASE):
+    found = re.search(re.escape(device_prefix(base)) + r"(\S+)\.", text)
     return found.group(1) if found else None
 
 
@@ -761,7 +836,7 @@ def no_browser_login(developer):
     )
     try:
         lines = [process.stdout.readline().strip() for _ in range(2)]
-        code = device_code(lines[1])
+        code = device_code(lines[1], developer.server)
         approved = code is not None and approve(developer, code)
         out, err = process.communicate(timeout=90)
         return process.returncode, lines, approved, out.strip(), err.strip()
@@ -804,7 +879,7 @@ def in_terminal(developer, arguments, cwd, replies, timeout=180):
             if not chunk:
                 break
             shown += chunk.decode(errors="replace").replace("\r\n", "\n")
-            code = device_code(shown)
+            code = device_code(shown, developer.server)
             if code and approved is None:
                 approved = approve(developer, code)
             while replies and replies[0][0] in shown[seen:]:
@@ -820,11 +895,9 @@ def in_terminal(developer, arguments, cwd, replies, timeout=180):
     return returncode, shown, approved
 
 
-def expire_sign_in(username):
+def expire_sign_in(install, username):
     """Expire the account's CLI sign-in on the server; how many were expired."""
-    result = classes.compose(
-        "exec",
-        "-T",
+    result = install.exec(
         "app",
         "python",
         "manage.py",
@@ -837,11 +910,9 @@ def expire_sign_in(username):
     return int(lines[-1]) if not result.returncode and lines else None
 
 
-def cloud_state():
+def cloud_state(install):
     """The cloud-provider fixture's record: answers, and key hashes it was sent."""
-    result = classes.compose(
-        "exec", "-T", "cloud-provider", "python", "-c", CALLS_SCRIPT, timeout=60
-    )
+    result = install.exec("cloud-provider", "python", "-c", CALLS_SCRIPT, timeout=60)
     try:
         data = json.loads(result.stdout) if not result.returncode else None
     except ValueError:
@@ -851,9 +922,9 @@ def cloud_state():
     return data, result.stdout
 
 
-def cloud_calls():
+def cloud_calls(install):
     """How many requests the cloud-provider fixture answered, or None."""
-    state = cloud_state()
+    state = cloud_state(install)
     try:
         return state[0]["count"] if state else None
     except (KeyError, TypeError):
@@ -864,11 +935,9 @@ def key_hash(key):
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-def mark_key(key, verdict):
+def mark_key(install, key, verdict):
     """Tell the fixture provider to accept or refuse a key; only its hash is sent."""
-    result = classes.compose(
-        "exec",
-        "-T",
+    result = install.exec(
         "cloud-provider",
         "python",
         "-c",
@@ -912,8 +981,8 @@ def sign_in_client(developer):
     return saved.get("client_id") if isinstance(saved, dict) else None
 
 
-def sent_counts(coder):
-    return coder.served(), gateway_requests(), cloud_calls()
+def sent_counts(coder, install):
+    return coder.served(), install.gateway_requests(), cloud_calls(install)
 
 
 def later_cases(record, context):
@@ -926,6 +995,7 @@ def later_cases(record, context):
     """
     first, coder, repo = context["first"], context["coder"], context["repo"]
     coder_model, names = context["coder_model"], context["names"]
+    install = context["install"]
 
     # DEV-06: no browser can open here (SSH), so the device code signs in.
     code, lines, approved, out, err = no_browser_login(first)
@@ -935,7 +1005,7 @@ def later_cases(record, context):
         "pass"
         if code == 0
         and lines[0] == browser_login.NO_BROWSER
-        and device_code(lines[1]) is not None
+        and device_code(lines[1], install.base) is not None
         and approved
         and out == "Signed in to Keeplane."
         and who[0] == 0
@@ -945,7 +1015,7 @@ def later_cases(record, context):
         {
             "login_exit": code,
             "first_line": lines[0],
-            "code_shown": device_code(lines[1]) is not None,
+            "code_shown": device_code(lines[1], install.base) is not None,
             "approved_elsewhere": approved,
             "login_output": out,
             "login_errors": bool(err),
@@ -957,8 +1027,8 @@ def later_cases(record, context):
 
     # DEV-07: the server ends the sign-in; `code` sends nothing, in a script
     # and in a terminal, where it offers to sign in again.
-    expired = expire_sign_in(names["first"])
-    before = sent_counts(coder)
+    expired = expire_sign_in(install, names["first"])
+    before = sent_counts(coder, install)
     script = first.run("code", "anything", cwd=repo)
     terminal = in_terminal(
         first,
@@ -970,7 +1040,7 @@ def later_cases(record, context):
         ],
     )
     time.sleep(2)  # Let the gateway write any request it received.
-    after = sent_counts(coder)
+    after = sent_counts(coder, install)
     who = first.run("whoami")
     record(
         "DEV-07",
@@ -999,7 +1069,7 @@ def later_cases(record, context):
             "terminal_shown": [
                 line
                 for line in terminal[1].splitlines()
-                if line.strip() and device_code(line) is None
+                if line.strip() and device_code(line, install.base) is None
             ],
             "signed_in_again_elsewhere": terminal[2],
             "sent_before": dict(zip(("model", "gateway", "cloud"), before)),
@@ -1019,11 +1089,15 @@ def later_cases(record, context):
         return
     root = context["root"]
     admin_cli = Developer(
-        root / "admin", "first-admin", context["password"], context["binary"]
+        root / "admin",
+        "first-admin",
+        context["password"],
+        context["binary"],
+        install.base,
     )
     clone = sample_repo(root / "admin/sample", context["remote"])
     try:
-        signed = admin_cli.run("login", "--server", BASE, "--timeout", "60")
+        signed = admin_cli.run("login", "--server", install.base, "--timeout", "60")
         who = admin_cli.run("whoami")
         listed = admin_cli.run("models", cwd=clone)
         theirs = first.run("models", cwd=repo)
@@ -1041,14 +1115,14 @@ def later_cases(record, context):
             if not row.get("approved")
         )
         unlisted = unapproved[0] if unapproved else None
-        before = sent_counts(coder)
+        before = sent_counts(coder, install)
         outside = (
             admin_cli.run("code", "--model", unlisted, "anything", cwd=clone)
             if unlisted
             else (None, "", "")
         )
         time.sleep(2)
-        refused_sent = sent_counts(coder)
+        refused_sent = sent_counts(coder, install)
         chosen = admin_cli.run("use", coder_model, cwd=clone)
         coder.target = clone / "calc.py"
         tools_before, served_before = len(coder.tools), coder.served()
@@ -1140,11 +1214,12 @@ def own_key_cases(record, context):
             )
         return
     model, shared = context["own_model"], context["cloud_key"]
+    install = context["install"]
 
     def own_key(developer, cwd):
         """A new key the provider accepts, saved with `keeplane keys set`."""
         key = "own-" + uuid.uuid4().hex + uuid.uuid4().hex
-        mark_key(key, "accepted")
+        mark_key(install, key, "accepted")
         before = key_list_status(developer, cwd, model)
         saved = developer.run(
             "keys", "set", "--model", model, "--key-stdin", cwd=cwd, stdin=key + "\n"
@@ -1154,10 +1229,10 @@ def own_key_cases(record, context):
     # DEV-09: the provider refuses the second developer's own key during a task.
     second, clone = context["second"], context["clone"]
     key, listed_before, saved = own_key(second, clone)
-    mark_key(key, "refused")
-    before, _ = cloud_state() or ({}, "")
+    mark_key(install, key, "refused")
+    before, _ = cloud_state(install) or ({}, "")
     task = second.run("code", "--model", model, "Say hello", cwd=clone)
-    after, raw = cloud_state() or ({}, "")
+    after, raw = cloud_state(install) or ({}, "")
     listed = key_list_status(second, clone, model)
     refused_message = coding.KEY_REFUSED.format(model=model)
     accepted_delta = key_calls(after, key)[0] - key_calls(before, key)[0]
@@ -1196,9 +1271,9 @@ def own_key_cases(record, context):
     first, repo = context["first"], context["repo"]
     key, listed_before, saved = own_key(first, repo)
     sign_ins = [name for name in RUNTIME_SIGN_INS if (first.home / name).exists()]
-    before, _ = cloud_state() or ({}, "")
+    before, _ = cloud_state(install) or ({}, "")
     task = first.run("code", "--model", model, "Say hello", cwd=repo)
-    after, raw = cloud_state() or ({}, "")
+    after, raw = cloud_state(install) or ({}, "")
     sign_ins += [name for name in RUNTIME_SIGN_INS if (first.home / name).exists()]
     listed = key_list_status(first, repo, model)
     own_delta = [a - b for a, b in zip(key_calls(after, key), key_calls(before, key))]
@@ -1249,9 +1324,9 @@ def own_key_cases(record, context):
     )
 
 
-def restore(password, state, failures):
+def restore(install, password, state, failures):
     try:
-        admin = Browser()
+        admin = Browser(install.base)
         if admin.login("first-admin", password)[0] != 200:
             raise RuntimeError("sign-in failed")
         for model in state["models"]:
@@ -1260,9 +1335,7 @@ def restore(password, state, failures):
             )
             if status not in (200, 404):
                 failures.append(f"{model} setup removal returned {status}")
-            removed = classes.compose(
-                "exec",
-                "-T",
+            removed = install.exec(
                 "app",
                 "python",
                 "-c",

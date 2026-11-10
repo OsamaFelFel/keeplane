@@ -56,6 +56,16 @@ planned schema rollback.
 
 ## Shared-database and Kubernetes installs
 
+CLI sign-in works the same on a shared PostgreSQL database with several app
+copies behind one address. Give every copy the same signing secret, database
+and `PUBLIC_ORIGIN`, and set `KEEPLANE_GATEWAY_PUBLIC_URL` to the gateway
+address developers' CLIs use: the managed gateway's protected listener, or
+the developer listener of your own gateway. A sign-in started on one copy can
+finish on another. The
+[release journey cases](../../tests/e2e/developer-journey-release-cases.md)
+check this with the developer journey, DEV-01 to DEV-08, on two copies with
+each kind of gateway.
+
 Sign-ins, codes waiting for approval and refresh tokens are kept in the
 database, so restarting the app, PostgreSQL or the gateway signs nobody out. While
 the app or PostgreSQL is down, the CLI tells developers Keeplane isn't available
