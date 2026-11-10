@@ -11,18 +11,16 @@ They refuse any kubeconfig context other than kind-keeplane-isolated, and
 change the runner's firewall, so they run only in that workflow.
 """
 
-import pytest
-
 import http.cookiejar
 import json
 import os
-from pathlib import Path
 import socket
 import ssl
 import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import (
     HTTPCookieProcessor,
@@ -32,8 +30,9 @@ from urllib.request import (
     urlopen,
 )
 
-from tests.support.protected_preview import BrowserCsrfHandler
+import pytest
 
+from tests.support.protected_preview import BrowserCsrfHandler
 
 ROOT = Path(__file__).resolve().parents[2]
 KUBECONFIG = os.environ.get(
@@ -132,7 +131,11 @@ APP = {
     "port": 3000,
     "path": "/health",
 }
-GATEWAY = {"name": "gateway", "host": "keeplane.keeplane.svc.cluster.local", "port": 4000}
+GATEWAY = {
+    "name": "gateway",
+    "host": "keeplane.keeplane.svc.cluster.local",
+    "port": 4000,
+}
 IN_CLUSTER_MODEL = {
     "name": "in_cluster_model",
     "host": "model.keeplane.svc.cluster.local",
@@ -143,13 +146,15 @@ IN_CLUSTER_MODEL = {
 
 def registry_target():
     """The registry by an IPv4 address the runner resolves for it."""
-    address = socket.getaddrinfo(REGISTRY_HOST, 443, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
+    address = socket.getaddrinfo(
+        REGISTRY_HOST, 443, socket.AF_INET, socket.SOCK_STREAM
+    )[0][4][0]
     return {"name": "registry", "host": address, "port": 443}
 
 
 def run(*command, timeout=300, check=True):
     result = subprocess.run(
-        command, cwd=ROOT, text=True, capture_output=True, timeout=timeout
+        command, check=False, cwd=ROOT, text=True, capture_output=True, timeout=timeout
     )
     if check and result.returncode:
         raise RuntimeError(f"{' '.join(command[:4])} failed: {result.stderr[-400:]}")
@@ -183,22 +188,38 @@ def probe_gateway(targets):
     GATEWAY_PROBES[0] += 1
     name = f"probe-{int(time.time())}-{GATEWAY_PROBES[0]}"
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as custom:
-        json.dump({"securityContext": {"runAsUser": 65532, "runAsGroup": 65532}}, custom)
+        json.dump(
+            {"securityContext": {"runAsUser": 65532, "runAsGroup": 65532}}, custom
+        )
     try:
         kubectl(
-            "-n", "keeplane", "debug", "pod/keeplane-gateway-0",
-            "--image=" + PYTHON_IMAGE, "--image-pull-policy=IfNotPresent",
-            "--container=" + name, "--profile=restricted", "--custom=" + custom.name,
-            "--", "python", "-c", PROBE, json.dumps(targets),
+            "-n",
+            "keeplane",
+            "debug",
+            "pod/keeplane-gateway-0",
+            "--image=" + PYTHON_IMAGE,
+            "--image-pull-policy=IfNotPresent",
+            "--container=" + name,
+            "--profile=restricted",
+            "--custom=" + custom.name,
+            "--",
+            "python",
+            "-c",
+            PROBE,
+            json.dumps(targets),
         )
     finally:
         os.unlink(custom.name)
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
-        pod = json.loads(kubectl("-n", "keeplane", "get", "pod", "keeplane-gateway-0", "-o", "json"))
+        pod = json.loads(
+            kubectl("-n", "keeplane", "get", "pod", "keeplane-gateway-0", "-o", "json")
+        )
         for status in pod["status"].get("ephemeralContainerStatuses", []):
             if status["name"] == name and "terminated" in status.get("state", {}):
-                logs = kubectl("-n", "keeplane", "logs", "pod/keeplane-gateway-0", "-c", name)
+                logs = kubectl(
+                    "-n", "keeplane", "logs", "pod/keeplane-gateway-0", "-c", name
+                )
                 return json.loads(logs.strip().splitlines()[-1])
         time.sleep(2)
     raise RuntimeError("The gateway probe did not finish")
@@ -241,7 +262,9 @@ def sign_in():
     )
     opener.addheaders = [("X-Keeplane-Action", "1")]
     password = (RUNTIME / "first-admin-password").read_text().strip()
-    status, _ = api(opener, "/api/session", {"username": "first-admin", "password": password})
+    status, _ = api(
+        opener, "/api/session", {"username": "first-admin", "password": password}
+    )
     if status != 200:
         raise RuntimeError(f"Admin sign-in failed with {status}")
     return opener
@@ -273,8 +296,20 @@ def provider_calls():
 
 def node_reaches_registry():
     result = run(
-        "docker", "exec", NODE, "curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
-        "-m", "10", "https://registry.k8s.io/v2/", check=False, timeout=60,
+        "docker",
+        "exec",
+        NODE,
+        "curl",
+        "-sS",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "-m",
+        "10",
+        "https://registry.k8s.io/v2/",
+        check=False,
+        timeout=60,
     )
     return result.returncode == 0 and result.stdout not in ("", "000"), result.stdout
 
@@ -305,12 +340,34 @@ def wait_for_workloads(timeout="300s"):
         "deployment/model",
         "deployment/postgres",
     ):
-        kubectl("-n", "keeplane", "rollout", "status", kind_name, "--timeout=" + timeout, timeout=400)
+        kubectl(
+            "-n",
+            "keeplane",
+            "rollout",
+            "status",
+            kind_name,
+            "--timeout=" + timeout,
+            timeout=400,
+        )
     kubectl(
-        "-n", "ingress-nginx", "rollout", "status", "deployment/ingress-nginx-controller",
-        "--timeout=" + timeout, timeout=400,
+        "-n",
+        "ingress-nginx",
+        "rollout",
+        "status",
+        "deployment/ingress-nginx-controller",
+        "--timeout=" + timeout,
+        timeout=400,
     )
-    kubectl("-n", "inside", "wait", "--for=condition=Ready", "pod", "--all", "--timeout=" + timeout, timeout=400)
+    kubectl(
+        "-n",
+        "inside",
+        "wait",
+        "--for=condition=Ready",
+        "pod",
+        "--all",
+        "--timeout=" + timeout,
+        timeout=400,
+    )
 
 
 def ask(opener, model, prompt="Say hello"):
@@ -327,10 +384,17 @@ def run_cases():
     def case(identifier, step):
         try:
             passed, observed = step()
-        except Exception as error:  # A broken step fails its case, with the reason.
-            passed, observed = False, {"error": f"{type(error).__name__}: {error}"[:600]}
+        except Exception as error:  # noqa: BLE001 - a broken step fails its case, with the reason.
+            passed, observed = (
+                False,
+                {"error": f"{type(error).__name__}: {error}"[:600]},
+            )
         results.append(
-            {"case": identifier, "verdict": "pass" if passed else "fail", "observed": observed}
+            {
+                "case": identifier,
+                "verdict": "pass" if passed else "fail",
+                "observed": observed,
+            }
         )
 
     def iso_01():
@@ -383,8 +447,12 @@ def run_cases():
         # Control: before closing, the node pulls the same reference, then
         # forgets it, so the pull after closing can fail only for want of
         # the registry, not because the reference is wrong.
-        absent_before = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
-        control_pull = node("timeout", "120", "crictl", "pull", ABSENT_IMAGE, timeout=180)
+        absent_before = (
+            node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
+        )
+        control_pull = node(
+            "timeout", "120", "crictl", "pull", ABSENT_IMAGE, timeout=180
+        )
         node("crictl", "rmi", ABSENT_IMAGE, timeout=60)
         forgotten = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
         closed = run("sudo", str(CLOSE), timeout=60)
@@ -392,9 +460,13 @@ def run_cases():
         pull = node("timeout", "90", "crictl", "pull", ABSENT_IMAGE)
         error = (pull.stderr.strip() or pull.stdout.strip())[-300:]
         reference_rejected = any(
-            text in error.lower() for text in ("not found", "manifest unknown", "unauthorized", "denied")
+            text in error.lower()
+            for text in ("not found", "manifest unknown", "unauthorized", "denied")
         )
-        visitor = probe("visitor", [MODEL, INTERNET, state.setdefault("registry", registry_target())])
+        visitor = probe(
+            "visitor",
+            [MODEL, INTERNET, state.setdefault("registry", registry_target())],
+        )
         return (
             absent_before
             and control_pull.returncode == 0
@@ -418,24 +490,46 @@ def run_cases():
 
     def iso_03():
         before = {p["metadata"]["uid"] for p in pods("keeplane")}
-        before |= {p["metadata"]["uid"] for p in pods("ingress-nginx", "app.kubernetes.io/component=controller")}
+        before |= {
+            p["metadata"]["uid"]
+            for p in pods("ingress-nginx", "app.kubernetes.io/component=controller")
+        }
         kubectl("-n", "keeplane", "delete", "pod", "--all", "--wait=true", timeout=400)
-        kubectl("-n", "ingress-nginx", "delete", "pod", "-l", "app.kubernetes.io/component=controller", "--wait=true", timeout=400)
+        kubectl(
+            "-n",
+            "ingress-nginx",
+            "delete",
+            "pod",
+            "-l",
+            "app.kubernetes.io/component=controller",
+            "--wait=true",
+            timeout=400,
+        )
         wait_for_workloads()
-        after = pods("keeplane") + pods("ingress-nginx", "app.kubernetes.io/component=controller")
+        after = pods("keeplane") + pods(
+            "ingress-nginx", "app.kubernetes.io/component=controller"
+        )
         uids = {p["metadata"]["uid"] for p in after}
         events = []
         for namespace in ("keeplane", "ingress-nginx"):
-            for event in json.loads(kubectl("-n", namespace, "get", "events", "-o", "json"))["items"]:
+            for event in json.loads(
+                kubectl("-n", namespace, "get", "events", "-o", "json")
+            )["items"]:
                 if event["involvedObject"].get("uid") in uids:
                     events.append((event.get("reason"), event.get("message", "")))
         pulls = [
-            e for e in events
+            e
+            for e in events
             if e[0] == "Pulling" or "ErrImagePull" in e[1] or "ImagePullBackOff" in e[1]
         ]
-        present = sum(1 for e in events if e[0] == "Pulled" and "already present" in e[1])
+        present = sum(
+            1 for e in events if e[0] == "Pulled" and "already present" in e[1]
+        )
         return (
-            after and not (uids & before) and all(ready(p) for p in after) and not pulls,
+            after
+            and not (uids & before)
+            and all(ready(p) for p in after)
+            and not pulls,
             {
                 "restarted": sorted(p["metadata"]["name"] for p in after),
                 "pull_attempts": pulls,
@@ -451,10 +545,23 @@ def run_cases():
         # for a moment after the pod reports ready, so retry for a minute.
         for _ in range(20):
             visit = run(
-                "kubectl", "--kubeconfig", KUBECONFIG, "-n", "inside", "exec", "visitor",
-                "--", "python", "-c", INSIDE_UI, check=False, timeout=60,
+                "kubectl",
+                "--kubeconfig",
+                KUBECONFIG,
+                "-n",
+                "inside",
+                "exec",
+                "visitor",
+                "--",
+                "python",
+                "-c",
+                INSIDE_UI,
+                check=False,
+                timeout=60,
             )
-            inside = visit.stdout.strip() or "".join(visit.stderr.strip().splitlines()[-1:])
+            inside = visit.stdout.strip() or "".join(
+                visit.stderr.strip().splitlines()[-1:]
+            )
             if visit.returncode == 0:
                 break
             time.sleep(3)
@@ -515,7 +622,9 @@ def run_cases():
     def iso_06():
         opener = state.get("opener") or sign_in()
         status, listing = api(opener, "/api/models")
-        fixture = next((m for m in listing.get("models", []) if m["id"] == "local-fixture"), {})
+        fixture = next(
+            (m for m in listing.get("models", []) if m["id"] == "local-fixture"), {}
+        )
         setup = None
         if not fixture.get("approved"):
             setup, _ = api(
@@ -536,7 +645,12 @@ def run_cases():
         )
 
     def iso_07():
-        targets = [MODEL, INSIDE, INTERNET, state.setdefault("registry", registry_target())]
+        targets = [
+            MODEL,
+            INSIDE,
+            INTERNET,
+            state.setdefault("registry", registry_target()),
+        ]
         app = probe("app", targets)
         gateway = probe_gateway(targets)
         control = probe("model", [INSIDE])
@@ -564,25 +678,45 @@ def run_cases():
         deadline = time.monotonic() + 300
         while time.monotonic() < deadline:
             nodes = run(
-                "kubectl", "--kubeconfig", KUBECONFIG, "get", "nodes", "-o", "json",
-                check=False, timeout=30,
+                "kubectl",
+                "--kubeconfig",
+                KUBECONFIG,
+                "get",
+                "nodes",
+                "-o",
+                "json",
+                check=False,
+                timeout=30,
             )
             if nodes.returncode == 0 and all(
-                any(c["type"] == "Ready" and c["status"] == "True" for c in n["status"]["conditions"])
+                any(
+                    c["type"] == "Ready" and c["status"] == "True"
+                    for c in n["status"]["conditions"]
+                )
                 for n in json.loads(nodes.stdout)["items"]
             ):
                 break
             time.sleep(5)
         else:
             raise RuntimeError("The node did not come back Ready")
-        kubectl("-n", "kube-system", "rollout", "status", "daemonset/calico-node", "--timeout=300s", timeout=400)
+        kubectl(
+            "-n",
+            "kube-system",
+            "rollout",
+            "status",
+            "daemonset/calico-node",
+            "--timeout=300s",
+            timeout=400,
+        )
         wait_for_workloads()
         status, page = fetch("/", attempts=60)
         opener = sign_in()
         cloud_status, cloud = ask(opener, "outside-cloud")
         local_status, local = ask(opener, "local-fixture", "fixture")
         reaches, code = node_reaches_registry()
-        app = probe("app", [MODEL, INTERNET, state.setdefault("registry", registry_target())])
+        app = probe(
+            "app", [MODEL, INTERNET, state.setdefault("registry", registry_target())]
+        )
         return (
             status == 200
             and b'id="root"' in page
@@ -592,8 +726,14 @@ def run_cases():
             and blocked(app, "internet", "registry"),
             {
                 "page": status,
-                "outside_cloud": [cloud_status, cloud.get("answer") or cloud.get("error")],
-                "local_fixture": [local_status, local.get("answer") or local.get("error")],
+                "outside_cloud": [
+                    cloud_status,
+                    cloud.get("answer") or cloud.get("error"),
+                ],
+                "local_fixture": [
+                    local_status,
+                    local.get("answer") or local.get("error"),
+                ],
                 "node_registry_status": code,
                 "app": app,
             },
@@ -612,7 +752,11 @@ def run_cases():
     ):
         case(identifier, step)
 
-    print(json.dumps({"suite": "Keeplane on an isolated network", "results": results}, indent=2))
+    print(
+        json.dumps(
+            {"suite": "Keeplane on an isolated network", "results": results}, indent=2
+        )
+    )
     return 1 if any(r["verdict"] == "fail" for r in results) else 0
 
 
