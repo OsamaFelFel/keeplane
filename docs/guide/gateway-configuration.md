@@ -13,6 +13,11 @@ the current release scope.
 | `managed` | Keeplane app and gateway | The chart's gateway Service | Two agentgateway copies (`gateway.copies`) with shared PostgreSQL registration |
 | `existing` | Keeplane app only | `gateway.url`, supplied by the operator | A separate agentgateway installation in another namespace |
 
+With a customer-run gateway (`existing`), Keeplane currently supports only
+models set up with **No key**. Keeplane's shared key and developers' own keys
+aren't supported in this mode yet: Keeplane has no way to deliver a key to a
+gateway it doesn't run.
+
 In `managed` mode the chart always requires keys on the gateway's model and
 management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
@@ -137,7 +142,10 @@ details and try again.", and keeps your entries:
 | One shared key for the organization | Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key for this model. |
 | Each developer adds their own key | Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. |
 
-Choose **No key needed** instead. A model set up for developers' own keys before
+Choose **No key needed** instead: a cloud model whose key your own gateway
+holds is set up with **No key**; see
+[Keeplane's checks on a customer-run gateway](#keeplanes-checks-on-a-customer-run-gateway).
+A model set up for developers' own keys before
 this rule can only move to No key: in **Edit**, **Save** shows the reason above
 and offers **Use No key**, which keeps the model's approved classes and saves
 once the model answers through your gateway. Any other edit of that model is
@@ -294,6 +302,61 @@ Repeat the `final-<model>` policy for each model Keeplane sets up, with that
 model's ID in the body. Both of Keeplane's developer checks read the
 data-class switch, the classes and the approvals on every call, so turning
 data classes off or on applies from the next request.
+
+A model an admin adds in Keeplane is written to your gateway by Keeplane, so
+its definition has no `requestHeaders` of yours. Remove Keeplane's headers on
+its backend instead, with a last transformation that passes on only the
+provider's own headers. It runs after the checks and after any provider key
+the backend adds:
+
+```yaml
+policies:
+  - name: {name: strip-coder, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:coder", namespace: ""}}}
+    policy:
+      transformations:
+        request:
+          replace: '{"content-type": "application/json"}'
+```
+
+Add one `strip-<model>` policy for every model Keeplane adds, with that
+model's backend as its target, next to its `final-<model>` policy.
+
+> **If you set up your gateway from an earlier version of this guide:** that
+> example removed Keeplane's headers only in the `requestHeaders` of models you
+> define yourself. Add the `strip-<model>` step above for every model
+> Keeplane adds. Without it, developers' sign-in tokens, project IDs and the
+> developer marker reach the model.
+
+This mode supports only **No key** models: Keeplane's shared key and
+developers' own keys aren't supported with a customer-run gateway yet. For a
+cloud model, your gateway can hold the provider key itself: the admin adds
+the model in Keeplane with **No key**, and on that model's backend you add the
+key and keep its `authorization` header in the last transformation. Keeplane
+doesn't hold, check or rotate that key: it lives only in your gateway, and
+keeping it valid and rotating it is up to you. This is not Keeplane's
+shared-key option. Keeplane still records the provider and model name it
+added, so developers' usage shows an estimated cost for it:
+
+```yaml
+policies:
+  - name: {name: key-cloud, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:cloud", namespace: ""}}}
+    policy:
+      backendAuth:
+        key: {value: {file: /secrets/provider-key}}
+  - name: {name: strip-cloud, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:cloud", namespace: ""}}}
+    policy:
+      transformations:
+        request:
+          replace: '{"content-type": "application/json", "authorization": request.headers["authorization"]}'
+```
+
+The [release journey cases](../../tests/e2e/developer-journey-release-cases.md)
+run the developer journey, DEV-01 to DEV-08, through a customer-run gateway set
+up this way, on PostgreSQL with two app copies (DJR-01), and through the
+managed gateway (DJR-02).
 
 ## Retry a model that is down
 

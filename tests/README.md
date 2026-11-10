@@ -29,8 +29,12 @@ pinned coding runtime, the [developer journey](e2e/developer-journey-cases.md)
 cases. A second
 job in the same workflow builds the `detection` app image, starts the preview
 the same way and runs the [personal-data detection](e2e/personal-data-live-cases.md)
-cases with `KEEPLANE_PERSONAL_DATA_DETECTION=1`. A case that is skipped or
-never runs fails its job.
+cases with `KEEPLANE_PERSONAL_DATA_DETECTION=1`. The `release-journey` job
+of `checks.yml` runs the same developer journey, DEV-01 to DEV-08, on two
+disposable PostgreSQL installs with two app copies, one with the customer's own
+gateway and one with the managed gateway (the
+[release journey](e2e/developer-journey-release-cases.md) cases). A case that
+is skipped or never runs fails its job.
 Each spec's scenario map names the cases that prove every scenario, and a
 unit test fails when a scenario is missing or a named case has no test:
 Spec 002 [self-hosting](e2e/self-hosting-cases.md), 003
