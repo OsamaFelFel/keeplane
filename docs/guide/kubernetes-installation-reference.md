@@ -960,8 +960,12 @@ The [model enroller chart cases](../../tests/integration/chart-model-enroller-ca
 check this section against rendered manifests, and the
 [model enroller files cases](../../tests/unit/model-enroller-files-cases.md)
 check the init step. They prove what the chart asks Kubernetes to run and what
-the init step writes, not a live run on a cluster or on the real gateway
-image.
+the init step writes. The
+[Kubernetes developer cases](../../tests/e2e/kubernetes-developer-cases.md)
+run the enroller live in CI, with the real gateway image, on a kind cluster:
+two copies with PostgreSQL and the roles above, the chart's migration Job, and
+developers' calls through the protected path. That cluster doesn't enforce
+NetworkPolicy, so the network policies above stay off there.
 
 ### How developers reach protected models
 
@@ -1060,5 +1064,12 @@ Each request reaches one copy. A copy whose enroller hasn't confirmed a model
 refuses it, so right after a copy starts or a model changes, a protected call
 can be refused by one copy while another serves it. The chart's render checks
 cover this shape
-([protected access cases](../../tests/integration/chart-protected-access-cases.md));
-a live run through an ingress controller hasn't been done yet.
+([protected access cases](../../tests/integration/chart-protected-access-cases.md)).
+CI also runs it live through ingress-nginx on a kind cluster, with
+`gateway.protectedIngress.annotations` set as above: developers sign in with
+the CLI at `https://<host>`, the CLI saves `https://<host>/v1`, and
+`keeplane code` reaches protected models there on a shared key and on
+developers' own keys, while a call without a sign-in is refused
+([Kubernetes developer cases](../../tests/e2e/kubernetes-developer-cases.md);
+to try it, see
+[the protected developer path](kubernetes-local.md#try-the-protected-developer-path)).

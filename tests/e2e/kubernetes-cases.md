@@ -58,6 +58,7 @@ keep it stopped until the test scales it back; a rolling restart, where a copy
 gets its 30-second shutdown, is not checked separately. The streamed reply
 goes straight to a gateway copy's model port with the app's runtime key; the
 protected runtime port that developers' tools reach with the model enroller is
-not installed in this trial.
+not installed in this trial; the protected developer release in the same
+cluster covers it ([Kubernetes developer cases](kubernetes-developer-cases.md)).
 The cases do not prove behavior when a Kubernetes node or PostgreSQL fails, or
 an external model endpoint is used.

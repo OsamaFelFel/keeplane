@@ -85,9 +85,12 @@ configuration before deliberately repairing it. A matching registration is safe
 to repeat. Turning sign-in off retains its tables and clients.
 
 Use the [installed CLI sign-in commands](cli-browser-login.md) with that server
-address and a private profile. This enables account access only. The protected
-coding listener still requires its separate installation; this chart setting
-does not deploy it or complete the release integration.
+address and a private profile. This setting enables account access only. With
+the managed gateway, the protected coding path comes from
+[`gateway.enroller`](kubernetes-installation-reference.md#model-enroller) and
+the chart's Ingress; the
+[local protected developer release](kubernetes-local.md#try-the-protected-developer-path)
+turns on all three.
 
 Configure every app replica and the one-off migration process:
 

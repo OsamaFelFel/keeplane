@@ -166,6 +166,88 @@ use **Set up**. When data classes are enabled, choose its approved classes too.
 Runner addresses are internal to the cluster, so enter them in Keeplane rather
 than opening them in your browser. See [model setup](model-add-local.md).
 
+## Try the protected developer path
+
+The two installations above keep accounts in SQLite and have no protected
+model path. To try what developers use on a real install (CLI sign-in, the
+guarded gateway copies with the model enroller, and their own keys), add the
+protected developer release. It uses the chart's own options from
+[`deploy/local/protected-values.yaml`](../../deploy/local/protected-values.yaml):
+PostgreSQL accounts with [CLI sign-in](postgres-accounts.md#add-cli-sign-in-to-the-shared-database-image),
+the [model enroller](kubernetes-installation-reference.md#model-enroller) on
+both gateway copies with its [database roles](guard-status-roles.md), and one
+HTTPS address for the web UI, the CLI and model calls, as in
+[how developers reach protected models](kubernetes-installation-reference.md#how-developers-reach-protected-models).
+
+1. Point the release's name at your computer, once:
+
+   ```sh
+   echo "127.0.0.1 keeplane.kind.test" | sudo tee -a /etc/hosts
+   ```
+
+2. Leave port 443 free on 127.0.0.1. The release needs a cluster made from
+   [`deploy/local/kind-protected.yaml`](../../deploy/local/kind-protected.yaml),
+   which adds that port; if you already have the `keeplane` cluster, delete it
+   first (`kind delete cluster --name keeplane`).
+3. Run the setup with the release turned on:
+
+   ```sh
+   KEEPLANE_KIND_PROTECTED=on deploy/local/kind-up.sh
+   ```
+
+   Expected result, after the two trial lines: `Keeplane protected developer
+   release: https://keeplane.kind.test (test CA: <credential folder>/kind-protected/ca.pem)`.
+
+The script also builds the `postgres-cli-auth-trial` app image, loads it into
+kind and installs it by its digest, as a PostgreSQL install requires. In
+namespace `keeplane-protected` it starts a PostgreSQL account database that
+accepts only TLS, creates Keeplane's migration and app roles and the
+enroller's roles in it, starts the gateway database and its own copy of the
+fixture provider, installs ingress-nginx (`controller-v1.15.1`, every image
+by digest) on port 443, and installs release `keeplane`. A new test CA signs
+the database's, the address's and the fixture provider's certificates; its key
+is deleted once it has signed. The namespace starts fresh on every run, so its
+accounts and models don't carry over.
+
+Inside the cluster, the name `api.openai.com` points to the fixture provider
+(a `hosts` entry in the cluster DNS): OpenAI models you add to this release
+reach only the fixture, which answers "mock cloud answer" to the trial's
+shared key (`cloud-provider-key` in the credential folder). Nothing is sent to
+the real provider.
+
+Open <https://keeplane.kind.test> and sign in as `first-admin` with the same
+password file as the trial. Your browser doesn't trust the test CA: import
+`kind-protected/ca.pem` from the credential folder, or accept the warning for
+this address only. Then, as a developer you add in **Users**, sign in from the
+CLI. The CLI trusts the test CA through `SSL_CERT_FILE`:
+
+```sh
+export SSL_CERT_FILE=/private/tmp/keeplane-accounts-trial/kind-protected/ca.pem
+python3 components/cli/keeplane.py login --server https://keeplane.kind.test
+python3 components/cli/keeplane.py code --model <model> "Say hello"
+```
+
+`login` saves the gateway address the server gives, `https://keeplane.kind.test/v1`,
+so `code` needs no `--gateway`. Set `SSL_CERT_FILE` only in this terminal: it
+replaces the system CAs for the CLI. See [CLI quickstart](cli-quickstart.md)
+for the rest of the developer commands.
+
+If the setup stops with `keeplane.kind.test must point to this computer`, add
+the `/etc/hosts` line above. If it says the cluster has no HTTPS port, delete
+the cluster and run again. To check the release:
+
+```sh
+kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane-protected get pods,ingress
+kubectl --kubeconfig /private/tmp/keeplane-kind-kubeconfig -n keeplane-protected \
+  logs keeplane-gateway-0 -c model-enroller --tail=20
+```
+
+The enroller's last line says how many models each copy has enrolled, such as
+`Protected access is ready: 2 models are enrolled.` The
+[Kubernetes developer cases](../../tests/e2e/kubernetes-developer-cases.md)
+run these steps in CI. The release runs on kindnet, which doesn't enforce
+NetworkPolicy, so its network policies stay off.
+
 ## Inspect and troubleshoot
 
 Use the isolated kubeconfig for every command. If you changed its path, replace
@@ -263,8 +345,8 @@ Upgrade the app and gateway together; an older app image lacks the initializer.
 
 The [stack lock](../../deploy/local/stack.lock.json) pins trial images, chart and
 demo model. Local values are development inputs. The cluster's kindnet CNI does
-not enforce NetworkPolicy; TLS Ingress and gateway ingress policies are optional
-and disabled here. Production needs operated PostgreSQL, storage and Secret
+not enforce NetworkPolicy; gateway ingress policies are optional and disabled
+here, and only the protected developer release uses a TLS Ingress. Production needs operated PostgreSQL, storage and Secret
 recovery, enforced network controls, certificate operations and the completed
 runtime policy and package review. See [gateway modes](gateway-configuration.md)
 and [PostgreSQL configuration](postgres-accounts.md) before planning an install.

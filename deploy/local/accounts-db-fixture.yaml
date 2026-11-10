@@ -1,0 +1,90 @@
+# Disposable account database for the protected kind release
+# (kind_protected.py, protected-values.yaml). It accepts only TLS connections
+# with a password, using the test certificate in Secret db-tls (name "db"),
+# and local connections inside the pod for kind_protected.py's role setup.
+# Its data lives in the container and is lost when the pod is replaced.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-hba
+data:
+  pg_hba.conf: |
+    local all all trust
+    hostnossl all all 0.0.0.0/0 reject
+    hostssl all all 0.0.0.0/0 scram-sha-256
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        # The image's postgres group reads the certificate key (mode 0640).
+        fsGroup: 70
+      containers:
+        - name: postgres
+          image: postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+          imagePullPolicy: IfNotPresent
+          args:
+            - postgres
+            - -c
+            - ssl=on
+            - -c
+            - ssl_cert_file=/tls/tls.crt
+            - -c
+            - ssl_key_file=/tls/tls.key
+            - -c
+            - hba_file=/hba/pg_hba.conf
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-admin
+                  key: password
+          ports:
+            - containerPort: 5432
+          # Over TCP, as in postgres-fixture.yaml: the first, socket-only
+          # server on a fresh volume must not count as ready.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+            periodSeconds: 2
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: hba
+              mountPath: /hba
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: db-tls
+            defaultMode: 0640
+        - name: hba
+          configMap:
+            name: db-hba
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+spec:
+  selector:
+    app: db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

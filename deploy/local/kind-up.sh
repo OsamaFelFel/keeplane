@@ -11,6 +11,10 @@
 # KEEPLANE_KIND_LOAD_IMAGES=off: load only the app image into kind; the node
 #   pulls the digest-pinned public images itself. Some Docker image stores
 #   save a digest-pinned image that kind's containerd cannot run.
+# KEEPLANE_KIND_PROTECTED=on: also install the protected developer release
+#   (PostgreSQL, CLI sign-in, the model enroller) at https://keeplane.kind.test
+#   with deploy/local/kind_protected.py. Needs that name in /etc/hosts and the
+#   cluster from deploy/local/kind-protected.yaml, which adds port 443.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
@@ -24,6 +28,7 @@ fi
 KUBECONFIG_PATH=${KEEPLANE_KUBECONFIG:-$DEFAULT_KUBECONFIG}
 QWEN=${KEEPLANE_KIND_QWEN:-on}
 LOAD_PUBLIC_IMAGES=${KEEPLANE_KIND_LOAD_IMAGES:-on}
+PROTECTED=${KEEPLANE_KIND_PROTECTED:-off}
 HELM_BIN=${KEEPLANE_HELM_BIN:-helm}
 PYTHON_IMAGE=python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
 POSTGRES_IMAGE=postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
@@ -71,6 +76,13 @@ fi
 if [ "$LOAD_PUBLIC_IMAGES" != on ] && [ "$LOAD_PUBLIC_IMAGES" != off ]; then
   printf 'KEEPLANE_KIND_LOAD_IMAGES must be on or off.\n' >&2
   exit 1
+fi
+if [ "$PROTECTED" != on ] && [ "$PROTECTED" != off ]; then
+  printf 'KEEPLANE_KIND_PROTECTED must be on or off.\n' >&2
+  exit 1
+fi
+if [ "$PROTECTED" = on ]; then
+  python3 -B deploy/local/kind_protected.py check
 fi
 if [ "$QWEN" = on ]; then
   if [ ! -f "$QWEN_MODEL" ]; then
@@ -127,11 +139,19 @@ if [ "$LOAD_PUBLIC_IMAGES" = on ]; then
 fi
 docker build -f components/control-plane/Dockerfile -t keeplane-preview:kind-local .
 
+KIND_CONFIG=deploy/local/kind.yaml
+if [ "$PROTECTED" = on ]; then
+  KIND_CONFIG=deploy/local/kind-protected.yaml
+fi
 if kind get clusters | grep -qx keeplane; then
   kind export kubeconfig --name keeplane --kubeconfig "$KUBECONFIG_PATH"
+  if [ "$PROTECTED" = on ] && ! docker port keeplane-control-plane 443/tcp >/dev/null 2>&1; then
+    printf 'The keeplane kind cluster has no HTTPS port for the protected release. Delete it with `kind delete cluster --name keeplane` and run again.\n' >&2
+    exit 1
+  fi
 else
   kind create cluster --name keeplane --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 \
-    --config deploy/local/kind.yaml --kubeconfig "$KUBECONFIG_PATH" --wait 120s
+    --config "$KIND_CONFIG" --kubeconfig "$KUBECONFIG_PATH" --wait 120s
 fi
 python3 - "$KUBECONFIG_PATH" "$RUNTIME_DIR" <<'PY'
 import base64
@@ -280,5 +300,10 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status statefulset/k
   --wait --timeout 180s
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing rollout restart deployment/keeplane-existing-app
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane-existing rollout status deployment/keeplane-existing-app --timeout=120s
+
+if [ "$PROTECTED" = on ]; then
+  KEEPLANE_KUBECONFIG="$KUBECONFIG_PATH" KEEPLANE_RUNTIME_DIR="$RUNTIME_DIR" KEEPLANE_HELM_BIN="$HELM_BIN" \
+    python3 -B deploy/local/kind_protected.py install
+fi
 
 printf 'Keeplane local Kubernetes trial: http://127.0.0.1:13000\n'
