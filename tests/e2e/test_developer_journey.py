@@ -1168,7 +1168,7 @@ def own_key_cases(record, context):
         if listed_before[1:] == (True, "missing")
         and saved[0] == 0
         and json.loads(saved[1] or "{}").get("status") == "added"
-        and task[0] != 0
+        and task[0] == 1
         and refused_message in task[2]
         and coding.ANSWERED_BY.format(models=model) not in task[2]
         and listed == (0, True, "refused")

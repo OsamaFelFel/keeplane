@@ -8,6 +8,8 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 from tests.support.shards import shard_of
 
 TESTS = Path(__file__).resolve().parents[1]
@@ -387,22 +389,61 @@ def test_dcsm_01_every_spec_scenario_is_listed_once():
     assert NOT_PROVEN <= SCENARIOS
 
 
+def check_row(scenario, proven_by, closest, not_proven):
+    """DCSM-02 for one row of the table."""
+    assert closest, f"{scenario} has an empty closest-evidence cell"
+    if scenario in not_proven:
+        reason = re.match(r"Not proven yet: (.*)", proven_by)
+        assert reason, f"{scenario} must start with 'Not proven yet:'"
+        # The reason comes before the first case it names, in words.
+        before_cases = CASE.split(reason.group(1), 1)[0]
+        assert len(re.findall(r"[a-z]+", before_cases)) >= 5, (
+            f"{scenario} gives no reason before naming cases"
+        )
+        # It names the cases that come closest, so the gap is visible.
+        assert CASE.findall(closest), f"{scenario} names no closest evidence"
+    else:
+        assert not proven_by.startswith("Not "), scenario
+        assert CASE.findall(proven_by), f"{scenario} names no case"
+
+
 def test_dcsm_02_proven_scenarios_name_cases_and_unproven_ones_say_why():
     for scenario, (proven_by, closest) in scenario_rows().items():
-        assert closest, f"{scenario} has an empty closest-evidence cell"
-        if scenario in NOT_PROVEN:
-            reason = re.match(r"Not proven yet: (.*)", proven_by)
-            assert reason, f"{scenario} must start with 'Not proven yet:'"
-            # The reason comes before the first case it names, in words.
-            before_cases = CASE.split(reason.group(1), 1)[0]
-            assert len(re.findall(r"[a-z]+", before_cases)) >= 5, (
-                f"{scenario} gives no reason before naming cases"
-            )
-            # It names the cases that come closest, so the gap is visible.
-            assert CASE.findall(closest), f"{scenario} names no closest evidence"
-        else:
-            assert not proven_by.startswith("Not "), scenario
-            assert CASE.findall(proven_by), f"{scenario} names no case"
+        check_row(scenario, proven_by, closest, NOT_PROVEN)
+
+
+# Made-up rows for the not-proven path, which the real table doesn't use today.
+SYNTHETIC = ("ST99", "A made-up scenario")
+REASON = "Not proven yet: no CI job runs the journey with a real provider yet. DEV-04"
+
+
+@pytest.mark.parametrize(
+    ("proven_by", "closest", "problem"),
+    [
+        (REASON, "DEV-10 comes close.", None),
+        ("DEV-04", "DEV-10 comes close.", "must start with 'Not proven yet:'"),
+        ("Not built yet: no CI job runs it. DEV-04", "DEV-10", "must start"),
+        ("Not proven yet: DEV-04 is missing.", "DEV-10", "gives no reason"),
+        ("Not proven yet: not run. DEV-04", "DEV-10", "gives no reason"),
+        (REASON, "", "empty closest-evidence cell"),
+        (REASON, "—", "names no closest evidence"),
+    ],
+)
+def test_dcsm_02_a_not_proven_row_says_why_before_naming_cases(
+    proven_by, closest, problem
+):
+    if problem is None:
+        check_row(SYNTHETIC, proven_by, closest, {SYNTHETIC})
+        return
+    with pytest.raises(AssertionError, match=re.escape(problem)):
+        check_row(SYNTHETIC, proven_by, closest, {SYNTHETIC})
+
+
+def test_dcsm_02_a_proven_row_never_says_not_proven():
+    with pytest.raises(AssertionError):
+        check_row(SYNTHETIC, REASON, "DEV-10", set())
+    with pytest.raises(AssertionError, match="names no case"):
+        check_row(SYNTHETIC, "the journey", "—", set())
 
 
 def test_dcsm_03_every_proof_is_a_check_ci_runs_on_this_revision():
