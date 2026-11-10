@@ -38,7 +38,8 @@ registry on every start. A node that has never held an image still needs to
 pull it from your internal registry. CI checks this on every revision: the
 [isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md) install
 the chart while the registry is reachable, close every outside connection but
-one model provider, then restart every Keeplane pod and the node.
+one model provider, and outside name lookups too, then restart every Keeplane
+pod and the node. Names inside the cluster still resolve.
 
 ## Secrets
 

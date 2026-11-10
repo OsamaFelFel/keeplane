@@ -1,11 +1,13 @@
 """Run the isolated-network cases (kubernetes-isolated-cases.md) on kind.
 
 The cluster is the disposable `keeplane-isolated` kind cluster the isolated
-network job of the Kubernetes live checks workflow creates: Calico enforces NetworkPolicy, ingress-nginx
+network job of the Kubernetes live checks workflow creates: Calico enforces
+NetworkPolicy, ingress-nginx
 publishes Keeplane on https://keeplane.isolated.test, and the model provider
 fixture runs on the runner outside the cluster. The cases close the network's
-outside access themselves (ISO-02), restart every Keeplane pod and then the
-node, and run the admin journey with only the model provider reachable.
+outside access and outside name lookups themselves (ISO-02), restart every
+Keeplane pod and then the node, and run the admin journey with only the model
+provider reachable.
 
 They refuse any kubeconfig context other than kind-keeplane-isolated, and
 change the runner's firewall, so they run only in that workflow.
@@ -80,6 +82,17 @@ for t in json.loads(sys.argv[1]):
   out[t["name"]]="blocked:"+n
 print(json.dumps(out))"""
 
+# Runs in a pod: look each name up as the pod's own resolver does (through
+# CoreDNS) and report "resolved:<address>" or "failed:<error>".
+LOOKUP = """import json,socket,sys
+out={}
+for n in json.loads(sys.argv[1]):
+ try:
+  out[n]="resolved:"+socket.getaddrinfo(n,443,socket.AF_INET,socket.SOCK_STREAM)[0][4][0]
+ except OSError as e:
+  out[n]="failed:"+type(e).__name__+":"+str(e.args[0] if e.args else "")
+print(json.dumps(out))"""
+
 # Runs in the visitor pod: open the web UI through the ingress controller's
 # Service with the run's CA, as a browser inside the network would, following
 # the app's redirects on the same host (to its sign-in page).
@@ -119,6 +132,9 @@ MODEL = {"name": "model", "host": PROVIDER, "port": PROVIDER_PORT, "path": "/hea
 # Outside places by IP address, so a probe never depends on a name lookup.
 INTERNET = {"name": "internet", "host": "1.1.1.1", "port": 443}
 REGISTRY_HOST = "registry.k8s.io"
+# In-cluster names CoreDNS answers itself, which must keep working.
+INSIDE_NAME = "service.inside.svc.cluster.local"
+APP_NAME = "keeplane-app.keeplane.svc.cluster.local"
 INSIDE = {
     "name": "inside_service",
     "host": "service.inside.svc.cluster.local",
@@ -165,15 +181,60 @@ def kubectl(*args, timeout=300):
     return run("kubectl", "--kubeconfig", KUBECONFIG, *args, timeout=timeout).stdout
 
 
+POD_EXEC = {
+    "app": ("-n", "keeplane", "exec", "deploy/keeplane-app", "-c", "app"),
+    "model": ("-n", "keeplane", "exec", "deploy/model"),
+    "visitor": ("-n", "inside", "exec", "visitor"),
+}
+
+
 def probe(where, targets):
     """Probe from a pod: ("app" | "model" | "visitor")."""
-    target = {
-        "app": ("-n", "keeplane", "exec", "deploy/keeplane-app", "-c", "app"),
-        "model": ("-n", "keeplane", "exec", "deploy/model"),
-        "visitor": ("-n", "inside", "exec", "visitor"),
-    }[where]
-    output = kubectl(*target, "--", "python", "-c", PROBE, json.dumps(targets))
+    output = kubectl(*POD_EXEC[where], "--", "python", "-c", PROBE, json.dumps(targets))
     return json.loads(output)
+
+
+def lookup(where, names):
+    """Look names up from a pod, or from the node itself ("node")."""
+    if where != "node":
+        output = kubectl(
+            *POD_EXEC[where], "--", "python", "-c", LOOKUP, json.dumps(names)
+        )
+        return json.loads(output)
+    out = {}
+    for name in names:
+        result = run(
+            "docker", "exec", NODE, "getent", "ahostsv4", name, check=False, timeout=60
+        )
+        found = result.stdout.split()
+        out[name] = (
+            "resolved:" + found[0]
+            if result.returncode == 0 and found
+            else f"failed:exit {result.returncode}"
+        )
+    return out
+
+
+def resolved(observed, *names):
+    return all(observed.get(name, "").startswith("resolved:") for name in names)
+
+
+def unresolved(observed, *names):
+    return all(observed.get(name, "").startswith("failed:") for name in names)
+
+
+def restart_cluster_dns():
+    """Restart CoreDNS so no name it looked up before closing is still cached."""
+    kubectl("-n", "kube-system", "rollout", "restart", "deployment/coredns")
+    kubectl(
+        "-n",
+        "kube-system",
+        "rollout",
+        "status",
+        "deployment/coredns",
+        "--timeout=180s",
+        timeout=240,
+    )
 
 
 GATEWAY_PROBES = [0]
@@ -417,8 +478,14 @@ def run_cases():
         control = probe("model", outside)
         app = probe("app", outside)
         gateway = probe_gateway(outside)
+        # Control for ISO-02: before closing, outside names resolve.
+        names_before = {
+            "node": lookup("node", [REGISTRY_HOST]),
+            "visitor": lookup("visitor", [REGISTRY_HOST]),
+        }
         return (
             reaches
+            and all(resolved(found, REGISTRY_HOST) for found in names_before.values())
             and keeplane
             and all(ready(pod) for pod in keeplane)
             and pinned
@@ -431,6 +498,7 @@ def run_cases():
                 "pods_ready": {p["metadata"]["name"]: ready(p) for p in keeplane},
                 "images": images,
                 "registry_address": outside[1]["host"],
+                "lookups_before_closing": names_before,
                 "before_closing": {
                     "visitor": visitor,
                     "unrestricted_pod_in_keeplane": control,
@@ -455,7 +523,13 @@ def run_cases():
         )
         node("crictl", "rmi", ABSENT_IMAGE, timeout=60)
         forgotten = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
-        closed = run("sudo", str(CLOSE), timeout=60)
+        closed = run("sudo", str(CLOSE), timeout=120)
+        restart_cluster_dns()
+        names = {
+            "node": lookup("node", [REGISTRY_HOST]),
+            "app": lookup("app", [REGISTRY_HOST, APP_NAME]),
+            "visitor": lookup("visitor", [REGISTRY_HOST, INSIDE_NAME]),
+        }
         reaches, code = node_reaches_registry()
         pull = node("timeout", "90", "crictl", "pull", ABSENT_IMAGE)
         error = (pull.stderr.strip() or pull.stdout.strip())[-300:]
@@ -471,6 +545,9 @@ def run_cases():
             absent_before
             and control_pull.returncode == 0
             and forgotten
+            and all(unresolved(found, REGISTRY_HOST) for found in names.values())
+            and resolved(names["app"], APP_NAME)
+            and resolved(names["visitor"], INSIDE_NAME)
             and not reaches
             and pull.returncode != 0
             and not reference_rejected
@@ -481,6 +558,7 @@ def run_cases():
                 "control_pull_exit_before_closing": control_pull.returncode,
                 "image_removed_after_control": forgotten,
                 "rules": closed.stdout.strip().splitlines(),
+                "lookups_after_closing": names,
                 "node_registry_status": code,
                 "node_pull_exit": pull.returncode,
                 "node_pull_error": error,
@@ -632,15 +710,19 @@ def run_cases():
                 "/api/models/local-fixture/setup",
                 {"key_choice": "none", "approved_classes": ["Public"]},
             )
+        before = provider_calls()
         ask_status, answer = ask(opener, "local-fixture", "fixture")
+        after = provider_calls()
         return (
             status == 200
             and ask_status == 200
-            and answer.get("answer") == "mock answer",
+            and answer.get("answer") == "mock answer"
+            and after == before,
             {
                 "setup_status": setup,
                 "ask_status": ask_status,
                 "answer": answer.get("answer") or answer.get("error"),
+                "outside_provider_calls": [before, after],
             },
         )
 
@@ -717,13 +799,19 @@ def run_cases():
         app = probe(
             "app", [MODEL, INTERNET, state.setdefault("registry", registry_target())]
         )
+        names = {
+            "node": lookup("node", [REGISTRY_HOST]),
+            "app": lookup("app", [REGISTRY_HOST, APP_NAME]),
+        }
         return (
             status == 200
             and b'id="root"' in page
             and cloud.get("answer") == "mock cloud answer"
             and local.get("answer") == "mock answer"
             and not reaches
-            and blocked(app, "internet", "registry"),
+            and blocked(app, "internet", "registry")
+            and all(unresolved(found, REGISTRY_HOST) for found in names.values())
+            and resolved(names["app"], APP_NAME),
             {
                 "page": status,
                 "outside_cloud": [
@@ -736,6 +824,7 @@ def run_cases():
                 ],
                 "node_registry_status": code,
                 "app": app,
+                "lookups": names,
             },
         )
 

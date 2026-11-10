@@ -179,6 +179,8 @@ every other connection refused.
 The [isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md)
 check a whole Kubernetes install the same way on every revision: a kind
 cluster whose only outside connection is one model provider, with the chart's
-network policies on. The web UI opens through the ingress, an admin adds and
+network policies on. Outside name lookups are closed too: neither the node nor
+any pod can resolve a public name such as `registry.k8s.io`, while names inside
+the cluster still resolve. The web UI opens through the ingress, an admin adds and
 asks a model on that provider and a model inside the cluster, and calls from
 the app and gateway pods to any other address fail.
