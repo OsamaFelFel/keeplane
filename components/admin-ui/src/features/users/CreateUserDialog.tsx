@@ -86,7 +86,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
   }
 
   return <Dialog open={open} onOpenChange={close}>
-    <DialogContent showCloseButton={false} aria-busy={phase === 'saving' || undefined} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}
+    <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}
       onCloseAutoFocus={event => { event.preventDefault(); returnFocusRef.current?.focus() }}>
       <DialogHeader><DialogTitle className="text-[22px] font-semibold">Create user</DialogTitle></DialogHeader>
       <form onSubmit={event => { void handleSubmit(save)(event) }} className="grid gap-5">
