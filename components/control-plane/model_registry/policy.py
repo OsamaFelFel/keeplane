@@ -15,6 +15,21 @@ class ModelPolicyUnavailable(Exception):
     """No eligibility decision can safely be made from the available policy."""
 
 
+class GatewayUnavailable(ModelPolicyUnavailable):
+    """The gateway didn't give its model list or definitions.
+
+    Routes that need the gateway's view answer 503 with ``GATEWAY_UNREACHABLE``,
+    so a developer's client can say the gateway, not Keeplane, is the cause.
+    """
+
+
+# The reason runtime routes give with their 503 when the gateway is the cause.
+GATEWAY_UNREACHABLE = {
+    "error": "Keeplane's gateway can't be reached",
+    "code": "gateway_unreachable",
+}
+
+
 def registry_rows(body, field):
     rows = body.get(field) if isinstance(body, dict) else None
     if not isinstance(rows, list) or any(
@@ -70,12 +85,37 @@ class DjangoModelPolicy:
             raise ValueError("Choose a project context")
         status, listing = self.gateway.models()
         if status != 200:
-            raise ModelPolicyUnavailable("The gateway model list is unavailable")
+            raise GatewayUnavailable("The gateway model list is unavailable")
         status, registry = self.gateway.resources()
         if status != 200:
-            raise ModelPolicyUnavailable("The gateway definitions are unavailable")
+            raise GatewayUnavailable("The gateway definitions are unavailable")
         model_ids = {row["id"] for row in registry_rows(listing, "data")}
         resources = registry_rows(registry, "resources")
+        return self._decide(project_id, personal_data, model_ids, resources)
+
+    def recordable_model_ids(self, project_id):
+        """Models a developer may report usage of for this project (ADR 029).
+
+        While the gateway answers, exactly ``eligible_model_ids``. While it
+        doesn't, Keeplane's own policy alone decides, so a task that ran
+        before the gateway went down still has its usage recorded: the model
+        must be set up in Keeplane (an approval with a saved gateway
+        definition) and allowed for the project's data class, under the same
+        lock and primary-database rule. Only the comparison with the
+        gateway's current definition is left out, because it can't be made;
+        it guards sending a request, and a usage report sends nothing. A
+        model only present in the gateway, never set up, or not allowed for
+        the project is still refused.
+        """
+        if not isinstance(project_id, str) or not 0 < len(project_id) <= 64:
+            raise ValueError("Choose a project context")
+        try:
+            return self.eligible_model_ids(project_id)
+        except GatewayUnavailable:
+            return self._decide(project_id, None, None, None)[0]
+
+    def _decide(self, project_id, personal_data, model_ids, resources):
+        """The locked policy decision; ``model_ids`` None means without the gateway."""
         with transaction.atomic():
             if connection.vendor == "postgresql":
                 with connection.cursor() as cursor:
@@ -128,7 +168,12 @@ class DjangoModelPolicy:
                     if held_class is None:
                         raise ModelPolicyUnavailable("The detection class is missing")
             eligible = set()
-            for approval in ModelApproval.objects.filter(pk__in=model_ids):
+            approvals = (
+                ModelApproval.objects.all()
+                if model_ids is None
+                else ModelApproval.objects.filter(pk__in=model_ids)
+            )
+            for approval in approvals:
                 classes = approval.approved_classes
                 if (
                     not isinstance(classes, list)
@@ -137,7 +182,11 @@ class DjangoModelPolicy:
                     or approval.key_choice not in ProviderKeyChoice.values
                 ):
                     raise ModelPolicyUnavailable("Model setup is incomplete")
-                current = fingerprint(approval.pk, resources, self.file_config)
+                if resources is None:
+                    # Without the gateway: set up in Keeplane, definition saved.
+                    current = approval.gateway_fingerprint
+                else:
+                    current = fingerprint(approval.pk, resources, self.file_config)
                 if current and current == approval.gateway_fingerprint:
                     if (class_name is None or class_name in classes) and (
                         held_class is None or held_class in classes

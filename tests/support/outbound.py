@@ -348,7 +348,7 @@ CLI_DESTINATIONS = {
         "guide": "Usage relay",
     },
     "gateway": {
-        "what": "The gateway URL the developer gave or the server saved at sign-in; only the usage relay connects to it",
+        "what": "The gateway URL the developer gave or the server saved at sign-in; the usage relay sends model calls to it, and `code` only opens and closes a connection to it when Keeplane can't choose a model",
         "guide": "`keeplane code --gateway`",
     },
 }
@@ -380,6 +380,11 @@ CLI_CALL_SITES = {
         {"http.client", "socket", "socketserver", "ssl"},
         {"usage-relay", "gateway"},
         "One turn's loopback relay: sends each runtime request unchanged to the gateway, adds no credential, reads each answer's usage; no proxy, no redirects",
+    ),
+    "coding.py": (
+        {"socket"},
+        {"gateway"},
+        "When Keeplane answers 503 before a turn: opens and closes one connection to the gateway, sending nothing, to tell a gateway outage from a Keeplane one",
     ),
     "keeplane.py": (
         {"subprocess"},

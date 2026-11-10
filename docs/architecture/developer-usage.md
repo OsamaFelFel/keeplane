@@ -57,7 +57,16 @@ The server:
 2. checks that the developer may use the project and that the model is
    currently eligible for it, using the same project access and model policy as
    `GET /api/runtime/projects/{id}/models`. Otherwise it answers 403; if the
-   policy can't be read, 503;
+   policy can't be read, 503. While the gateway's model list or definitions
+   can't be read, Keeplane's own data decides instead (`recordable_model_ids`):
+   the model must have an approval with a saved gateway definition and be
+   allowed for the project's data class, read under the same lock and on the
+   primary database. Only the comparison with the gateway's current definition
+   is left out, because it can't be made; it guards sending a request, and a
+   report sends nothing. A model only in the gateway, never set up, or not
+   allowed for the project is still refused, and a database or other policy
+   failure is still 503. So a task that ran before the gateway went down is
+   still counted;
 3. caps the numbers: at most 10,000 requests per report, requests without
    tokens at most the request count, and at most 10 million input and 10
    million output tokens per request that reported tokens. No hourly total grows

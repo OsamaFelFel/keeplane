@@ -2,7 +2,9 @@
 
 import json
 import shutil
+import socket
 from pathlib import Path
+from urllib.parse import urlsplit
 
 if __package__:
     from . import (
@@ -147,6 +149,10 @@ START_UNAVAILABLE = ("Keeplane isn't available right now, so nothing was sent. T
 SERVER_DOWN = ("Keeplane isn't available right now, so this task stopped and nothing "
                "{more}was sent. Try again in a few minutes, or ask your admin to check "
                "Keeplane.")
+
+# The reason Keeplane gives with its 503 when its gateway, not Keeplane itself,
+# is why it can't choose a model.
+GATEWAY_REASON = "Keeplane's gateway can't be reached"
 
 # What the gateway's refusal says when Keeplane's check couldn't run, so the
 # request never reached a model (D177): agentgateway's own text, then
@@ -524,6 +530,32 @@ def outage(result, issuer, credential):
     return None
 
 
+def gateway_answers(gateway, timeout=5):
+    """Whether anything accepts a connection at the gateway's address."""
+    url = urlsplit(gateway)
+    try:
+        port = url.port or (443 if url.scheme == "https" else 80)
+        socket.create_connection((url.hostname, port), timeout=timeout).close()
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def start_outage(error, gateway, keeplane_answered):
+    """The message for an outage that stopped `code` before the runtime started.
+
+    GATEWAY_DOWN when Keeplane answered the sign-in check and then said it
+    was unavailable because its gateway is (its reason, when the CLI gets
+    it), or the CLI can't connect to the gateway either. Otherwise
+    START_UNAVAILABLE: Keeplane itself is down or not answering.
+    """
+    if (keeplane_answered and isinstance(error, KeeplaneUnavailable)
+            and error.status == 503
+            and (error.detail == GATEWAY_REASON or not gateway_answers(gateway))):
+        return GATEWAY_DOWN.format(more="")
+    return START_UNAVAILABLE
+
+
 def problem_message(problem, model, alternatives):
     """Tell the developer what happened and which allowed models they may choose."""
     message = STOPPED[problem].format(model=model)
@@ -562,6 +594,7 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             gateway = gateway_endpoint(saved)
         # 009-15: the checks before the runtime starts. Keeplane not answering,
         # or answering that it is unavailable, means nothing was sent.
+        actor = None
         try:
             actor = account(credential.issuer, credential.access_token)
             if actor["id"] != credential.actor_id:
@@ -594,10 +627,11 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
                     raise ConnectionError(NOT_ALLOWED)
         except SignInExpired:
             raise
-        except (Unreachable, KeeplaneUnavailable):
+        except (Unreachable, KeeplaneUnavailable) as error:
             # Keeplane's own answer; a model the server says can't be used
             # right now keeps its own message.
-            raise ConnectionError(START_UNAVAILABLE) from None
+            raise ConnectionError(
+                start_outage(error, gateway, actor is not None)) from None
         try:
             result = opencode_adapter.run(
                 binary, directory, gateway, model, prompt, credential.access_token,

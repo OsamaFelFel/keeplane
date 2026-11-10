@@ -33,6 +33,7 @@ def connected(tmp_path, monkeypatch):
         task_model="coder",
         task_model_status=200,
         task_model_reply=None,
+        models_status=200,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -83,7 +84,7 @@ def connected(tmp_path, monkeypatch):
                     "project_id": self.path.split("/")[-2],
                     "models": [{"id": value} for value in state.model_ids],
                 }
-                status = 200
+                status = state.models_status
             self.respond(status, value)
 
         def do_POST(self):

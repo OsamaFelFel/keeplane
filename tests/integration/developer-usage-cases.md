@@ -1,6 +1,7 @@
 # Developer usage on the server
 
-Spec 009 ST31 (D186, D189, D191), ADR 029, tasks 009-08 and 009-09. Journey
+Spec 009 ST31 (D186, D189, D191), ADR 029, tasks 009-08 and 009-09, and the
+usage follow-up from task 009-15 (DU-06, DU-19 to DU-21). Journey
 case DEV-04 (with 009-10). Run
 `.venv/bin/python -m pytest tests/integration/test_developer_usage.py tests/integration/test_developer_usage_storage.py tests/integration/test_usage_cost.py`.
 The storage cases run once on SQLite and once on PostgreSQL; the PostgreSQL
@@ -16,7 +17,7 @@ skipped elsewhere. DU-15 needs the separately pinned CLI sign-in packages.
 | DU-03 | A report names another developer's account ID. | The ID is ignored: the total belongs to the signed-in developer, and the other developer sees nothing. |
 | DU-04 | An admin reads usage; the app's routes are listed. | The admin sees only their own (empty) usage. The only usage route is the developer's own `api/runtime/usage`; no admin route reads totals. |
 | DU-05 | A report names a model that isn't approved for the project, a model that isn't set up, an unknown project or a malformed project ID. | Each is refused with 403 and nothing is recorded. |
-| DU-06 | The gateway's model list can't be read. | The report is refused with 503 and nothing is recorded. |
+| DU-06 | The gateway's model list, or its model definitions, can't be read, and a report names a model set up in Keeplane for the project. | The report is recorded: usage doesn't depend on the gateway being up. |
 | DU-07 | A report or a read is sent with only a session cookie, client account or role headers, a Basic header or an invalid bearer. | Each gets 401 with a Bearer challenge and nothing is recorded. |
 | DU-08 | A report also carries a prompt, an answer, a file path, a repository and a project name. | The total holds only the account, model, hour and four counts; none of the extra text is stored or returned. |
 | DU-09 | A report has negative, fractional, text or true/false counts, zero requests, or a missing, empty or too-long model. | Each is refused with 400 and nothing is recorded. |
@@ -29,6 +30,9 @@ skipped elsewhere. DU-15 needs the separately pinned CLI sign-in packages.
 | DU-16 | Totals just before and after local midnight are read in Kathmandu (UTC+5:45) and India (UTC+5:30). | Kathmandu's day and month start at the nearest UTC hour, 18:00, so 23:45 local counts in the next day. India's half-hour tie uses the earlier hour, 18:00, too. |
 | DU-17 | At 1 December 03:00 UTC, totals across October and one from 30 September exist, then a report is sent. | All of October is kept, because New York is still in November; the September total is deleted. |
 | DU-18 | The database fails while checking project access, adding a report or reading usage. | Each answers 503 "Usage storage is unavailable", not cached. |
+| DU-19 | With the gateway down and the project's class Confidential, reports name a model only in the gateway, one never set up, one whose saved gateway definition was cleared, one approved only for Public, and an approved model not allowed for Confidential; another names a project the developer can't use. | Keeplane's own policy refuses each with 403 and nothing is recorded. |
+| DU-20 | A model's gateway definition is changed outside Keeplane; a report is sent with the gateway answering, then with it down. | With the gateway answering the report is refused (403), because its current definition no longer matches. With it down that comparison can't be made, so the report is recorded. |
+| DU-21 | With the gateway down, Keeplane's own policy can't decide (a model's setup is incomplete), or the database fails while reading it. | 503 "Model policy is unavailable", or 503; nothing is recorded. |
 
 ## Separate app processes on SQLite and PostgreSQL (`test_developer_usage_storage.py`)
 

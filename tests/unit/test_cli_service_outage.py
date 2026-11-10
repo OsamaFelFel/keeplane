@@ -1,10 +1,11 @@
 """Task 009-15: a coding task stopped by an outage says so, not that the model is down.
 
-Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-10).
+Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-14).
 """
 
 import dataclasses
 import json
+import socket
 import ssl
 import subprocess
 import uuid
@@ -284,3 +285,75 @@ def test_out_10_a_certificate_problem_keeps_its_own_message(monkeypatch):
         "Cannot reach Keeplane securely; check the server and certificate "
         "configuration."
     )
+
+
+# Before the task starts, nothing at all was sent.
+GATEWAY_DOWN_AT_START = GATEWAY_DOWN
+
+
+@pytest.mark.parametrize("route", ["models", "choice"])
+@pytest.mark.parametrize("gateway_up", [False, True])
+def test_out_11_keeplane_cant_choose_a_model_because_the_gateway_is_down(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+    route,
+    gateway_up,
+):
+    """Keeplane answered the sign-in check, then couldn't choose a model (503)."""
+    setattr(connected, route + "_status", 503)
+    probed = []
+    monkeypatch.setattr(
+        coding, "gateway_answers", lambda gateway: probed.append(gateway) or gateway_up
+    )
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert capsys.readouterr().err == (
+        START_UNAVAILABLE if gateway_up else GATEWAY_DOWN_AT_START
+    )
+    assert probed == ["https://gateway.test/v1"]
+    assert not runtime[1]
+
+
+def test_out_12_keeplane_down_from_the_sign_in_check_never_blames_the_gateway(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    connected.status = 503
+    monkeypatch.setattr(coding, "gateway_answers", lambda gateway: False)
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert capsys.readouterr().err == START_UNAVAILABLE
+
+
+def test_out_13_keeplanes_gateway_reason_is_enough_without_a_probe(monkeypatch):
+    monkeypatch.setattr(coding, "gateway_answers", lambda gateway: True)
+    error = server_connection.KeeplaneUnavailable("x", 503, coding.GATEWAY_REASON)
+    assert coding.start_outage(error, "https://gw.test/v1", True) + "\n" == (
+        GATEWAY_DOWN_AT_START
+    )
+    other = server_connection.KeeplaneUnavailable("x", 503, "Something else")
+    assert coding.start_outage(other, "https://gw.test/v1", True) + "\n" == (
+        START_UNAVAILABLE
+    )
+    # A 502 or 504 is a proxy in front of Keeplane, not Keeplane's own answer.
+    for status in (502, 504):
+        error = server_connection.KeeplaneUnavailable("x", status, None)
+        monkeypatch.setattr(coding, "gateway_answers", lambda gateway: False)
+        assert coding.start_outage(error, "https://gw.test/v1", True) + "\n" == (
+            START_UNAVAILABLE
+        )
+
+
+def test_out_14_the_gateway_probe_only_connects():
+    with socket.socket() as listening:
+        listening.bind(("127.0.0.1", 0))
+        listening.listen()
+        port = listening.getsockname()[1]
+        assert coding.gateway_answers(f"http://127.0.0.1:{port}/v1")
+    # Nothing listens on the discard port.
+    assert not coding.gateway_answers("http://127.0.0.1:9/v1")
+    assert not coding.gateway_answers("https://gateway.invalid/v1", timeout=2)

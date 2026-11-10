@@ -9,9 +9,10 @@ import pytest
 from model_registry import routing
 from model_registry.levels import ModelInUse
 from model_registry.models import ModelApproval
+from model_registry.policy import GATEWAY_UNREACHABLE, DjangoModelPolicy
 
 from tests.integration.test_installed_personal_runtime import KEY
-from tests.integration.test_model_choice import choice  # noqa: F401
+from tests.integration.test_model_choice import broken_policy, choice  # noqa: F401
 
 pytest_plugins = ("tests.integration.test_installed_personal_runtime",)
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -180,13 +181,19 @@ def test_rt_10_invalid_requests_are_refused(task, query):
     assert response.json() == {"error": "Send at most one model ID, persona and level"}
 
 
-def test_rt_11_signed_out_unknown_project_and_policy_outage(task):
+def test_rt_11_signed_out_unknown_project_and_policy_outage(task, monkeypatch):
     assert ask(task, token="invalid", persona="architect").status_code == 401
     task.state.status = 503
     response = ask(task, persona="architect")
+    # The gateway is the cause, so the developer's client can say so.
+    assert response.status_code == 503
+    assert response.json() == GATEWAY_UNREACHABLE
+    task.state.status = 200
+    with monkeypatch.context() as patch:
+        patch.setattr(DjangoModelPolicy, "_decide", broken_policy)
+        response = ask(task, persona="architect")
     assert response.status_code == 503
     assert response.json() == {"error": "Model routing is unavailable"}
-    task.state.status = 200
     project = task.project
     task.project = "00000000-0000-4000-8000-00000000abcd"
     assert ask(task, persona="architect").status_code == 403

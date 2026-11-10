@@ -635,6 +635,15 @@ for this project. Make the task smaller, or ask your admin to set up a model wit
 a larger context." (governance issue #57; [CLI coding guide](../guide/cli-coding.md)). Errors are 400, 401, 403 and 503
 as for the model choice.
 
+When the gateway's model list or definitions can't be read, the catalog,
+task-model, model-choice and model-alternatives routes answer 503
+`{"error": "Keeplane's gateway can't be reached", "code": "gateway_unreachable"}`
+(`GatewayUnavailable` in the policy), not their general "… is unavailable", so a
+client can name the gateway as the cause. `keeplane code` shows "Keeplane's
+gateway can't be reached right now, so this task stopped and nothing was sent. …"
+when Keeplane answered the sign-in check, then answered 503, and the CLI can't
+connect to the gateway either (or the 503 carries that reason).
+
 ```mermaid
 flowchart LR
   CLI[CLI turn] --> Entry[Entry check]

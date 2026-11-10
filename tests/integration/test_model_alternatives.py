@@ -3,10 +3,15 @@
 import pytest
 from model_registry.fingerprints import fingerprint
 from model_registry.models import ModelApproval
+from model_registry.policy import GATEWAY_UNREACHABLE, DjangoModelPolicy
 
 from tests.integration.test_installed_personal_runtime import KEY
 from tests.integration.test_installed_runtime import send as entry
-from tests.integration.test_model_choice import choice, shared_model  # noqa: F401
+from tests.integration.test_model_choice import (  # noqa: F401
+    broken_policy,
+    choice,
+    shared_model,
+)
 
 pytest_plugins = ("tests.integration.test_installed_personal_runtime",)
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -117,13 +122,19 @@ def test_invalid_or_unallowed_requests_are_refused(choice, query, status):  # no
     assert ask(choice, query=query).status_code == status
 
 
-def test_signed_out_unknown_project_and_policy_outage(choice):  # noqa: F811
+def test_signed_out_unknown_project_and_policy_outage(choice, monkeypatch):  # noqa: F811
     assert ask(choice, token="invalid").status_code == 401
     choice.state.status = 503
     response = ask(choice)
+    # The gateway is the cause, so the developer's client can say so.
+    assert response.status_code == 503
+    assert response.json() == GATEWAY_UNREACHABLE
+    choice.state.status = 200
+    with monkeypatch.context() as patch:
+        patch.setattr(DjangoModelPolicy, "_decide", broken_policy)
+        response = ask(choice)
     assert response.status_code == 503
     assert response.json() == {"error": "Model alternatives are unavailable"}
-    choice.state.status = 200
     choice.project = "not-a-project"
     assert ask(choice).status_code == 403
 

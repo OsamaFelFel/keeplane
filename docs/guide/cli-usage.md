@@ -99,6 +99,10 @@ tokens are never guessed. The table then says the model's totals may be low:
 cloud: 3 requests didn't report tokens, so its totals may be low.
 ```
 
+Recording usage doesn't need the gateway: while it is down, Keeplane checks the
+model against its own setup (set up in Keeplane and allowed for the project's
+class), so the calls the gateway answered before it went down still count.
+
 If a report can't be sent (the server can't be reached, or your sign-in
 expired during the turn), the turn still finishes as usual and `code` adds:
 

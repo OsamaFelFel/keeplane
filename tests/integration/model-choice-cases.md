@@ -17,7 +17,7 @@ project classes (MC-07, MC-08, MC-18 to MC-21). Run
 | MC-09 | The requested model needs no own key | It is kept unchanged. |
 | MC-10 | Existing-gateway mode | Candidates pass that mode's shared-key check, which never admits a Personal model. |
 | MC-11 | Responses | No key, key file name, fingerprint, session or directory appears. |
-| MC-12 | Missing or extra query fields, an empty or unallowed model, invalid session, unknown project, policy outage | 400, 403, 401, 403 and 503 with no choice. |
+| MC-12 | Missing or extra query fields, an empty or unallowed model, invalid session, unknown project, gateway outage, another policy outage | 400, 403, 401, 403 and 503 with no choice; the gateway outage's 503 is `{"error": "Keeplane's gateway can't be reached", "code": "gateway_unreachable"}`, the other "Model choice is unavailable". |
 | MC-13 | CLI receives a fallback | The runtime starts with the other model; stderr explains why and shows `keeplane keys set --model <model>`, with credentials omitted. |
 | MC-14 | CLI receives a choice outside the allowed catalog or a malformed choice | The runtime never starts. |
 | MC-15 | Older server without the route (404) | The CLI keeps the requested model; the gateway still refuses a missing key. A 403 or 503 stops before the runtime. |
