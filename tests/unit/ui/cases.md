@@ -33,6 +33,7 @@ colocated tests.
 | UI-USERS-02 | Choose Next, then search. | Next asks for page 2; search asks the server for matches from page 1, 25 at a time. |
 | UI-USERS-03 | Change a role from Users. | Users shows the change, and focus goes back to that row's Change role after the table reloads. |
 | UI-USERS-04 | Create a user from Users when Keeplane saves it but the answer is lost, then choose Check, which finds it. | The dialog closes, Users shows the new user with the chosen role, and the user was sent once. |
+| UI-USERS-05 | Open Change role from a row, choose Cancel, open it again with the keyboard, then press Escape. | The dialog opens with focus on the role the user has now. Each time it closes, focus goes back to that row's Change role, as Dialog states asks, and no change is sent. |
 | UI-CSRF-01 | Submit a browser change. | A fresh masked token is sent with same-origin credentials and the original JSON headers. |
 | UI-CSRF-02 | Fail token bootstrap. | No mutation request is sent. |
 | UI-CSRF-03 | Refuse or disconnect a mutation. | The write is not repeated automatically. |
