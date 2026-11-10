@@ -6,7 +6,9 @@ Choose approved classes if they are enabled, then add the model. No shared key
 is needed. **Edit** keeps the Personal choice when you save its classes. Its
 key choices follow what can be saved: a model with no key can move to each
 developer's own key; a shared key can't be chosen in Edit, because Edit has no
-step to enter one.
+step to enter one. Edit greys out the choices it can't save and says: "To use a
+choice that's greyed out, remove the model and add it again with that key
+choice."
 Installed Personal coding remains separate work.
 
 This choice needs Keeplane's own gateway. When Keeplane uses a customer-run

@@ -377,11 +377,14 @@ export function ModelsPage() {
             const available = keyChoices(editing, customerRunGateway)
             const choice = (value: ProviderKeyChoice, label: string) => <label className={`flex min-h-9 items-center gap-2 text-[15px]${available[value] ? '' : ' text-muted-foreground'}`}>
               <input type="radio" name="edit-provider-key" checked={editKeyChoice === value} disabled={busy || !available[value]} onChange={() => setEditKeyChoice(value)} />{label}</label>
-            return <fieldset><legend className="keeplane-field-label">Provider key</legend>
+            // Until Edit can make every key move, say how to reach a greyed-out one.
+            const greyedOut = !Object.values(available).every(Boolean)
+            return <fieldset role="radiogroup" aria-describedby={greyedOut ? 'edit-provider-key-unavailable' : undefined}><legend className="keeplane-field-label">Provider key</legend>
               {choice('shared', 'One shared key for the organization')}
               {choice('personal', 'Each developer adds their own key')}
               {choice('none', 'No key needed')}
               {editKeyChoice === 'personal' && <p className="text-[14px] leading-5 text-muted-foreground">Developers add their own keys from the CLI. Keys are never shown again.</p>}
+              {greyedOut && <p id="edit-provider-key-unavailable" className="text-[14px] leading-5 text-muted-foreground">To use a choice that's greyed out, remove the model and add it again with that key choice.</p>}
             </fieldset>
           })()}
           {editKeyChoice === 'shared' && editing?.key_choice === 'shared' && editing.owned_by_keeplane && editing.kind === 'cloud' && <div><Label htmlFor="replacement-key" className="keeplane-field-label">Replace shared key</Label><Input id="replacement-key" type="password" autoComplete="new-password" value={replacementKey} disabled={busy} onChange={event => setReplacementKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Leave it empty to keep the current key.</p></div>}

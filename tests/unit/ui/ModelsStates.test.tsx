@@ -287,3 +287,18 @@ test('MOD-UI-13: a model with no key can move to developers\' own keys', async (
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(bodies).toEqual([{ key_choice: 'personal', approved_classes: ['Public'] }])
 })
+
+const GREYED_OUT_HINT = "To use a choice that's greyed out, remove the model and add it again with that key choice."
+
+test.each([
+  ['shared', 'cloud', false],
+  ['personal', 'cloud', true],
+  ['none', 'real-local', false],
+] as const)('MOD-UI-14: with a greyed-out choice, Edit says how to use it and screen readers hear it on the group (%s, %s, customer-run gateway %s)', async (current, kind, customer) => {
+  editFixture({ models: [model(current, kind)], customer_run_gateway: customer }, () => response({}))
+  const { dialog } = await openEdit()
+  const group = within(dialog).getByRole('radiogroup', { name: 'Provider key' })
+  expect(within(group).getByText(GREYED_OUT_HINT)).toBeTruthy()
+  const described = (group.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
+  expect(described).toEqual([GREYED_OUT_HINT])
+})

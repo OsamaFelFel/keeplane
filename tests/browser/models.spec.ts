@@ -226,6 +226,9 @@ test('MO-UI-13: on a customer-run gateway an own-key model saves only with No ke
   await page.getByRole('row', { name: /personal-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit personal-coder' })
   await expect(dialog.getByRole('radio', { name: 'One shared key for the organization', exact: true })).toBeDisabled()
+  const hint = "To use a choice that's greyed out, remove the model and add it again with that key choice."
+  await expect(dialog.getByText(hint)).toBeVisible()
+  await expect(dialog.getByRole('radiogroup', { name: 'Provider key' })).toHaveAccessibleDescription(hint)
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(dialog.getByRole('alert')).toHaveText(`${OWN_KEYS_REFUSED} Check the details and try again.`)
   await expect(dialog.getByRole('button', { name: 'Use No key' })).toHaveCount(0)

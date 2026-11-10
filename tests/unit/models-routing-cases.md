@@ -88,7 +88,7 @@ or a case named here has no row in its own catalog or no test.
 | --- | --- | --- |
 | ST10 | Add a cloud model | MRS-01, ML-01, CADD-02, CADD-03, CADD-06 |
 | ST10 | Data classes are off | MO-UI-02 (no class asked), MRS-02, MP-01 (every project) |
-| ST10 | The customer runs its own gateway | MRS-03, MRS-15, MRS-16, MRS-18 (only No key models; shared and own keys are refused; an earlier own-key model can move to No key), PMR-03, MOD-UI-11, MOD-UI-12, MO-UI-03, MO-UI-12, MO-UI-13, PK-03, KC-03, KC-04, EXIST-03 |
+| ST10 | The customer runs its own gateway | MRS-03, MRS-15, MRS-16, MRS-18 (only No key models; shared and own keys are refused; an earlier own-key model can move to No key), PMR-03, MOD-UI-11, MOD-UI-12, MOD-UI-14, MO-UI-03, MO-UI-12, MO-UI-13, PK-03, KC-03, KC-04, EXIST-03 |
 | ST10 | Add a model from a local runner | MRS-04, ML-05 (listed as Local), MO-UI-02 |
 | ST10 | The model doesn't answer | MRS-05, MRS-11, MRS-12, MRS-13, MOD-UI-02, MOD-UI-08, MO-UI-03, MO-UI-06, CADD-05 |
 | ST10 | The gateway doesn't register the model | MRS-06, MRS-13, MOD-UI-07 |

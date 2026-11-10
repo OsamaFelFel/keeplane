@@ -150,7 +150,9 @@ this rule can only move to No key: in **Edit**, choose **No key needed** and
 save, with any change to its approved classes; it saves once the model answers
 through your gateway. Saving with **Each developer adds their own key** still
 chosen shows the reason above with "Nothing was saved. Check the details and try
-again." **Remove model** still works.
+again." **Remove model** still works. Choices Edit can't save are greyed out,
+with "To use a choice that's greyed out, remove the model and add it again with
+that key choice."
 
 Developers can't add or replace their own key for any model either.
 `keeplane keys set` asks Keeplane before it prompts for a key and stops with
