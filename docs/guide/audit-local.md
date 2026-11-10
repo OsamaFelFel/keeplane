@@ -84,7 +84,21 @@ down, too slow or failed there, so during a detection outage one request can
 have more than one record; a held request is never left unrecorded. Each
 record gives a reference, the time, the developer, the project, the class the
 request was handled as, why it was held, and the model it was approved for or
-refused for. It never contains the prompt or what
+refused for. When detection found personal data it reads
+`Request [Reference] in [Project] held back by detection, handled as [Class]
+(Personal data detected); approved model [Model]`, for example
+`Request HR-3f9a0c41d2e7 in payments-api held back by detection, handled as
+Confidential (Personal data detected); approved model gpt-4.1`. When detection
+couldn't check the request (Request couldn't be read, Detection was down,
+Detection took longer than 200 ms or Detection failed) it reads
+`Request [Reference] in [Project] held back because detection couldn't check
+it, handled as [Class] ([Why]); approved model [Model]`. When the model isn't
+approved for that class, either form ends `model [Model] isn't approved for
+it, nothing was sent`. Search finds the reference, project, class, reason or
+model. Records written before you upgraded to the version with this change keep
+the words they were stored with, for example `Request HR-3f9a0c41d2e7 held back
+as Confidential (Personal data detected); project payments-api; approved model
+gpt-4.1`; upgrading doesn't rewrite them. It never contains the prompt or what
 detection found. If the record cannot be written, a warning is logged and the
 hold still applies. See the
 [held-back request cases](../../tests/integration/held-request-record-cases.md).
