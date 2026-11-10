@@ -13,14 +13,16 @@
 #    which kind publishes on the node's gateway address and which looks names
 #    up from the runner, outside the bridge rules above. Inside the node,
 #    every packet to that resolver (127.0.0.11 once Docker's rules redirect
-#    it) is refused, for the node itself and, through CoreDNS's forward, for
-#    every pod. CoreDNS still answers cluster names itself. A systemd unit in
-#    the node adds the rules again on every boot, so they hold across a
-#    node restart too.
+#    it) is refused; a systemd unit in the node adds the rules again on every
+#    boot, so they hold across a node restart too. CoreDNS gets the closed
+#    Corefile next to this script: no forward, cluster names as before, and
+#    "no such name" for everything else. It is restarted, so it holds no name
+#    it looked up before closing.
 set -eu
 BRIDGE=kind-isolated
 MODEL_PORT=18082
 NODE=keeplane-isolated-control-plane
+HERE=$(dirname "$0")
 ip link show "$BRIDGE" >/dev/null
 iptables -I DOCKER-USER 1 -i "$BRIDGE" ! -o "$BRIDGE" -j DROP
 iptables -I INPUT 1 -i "$BRIDGE" -j DROP
@@ -53,3 +55,9 @@ UNIT
 docker exec "$NODE" systemctl daemon-reload
 docker exec "$NODE" systemctl enable --now close-outside-dns.service
 docker exec "$NODE" iptables -S INPUT | grep -- 127.0.0.11
+
+NODE_KUBECTL="kubectl --kubeconfig /etc/kubernetes/admin.conf -n kube-system"
+docker exec -i "$NODE" sh -c "$NODE_KUBECTL create configmap coredns --from-file=Corefile=/dev/stdin \
+  --dry-run=client -o yaml | $NODE_KUBECTL apply -f -" < "$HERE/Corefile"
+docker exec "$NODE" sh -c "$NODE_KUBECTL rollout restart deployment/coredns \
+  && $NODE_KUBECTL rollout status deployment/coredns --timeout=180s"

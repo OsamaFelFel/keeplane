@@ -223,20 +223,6 @@ def unresolved(observed, *names):
     return all(observed.get(name, "").startswith("failed:") for name in names)
 
 
-def restart_cluster_dns():
-    """Restart CoreDNS so no name it looked up before closing is still cached."""
-    kubectl("-n", "kube-system", "rollout", "restart", "deployment/coredns")
-    kubectl(
-        "-n",
-        "kube-system",
-        "rollout",
-        "status",
-        "deployment/coredns",
-        "--timeout=180s",
-        timeout=240,
-    )
-
-
 GATEWAY_PROBES = [0]
 
 
@@ -523,8 +509,7 @@ def run_cases():
         )
         node("crictl", "rmi", ABSENT_IMAGE, timeout=60)
         forgotten = node("crictl", "inspecti", ABSENT_IMAGE, timeout=60).returncode != 0
-        closed = run("sudo", str(CLOSE), timeout=120)
-        restart_cluster_dns()
+        closed = run("sudo", str(CLOSE), timeout=300)
         names = {
             "node": lookup("node", [REGISTRY_HOST]),
             "app": lookup("app", [REGISTRY_HOST, APP_NAME]),
