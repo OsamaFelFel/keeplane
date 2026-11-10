@@ -121,7 +121,8 @@ To repeat the React browser suite through a temporary port-forward:
 
 Shared cloud-provider keys are not proven in this mode: the supplied gateway
 runs in a different namespace and cannot read Keeplane's private provider-key
-PVC. The local app rejects shared-key registration before saving the key or
+PVC. A gateway that holds the provider key itself works; see
+[Keeplane's checks on a customer-run gateway](#keeplanes-checks-on-a-customer-run-gateway). The local app rejects shared-key registration before saving the key or
 changing the gateway, with an explicit error. The release gateway contract
 needs a supported secret-delivery mechanism for customer-run gateways before
 this mode handles shared or personal keys.
@@ -269,6 +270,49 @@ Repeat the `final-<model>` policy for each model Keeplane sets up, with that
 model's ID in the body. Both of Keeplane's developer checks read the
 data-class switch, the classes and the approvals on every call, so turning
 data classes off or on applies from the next request.
+
+A model an admin adds in Keeplane is written to your gateway by Keeplane, so
+its definition has no `requestHeaders` of yours. Remove Keeplane's headers on
+its backend instead, with a last transformation that passes on only the
+provider's own headers. It runs after the checks and after any provider key
+the backend adds:
+
+```yaml
+policies:
+  - name: {name: strip-coder, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:coder", namespace: ""}}}
+    policy:
+      transformations:
+        request:
+          replace: '{"content-type": "application/json"}'
+```
+
+Keeplane keeps no shared provider key for a gateway it doesn't run (see
+below). For a cloud model, your gateway can hold the provider key itself:
+the admin adds the model in Keeplane with **No key**, and on that model's
+backend you add the key and keep its `authorization` header in the last
+transformation. Keeplane still records the provider and model name it added,
+so developers' usage shows an estimated cost for it:
+
+```yaml
+policies:
+  - name: {name: key-cloud, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:cloud", namespace: ""}}}
+    policy:
+      backendAuth:
+        key: {value: {file: /secrets/provider-key}}
+  - name: {name: strip-cloud, namespace: ""}
+    target: {backend: {backend: {name: "llm:model:cloud", namespace: ""}}}
+    policy:
+      transformations:
+        request:
+          replace: '{"content-type": "application/json", "authorization": request.headers["authorization"]}'
+```
+
+The [release journey cases](../../tests/e2e/developer-journey-release-cases.md)
+run the developer journey, DEV-01 to DEV-08, through a customer-run gateway set
+up this way, on PostgreSQL with two app copies (DJR-01), and through the
+managed gateway (DJR-02).
 
 ## Retry a model that is down
 

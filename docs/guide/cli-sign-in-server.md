@@ -56,6 +56,16 @@ planned schema rollback.
 
 ## Shared-database and Kubernetes installs
 
+CLI sign-in works the same on a shared PostgreSQL database with several app
+copies behind one address. Give every copy the same signing secret, database
+and `PUBLIC_ORIGIN`, and set `KEEPLANE_GATEWAY_PUBLIC_URL` to the gateway
+address developers' CLIs use: the managed gateway's protected listener, or
+the developer listener of your own gateway. A sign-in started on one copy can
+finish on another. The
+[release journey cases](../../tests/e2e/developer-journey-release-cases.md)
+check this with the developer journey, DEV-01 to DEV-08, on two copies with
+each kind of gateway.
+
 The PostgreSQL image targets with sign-in are `postgres-cli-auth-trial` and
 `postgres-cli-auth-detection`; see [PostgreSQL accounts](postgres-accounts.md)
 and the [Kubernetes installation reference](kubernetes-installation-reference.md).
