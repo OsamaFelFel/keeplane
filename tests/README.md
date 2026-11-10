@@ -23,7 +23,8 @@ The separate `live-preview.yml` workflow starts the protected Docker preview
 with `deploy/local/up.py` on a hosted runner and runs the live gateway cases
 that need it: the [CLI sign-in](e2e/preview-sign-in-live-cases.md), the
 [project classes](e2e/project-classes-live-cases.md), the
-[down-model retry](integration/native-runtime-outage-cases.md) and, with the
+[down-model retry](integration/native-runtime-outage-cases.md), the
+[model setup on the running gateway](e2e/model-setup-live-cases.md) and, with the
 pinned coding runtime, the [developer journey](e2e/developer-journey-cases.md)
 cases. A second
 job in the same workflow builds the `detection` app image, starts the preview
