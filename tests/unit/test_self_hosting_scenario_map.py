@@ -115,7 +115,9 @@ def live_ci_cases():
     """
     from tests.support.cases import EXPECTED_CASES
 
-    lines = re.findall(r"^\s*LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.MULTILINE)
+    lines = re.findall(
+        r"^\s*LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.MULTILINE
+    )
     assert len(lines) == 2, "Each Kubernetes live job names its LIVE_TESTS"
     files = []
     for line in lines:
@@ -156,9 +158,7 @@ def test_shm_03_a_proven_scenario_rests_on_a_check_ci_runs():
             continue
         named = set(CASE.findall(checked_by))
         in_ci = {
-            case
-            for case in named
-            if prefix_of(case) not in RENDER_ONLY | NOT_IN_CI
+            case for case in named if prefix_of(case) not in RENDER_ONLY | NOT_IN_CI
         } | (named & live_ci_cases())
         refusals = named & REFUSAL_PROOF.get(scenario, set())
         assert in_ci or refusals, (
@@ -174,9 +174,9 @@ def test_shm_04_every_named_case_has_a_row_in_its_own_catalog_and_a_test():
         prefix = prefix_of(case)
         assert prefix in CATALOGS, f"{case} has no known catalog"
         catalog = (TESTS / CATALOGS[prefix]).read_text()
-        assert re.search(
-            rf"^\|\s*{re.escape(case)}\s*\|", catalog, re.MULTILINE
-        ), f"{case} has no row in {CATALOGS[prefix]}"
+        assert re.search(rf"^\|\s*{re.escape(case)}\s*\|", catalog, re.MULTILINE), (
+            f"{case} has no row in {CATALOGS[prefix]}"
+        )
         assert is_tested(case, code), f"{case} has no test"
 
 
