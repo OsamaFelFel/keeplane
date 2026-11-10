@@ -52,9 +52,11 @@ flowchart LR
   `model_answer_records.record_sent_request` reads the switch, the developer's
   username and the project name from Keeplane's own tables and writes one
   record per allowed request, in its own transaction. The record's account is
-  the developer whose session made the request; its description names the model
-  and the project. The managed entry check and the shared
-  `/internal/runtime/authorize` check write nothing, because the gateway
+  the developer whose session made the request; its description reads
+  `Request in [Project] sent to [Model]` (D179), where [Model] is the model ID.
+  Records written before the upgrade to the version with this change keep their
+  earlier text; no migration rewrites them. The managed entry check and the
+  shared `/internal/runtime/authorize` check write nothing, because the gateway
   may call them more than once for one request. Unlike settings changes, a
   failed write never refuses the request: it is rolled back, logged as a
   warning with only the error kind, and the decision is still returned. Each

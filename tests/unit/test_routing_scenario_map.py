@@ -65,11 +65,6 @@ SCENARIOS = {
 NOT_BUILT = {
     # Judging a task's complexity waits for task 004-03's router choice.
     ("ST14", "Route by complexity"),
-    # The Developer CLI waits for Spec 009 (governance issue #28).
-    ("ST17", "See the model"),
-    ("ST17", "Switch the model"),
-    # The server's order is built; the CLI switch waits for Spec 009 too.
-    ("ST17", "My switch beats Keeplane's picks"),
 }
 CASE = re.compile(r"\b[A-Z]+(?:-[A-Z]+)*-\d+\b")
 # The catalog each case prefix belongs to, as the map's intro links them. A
@@ -90,6 +85,7 @@ CATALOGS = {
     "REQ": "unit/cli-request-settings-cases.md",
     "RK": "unit/cli-refused-key-cases.md",
     "RETRY": "unit/runtime-config-cases.md",
+    "SW": "unit/cli-model-switch-cases.md",
     "CL": "integration/complexity-level-cases.md",
     "CL-INT": "integration/complexity-level-cases.md",
     "PR-INT": "integration/persona-rule-cases.md",
@@ -107,6 +103,7 @@ CATALOGS = {
     "PMR": "integration/personal-model-registration-cases.md",
     "DK-COUNT": "integration/personal-key-count-cases.md",
     "MA": "integration/model-answer-record-cases.md",
+    "CSW": "integration/cli-model-switch-cases.md",
     "MODEL": "e2e/model-approval-cases.md",
     "EDIT": "e2e/model-edit-cases.md",
     "REMOVE": "e2e/model-removal-cases.md",
@@ -116,6 +113,7 @@ CATALOGS = {
     "LEVEL-LIVE": "e2e/complexity-levels-cases.md",
     "RULE-LIVE": "e2e/persona-rules-cases.md",
     "MSL-LIVE": "e2e/model-setup-live-cases.md",
+    "DEV": "e2e/developer-journey-cases.md",
 }
 
 
@@ -152,9 +150,7 @@ def is_tested(case, code):
 
 def has_row(case, catalog):
     # A table row that starts with the case, or a list item that does.
-    return re.search(
-        rf"^(?:\|\s*|-\s+){re.escape(case)}\b", catalog, re.MULTILINE
-    )
+    return re.search(rf"^(?:\|\s*|-\s+){re.escape(case)}\b", catalog, re.MULTILINE)
 
 
 def test_rsm_01_every_spec_scenario_is_listed_once():

@@ -114,3 +114,19 @@ test('AU-UI-05: initial search settling does not undo a quick Next click', async
   await page.waitForTimeout(350)
   await expect(page.getByText('Showing 26–26 of 26 records')).toBeVisible()
 })
+
+test('AU-UI-06: model answers show as stored, new ones as designed', async ({ page }) => {
+  await mockAudit(page)
+  // D179: new records read "Request in [Project] sent to [Model]"; one stored before keeps its words.
+  const stored = [
+    { id: 41, kind: 'model_answers', when: '2026-11-10T09:15:00+00:00', who: 'dev-one', what: 'Request in payments-api sent to gpt-4.1' },
+    { id: 40, kind: 'model_answers', when: '2026-11-09T09:15:00+00:00', who: 'dev-one', what: 'Request sent to model gpt-4.1; project payments-api' },
+  ]
+  await page.route(url => url.pathname === '/api/audit/records' && url.searchParams.get('kind') === 'model_answers',
+    route => route.fulfill({ json: { records: stored, total: 2, page: 1, page_size: 25, has_more: false } }))
+  await page.goto('/app/audit')
+  await expect(page.getByRole('option', { name: 'Model answers' })).toHaveCount(1)
+  await page.getByLabel('Show').selectOption('model_answers')
+  await expect(page.getByRole('cell', { name: 'Request in payments-api sent to gpt-4.1', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Request sent to model gpt-4.1; project payments-api', exact: true })).toBeVisible()
+})

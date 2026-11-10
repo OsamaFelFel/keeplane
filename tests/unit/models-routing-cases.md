@@ -46,8 +46,9 @@ catalog:
   [signed-in coding cases](cli-signed-in-coding-cases.md), KC the
   [CLI provider-key cases](cli-provider-key-command-cases.md), REQ the
   [request settings cases](cli-request-settings-cases.md), RK the
-  [refused key cases](cli-refused-key-cases.md) and RETRY the
-  [managed runtime configuration cases](runtime-config-cases.md).
+  [refused key cases](cli-refused-key-cases.md), RETRY the
+  [managed runtime configuration cases](runtime-config-cases.md) and SW the
+  [model switch cases](cli-model-switch-cases.md).
 - CL and CL-INT the [complexity level cases](../integration/complexity-level-cases.md),
   PR-INT the [persona rule cases](../integration/persona-rule-cases.md), RT the
   [task routing cases](../integration/task-routing-cases.md), MC the
@@ -62,8 +63,9 @@ catalog:
   [model policy cases](../integration/model-policy-cases.md), RK-INT the
   [refused key cases on the server](../integration/cli-refused-key-cases.md), PMR the
   [personal model setup cases](../integration/personal-model-registration-cases.md),
-  DK-COUNT the [key count cases](../integration/personal-key-count-cases.md) and
-  MA the [model answer record cases](../integration/model-answer-record-cases.md).
+  DK-COUNT the [key count cases](../integration/personal-key-count-cases.md),
+  MA the [model answer record cases](../integration/model-answer-record-cases.md)
+  and CSW the [model switch cases on the server](../integration/cli-model-switch-cases.md).
 - The live cases: MODEL the [approval cases](../e2e/model-approval-cases.md),
   EDIT the [edit cases](../e2e/model-edit-cases.md), REMOVE the
   [removal cases](../e2e/model-removal-cases.md), REPLACE the
@@ -71,8 +73,9 @@ catalog:
   [cloud add cases](../e2e/cloud-add-cases.md), EXIST the
   [customer-run gateway cases](../e2e/existing-gateway-cases.md), LEVEL-LIVE the
   [live level cases](../e2e/complexity-levels-cases.md), RULE-LIVE the
-  [live rule cases](../e2e/persona-rules-cases.md) and MSL-LIVE the
-  [live model setup cases](../e2e/model-setup-live-cases.md).
+  [live rule cases](../e2e/persona-rules-cases.md), MSL-LIVE the
+  [live model setup cases](../e2e/model-setup-live-cases.md) and DEV the
+  [developer journey cases](../e2e/developer-journey-cases.md).
 
 `tests/unit/test_routing_scenario_map.py` fails if a scenario is missing here,
 or a case named here has no row in its own catalog or no test.
@@ -108,9 +111,9 @@ or a case named here has no row in its own catalog or no test.
 | ST16 | A task too big for the model | RETRY-02, OUT-08, OUT-11 (local runner), CODE-05, CODE-07 |
 | ST16 | Down, and no other model allowed | ALT-03, CODE-04 |
 | ST16 | Too big, and no other model allowed | CODE-06, CODE-07 |
-| ST17 | See the model | Not built yet: the CLI doesn't show which model answered. The Developer CLI waits for Spec 009 (governance issue #28). |
-| ST17 | Switch the model | Not built yet: the CLI has no switch; `--model` names one task's model. It waits for Spec 009 (governance issue #28). |
-| ST17 | My switch beats Keeplane's picks | Not built yet: the server's order (RT-02, RT-07, PR-05) is on main; the CLI switch waits for Spec 009 (governance issue #28). |
+| ST17 | See the model | SW-03, SW-07, SW-12 (after a finished turn the CLI says “Answered by [Model].”), DEV-03, DEV-04 (on the default preview) |
+| ST17 | Switch the model | SW-01, SW-02 (`keeplane use` saves only a model the project allows), SW-05, SW-10, CSW-02, CSW-03 (on the real server), DEV-02, DEV-03 (on the default preview, the next task uses the model chosen) |
+| ST17 | My switch beats Keeplane's picks | CSW-01 (the CLI's switch beats a persona rule and a changed level on the real server), RT-02, RT-07, PR-05, SW-03 |
 | ST23 | Edit a model | EDIT-02, CADD-07, GC-14, MRS-14, MO-UI-05 |
 | ST23 | Keep the shared key | MRS-08, CADD-07 |
 | ST23 | Remove a model | MR-04, MR-06, REMOVE-03 |
