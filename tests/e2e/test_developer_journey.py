@@ -524,17 +524,14 @@ def run_cases():
                     and all(counts(cloud_row, p) == own_cloud for p in periods)
                     and mine[coder_model]["cost_status"] == "local"
                     and cloud_row["cost_status"] == "estimate"
-                    # Tokens counted in the hour the model was added are left
-                    # out of the estimate (ADR 029), and the CLI says so.
+                    # A new model name is priced from its first hour (ADR
+                    # 029), so every token counts and the CLI adds no note.
                     and all(
                         Decimal(cloud_row[p]["estimated_cost"]) > 0
-                        or cloud_row[p]["cost_partial"]
+                        and not cloud_row[p]["cost_partial"]
                         for p in periods
                     )
-                    and (
-                        not any(cloud_row[p]["cost_partial"] for p in periods)
-                        or usage.PARTIAL_COST.format(model=cloud_model) in shown[1]
-                    )
+                    and usage.PARTIAL_COST.format(model=cloud_model) not in shown[1]
                     and counts(theirs.get(coder_model), "today")
                     == tokens(
                         second_answers,

@@ -57,6 +57,10 @@ class ModelApproval(models.Model):
     # When the origin was recorded; usage before then is never priced, so a
     # name reused after removal can't price a local model's tokens.
     origin_recorded_at = models.DateTimeField(null=True, blank=True)
+    # True when no developer's usage held this model name yet in the UTC hour
+    # the origin was recorded, so that hour holds only this model's tokens and
+    # is priced too. Otherwise pricing starts with the next whole hour.
+    origin_hour_priced = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         db_table = "accounts_modelapproval"

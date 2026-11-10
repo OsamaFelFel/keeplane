@@ -12,7 +12,8 @@ input and output tokens. Each model gets one ``cost_status``:
 
 Each period also gets ``cost_partial``: true when an ``estimate`` leaves out
 some of that period's tokens because they were counted before Keeplane recorded
-the model's provider.
+the model's provider. A model name with no usage yet in the UTC hour its
+provider was recorded is priced from that hour; otherwise from the next one.
 """
 
 import logging
@@ -41,16 +42,17 @@ def price_list():
         return None
 
 
-def first_priced_hour(recorded):
+def first_priced_hour(recorded, hour_priced=False):
     """The first hourly total that holds only usage from after ``recorded``.
 
     A total covers its whole UTC hour, so the hour the origin was recorded in
-    may hold earlier usage under the same name; it is priced only when the
-    origin was recorded exactly on the hour.
+    may hold earlier usage under the same name. It is priced when no usage
+    held the name in that hour when the origin was recorded (``hour_priced``),
+    or when the origin was recorded exactly on the hour.
     """
     recorded = recorded.astimezone(dt_timezone.utc)
     hour = recorded.replace(minute=0, second=0, microsecond=0)
-    return hour if hour == recorded else hour + timedelta(hours=1)
+    return hour if hour_priced or hour == recorded else hour + timedelta(hours=1)
 
 
 def priced_tokens(user_id, model_id, since, day_start, month_start):
@@ -103,7 +105,12 @@ def add_estimates(user_id, usage, day_start, month_start):
         for row in ModelApproval.objects.filter(
             pk__in=[item["model"] for item in usage["models"]]
         ).values(
-            "model_id", "origin", "provider", "provider_model", "origin_recorded_at"
+            "model_id",
+            "origin",
+            "provider",
+            "provider_model",
+            "origin_recorded_at",
+            "origin_hour_priced",
         )
     }
     for item in usage["models"]:
@@ -118,7 +125,9 @@ def add_estimates(user_id, usage, day_start, month_start):
         priced = priced_tokens(
             user_id,
             item["model"],
-            first_priced_hour(origin["origin_recorded_at"]),
+            first_priced_hour(
+                origin["origin_recorded_at"], origin["origin_hour_priced"]
+            ),
             day_start,
             month_start,
         )

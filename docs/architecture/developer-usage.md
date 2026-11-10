@@ -143,16 +143,32 @@ Each model in the answer has a `cost_status`:
 Matching is exact on the recorded provider and model name: no letter-case
 folding, prefixes or aliases.
 
-Only hourly totals that start at or after the moment the provider was recorded
-are priced: the next full UTC hour, or that same hour if it was recorded exactly
-on the hour. A total covers its whole hour, so the hour the model was added in
-may also hold an earlier model's tokens under the same name. If a removed
-local model's name is reused for a cloud model, none of the local model's
-tokens are priced, even ones from earlier in the same hour. The cloud model's
-own tokens in that first part-hour are left out too, so the estimate can be
-low. When a period's cost leaves out some of its tokens this way, that
-period's `cost_partial` is `true`, so the CLI can say so. It is `false`
-otherwise, and always `false` when there is no cost.
+Usage counted before the provider was recorded is never priced. A total covers
+its whole UTC hour, so the hour the model was added in may also hold an earlier
+model's tokens under the same name. When Keeplane records the provider it also
+records, on the approval (`origin_hour_priced`), whether any developer's total
+already holds that model name in that UTC hour:
+
+- **None does** (a new name, the usual case): pricing starts with that hour,
+  so a model used right after it is added is priced from its first request.
+- **One does** (a reused name): pricing starts with the next full UTC hour, or
+  that same hour if the provider was recorded exactly on the hour. If a
+  removed local model's name is reused for a cloud model, none of the local
+  model's tokens are priced, even ones from earlier in the same hour. The
+  cloud model's own tokens in that first part-hour are left out too, so the
+  estimate can be low.
+
+The check and the reports are ordered, so a report lands either before the
+provider is recorded (and the check sees it) or after (and it is the new
+model's own usage). Adding a report takes a shared lock on the model name, and
+recording the provider takes it exclusively before it reads the time and checks
+the totals; on PostgreSQL these are transaction-scoped advisory locks, and on
+SQLite every write transaction already runs one at a time. Approvals recorded
+before this check existed keep the next-hour rule.
+
+When a period's cost leaves out some of its tokens this way, that period's
+`cost_partial` is `true`, so the CLI can say so. It is `false` otherwise, and
+always `false` when there is no cost.
 
 Setting a model up again keeps what was recorded while Keeplane still owns the
 model. If its gateway definition was replaced outside Keeplane, setting it up
