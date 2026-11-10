@@ -38,7 +38,7 @@ test('AU-UI-01: break-glass recording is visible and cannot be switched off', as
   await expect(mandatory).toBeDisabled()
   await expect(page.getByRole('switch', { name: 'Changes to models, routing and data classes' })).not.toBeChecked()
   await expect(page.getByRole('switch', { name: 'Requests held back by personal-data detection' })).not.toBeChecked()
-  await expect(page.getByRole('switch', { name: 'Which model answered each task' })).not.toBeChecked()
+  await expect(page.getByRole('switch', { name: 'Which model each request was sent to' })).not.toBeChecked()
   await expect(page.getByRole('option', { name: 'Break-glass sign-ins' })).toHaveCount(1)
 })
 
@@ -49,7 +49,7 @@ test('AU-UI-02: optional recording changes one kind and persists on refresh', as
   await expect(settings).not.toBeChecked()
   await settings.check()
   await expect(page.getByRole('status')).toContainText('Recording turned on.')
-  await expect(page.getByRole('switch', { name: 'Which model answered each task' })).not.toBeChecked()
+  await expect(page.getByRole('switch', { name: 'Which model each request was sent to' })).not.toBeChecked()
   await page.reload()
   await expect(settings).toBeChecked()
   await expect(page.getByRole('switch', { name: 'Sign-ins with the break-glass admin' })).toBeChecked()

@@ -14,8 +14,11 @@ type RecordPage = { records: RecordRow[]; total: number; page: number; page_size
 
 const controls: { kind: OptionalKind; label: string; description: string }[] = [
   { kind: 'settings', label: 'Changes to models, routing and data classes', description: 'Who changed what, and when.' },
-  { kind: 'held_requests', label: 'Requests held back by personal-data detection', description: 'Which request, whose, and the class it was handled as.' },
-  { kind: 'model_answers', label: 'Which model answered each task', description: 'The model, the developer and the project.' },
+  { kind: 'held_requests', label: 'Requests held back by personal-data detection',
+    description: 'A reference to the request, whose it was, its project, the class it was handled as and why. The prompt is never stored.' },
+  // A record is written when the request is sent, not when the model answers (governance issue #36).
+  { kind: 'model_answers', label: 'Which model each request was sent to',
+    description: 'The model, the developer and the project, when a request is sent. No prompt or answer text.' },
 ]
 
 export function AuditPage() {
