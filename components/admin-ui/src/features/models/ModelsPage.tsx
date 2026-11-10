@@ -33,6 +33,9 @@ type InUse = { model: string; levels: string[]; personaRules: string[] }
 type Classes = { enabled: boolean; classes: { name: string }[] }
 type RunnerModels = { models: string[]; runtime?: Record<string, { active_context_tokens?: number; training_context_tokens?: number }> }
 
+// The start of the server's own-key refusal on a customer-run gateway (D110).
+const OWN_KEYS_REFUSED = "Keeplane can't pass developers' own keys to a gateway it doesn't run yet"
+
 const selectStyle = 'h-11 w-full rounded-[6px] border border-input bg-background px-3 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 function ClassChoices({ choices, selected, onChange }: {
@@ -57,6 +60,7 @@ export function ModelsPage() {
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState('')
   const [addFailure, setAddFailure] = useState<{ title: string; reason: string } | null>(null)
+  const [ownKeysRefused, setOwnKeysRefused] = useState(false)
   const [duplicate, setDuplicate] = useState('')
   const [source, setSource] = useState<'runner' | 'openai' | 'anthropic'>('runner')
   const [runnerAddress, setRunnerAddress] = useState('')
@@ -145,24 +149,41 @@ export function ModelsPage() {
   }
 
   function openEdit(model: Model) {
-    setEditing(model); setDialogError(''); setReplacementKey('')
+    setEditing(model); setDialogError(''); setReplacementKey(''); setOwnKeysRefused(false)
     setApprovedClasses(model.approved_classes || [])
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!editing) return
-    setBusy(true); setDialogError('')
+    await saveSetup({
+      key_choice: editing.key_choice ?? 'none',
+      ...(classes?.enabled ? { approved_classes: approvedClasses } : {}),
+      ...(replacementKey ? { replace_shared_key: replacementKey } : {}),
+    })
+  }
+
+  // Spec 004 D110: a customer-run gateway takes only No key models, so an
+  // own-key model set up earlier can only move to No key, with its classes.
+  async function switchToNoKey() {
+    if (!editing) return
+    await saveSetup({ key_choice: 'none', ...(classes?.enabled ? { approved_classes: editing.approved_classes ?? [] } : {}) })
+  }
+
+  async function saveSetup(body: Record<string, unknown>) {
+    if (!editing) return
+    setBusy(true); setDialogError(''); setOwnKeysRefused(false)
     try {
-      await action(`/api/models/${encodeURIComponent(editing.id)}/setup`, 'POST', {
-        key_choice: editing.key_choice ?? 'none',
-        ...(classes?.enabled ? { approved_classes: approvedClasses } : {}),
-        ...(replacementKey ? { replace_shared_key: replacementKey } : {}),
-      })
+      await action(`/api/models/${encodeURIComponent(editing.id)}/setup`, 'POST', body)
       setNotice(`${editing.approved ? 'Saved' : 'Set up'} ${editing.id}.`)
       setEditing(null); setReplacementKey('')
       await refresh()
-    } catch (cause) { setDialogError((cause as Error).message) }
+    } catch (cause) {
+      const message = (cause as Error).message
+      setDialogError(message)
+      setOwnKeysRefused(cause instanceof ApiError && cause.status === 422 && editing.key_choice === 'personal'
+        && message.startsWith(OWN_KEYS_REFUSED))
+    }
     finally { setBusy(false) }
   }
 
@@ -358,6 +379,7 @@ export function ModelsPage() {
           {editing?.key_choice === 'shared' && editing.owned_by_keeplane && editing.kind === 'cloud' && <div><Label htmlFor="replacement-key" className="keeplane-field-label">Replace shared key</Label><Input id="replacement-key" type="password" autoComplete="new-password" value={replacementKey} disabled={busy} onChange={event => setReplacementKey(event.target.value)} /><p className="mt-1 text-[14px] text-muted-foreground">Leave it empty to keep the current key.</p></div>}
           {classes?.enabled && <ClassChoices choices={classes.classes.map(item => item.name)} selected={approvedClasses} onChange={setApprovedClasses} />}
           {dialogError && <p role="alert" className="text-[15px]">{dialogError}</p>}
+          {ownKeysRefused && <div><Button type="button" variant="outline" disabled={busy} onClick={() => void switchToNoKey()}>Use No key</Button></div>}
           <div className="flex flex-wrap justify-end gap-3">{editing?.approved && <Button type="button" variant="outline" className="mr-auto" disabled={busy} onClick={startRemove}>{editing.owned_by_keeplane ? 'Remove model' : 'Remove setup'}</Button>}
             <Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button></div>
         </form>

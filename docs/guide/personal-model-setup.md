@@ -7,10 +7,12 @@ is needed. **Edit** keeps the Personal choice when you save its classes.
 Installed Personal coding remains separate work.
 
 This choice needs Keeplane's own gateway. When Keeplane uses a customer-run
-gateway (`GATEWAY_MODE=existing`), Add, Edit and Set up refuse it with
-"Developers' own provider keys need a supported delivery path to the
-customer-run gateway" (HTTP 422) before saving anything or changing the gateway;
-see [provider keys on a customer-run gateway](gateway-configuration.md#provider-keys-on-a-customer-run-gateway).
+gateway (`GATEWAY_MODE=existing`), Add, Edit and Set up refuse it with HTTP 422
+and "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so
+use No key for this model. Nothing was saved." before saving anything or
+changing the gateway. A model set up this way earlier can then only move to No
+key (`key_choice: none` with its classes unchanged) or be removed; see
+[provider keys on a customer-run gateway](gateway-configuration.md#provider-keys-on-a-customer-run-gateway).
 
 The same setup is available through the admin API. Use an existing admin browser
 session and the normal CSRF and

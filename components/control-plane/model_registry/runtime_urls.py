@@ -41,6 +41,7 @@ urlpatterns = [
     path("api/runtime/provider-keys", runtime_keys.provider_keys),
     path("api/runtime/projects/<str:project_id>/provider-keys", runtime_keys.project_provider_keys),
     path("api/runtime/provider-keys/check", runtime_keys.check_provider_key),
+    path("api/runtime/provider-keys/support", runtime_keys.provider_key_support),
     path("api/runtime/projects/<str:project_id>/models", runtime_views.project_models),
     path(
         "api/runtime/projects/<str:project_id>/model-choice",

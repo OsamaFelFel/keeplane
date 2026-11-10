@@ -213,3 +213,49 @@ test.each([
   expect(alert.textContent).toBe(error)
   expect(screen.getByRole('dialog')).toBe(dialog)
 })
+
+const OWN_KEYS_REFUSED = "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved."
+const ownKeyListing = { models: [{ id: 'coder', provider: 'OpenAI', kind: 'cloud', approved: true, key_choice: 'personal', approved_classes: ['Public'], owned_by_keeplane: true }] }
+
+test('MOD-UI-11: an own-key model a customer-run gateway refuses offers Use No key, which saves only that change', async () => {
+  const bodies: unknown[] = []
+  const request = vi.fn(async (path: string, options: RequestInit = {}) => {
+    if (path === '/api/models' && (options.method ?? 'GET') === 'GET') return response(ownKeyListing)
+    if (path === '/api/data-classes') return response({ enabled: true, classes: [{ name: 'Public' }, { name: 'Internal' }] })
+    if (path === '/api/auth-options') return response({ csrf_token: 'masked' })
+    if (path === '/api/models/coder/setup') {
+      const body = JSON.parse(String(options.body))
+      bodies.push(body)
+      return body.key_choice === 'none' ? response({ key_choice: 'none' }) : response({ error: OWN_KEYS_REFUSED }, 422)
+    }
+    return response({})
+  })
+  vi.stubGlobal('fetch', request)
+  const user = userEvent.setup()
+  render(<ModelsPage />)
+  await user.click(await within(await screen.findByRole('row', { name: /coder/ })).findByRole('button', { name: 'Edit' }))
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).queryByRole('button', { name: 'Use No key' })).toBeNull()
+  await user.click(within(dialog).getByRole('checkbox', { name: 'Internal' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+  expect((await within(dialog).findByRole('alert')).textContent).toBe(OWN_KEYS_REFUSED)
+  await user.click(within(dialog).getByRole('button', { name: 'Use No key' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  // The class change is not sent with the move to No key.
+  expect(bodies).toEqual([
+    { key_choice: 'personal', approved_classes: ['Public', 'Internal'] },
+    { key_choice: 'none', approved_classes: ['Public'] },
+  ])
+  expect(await screen.findByText('Saved coder.')).toBeTruthy()
+})
+
+test('MOD-UI-12: any other Edit refusal offers no Use No key', async () => {
+  fixture({ models: () => response(ownKeyListing), setup: () => response({ error: "The model didn't answer. Nothing was saved." }, 503) })
+  const user = userEvent.setup()
+  render(<ModelsPage />)
+  await user.click(await within(await screen.findByRole('row', { name: /coder/ })).findByRole('button', { name: 'Edit' }))
+  const dialog = screen.getByRole('dialog')
+  await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+  await within(dialog).findByRole('alert')
+  expect(within(dialog).queryByRole('button', { name: 'Use No key' })).toBeNull()
+})

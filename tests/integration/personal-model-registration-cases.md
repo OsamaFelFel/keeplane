@@ -25,10 +25,12 @@ key through the [provider-key API](../../docs/guide/cli-provider-keys.md).
   Malformed falsy authentication fields are also refused before provider contact.
 - PMR-03 While Keeplane uses the customer's gateway (`GATEWAY_MODE=existing`), the
   actual admin API refuses each developer's own key on Add, on Edit of a model set
-  up that way earlier and on Set up of a gateway-only model: 422 with
-  “Developers' own provider keys need a supported delivery path to the
-  customer-run gateway”. No provider call, no gateway write, and the approvals and
-  Audit are unchanged.
+  up that way earlier (keeping that choice, or moving to No key with other
+  classes) and on Set up of a gateway-only model: 422 with
+  “Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved.”
+  No provider call, no gateway write, and the approvals and Audit are unchanged.
+  Moving the earlier model to No key with its classes is then saved, and removing
+  another earlier own-key model works.
 
 Run `python -m pytest tests/integration/test_personal_model_registration.py`.
 The tests use disposable local providers and require OpenSSL for the HTTPS case.

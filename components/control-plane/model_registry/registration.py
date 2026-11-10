@@ -35,14 +35,21 @@ MAY_REMAIN_IN_GATEWAY = (
 )
 
 
-# Spec 004 D110 (decision of 10 November 2026): on a customer-run gateway
-# (GATEWAY_MODE=existing) only No key models are supported until Keeplane has a
-# supported way to deliver provider keys to that gateway. The runtime refuses
-# developers' own keys there too, so Add, Edit and Set up refuse both choices.
+# Spec 004 D110 (decisions of 10 November 2026): on a customer-run gateway
+# (GATEWAY_MODE=existing) only No key models are supported until Keeplane can
+# pass provider keys to that gateway. The runtime refuses developers' own keys
+# there too, so Add, Edit and Set up refuse both choices with these reasons,
+# in ST10's "[Reason] Nothing was saved." form.
 EXISTING_GATEWAY_KEYS = {
-    "shared": "Shared provider keys need a supported delivery path to the customer-run gateway",
-    "personal": "Developers' own provider keys need a supported delivery path to the customer-run gateway",
+    "shared": "Keeplane can't pass a shared key to a gateway it doesn't run yet, "
+    "so use No key for this model.",
+    "personal": "Keeplane can't pass developers' own keys to a gateway it doesn't "
+    "run yet, so use No key for this model.",
 }
+
+
+def existing_gateway_refusal(key_choice):
+    return {"error": EXISTING_GATEWAY_KEYS[key_choice] + " Nothing was saved."}
 
 
 def approval_not_saved(undone):
@@ -291,7 +298,7 @@ class ModelManagement:
 
     def replace_shared_key(self, model_id, resource, previous, classes, replacement):
         if self.gateway_mode == "existing":
-            return self.reply(422, {"error": EXISTING_GATEWAY_KEYS["shared"]})
+            return self.reply(422, existing_gateway_refusal("shared"))
         if not previous["owned_by_keeplane"] or resource.get("provider") not in (
             "openAI",
             "anthropic",
@@ -459,7 +466,7 @@ class ModelManagement:
             )
         if key_choice in EXISTING_GATEWAY_KEYS and self.gateway_mode == "existing":
             # Before any key is saved or the customer's gateway is touched.
-            return self.reply(422, {"error": EXISTING_GATEWAY_KEYS[key_choice]})
+            return self.reply(422, existing_gateway_refusal(key_choice))
         if key_choice == "shared":
             shared_key = body.get("shared_key")
             if (
@@ -566,9 +573,25 @@ class ModelManagement:
         choice = body.get("key_choice")
         if choice == "personal" and self.gateway_mode == "existing":
             # Edit and Set up, as Add: nothing is read, saved or changed.
-            return self.reply(422, {"error": EXISTING_GATEWAY_KEYS["personal"]})
+            return self.reply(422, existing_gateway_refusal("personal"))
         previous = self.catalog.get(model_id)
-        if previous and previous["key_choice"] == "personal" and choice != "personal":
+        own_keys_before = bool(previous and previous["key_choice"] == "personal")
+        if own_keys_before and self.gateway_mode == "existing":
+            # A model set up for developers' own keys before D110: the only
+            # edit saved is moving it to No key with its classes unchanged.
+            # Remove still works.
+            asked = body.get("approved_classes", previous["approved_classes"])
+            if (
+                choice != "none"
+                or body.get("shared_key")
+                or body.get("replace_shared_key")
+                or not isinstance(asked, list)
+                or any(not isinstance(item, str) for item in asked)
+                or sorted(asked) != sorted(previous["approved_classes"])
+            ):
+                return self.reply(422, existing_gateway_refusal("personal"))
+            body = {**body, "approved_classes": previous["approved_classes"]}
+        elif own_keys_before and choice != "personal":
             return self.reply(
                 400, {"error": "Keep each developer's own key for this model"}
             )

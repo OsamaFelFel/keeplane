@@ -555,9 +555,13 @@ def test_mrs_14_when_the_previous_key_cannot_be_restored_keeplane_says_to_check_
     assert "previous key is still active" not in error
 
 
-SHARED_REFUSED = "Shared provider keys need a supported delivery path to the customer-run gateway"
+SHARED_REFUSED = (
+    "Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key "
+    "for this model. Nothing was saved."
+)
 OWN_REFUSED = (
-    "Developers' own provider keys need a supported delivery path to the customer-run gateway"
+    "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use "
+    "No key for this model. Nothing was saved."
 )
 
 
@@ -620,6 +624,39 @@ def test_mrs_16_the_customers_gateway_refuses_own_keys_on_edit_and_set_up(
         customer, Catalog(), tmp_path, monkeypatch, classes_on=True, mode="existing"
     ).setup("coder", {"key_choice": "none", "approved_classes": ["Public"]})
     assert status == 200
+
+
+def test_mrs_18_an_earlier_own_key_model_can_only_move_to_no_key(tmp_path, monkeypatch):
+    customer = Gateway()
+    customer.put(
+        {"id": "coder", "name": "coder", "provider": "openAI", "params": {"model": "coder"}}
+    )
+    revision = fingerprint("coder", customer.resources()[1]["resources"])
+    saved = {
+        "approved_classes": ["Public"],
+        "gateway_fingerprint": revision,
+        "key_choice": "personal",
+        "owned_by_keeplane": True,
+    }
+    catalog = Catalog({"coder": dict(saved)})
+    manager = management(
+        customer, catalog, tmp_path, monkeypatch, classes_on=True, mode="existing"
+    )
+    calls = watched(customer)
+    # Any other edit: a shared key, or No key with different classes.
+    for body in (
+        {"key_choice": "shared", "approved_classes": ["Public"]},
+        {"key_choice": "none", "approved_classes": ["Internal"]},
+        {"key_choice": "none", "approved_classes": []},
+        {"key_choice": "none", "approved_classes": ["Public"], "replace_shared_key": "x" * 20},
+    ):
+        assert manager.setup("coder", body) == (422, {"error": OWN_REFUSED})
+    assert calls == [] and catalog.rows == {"coder": saved}
+    # Moving it to No key with its classes is saved, after the model answers.
+    status, result = manager.setup("coder", {"key_choice": "none", "approved_classes": ["Public"]})
+    assert status == 200
+    assert result == saved | {"key_choice": "none"}
+    assert customer.writes == [] and customer.asked == ["coder"]
 
 
 def test_mrs_17_a_managed_gateway_still_takes_developers_own_keys(tmp_path, monkeypatch):

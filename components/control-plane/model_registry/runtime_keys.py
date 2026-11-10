@@ -35,9 +35,13 @@ from .policy import ModelPolicyUnavailable
 # separate so this module imports no gateway call site); the CLI recognises it
 # and explains it to the developer.
 OWN_KEYS_UNSUPPORTED = (
-    "Developers' own provider keys need a supported delivery path to the "
-    "customer-run gateway"
+    "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, "
+    "so use No key for this model."
 )
+
+
+def own_keys_supported():
+    return os.environ.get("GATEWAY_MODE", "managed") == "managed"
 
 
 def strict_object(pairs):
@@ -95,6 +99,23 @@ def check_provider_key(request):
     return provider_key_response(request, check_saved=True)
 
 
+@never_cache
+@runtime_bearer_only
+@api_view(["GET"])
+@authentication_classes([RuntimeSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def provider_key_support(request):
+    """Whether this installation can use developers' own keys at all (D110).
+
+    `keeplane keys set` asks before prompting for a key, so a developer on a
+    customer-run gateway is never asked for a key that can't be used. The
+    PUT refusal above stays as the backstop.
+    """
+    if request.body or request.query_params:
+        return Response({"error": "Send an empty request"}, status=400)
+    return Response({"own_keys": own_keys_supported()})
+
+
 def provider_key_response(request, *, check_saved=False):
     if len(request.body) > 4096:
         return Response({"error": "Request is too large"}, status=413)
@@ -133,11 +154,11 @@ def provider_key_response(request, *, check_saved=False):
             or any(not 33 <= ord(c) <= 126 for c in key)
         ):
             return Response({"error": "Enter a valid provider key"}, status=400)
-    customer_gateway = os.environ.get("GATEWAY_MODE", "managed") != "managed"
-    if request.method == "PUT" and customer_gateway:
-        # Spec 004 D110: a customer-run gateway has no supported delivery path
-        # for developers' own keys, so the runtime could never use one. Refuse
-        # before the key reaches the gateway, the provider or storage.
+    if request.method == "PUT" and not own_keys_supported():
+        # Spec 004 D110: Keeplane can't pass developers' own keys to a
+        # customer-run gateway, so the runtime could never use one. The CLI
+        # asks provider-keys/support first; this is the backstop, before the
+        # key reaches the gateway, the provider or storage.
         return Response({"error": OWN_KEYS_UNSUPPORTED}, status=403)
     try:
         store = key_store(request, model_id)

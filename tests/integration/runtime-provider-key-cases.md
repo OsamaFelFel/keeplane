@@ -29,7 +29,7 @@ flowchart LR
 | Cleanup/status confirmation fails after commit | 503 can follow a committed replacement; GET safely reports stored registration. |
 | Old-file deletion fails | Metadata reports pending cleanup; a later DELETE retries it. |
 | Installation uses non-loopback plain HTTP | Runtime admission is refused. |
-| PK-03 Keeplane uses the customer's gateway (`GATEWAY_MODE=existing`) and a developer adds or replaces a key | 403 with “Developers' own provider keys need a supported delivery path to the customer-run gateway”, before the gateway, the provider or key storage is reached; the earlier key stays. Status and removal still work. |
+| PK-03 Keeplane uses the customer's gateway (`GATEWAY_MODE=existing`) and a developer adds or replaces a key | `GET /api/runtime/provider-keys/support` answers `{"own_keys": false}` (`true` on Keeplane's own gateway) and needs the runtime bearer. PUT is refused with 403 and “Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model.”, before the gateway, the provider or key storage is reached; the earlier key stays. Status and removal still work. |
 
 The owner lock covers the live bearer check, bounded provider validation and
 key commit. Native logout takes the same lock; password/activity changes and

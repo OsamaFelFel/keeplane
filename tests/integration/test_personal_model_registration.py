@@ -424,7 +424,10 @@ def test_actual_admin_api_keeps_roles_csrf_and_classes(
         assert not provider["calls"] and not ModelApproval.objects.exists()
 
 
-OWN_REFUSED = "Developers' own provider keys need a supported delivery path to the customer-run gateway"
+OWN_REFUSED = (
+    "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, "
+    "so use No key for this model. Nothing was saved."
+)
 
 
 @pytest.mark.parametrize("provider", [True], indirect=True)
@@ -444,23 +447,25 @@ def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
     monkeypatch.setenv("PREVIEW_OPENAI_BASE_URL", provider["url"])
     monkeypatch.setenv("SSL_CERT_FILE", provider["ca"])
     domain_services.classes.set_enabled(True)
-    # A model set up for developers' own keys before this rule, and one only
+    # Models set up for developers' own keys before this rule, and one only
     # in the customer's gateway.
-    for model_id in ("legacy", "outside"):
+    for model_id in ("legacy", "outside", "retired"):
         value = definition(provider) | {"id": model_id, "name": model_id}
         registrar.gateway.records[model_id] = {
             "id": model_id,
             "revision": 1,
             "value": value,
         }
-    domain_services.catalog.approve(
-        "legacy",
-        ["Public"],
-        fingerprint("legacy", [registrar.gateway.records["legacy"]]),
-        None,
-        owned_by_keeplane=True,
-        key_choice="personal",
-    )
+    for model_id in ("legacy", "retired"):
+        domain_services.catalog.approve(
+            model_id,
+            ["Public"],
+            fingerprint(model_id, [registrar.gateway.records[model_id]]),
+            None,
+            # Removing "retired" then leaves its gateway entry in place.
+            owned_by_keeplane=model_id == "legacy",
+            key_choice="personal",
+        )
     client = Client(enforce_csrf_checks=True)
     client.cookies["keeplane_session"] = identity.login(
         "first-admin", "first-test-password-123"
@@ -487,6 +492,11 @@ def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
             "/api/models/legacy/setup",
             {"key_choice": "personal", "approved_classes": ["Internal"]},
         ),
+        # Any edit of an earlier own-key model but a move to No key.
+        (
+            "/api/models/legacy/setup",
+            {"key_choice": "none", "approved_classes": ["Internal"]},
+        ),
         (
             "/api/models/outside/setup",
             {"key_choice": "personal", "approved_classes": ["Public"]},
@@ -507,3 +517,32 @@ def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
         list(ModelApproval.objects.values()),
         AuditRecord.objects.count(),
     )
+
+    def send(path, body=None, method="post"):
+        return getattr(client, method)(
+            path,
+            json.dumps(body if body is not None else {}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf,
+            HTTP_X_KEEPLANE_ACTION="1",
+        )
+
+    # Moving the earlier model to No key, classes unchanged, is saved once the
+    # model answers through the gateway.
+    registrar.gateway.request = Gateway.request.__get__(registrar.gateway)
+    response = send(
+        "/api/models/legacy/setup",
+        {"key_choice": "none", "approved_classes": ["Public"]},
+    )
+    assert response.status_code == 200, response.json()
+    approval = ModelApproval.objects.get(pk="legacy")
+    assert approval.key_choice == "none" and approval.approved_classes == ["Public"]
+    assert not provider["calls"] and registrar.gateway.writes == []
+    # Remove still works for an earlier own-key model.
+    from model_registry import views
+
+    monkeypatch.setattr(views, "CATALOG", domain_services.catalog)
+    monkeypatch.setattr(views, "MODEL_GATEWAY", registrar.gateway)
+    removed = send("/api/models/retired/setup", method="delete")
+    assert removed.status_code == 200, removed.json()
+    assert not ModelApproval.objects.filter(pk="retired").exists()

@@ -128,23 +128,28 @@ cannot read Keeplane's private provider-key PVC, and Keeplane's runtime does
 not hand developers' own keys to it.
 
 So in `existing` mode **Add model**, **Edit** and **Set up** refuse both key
-choices for a cloud model, before saving anything or changing the gateway. The
-error stays in the dialog with your entries:
+choices for a cloud model, before saving anything or changing the gateway. Add
+shows "[Model] wasn't added" with the reason, then "Nothing was saved. Check the
+details and try again.", and keeps your entries:
 
-| Key choice | Error |
+| Key choice | Reason |
 | --- | --- |
-| One shared key for the organization | Shared provider keys need a supported delivery path to the customer-run gateway |
-| Each developer adds their own key | Developers' own provider keys need a supported delivery path to the customer-run gateway |
+| One shared key for the organization | Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key for this model. |
+| Each developer adds their own key | Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. |
 
-Choose a model that needs no key instead. A model set up for developers' own
-keys before this rule can't be edited in this mode; remove it from Keeplane in
-**Edit** if it is no longer wanted. Developers can't add or replace their own
-key for any model either: `keeplane keys set` stops with "Keeplane can't use
-developers' own keys with this installation's gateway, so your key for MODEL
-wasn't saved. Ask your Keeplane admin which models you can use." They can still
-list and remove saved keys. The release gateway contract needs a supported
-secret-delivery mechanism for customer-run gateways before this mode handles
-shared or personal keys.
+Choose **No key needed** instead. A model set up for developers' own keys before
+this rule can only move to No key: in **Edit**, **Save** shows the reason above
+and offers **Use No key**, which keeps the model's approved classes and saves
+once the model answers through your gateway. Any other edit of that model is
+refused with the same reason. **Remove model** still works.
+
+Developers can't add or replace their own key for any model either.
+`keeplane keys set` asks Keeplane before it prompts for a key and stops with
+"Keeplane can't use developers' own keys with this installation's gateway, so
+your key for MODEL wasn't saved. Ask your Keeplane admin which models you can
+use." They can still list and remove saved keys. The release gateway contract
+needs a supported secret-delivery mechanism for customer-run gateways before
+this mode handles shared or personal keys.
 
 ## Keeplane's checks on a customer-run gateway
 

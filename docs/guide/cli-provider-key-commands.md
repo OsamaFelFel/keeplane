@@ -33,7 +33,8 @@ keeplane keys set --profile ~/.config/keeplane/dev --model coder
 ```
 
 If your Keeplane installation uses a customer-run gateway, it can't use
-developers' own keys yet, and `set` stops without saving the key:
+developers' own keys yet. `set` checks this before asking for the key, and
+stops:
 
 ```text
 Keeplane can't use developers' own keys with this installation's gateway, so your key for coder wasn't saved. Ask your Keeplane admin which models you can use.

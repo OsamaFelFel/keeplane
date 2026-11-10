@@ -66,7 +66,7 @@ test('MO-UI-03: an unsupported shared key keeps the Add dialog and its entries',
   await mockModels(page)
   await page.route('**/api/models', route => {
     if (route.request().method() === 'POST') return route.fulfill({ status: 422, json: {
-      error: 'Shared provider keys need a supported delivery path to the customer-run gateway',
+      error: "Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key for this model. Nothing was saved.",
     } })
     return route.fallback()
   })
@@ -76,7 +76,8 @@ test('MO-UI-03: an unsupported shared key keeps the Add dialog and its entries',
   await page.getByLabel('Model', { exact: true }).fill('cloud-example')
   await page.getByLabel('Shared key', { exact: true }).fill('disposable-fixture-key')
   await page.getByRole('dialog').getByRole('button', { name: 'Add model' }).click()
-  await expect(page.getByRole('alert')).toContainText('supported delivery path')
+  await expect(page.getByRole('alert')).toContainText("cloud-example wasn't added")
+  await expect(page.getByRole('alert')).toContainText("Keeplane can't pass a shared key to a gateway it doesn't run yet, so use No key for this model. Nothing was saved. Check the details and try again.")
   await expect(page.getByLabel('Model', { exact: true })).toHaveValue('cloud-example')
   await expect(page.getByLabel('Shared key', { exact: true })).toHaveValue('disposable-fixture-key')
   await expect(page.getByRole('dialog')).toBeVisible()
@@ -185,7 +186,7 @@ test('MO-UI-07: editing a Personal model preserves its key choice and explains t
   await expect(dialog).not.toBeVisible()
 })
 
-const OWN_KEYS_REFUSED = "Developers' own provider keys need a supported delivery path to the customer-run gateway"
+const OWN_KEYS_REFUSED = "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved."
 
 test('MO-UI-12: an own-key model refused by a customer-run gateway keeps the Add dialog and its entries', async ({ page }) => {
   await mockModels(page)
@@ -202,27 +203,34 @@ test('MO-UI-12: an own-key model refused by a customer-run gateway keeps the Add
   await dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true }).check()
   await dialog.getByRole('button', { name: 'Add model', exact: true }).click()
   await expect(dialog.getByRole('alert')).toContainText("personal-coder wasn't added")
-  await expect(dialog.getByRole('alert')).toContainText(OWN_KEYS_REFUSED)
+  await expect(dialog.getByRole('alert')).toContainText(`${OWN_KEYS_REFUSED} Check the details and try again.`)
   await expect(dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true })).toBeChecked()
   await expect(dialog.getByLabel('Model', { exact: true })).toHaveValue('personal-coder')
   await expect(page.getByRole('row', { name: /personal-coder/ })).toHaveCount(0)
 })
 
-test('MO-UI-13: editing an own-key model on a customer-run gateway shows the refusal and keeps the dialog', async ({ page }) => {
+test('MO-UI-13: an own-key model on a customer-run gateway can only move to No key', async ({ page }) => {
   const model: Model = { id: 'personal-coder', provider: 'OpenAI', kind: 'cloud', approved: true,
     key_choice: 'personal', approved_classes: [], owned_by_keeplane: true }
   await mockModels(page, [model])
+  const sent: unknown[] = []
   await page.route('**/api/models/personal-coder/setup', route => {
-    expect(route.request().postDataJSON()).toEqual({ key_choice: 'personal' })
+    const body = route.request().postDataJSON()
+    sent.push(body)
+    if (body.key_choice === 'none') return route.fulfill({ json: { model_id: model.id, key_choice: 'none', approved_classes: [] } })
     return route.fulfill({ status: 422, json: { error: OWN_KEYS_REFUSED } })
   })
   await page.goto('/app/models')
   await page.getByRole('row', { name: /personal-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit personal-coder' })
+  await expect(dialog.getByRole('button', { name: 'Use No key', exact: true })).toHaveCount(0)
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(dialog.getByRole('alert')).toHaveText(OWN_KEYS_REFUSED)
   await expect(dialog).toBeVisible()
-  await expect(page.getByText('Saved personal-coder.')).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Use No key', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByText('Saved personal-coder.')).toBeVisible()
+  expect(sent).toEqual([{ key_choice: 'personal' }, { key_choice: 'none' }])
 })
 
 type Level = { level: string; name: string; model_id: string | null; keeplane_pick: string | null; changed_by_admin: boolean; admin_model_id: string | null; admin_model_set_up: boolean | null }
