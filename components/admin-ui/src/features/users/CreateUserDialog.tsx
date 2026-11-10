@@ -116,7 +116,7 @@ export function CreateUserDialog({ open, onOpenChange, onCreated, returnFocusRef
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => close(false)} disabled={phase === 'saving'}>Cancel</Button>
           {phase === 'no-answer' ? <Button type="button" onClick={check} disabled={checking}>Check</Button>
-            : <Button type="submit" disabled={phase === 'saving'}>{phase === 'saving' && <UpdateIcon className="animate-spin" />}Create user</Button>}
+            : <Button type="submit" disabled={phase === 'saving'} aria-busy={phase === 'saving' || undefined}>{phase === 'saving' && <UpdateIcon className="animate-spin" />}Create user</Button>}
         </div>
       </form>
     </DialogContent>

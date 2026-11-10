@@ -67,7 +67,7 @@ line: `e2e/test_local.py`, `e2e/test_kind.py`, `e2e/test_kind_private_ca.py`
 `e2e/test_gateway_secret_rotation.py`, `e2e/test_existing_gateway_preflight.py`,
 `e2e/test_gateway_down.py` and `e2e/test_gateway_copy_stop.py`, which stops one
 managed gateway copy mid-stream and during admin model changes, then brings it
-back. The job fails if any of them is skipped,
+back and checks it serves the current models. The job fails if any of them is skipped,
 fails or reports an incomplete case set. Reports, the JUnit file and the
 cluster's state and logs are uploaded as the `kubernetes-live-<commit>`
 artifact.

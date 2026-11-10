@@ -207,7 +207,7 @@ test('UI-10: Check that gets no answer stays in No answer with "Check again", an
   expect(onCreated).not.toHaveBeenCalled()
 })
 
-test('UI-11: while saving, the button spins, a screen-reader status says Saving, everything is off and Escape does not close', async () => {
+test('UI-11: while saving, the button is busy and spins, a screen-reader status says Saving, everything is off and Escape does not close', async () => {
   let answer: (value: object) => void = () => {}
   const request = fixture(() => new Promise(resolve => { answer = resolve }))
   const user = userEvent.setup()
@@ -216,8 +216,13 @@ test('UI-11: while saving, the button spins, a screen-reader status says Saving,
   await fill(user)
   await user.click(screen.getByRole('button', { name: 'Create user' }))
   expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Saving')
+  // Only the button is busy: a busy dialog could keep screen readers from
+  // announcing the Saving status inside it.
+  expect(screen.getByRole('dialog').hasAttribute('aria-busy')).toBe(false)
+  expect(screen.getByRole('dialog').contains(screen.getByRole('status'))).toBe(true)
   const button = screen.getByRole('button', { name: 'Create user' })
   expect(button).toHaveProperty('disabled', true)
+  expect(button.getAttribute('aria-busy')).toBe('true')
   expect(button.querySelector('svg.animate-spin')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty('disabled', true)
   expect(screen.getByLabelText('Username')).toHaveProperty('disabled', true)
