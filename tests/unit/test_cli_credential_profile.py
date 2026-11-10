@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import stat
 import uuid
 
@@ -190,20 +191,64 @@ def make_unsafe(path, outside, unsafe):
         target.symlink_to(outside.parent / "nowhere")
     elif unsafe == "hardlink":
         os.link(outside, target)
+    elif unsafe == "socket":
+        listener = socket.socket(socket.AF_UNIX)
+        listener.bind(str(target))
+        listener.close()
+        target.chmod(0o600)
+    elif unsafe == "foreign owner":
+        target.write_bytes(VALID_SERVER)
+        target.chmod(0o600)
+        owner = target.lstat().st_uid
+        real = os.stat
+
+        def foreign(name, *args, **kwargs):
+            info = real(name, *args, **kwargs)
+            if name == "server.json" or str(name).endswith("/server.json"):
+                fields = list(info)
+                fields[stat.ST_UID] = owner + 1
+                return os.stat_result(fields)
+            return info
+
+        return foreign
     else:
         os.mkfifo(target, 0o600)
 
 
-UNSAFE_SERVER = ["file_mode", "symlink", "dangling symlink", "hardlink", "fifo"]
+UNSAFE_SERVER = [
+    "file_mode",
+    "symlink",
+    "dangling symlink",
+    "hardlink",
+    "fifo",
+    "socket",
+    "foreign owner",
+]
 
 
 @pytest.mark.parametrize("unsafe", UNSAFE_SERVER)
-def test_an_unsafe_server_file_is_refused_without_being_read(saved, tmp_path, unsafe):
+def test_an_unsafe_server_file_is_refused_without_being_read(
+    saved, tmp_path, monkeypatch, unsafe
+):
     path, _ = saved
     with opened(path) as profile:
         profile.forget()
     (path / "server.json").unlink()
-    make_unsafe(path, tmp_path / "outside", unsafe)
+    foreign = make_unsafe(path, tmp_path / "outside", unsafe)
+    if foreign:
+        monkeypatch.setattr(os, "stat", foreign)
+
+        def never(*args, **kwargs):
+            raise AssertionError("another user's server.json must not be opened")
+
+        real_open = os.open
+        monkeypatch.setattr(
+            os,
+            "open",
+            lambda name, *a, **k: (
+                never() if name == "server.json" else real_open(name, *a, **k)
+            ),
+        )
     with pytest.raises(UnusableServer) as error:
         saved_server(path)
     assert str(error.value) == UNUSABLE_SERVER
@@ -211,10 +256,14 @@ def test_an_unsafe_server_file_is_refused_without_being_read(saved, tmp_path, un
 
 
 @pytest.mark.parametrize("unsafe", UNSAFE_SERVER)
-def test_an_unusable_server_file_does_not_block_the_profile(saved, tmp_path, unsafe):
+def test_an_unusable_server_file_does_not_block_the_profile(
+    saved, tmp_path, monkeypatch, unsafe
+):
     # `login --server` must work: the profile opens and saves without the file.
     path, credential = saved
-    make_unsafe(path, tmp_path / "outside", unsafe)
+    foreign = make_unsafe(path, tmp_path / "outside", unsafe)
+    if foreign:
+        monkeypatch.setattr(os, "stat", foreign)
     with opened(path) as profile:
         assert profile.load() == credential
         with pytest.raises(UnusableServer):
@@ -223,7 +272,9 @@ def test_an_unusable_server_file_does_not_block_the_profile(saved, tmp_path, uns
 
 
 @pytest.mark.parametrize("unsafe", [*UNSAFE_SERVER, "malformed"])
-def test_remove_unusable_server_unlinks_only_the_bad_entry(saved, tmp_path, unsafe):
+def test_remove_unusable_server_unlinks_only_the_bad_entry(
+    saved, tmp_path, monkeypatch, unsafe
+):
     path, _ = saved
     with opened(path) as profile:
         profile.forget()
@@ -232,7 +283,9 @@ def test_remove_unusable_server_unlinks_only_the_bad_entry(saved, tmp_path, unsa
         (path / "server.json").write_bytes(b"[invalid")
         (path / "server.json").chmod(0o600)
     else:
-        make_unsafe(path, tmp_path / "outside", unsafe)
+        foreign = make_unsafe(path, tmp_path / "outside", unsafe)
+        if foreign:
+            monkeypatch.setattr(os, "stat", foreign)
     with opened(path) as profile:
         assert profile.remove_unusable_server() is True
     assert {item.name for item in path.iterdir()} == {"lock"}

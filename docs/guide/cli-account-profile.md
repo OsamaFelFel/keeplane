@@ -62,10 +62,11 @@ and runtime history. The parent directory must exist and be controlled by you.
 The profile directory is owned by your OS user with mode 0700; its credential,
 kept server address (`server.json`, written at sign-out, with no token or account)
 and stable lock files use 0600. Writes are atomic and serialized. Symlinks,
-hardlinks, special files, foreign files and unsafe permissions are refused. An
-unsafe or malformed `server.json` is refused only when a plain `keeplane login`
-needs it, without reading an unsafe one; every other command, including
-`login --server`, leaves it alone.
+hardlinks, special files, foreign files and unsafe permissions are refused. Only a
+plain `keeplane login` reads `server.json`; it refuses a malformed one, and an
+unsafe one without opening it. `login --server` and the other commands don't
+read it. `forget` while signed out removes a bad one; `logout`, and `forget`
+while signed in, replace it with the server you signed in to.
 An interrupted write may leave a pending file; inspect the private directory
 and recover it before retrying. Do not remove the lock to bypass active use.
 
