@@ -10,6 +10,7 @@
 | Logout 204 or 401 | Local credential removed after server success or confirmed withdrawal. |
 | Logout outage/redirect | Credential retained; no success claim or redirect follow. |
 | Explicit local forget | Local credential removed without any server request or server-revocation claim. |
-| Sign-out keeps the server | Logout and forget leave only `server.json` (format and server address, 0600, atomic) and the lock; no token, account or gateway. A malformed, oversized, duplicate-key or unsafe `server.json` is refused. |
+| Sign-out keeps the server | Logout and forget leave only `server.json` (format and server address, 0600, atomic) and the lock; no token, account or gateway. A malformed, oversized, duplicate-key or unsafe `server.json` is refused with one message naming `keeplane login --server <address>` and `keeplane forget`. |
+| Unusable `server.json` | An unsafe one (mode, another owner, link, dangling link, hardlink, FIFO, socket) is refused before it is opened, even when its target holds a valid address. It doesn't block opening the profile, so other commands still work; a `server.json` directory still does. `remove_server` unlinks the entry (never a link's target) and says whether it was usable. After sign-in, `replace_kept_server` replaces any kept entry, unread, with the signed-in server (0600, atomic, no-follow); sign-out does the same. |
 
 These tests use a controlled localhost HTTP server, not the actual OAuth issuer.

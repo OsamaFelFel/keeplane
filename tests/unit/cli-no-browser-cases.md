@@ -41,3 +41,21 @@ run the same fallback against the real server.
   finish, so you aren't signed in. Run `keeplane login` to try again, or
   `keeplane login --device` to sign in from another device." No device code is
   asked for and nothing is saved.
+- **NB-13 The kept server can't be used.** With a malformed, extra-key, oversized,
+  wrong-mode or symlinked `server.json`, a plain `login` exits 1 with "Keeplane
+  can't use the server address it kept for this profile. Run `keeplane login
+  --server <address>`, or `keeplane forget` to remove it." and sends nothing.
+- **NB-14 `--server` gets round it.** `login --server` signs in without reading
+  the file, then replaces it (0600, not a link; a link's target is untouched)
+  with the server it signed in to; `logout` keeps that server.
+- **NB-15 `forget` removes it.** Signed out, `forget` removes the bad file
+  (not a link's target), says so and exits 0; a plain `login` then says Keeplane doesn't
+  know the server yet.
+- **NB-16 `forget` removes a usable server.** Signed out with a usable address,
+  `forget` removes it, says "Removed the saved server address. Run `keeplane
+  login --server <address>` to sign in." and exits 0. With nothing saved it says
+  "Keeplane has no saved sign-in or server address, so there's nothing to
+  forget." and exits 0. `keeplane forget --help` says "Delete the sign-in saved
+  on this machine, or, once signed out, the saved server address."
+- **NB-17 A failed sign-in changes nothing.** When `login --server` fails, the
+  unusable `server.json` stays exactly as it was and no credential is saved.

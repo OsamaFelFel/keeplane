@@ -27,6 +27,16 @@ class ProfileError(Exception):
     pass
 
 
+class UnusableServer(ProfileError):
+    """The kept server address is malformed or unsafe; it is never trusted."""
+
+
+UNUSABLE_SERVER = (
+    "Keeplane can't use the server address it kept for this profile. "
+    "Run `keeplane login --server <address>`, or `keeplane forget` to remove it."
+)
+
+
 def default_path():
     """``$XDG_CONFIG_HOME/keeplane/account``: ``~/.config/keeplane/account`` by default."""
     configured = os.environ.get("XDG_CONFIG_HOME", "")
@@ -145,20 +155,29 @@ class Profile:
         self._write("credential.json", data)
 
     def load_server(self):
-        """The server address kept after sign-out, or None (Spec 009 ST29)."""
+        """The server address kept after sign-out, or None (Spec 009 ST29).
+
+        An unsafe file (wrong mode or owner, a link, a special file) is refused
+        before it is opened, and a malformed one after a bounded read; both
+        raise ``UnusableServer`` and nothing in the file is used.
+        """
+        try:
+            info = os.stat(SERVER_FILE, dir_fd=self.directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        if not private_file(info):
+            raise UnusableServer(UNUSABLE_SERVER)
         try:
             descriptor = os.open(
                 SERVER_FILE,
                 os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                 dir_fd=self.directory,
             )
-        except FileNotFoundError:
-            return None
+        except OSError:
+            raise UnusableServer(UNUSABLE_SERVER) from None
         with os.fdopen(descriptor, "rb") as source:
             if not private_file(os.fstat(source.fileno())):
-                raise ProfileError(
-                    "Credential file must be private and owned by this user."
-                )
+                raise UnusableServer(UNUSABLE_SERVER)
             raw = source.read(4097)
         try:
             data = json.loads(raw, object_pairs_hook=unique)
@@ -171,8 +190,36 @@ class Profile:
             ):
                 raise ValueError
         except (ValueError, TypeError, RecursionError, ConnectionError):
-            raise ProfileError("Credential profile is invalid.") from None
+            raise UnusableServer(UNUSABLE_SERVER) from None
         return data["server"]
+
+    def remove_server(self):
+        """Remove the kept server address; say whether it was usable.
+
+        Returns "unusable", "usable", or None when nothing was kept. Only
+        ``keeplane forget`` calls this, while signed out. Unlinking never
+        follows a link, and an unusable file is never trusted.
+        """
+        try:
+            state = "usable" if self.load_server() else None
+        except UnusableServer:
+            state = "unusable"
+        if state:
+            os.unlink(SERVER_FILE, dir_fd=self.directory)
+            os.fsync(self.directory)
+        return state
+
+    def replace_kept_server(self, server):
+        """After a successful sign-in, keep the server just signed in to.
+
+        Any kept file is replaced without being read, by the same atomic,
+        no-follow write as sign-out: a link is replaced, never its target.
+        """
+        try:
+            os.stat(SERVER_FILE, dir_fd=self.directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        self.save_server(server)
 
     def save_server(self, server):
         """Keep only the non-secret server address, with no account or token."""
@@ -239,7 +286,12 @@ def opened(path, *, create=False):
         if set(os.listdir(directory)) - {"credential.json", SERVER_FILE, "lock"}:
             raise ProfileError("Refusing foreign or incomplete credential state.")
         for name in os.listdir(directory):
-            if not private_file(os.stat(name, dir_fd=directory, follow_symlinks=False)):
+            info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            # An unusable server.json is never read here; reading it refuses it
+            # (load_server), so `login --server` and `forget` still work.
+            if name == SERVER_FILE and not stat.S_ISDIR(info.st_mode):
+                continue
+            if not private_file(info):
                 raise ProfileError("Credential state contains an unsafe file.")
         lock = os.open(
             "lock",
@@ -267,7 +319,8 @@ def opened(path, *, create=False):
 
 def saved_server(path):
     """The server address this profile kept after sign-out, or None."""
-    if not (Path(path).expanduser() / SERVER_FILE).exists():
+    # lexists: a dangling link is still a kept file, and is refused.
+    if not os.path.lexists(Path(path).expanduser() / SERVER_FILE):
         return None
     with opened(path) as profile:
         return profile.load_server()
