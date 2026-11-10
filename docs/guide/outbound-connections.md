@@ -94,9 +94,11 @@ the demo model; see [Run locally](local-preview.md).
 Images are built, and source archives for the licence notices are collected,
 before installation. Those steps download pinned packages and sources and are
 never run by a running installation. Pulling images is the only install-time
-need: make the pinned images available inside your network before you close
-any temporary registry access (see [Images](kubernetes-installation-reference.md#images)).
-After that, restarting pods or nodes needs no registry.
+need: copy the pinned images, by digest, into a registry inside your network
+before you close any temporary registry access, and point your nodes at it
+(see [Use an internal registry](kubernetes-installation-reference.md#use-an-internal-registry)).
+After that, restarting pods or nodes needs no outside registry, and a new
+node pulls from the internal one. Keeplane itself never contacts a registry.
 
 ## Developers' computers
 
@@ -183,4 +185,6 @@ network policies on. Outside name lookups are closed too: neither the node nor
 any pod can resolve a public name such as `registry.k8s.io`, while names inside
 the cluster still resolve. The web UI opens through the ingress, an admin adds and
 asks a model on that provider and a model inside the cluster, and calls from
-the app and gateway pods to any other address fail.
+the app and gateway pods to any other address fail. The node pulls every image
+from a registry inside that network, and still starts Keeplane after every
+image it pulled is removed from it.
