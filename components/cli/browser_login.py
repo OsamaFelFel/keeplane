@@ -308,6 +308,12 @@ def save_login(profile, server, access, refresh, *, client_id="keeplane-cli"):
                 "Sign-in was not saved reliably; server revocation could not be confirmed."
             ) from None
         raise
+    try:
+        # A bad kept address is replaced only once sign-in has succeeded.
+        profile.replace_kept_server(server)
+    except (OSError, ProfileError):
+        # Signed in all the same; the old file stays as it was (atomic write).
+        pass
 
 
 def login(server, path, *, timeout=120, browser=None, announce=print):

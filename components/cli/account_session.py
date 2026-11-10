@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 
 if __package__:
@@ -12,9 +13,30 @@ else:
     from server_connection import ConnectionError, account, logout
 
 
+NOTHING_TO_FORGET = (
+    "Keeplane has no saved sign-in or server address, so there's nothing to forget."
+)
+REMOVED_SERVER = (
+    "Removed the saved server address. "
+    "Run `keeplane login --server <address>` to sign in."
+)
+REMOVED_UNUSABLE_SERVER = (
+    "Removed the server address Keeplane couldn't use. "
+    "Run `keeplane login --server <address>` to sign in."
+)
+
+
 def run(action, path):
     with opened(path) as profile:
         if action == "forget":
+            if "credential.json" not in os.listdir(profile.directory):
+                # Signed out: forget the kept server address too.
+                removed = profile.remove_server()
+                if removed == "unusable":
+                    return REMOVED_UNUSABLE_SERVER
+                if removed == "usable":
+                    return REMOVED_SERVER
+                return NOTHING_TO_FORGET
             profile.forget()
             return "Local credential removed; server revocation was not requested."
         credential = profile.load()
