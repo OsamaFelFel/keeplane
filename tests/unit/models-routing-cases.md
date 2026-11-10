@@ -116,10 +116,10 @@ or a case named here has no row in its own catalog or no test.
 | ST23 | Remove a model | MR-04, MR-06, REMOVE-03 |
 | ST23 | A model in use | MR-20, MR-22, CL-INT-06, PR-INT-06, CL-UI-05, PR-UI-05, MO-UI-09, MO-UI-11, LEVEL-LIVE-03, RULE-LIVE-02 |
 | ST23 | Keeplane's own pick | CL-INT-05 |
-| ST23 | A model added outside Keeplane | MR-01, REMOVE-04, MO-UI-04, MC-16, EDIT-05, MSL-LIVE-03 (changed in the gateway), MSL-LIVE-05 |
+| ST23 | A model added outside Keeplane | MR-01, REMOVE-04, MO-UI-04, MC-16, EDIT-05, MSL-LIVE-05 |
 | ST24 | Listed but unused | ML-01, MP-02 (even with no class), MODEL-01, MODEL-02, REPLACE-01, EXIST-03, MSL-LIVE-01 |
-| ST24 | Set it up | MODEL-05, MODEL-06, MO-UI-05, GC-09, MSL-LIVE-02, MSL-LIVE-04 (enrolled on the running gateway) |
-| ST24 | Set it up with data classes off | MRS-09, MP-01, MSL-LIVE-02 |
+| ST24 | Set it up | MODEL-05, MODEL-06, MO-UI-05, GC-09 |
+| ST24 | Set it up with data classes off | MRS-09, MP-01, MSL-LIVE-02, MSL-LIVE-04 (enrolled on the running gateway) |
 | ST25 | Loading | MOD-UI-04 |
 | ST25 | The gateway isn't answering | MOD-UI-05 |
 | ST25 | No gateway name | MOD-UI-06 |

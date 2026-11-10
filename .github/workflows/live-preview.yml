@@ -6,10 +6,10 @@ name: Live preview gateway checks
 # fresh default start (task 009-01), Spec 005 ST19 project classes through the
 # guarded endpoint (task 005-02), Spec 004 ST16 retry of a model that is
 # down (task 004-04) and Spec 004 ST23/ST24 model setup reaching the running
-# gateway through the model enroller (task 004-01). Last, the developer half of the MVP journey, DEV-01 to
-# DEV-05 (task 009-13), then DEV-06 to DEV-08 and DEV-09 and DEV-10 (tasks on
-# developers' own keys, sent to the preview's HTTPS fixture provider), runs with
-# the hash-pinned coding runtime.
+# gateway through the model enroller (task 004-01). Last, the developer half
+# of the MVP journey, DEV-01 to DEV-05 (task 009-13), then DEV-06 to DEV-08 and
+# DEV-09 and DEV-10 (tasks on developers' own keys, sent to the preview's HTTPS
+# fixture provider), runs with the hash-pinned coding runtime.
 # A second job, in parallel, builds the `detection` app image and runs Spec 005
 # ST20 personal-data detection and Spec 006 ST21 held-back request records
 # through the same guarded endpoint (tasks 005-03 and 006-02).

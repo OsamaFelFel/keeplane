@@ -35,13 +35,15 @@ there, without restarting the gateway or the app:
 - A developer's own provider key needs no enrollment: a new or replaced one
   applies to their next request. A shared key is different (see the next
   point).
-- A model someone put straight into the gateway is listed in Models and
-  routing but gets no work until you set it up. Setting it up enrols it
-  within a few seconds, as adding does.
+- A model added outside Keeplane, straight into the gateway, shows as not set
+  up and gets no work until you set it up. Setting it up enrols it within a
+  few seconds, as adding does.
 - A model you remove is refused as soon as you remove it. Removing the setup of
   a model added outside Keeplane keeps it in the gateway, unused.
 - A model whose destination changes in the gateway, outside Keeplane, is
-  refused at once and shows as not set up; set it up again to use it.
+  refused at once and shows as not set up; set it up again to use it. As for
+  an edit, the new setup takes effect after the hold, about 3 minutes and 16
+  seconds after the change.
 - A model you edit (or a shared key you replace) is refused at once. Its new
   setup is enrolled after about 3 minutes and 16 seconds, once every request
   that started under the old setup has finished its retries. While a change

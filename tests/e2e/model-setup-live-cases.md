@@ -1,7 +1,8 @@
 # Model setup on the running guarded gateway
 
-**Edition:** Open Source. Spec 004 ST23 "A model added outside Keeplane" and
-ST24 "Listed but unused", "Set it up" and "Set it up with data classes off";
+**Edition:** Open Source. Spec 004 ST23 "A model added outside Keeplane"
+(MSL-LIVE-05) and ST24 "Listed but unused" (MSL-LIVE-01) and "Set it up with
+data classes off" (MSL-LIVE-02 and 04);
 task 004-01, ADR 027. The [live runner](test_model_setup_live.py) proves that
 an admin's Set up reaches the Docker preview's managed gateway (the real,
 pinned gateway image) through the model enroller, without restarting the
