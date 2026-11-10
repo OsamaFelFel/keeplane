@@ -627,6 +627,7 @@ def test_mrs_16_the_customers_gateway_refuses_own_keys_on_edit_and_set_up(
 
 
 def test_mrs_18_an_earlier_own_key_model_can_only_move_to_no_key(tmp_path, monkeypatch):
+    """The move may change its classes too (APO decision, 10 November 2026)."""
     customer = Gateway()
     customer.put(
         {"id": "coder", "name": "coder", "provider": "openAI", "params": {"model": "coder"}}
@@ -643,19 +644,19 @@ def test_mrs_18_an_earlier_own_key_model_can_only_move_to_no_key(tmp_path, monke
         customer, catalog, tmp_path, monkeypatch, classes_on=True, mode="existing"
     )
     calls = watched(customer)
-    # Any other edit: a shared key, or No key with different classes.
+    # Any other choice: a shared key, or keeping developers' own keys.
     for body in (
         {"key_choice": "shared", "approved_classes": ["Public"]},
-        {"key_choice": "none", "approved_classes": ["Internal"]},
-        {"key_choice": "none", "approved_classes": []},
-        {"key_choice": "none", "approved_classes": ["Public"], "replace_shared_key": "x" * 20},
+        {"key_choice": "personal", "approved_classes": ["Public"]},
     ):
         assert manager.setup("coder", body) == (422, {"error": OWN_REFUSED})
     assert calls == [] and catalog.rows == {"coder": saved}
-    # Moving it to No key with its classes is saved, after the model answers.
-    status, result = manager.setup("coder", {"key_choice": "none", "approved_classes": ["Public"]})
+    # Moving it to No key is saved with its class change, after the model answers.
+    status, result = manager.setup(
+        "coder", {"key_choice": "none", "approved_classes": ["Public", "Internal"]}
+    )
     assert status == 200
-    assert result == saved | {"key_choice": "none"}
+    assert result == saved | {"key_choice": "none", "approved_classes": ["Public", "Internal"]}
     assert customer.writes == [] and customer.asked == ["coder"]
 
 

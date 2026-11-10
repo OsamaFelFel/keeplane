@@ -492,11 +492,6 @@ def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
             "/api/models/legacy/setup",
             {"key_choice": "personal", "approved_classes": ["Internal"]},
         ),
-        # Any edit of an earlier own-key model but a move to No key.
-        (
-            "/api/models/legacy/setup",
-            {"key_choice": "none", "approved_classes": ["Internal"]},
-        ),
         (
             "/api/models/outside/setup",
             {"key_choice": "personal", "approved_classes": ["Public"]},
@@ -527,22 +522,36 @@ def test_pmr_03_customer_run_gateway_refuses_own_keys_on_add_edit_and_set_up(
             HTTP_X_KEEPLANE_ACTION="1",
         )
 
-    # Moving the earlier model to No key, classes unchanged, is saved once the
-    # model answers through the gateway.
+    # A shared key is refused with the same reason.
+    response = send(
+        "/api/models/legacy/setup",
+        {"key_choice": "shared", "approved_classes": ["Public"]},
+    )
+    assert (response.status_code, response.json()) == (422, {"error": OWN_REFUSED})
+    # Moving the earlier model to No key is saved with its class change once
+    # the model answers through the gateway.
     registrar.gateway.request = Gateway.request.__get__(registrar.gateway)
     response = send(
         "/api/models/legacy/setup",
-        {"key_choice": "none", "approved_classes": ["Public"]},
+        {"key_choice": "none", "approved_classes": ["Public", "Internal"]},
     )
     assert response.status_code == 200, response.json()
     approval = ModelApproval.objects.get(pk="legacy")
-    assert approval.key_choice == "none" and approval.approved_classes == ["Public"]
+    assert approval.key_choice == "none"
+    assert sorted(approval.approved_classes) == ["Internal", "Public"]
     assert not provider["calls"] and registrar.gateway.writes == []
     # Remove still works for an earlier own-key model.
     from model_registry import views
 
     monkeypatch.setattr(views, "CATALOG", domain_services.catalog)
     monkeypatch.setattr(views, "MODEL_GATEWAY", registrar.gateway)
+    # Models and routing tells Edit which gateway Keeplane uses.
+    monkeypatch.setattr(views, "list_models", lambda *a: (200, {"models": []}))
+    monkeypatch.setattr(registrar.gateway, "models", None, raising=False)
+    assert client.get("/api/models").json()["customer_run_gateway"] is True
+    monkeypatch.setenv("GATEWAY_MODE", "managed")
+    assert client.get("/api/models").json()["customer_run_gateway"] is False
+    monkeypatch.setenv("GATEWAY_MODE", "existing")
     removed = send("/api/models/retired/setup", method="delete")
     assert removed.status_code == 200, removed.json()
     assert not ModelApproval.objects.filter(pk="retired").exists()

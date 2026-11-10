@@ -4,8 +4,10 @@ These cases use the product team's Models, Add model and Edit model designs. The
 
 - Personal Add hides the shared-key field, sends only the Personal choice and
   keeps the selected model/choice after a refused provider check.
-- Personal Edit names the developer-owned choice, explains the provider check,
-  preserves that choice when saving classes and offers no shared-key replacement.
+- Edit shows the three key choices of `Model-edit.dc.html`; only those Edit can
+  save can be picked. Personal Edit checks the developer-owned choice, explains
+  the provider check, preserves that choice when saving classes and offers no
+  shared-key replacement.
 
 | ID | Plain-English action | Expected result |
 | --- | --- | --- |
@@ -15,12 +17,12 @@ These cases use the product team's Models, Add model and Edit model designs. The
 | MO-UI-04 | Remove Keeplane setup for a model the customer put in the gateway. | Its gateway entry remains listed as added outside Keeplane and receives no Keeplane work. |
 | MO-UI-05 | Set up an outside model, have the first save refused, save again, then edit its approved classes. | The class choices are kept after the refusal, the retry sets it up and the row shows the new classes (MODEL-01, EDIT-01). |
 | MO-UI-06 | Add an OpenAI model set to each developer's own key while the provider check is refused, then again when it answers. | No shared-key field is shown or sent; after “OpenAI didn't answer.” the model and choice stay; the second add shows the model. |
-| MO-UI-07 | Edit a model set to each developer's own key. | The dialog names the developer-owned choice, explains the provider check, offers no shared-key replacement and keeps the choice when classes are saved. |
+| MO-UI-07 | Edit a model set to each developer's own key on Keeplane's own gateway. | The dialog checks the developer-owned choice, explains the provider check, shows No key needed and a shared key as choices that can't be picked, offers no shared-key replacement and keeps the choice when classes are saved. |
 | MO-UI-08 | Open Change for Complex with the keyboard, save another model, then choose Use Keeplane's pick; narrow to 320px. | The Change a level dialog is at most 560px wide with a 44px Model select and names Keeplane's pick; the row shows “changed by an admin”, then “Keeplane's pick” again; two protected requests are sent; the page stays inside 320px. |
 | MO-UI-09 | Choose Remove model for a model an admin-changed level uses. | The Remove model: in use dialog lists “Complexity level: Standard” and closes; no removal request is sent. |
 | MO-UI-10 | With no rules yet, open Add rule with the keyboard, choose Architect and a model, add it; narrow to 320px. | The Add persona rule dialog is at most 560px wide with 44px persona and model selects; the rule shows as “Persona is Architect” with the model and a notice; one protected request is sent; the page stays inside 320px. |
 | MO-UI-11 | Choose Remove model for a model a persona rule uses. | The Remove model: in use dialog lists “Persona rule: Architect” and closes; no removal request is sent. |
 | MO-UI-12 | On a customer-run gateway, try to add an OpenAI model set to each developer's own key. | The Add dialog stays open with “personal-coder wasn't added” and “Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved. Check the details and try again.”; the model and choice stay; no row is added. |
-| MO-UI-13 | On a customer-run gateway, save a model set to each developer's own key, then choose Use No key. | The Edit dialog stays open with the own-key reason and offers Use No key; that sends only `key_choice: none` and the model is saved. |
+| MO-UI-13 | On a customer-run gateway, save a model set to each developer's own key, then choose No key needed and save. | A shared key can't be picked. The first save shows “Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved. Check the details and try again.” with no other button; the second sends `key_choice: none` and the model is saved. |
 
 MO-UI-05 covers MODEL-01/EDIT-01 dialog behavior: set up an outside model, retain its class choices after a refused save, retry, edit its approvals and see the updated row. The Python API suites verify storage and authorization separately.

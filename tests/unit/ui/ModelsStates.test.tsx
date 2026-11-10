@@ -215,47 +215,75 @@ test.each([
 })
 
 const OWN_KEYS_REFUSED = "Keeplane can't pass developers' own keys to a gateway it doesn't run yet, so use No key for this model. Nothing was saved."
-const ownKeyListing = { models: [{ id: 'coder', provider: 'OpenAI', kind: 'cloud', approved: true, key_choice: 'personal', approved_classes: ['Public'], owned_by_keeplane: true }] }
 
-test('MOD-UI-11: an own-key model a customer-run gateway refuses offers Use No key, which saves only that change', async () => {
-  const bodies: unknown[] = []
-  const request = vi.fn(async (path: string, options: RequestInit = {}) => {
-    if (path === '/api/models' && (options.method ?? 'GET') === 'GET') return response(ownKeyListing)
+function editFixture(listing: object, setup: (body: Record<string, unknown>) => object) {
+  const bodies: Record<string, unknown>[] = []
+  vi.stubGlobal('fetch', vi.fn(async (path: string, options: RequestInit = {}) => {
+    if (path === '/api/models' && (options.method ?? 'GET') === 'GET') return response(listing)
     if (path === '/api/data-classes') return response({ enabled: true, classes: [{ name: 'Public' }, { name: 'Internal' }] })
     if (path === '/api/auth-options') return response({ csrf_token: 'masked' })
     if (path === '/api/models/coder/setup') {
       const body = JSON.parse(String(options.body))
       bodies.push(body)
-      return body.key_choice === 'none' ? response({ key_choice: 'none' }) : response({ error: OWN_KEYS_REFUSED }, 422)
+      return setup(body)
     }
     return response({})
-  })
-  vi.stubGlobal('fetch', request)
+  }))
+  return bodies
+}
+
+async function openEdit() {
   const user = userEvent.setup()
   render(<ModelsPage />)
-  await user.click(await within(await screen.findByRole('row', { name: /coder/ })).findByRole('button', { name: 'Edit' }))
-  const dialog = screen.getByRole('dialog')
-  expect(within(dialog).queryByRole('button', { name: 'Use No key' })).toBeNull()
+  await user.click(await within(await screen.findByRole('row', { name: /coder/ })).findByRole('button', { name: /Edit|Set up/ }))
+  return { user, dialog: screen.getByRole('dialog') }
+}
+
+const radio = (dialog: HTMLElement, name: string) => within(dialog).getByRole('radio', { name }) as HTMLInputElement
+const model = (key_choice: string, kind = 'cloud') => ({ id: 'coder', provider: 'OpenAI', kind, approved: true, key_choice, approved_classes: ['Public'], owned_by_keeplane: true })
+
+test.each([
+  // [current, kind, customer-run gateway, enabled shared, own, none]
+  ['shared', 'cloud', false, [true, false, false]],
+  ['none', 'cloud', false, [false, true, true]],
+  ['none', 'real-local', false, [false, false, true]],
+  ['personal', 'cloud', false, [false, true, false]],
+  ['personal', 'cloud', true, [false, true, true]],
+  ['none', 'cloud', true, [false, true, true]],
+] as const)('MOD-UI-11: Edit shows the three key choices and lets you pick only those it can save (%s, %s, customer-run gateway %s)', async (current, kind, customer, enabled) => {
+  editFixture({ models: [model(current, kind)], customer_run_gateway: customer }, () => response({}))
+  const { dialog } = await openEdit()
+  const radios = ['One shared key for the organization', 'Each developer adds their own key', 'No key needed'].map(name => radio(dialog, name))
+  expect(radios.map(item => !item.disabled)).toEqual(enabled)
+  expect(radios.map(item => item.checked)).toEqual(['shared', 'personal', 'none'].map(value => value === current))
+})
+
+test('MOD-UI-12: on a customer-run gateway an own-key model saves No key with its class change, and own key is refused', async () => {
+  const bodies = editFixture({ models: [model('personal')], customer_run_gateway: true },
+    body => body.key_choice === 'none' ? response({ key_choice: 'none' }) : response({ error: OWN_KEYS_REFUSED }, 422))
+  const { user, dialog } = await openEdit()
   await user.click(within(dialog).getByRole('checkbox', { name: 'Internal' }))
   await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-  expect((await within(dialog).findByRole('alert')).textContent).toBe(OWN_KEYS_REFUSED)
-  await user.click(within(dialog).getByRole('button', { name: 'Use No key' }))
+  expect((await within(dialog).findByRole('alert')).textContent).toBe(`${OWN_KEYS_REFUSED} Check the details and try again.`)
+  expect(within(dialog).queryByRole('button', { name: 'Use No key' })).toBeNull()
+  await user.click(radio(dialog, 'No key needed'))
+  expect(within(dialog).queryByText(/Developers add their own keys from the CLI/)).toBeNull()
+  await user.click(within(dialog).getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  // The class change is not sent with the move to No key.
   expect(bodies).toEqual([
     { key_choice: 'personal', approved_classes: ['Public', 'Internal'] },
-    { key_choice: 'none', approved_classes: ['Public'] },
+    { key_choice: 'none', approved_classes: ['Public', 'Internal'] },
   ])
   expect(await screen.findByText('Saved coder.')).toBeTruthy()
 })
 
-test('MOD-UI-12: any other Edit refusal offers no Use No key', async () => {
-  fixture({ models: () => response(ownKeyListing), setup: () => response({ error: "The model didn't answer. Nothing was saved." }, 503) })
-  const user = userEvent.setup()
-  render(<ModelsPage />)
-  await user.click(await within(await screen.findByRole('row', { name: /coder/ })).findByRole('button', { name: 'Edit' }))
-  const dialog = screen.getByRole('dialog')
+test('MOD-UI-13: a model with no key can move to developers\' own keys', async () => {
+  const bodies = editFixture({ models: [model('none')] }, () => response({ key_choice: 'personal' }))
+  const { user, dialog } = await openEdit()
+  await user.click(radio(dialog, 'Each developer adds their own key'))
+  expect(within(dialog).getByText(/Developers add their own keys from the CLI/)).toBeTruthy()
+  expect(within(dialog).getByText(/Keeplane checks that the provider answers/)).toBeTruthy()
   await user.click(within(dialog).getByRole('button', { name: 'Save' }))
-  await within(dialog).findByRole('alert')
-  expect(within(dialog).queryByRole('button', { name: 'Use No key' })).toBeNull()
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(bodies).toEqual([{ key_choice: 'personal', approved_classes: ['Public'] }])
 })

@@ -146,10 +146,11 @@ Choose **No key needed** instead: a cloud model whose key your own gateway
 holds is set up with **No key**; see
 [Keeplane's checks on a customer-run gateway](#keeplanes-checks-on-a-customer-run-gateway).
 A model set up for developers' own keys before
-this rule can only move to No key: in **Edit**, **Save** shows the reason above
-and offers **Use No key**, which keeps the model's approved classes and saves
-once the model answers through your gateway. Any other edit of that model is
-refused with the same reason. **Remove model** still works.
+this rule can only move to No key: in **Edit**, choose **No key needed** and
+save, with any change to its approved classes; it saves once the model answers
+through your gateway. Saving with **Each developer adds their own key** still
+chosen shows the reason above with "Nothing was saved. Check the details and try
+again." **Remove model** still works.
 
 Developers can't add or replace their own key for any model either.
 `keeplane keys set` asks Keeplane before it prompts for a key and stops with

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 type Model = { id: string; provider: string; kind: string; approved: boolean; key_choice: string | null; approved_classes: string[]; owned_by_keeplane: boolean }
 
-async function mockModels(page: Page, initial: Model[] = []) {
+async function mockModels(page: Page, initial: Model[] = [], extra: Record<string, unknown> = {}) {
   const models = [...initial]
   await page.route('**/api/identity', route => route.fulfill({ json: { id: 'admin', username: 'first-admin', role: 'admin' } }))
   await page.route('**/api/data-classes', route => route.fulfill({ json: { enabled: false, classes: [] } }))
@@ -14,7 +14,7 @@ async function mockModels(page: Page, initial: Model[] = []) {
         key_choice: 'none', approved_classes: [], owned_by_keeplane: true })
       return route.fulfill({ json: { name: body.name, approved_classes: [] } })
     }
-    return route.fulfill({ json: { models } })
+    return route.fulfill({ json: { models, ...extra } })
   })
   return models
 }
@@ -177,9 +177,11 @@ test('MO-UI-07: editing a Personal model preserves its key choice and explains t
   await page.goto('/app/models')
   await page.getByRole('row', { name: /personal-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit personal-coder' })
-  await expect(dialog.getByText('Each developer adds their own key', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('radio', { name: 'Each developer adds their own key', exact: true })).toBeChecked()
   await expect(dialog.getByText(/Keeplane checks that the provider answers/)).toBeVisible()
-  await expect(dialog.getByText('No key needed', { exact: true })).toHaveCount(0)
+  // Keeplane's own gateway keeps developers' own keys: the other choices can't be picked.
+  await expect(dialog.getByRole('radio', { name: 'No key needed', exact: true })).toBeDisabled()
+  await expect(dialog.getByRole('radio', { name: 'One shared key for the organization', exact: true })).toBeDisabled()
   await expect(dialog.getByLabel('Replace shared key', { exact: true })).toHaveCount(0)
   await dialog.getByRole('checkbox', { name: 'Public', exact: true }).check()
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
@@ -209,10 +211,10 @@ test('MO-UI-12: an own-key model refused by a customer-run gateway keeps the Add
   await expect(page.getByRole('row', { name: /personal-coder/ })).toHaveCount(0)
 })
 
-test('MO-UI-13: an own-key model on a customer-run gateway can only move to No key', async ({ page }) => {
+test('MO-UI-13: on a customer-run gateway an own-key model saves only with No key', async ({ page }) => {
   const model: Model = { id: 'personal-coder', provider: 'OpenAI', kind: 'cloud', approved: true,
     key_choice: 'personal', approved_classes: [], owned_by_keeplane: true }
-  await mockModels(page, [model])
+  await mockModels(page, [model], { customer_run_gateway: true })
   const sent: unknown[] = []
   await page.route('**/api/models/personal-coder/setup', route => {
     const body = route.request().postDataJSON()
@@ -223,11 +225,12 @@ test('MO-UI-13: an own-key model on a customer-run gateway can only move to No k
   await page.goto('/app/models')
   await page.getByRole('row', { name: /personal-coder/ }).getByRole('button', { name: 'Edit', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Edit personal-coder' })
-  await expect(dialog.getByRole('button', { name: 'Use No key', exact: true })).toHaveCount(0)
+  await expect(dialog.getByRole('radio', { name: 'One shared key for the organization', exact: true })).toBeDisabled()
   await dialog.getByRole('button', { name: 'Save', exact: true }).click()
-  await expect(dialog.getByRole('alert')).toHaveText(OWN_KEYS_REFUSED)
-  await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: 'Use No key', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toHaveText(`${OWN_KEYS_REFUSED} Check the details and try again.`)
+  await expect(dialog.getByRole('button', { name: 'Use No key' })).toHaveCount(0)
+  await dialog.getByRole('radio', { name: 'No key needed', exact: true }).check()
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(dialog).not.toBeVisible()
   await expect(page.getByText('Saved personal-coder.')).toBeVisible()
   expect(sent).toEqual([{ key_choice: 'personal' }, { key_choice: 'none' }])

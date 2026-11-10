@@ -577,20 +577,10 @@ class ModelManagement:
         previous = self.catalog.get(model_id)
         own_keys_before = bool(previous and previous["key_choice"] == "personal")
         if own_keys_before and self.gateway_mode == "existing":
-            # A model set up for developers' own keys before D110: the only
-            # edit saved is moving it to No key with its classes unchanged.
-            # Remove still works.
-            asked = body.get("approved_classes", previous["approved_classes"])
-            if (
-                choice != "none"
-                or body.get("shared_key")
-                or body.get("replace_shared_key")
-                or not isinstance(asked, list)
-                or any(not isinstance(item, str) for item in asked)
-                or sorted(asked) != sorted(previous["approved_classes"])
-            ):
+            # A model set up for developers' own keys before D110 can only move
+            # to No key, with any change to its classes; Remove still works.
+            if choice != "none":
                 return self.reply(422, existing_gateway_refusal("personal"))
-            body = {**body, "approved_classes": previous["approved_classes"]}
         elif own_keys_before and choice != "personal":
             return self.reply(
                 400, {"error": "Keep each developer's own key for this model"}
