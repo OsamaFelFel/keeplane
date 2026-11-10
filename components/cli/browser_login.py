@@ -8,12 +8,14 @@ signs in with the device code by itself, without ``--device``.
 import argparse
 import base64
 import hashlib
+import http.client
 import json
 import math
 import os
 import re
 import secrets
 import socket
+import ssl
 import sys
 import time
 import webbrowser
@@ -42,8 +44,28 @@ UNFINISHED = (
 )
 
 
+# 009-15: Keeplane was down or restarting (no answer, or a 5xx) when the CLI
+# came to exchange the sign-in, so nothing was saved and trying again works.
+UNAVAILABLE = (
+    "Keeplane isn't available right now, so you aren't signed in. "
+    "Run `keeplane login` to try again in a few minutes."
+)
+
+
 class BrowserUnavailable(ConnectionError):
     """The browser failed to start; nothing was sent to the server yet."""
+
+
+class ServerUnavailable(ConnectionError):
+    """No connection to the sign-in server, or a 5xx: nothing was changed there."""
+
+
+class AnswerCutOff(ServerUnavailable):
+    """The request reached the sign-in server but its answer was cut off.
+
+    The server may have acted on it, so callers never resend an
+    authorization code and never say that nothing changed.
+    """
 
 
 def no_browser(environ=None, platform=None, find=None):
@@ -285,8 +307,30 @@ def exchange(server, form, *, allow_pending=False, timeout=10):
             pass
         finally:
             error.close()
-        raise ConnectionError("The sign-in server refused the exchange.") from None
-    except (URLError, OSError, ValueError, OverflowError, RecursionError, ProfileError):
+        if error.code >= 500:
+            raise ServerUnavailable(
+                "The sign-in server is unavailable.", error.code
+            ) from None
+        raise ConnectionError(
+            "The sign-in server refused the exchange.", error.code
+        ) from None
+    except URLError as error:
+        if isinstance(error.reason, ssl.SSLError):
+            # A certificate or TLS problem, not an outage.
+            raise ConnectionError(
+                "Cannot complete sign-in securely; no credential was saved."
+            ) from None
+        # urllib wraps only failures to connect and send: nothing reached
+        # the server, so nothing changed there.
+        raise ServerUnavailable(
+            "Cannot complete sign-in securely; no credential was saved."
+        ) from None
+    except (OSError, http.client.HTTPException):
+        # The request was sent but its answer was cut off.
+        raise AnswerCutOff(
+            "Cannot complete sign-in securely; no credential was saved."
+        ) from None
+    except (ValueError, OverflowError, RecursionError, ProfileError):
         raise ConnectionError(
             "Cannot complete sign-in securely; no credential was saved."
         ) from None
@@ -336,7 +380,11 @@ def login(server, path, *, timeout=120, browser=None, announce=print):
             form = authorization_code(
                 server, timeout=timeout, browser=browser or webbrowser.open
             )
-            access, refresh = exchange(server, form)
+            try:
+                access, refresh = exchange(server, form)
+            except ServerUnavailable:
+                # The code is used once; a new sign-in starts from the browser.
+                raise ConnectionError(UNAVAILABLE) from None
             save_login(profile, server, access, refresh)
     except BrowserUnavailable:
         # The listener is closed and the profile unlocked before the device code.

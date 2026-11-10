@@ -73,7 +73,7 @@ def signed_in(path):
 
 def expired_message(expired, command, key_action=None):
     """The expired-sign-in line for a command other than ``code``."""
-    if command in {"whoami", "models", "usage"} or (
+    if command in {"whoami", "models", "usage", "refresh"} or (
         command == "keys" and key_action not in KEY_CHANGES
     ):
         return EXPIRED_READ

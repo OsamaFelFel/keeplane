@@ -372,6 +372,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         # answer still on its way has been counted.
         relay.close()
         result.usage = relay.usage()
+        result.gateway_unreachable = relay.unreachable
         result.stdout = result.stdout.replace(grant, "[redacted]")
         result.stderr = result.stderr.replace(grant, "[redacted]")
         # Some native failures are JSON error events despite an exit status of zero.

@@ -350,15 +350,50 @@ def test_required_token_fields_and_duplicate_keys_fail_closed(issuer, tmp_path, 
     assert not (tmp_path / "profile" / "credential.json").exists()
 
 
-@pytest.mark.parametrize("status", [302, 400, 503])
-def test_token_refusal_or_redirect_never_forwards_or_saves(issuer, tmp_path, status):
+@pytest.mark.parametrize(
+    "status,message",
+    [
+        (302, "refused the exchange"),
+        (400, "refused the exchange"),
+        # 009-15: Keeplane down or restarting; the code is never sent again.
+        (500, "isn't available right now"),
+        (503, "isn't available right now"),
+    ],
+)
+def test_token_refusal_or_redirect_never_forwards_or_saves(
+    issuer, tmp_path, status, message
+):
     issuer.token_status = status
-    with pytest.raises(ConnectionError, match="refused the exchange"):
+    with pytest.raises(ConnectionError, match=message):
         browser_login.login(issuer.url, tmp_path / "profile", browser=issuer.browser)
     assert (
         len(issuer.exchanges) == 1
         and not (tmp_path / "profile" / "credential.json").exists()
     )
+
+
+def test_server_gone_at_the_exchange_says_so_and_saves_nothing(
+    issuer, tmp_path, monkeypatch
+):
+    """009-15: the app stopped between the browser and the token exchange."""
+    real = browser_login.authorization_code
+
+    def then_stopped(server, **kwargs):
+        form = real(server, **kwargs)
+        monkeypatch.setattr(browser_login, "exchange", gone)
+        return form
+
+    def gone(server, form, **kwargs):
+        # A closed port: nothing answers.
+        return real_exchange("http://127.0.0.1:9", form, **kwargs)
+
+    real_exchange = browser_login.exchange
+    monkeypatch.setattr(browser_login, "authorization_code", then_stopped)
+    with pytest.raises(ConnectionError) as error:
+        browser_login.login(issuer.url, tmp_path / "profile", browser=issuer.browser)
+    assert str(error.value) == browser_login.UNAVAILABLE
+    assert not (tmp_path / "profile" / "credential.json").exists()
+    assert not issuer.exchanges and issuer.revocations == 0
 
 
 def test_account_or_storage_failure_revokes_issued_pair(issuer, tmp_path, monkeypatch):
