@@ -16,6 +16,7 @@ commits before password checking, so workers sharing the store share the limit.
 | LL-07 | Rotate the infrastructure password after exhausting budgets. | The first admin recovers; other account budgets remain limited. |
 | LL-08 | Let an unknown account bucket expire and try another account. | Expired state is pruned; only a hashed username remains. |
 
-These cases prove the existing local store. PostgreSQL identity, distributed
-rate limiting, network-source limits and the release identity choice remain
-separate release work.
+These cases prove the existing local store. The
+[identity replica cases](identity-replicas-cases.md) IDR-05 to IDR-07 check the
+same budget shared by two app copies on SQLite and PostgreSQL. Network-source
+limits and the release identity choice remain separate release work.

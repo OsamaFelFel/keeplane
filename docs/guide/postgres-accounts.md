@@ -131,6 +131,13 @@ together. All copies reserve from one per-username five-attempt, one-minute
 budget before checking a password. Casing changes and app restarts preserve it;
 unavailable storage refuses sign-in.
 
+Every copy checks the browser security token the same way. A token handed out
+by one copy works on the others, signing in on any copy replaces it, and every
+request that changes something is refused without it. Copies agree on sessions,
+tokens and the attempt budget only while they share this database and the same
+signing secret. The [identity replica cases](../../tests/integration/identity-replicas-cases.md)
+check this with two copies on SQLite and on PostgreSQL.
+
 Update the first-admin credential file consistently on every replica, then
 restart a copy. Rotation preserves the UUID, clears that account's exhausted
 budget and revokes old sessions. Never leave different configured passwords on
