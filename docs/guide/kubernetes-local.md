@@ -7,7 +7,7 @@ Production installation and recovery remain in progress.
 ## Before you start
 
 - Install Python 3.9 or later, Node.js 22.12 or later with npm, Docker, kind,
-  kubectl and Helm. Keep Docker running.
+  kubectl, Helm and `openssl`. Keep Docker running.
 - Start [the Docker preview](local-preview.md) once. Its launcher downloads the
   pinned Qwen demo file into `models/`; the Kubernetes setup requires that file
   unless you set `KEEPLANE_KIND_QWEN=off`, which skips the Qwen runner.
@@ -37,6 +37,20 @@ images itself.
 
 The **Kubernetes live checks** CI workflow runs this same script on a GitHub
 runner for every pull request; see [Tests](../../tests/README.md).
+
+Cloud models in this preview go to a disposable fixture provider,
+`cloud-provider`, which serves HTTPS at `https://cloud-provider:18443/v1`:
+Keeplane sends a provider key, a shared one or a developer's own, only over
+HTTPS. On every run the script makes a new test CA and a certificate for
+`cloud-provider` in `kind-cloud-provider-tls/` in the credential folder (its
+own folder, so a running Docker preview keeps its own), deletes the CA's
+private key once it has signed, and puts the CA in ConfigMap
+`cloud-provider-ca`. `deploy/local/values.yaml` names that ConfigMap in
+[`trust.extraCaBundle`](kubernetes-installation-reference.md#extra-trusted-cas),
+so the app and the managed gateway copies trust the test CA beside their
+system CAs; the script restarts both so they read the new CA. Nothing outside
+the cluster trusts it. The
+[private CA cases](../../tests/e2e/kubernetes-private-ca-cases.md) check this.
 
 ## Know which component set you install
 

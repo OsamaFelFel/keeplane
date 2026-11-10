@@ -123,9 +123,11 @@ preview's `app` and `gateway` containers trust that CA: `compose.yaml` mounts
 its `ca.pem` and names it in `SSL_CERT_FILE` for those two containers, and
 they trust nothing else. Nothing on your computer trusts it, and Keeplane's
 own defaults are unchanged: outside this preview, a provider address must be
-HTTPS with a publicly trusted certificate. The Kubernetes preview
-(`deploy/local/values.yaml`) still uses the plain-HTTP fixture, for shared keys
-only; it has no way to trust a test CA.
+HTTPS with a publicly trusted certificate, or one from a CA you add with the
+chart's
+[`trust.extraCaBundle`](kubernetes-installation-reference.md#extra-trusted-cas).
+The [Kubernetes preview](kubernetes-local.md) serves its fixture over HTTPS
+with its own test CA the same way, and trusts it through that setting.
 
 ## Configuration
 

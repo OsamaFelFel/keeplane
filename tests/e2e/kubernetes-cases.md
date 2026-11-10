@@ -3,7 +3,8 @@
 Run `test_local.py` against port 13000 first, then `test_kind.py`. The replica
 tests use `second-local`; `test_kind.py` registers it through Keeplane when it is
 absent (`test_local.py` removes the setups it added). The **Kubernetes live
-checks** CI workflow runs both, then `test_gateway_secret_rotation.py`,
+checks** CI workflow runs both, then `test_kind_private_ca.py`
+([private CA cases](kubernetes-private-ca-cases.md)), `test_gateway_secret_rotation.py`,
 `test_existing_gateway_preflight.py`, `test_gateway_down.py` and, last,
 `test_gateway_copy_stop.py`, on a kind cluster for every pull request (see
 [Tests](../README.md)). K8S-START-01 and

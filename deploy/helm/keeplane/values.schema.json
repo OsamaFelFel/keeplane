@@ -32,6 +32,21 @@
     }
   },
   "properties": {
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extraCaBundle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "secretName": {"type": "string"},
+            "configMapName": {"type": "string"},
+            "key": {"type": "string"}
+          }
+        }
+      }
+    },
     "app": {
       "type": "object",
       "properties": {

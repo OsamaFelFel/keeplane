@@ -120,6 +120,7 @@ names shown in brackets.
 | `gateway.keysSecret` (`keeplane-gateway-keys`) | `runtime-key`, `admin-key`; with the managed gateway also `runtime-key-hash`, `admin-key-hash`; with the [model enroller](#model-enroller) also `callback-key` | App copies and preflight Job; the managed gateway reads only the two hashes; with the enroller, its init step also reads the keys, the hashes and `callback-key` | Read-only directory `/run/gateway-keys`, files mode 0440; the gateway gets the hashes through `secretKeyRef`; the enroller's init step gets its values through `secretKeyRef` |
 | `app.localTrial.firstAdminSecret` (`keeplane-first-admin`) | `first-admin-password` | Local trial app | Read-only file, mode 0440 |
 | `gateway.caSecret` (existing mode, optional) | `ca.crt`: the CA of an `https` customer-run gateway | App copies and preflight Job, in addition to the image's system CAs | Read-only file, mode 0440 |
+| `trust.extraCaBundle.secretName` (optional) | `trust.extraCaBundle.key` (default `ca.crt`): CA certificates for outbound HTTPS, such as a model endpoint behind a private CA; or a ConfigMap with `configMapName` | App copies (through an init step) and managed gateway copies, in addition to the images' system CAs; see [extra trusted CAs](#extra-trusted-cas) | Only that key, as file `ca.crt`: mode 0440 in the app pods, 0444 in the gateway copies |
 | `ingress.tlsSecretName` | Standard TLS certificate and key | Your ingress controller | Referenced by the Ingress; see [renew the public HTTPS certificate](certificate-operations.md#renew-the-public-https-certificate) |
 | `app.imagePullSecrets` | Registry credentials | App and Job pods; the gateway copies too with the model enroller | Kubernetes pull secret |
 | `gateway.enroller.approvalsSecret` (optional) | `password` (enroller approvals role) | [Model enroller](#model-enroller) init step only | `secretKeyRef` environment value, written for the enroller to an in-memory file |
@@ -183,6 +184,67 @@ agentgateway-standalone:
   podSecurityContext:
     fsGroup: 65532
 ```
+
+## Extra trusted CAs
+
+If your model endpoints, or a proxy in front of them, present certificates
+from a private CA, give Keeplane that CA with `trust.extraCaBundle`. It is off
+by default. The app copies (which check provider keys and providers) and the
+managed gateway copies (which send model requests) then trust those CAs **in
+addition to** their images' system CAs, never instead of them. It changes
+nothing else: a provider address must still be HTTPS, so a provider key, a
+developer's own included, is never sent over plain HTTP.
+
+Put one PEM certificate, or a bundle, in a Secret or a ConfigMap in the release
+namespace, and name it with the key that holds it. Set `secretName` or
+`configMapName`, not both:
+
+```sh
+kubectl -n "$NS" create configmap model-endpoint-ca --from-file=ca.crt=private-ca.crt
+```
+
+```yaml
+trust:
+  extraCaBundle:
+    configMapName: model-endpoint-ca   # or secretName: model-endpoint-ca
+    key: ca.crt
+```
+
+```mermaid
+flowchart LR
+  B[Secret or ConfigMap<br/>key ca.crt] --> I[App init step<br/>prepare-trust-bundle]
+  S[App image's system CAs] --> I
+  I --> F[In-memory ca-bundle.pem<br/>SSL_CERT_FILE] --> A[App copies]
+  B --> D["/run/keeplane-extra-ca<br/>SSL_CERT_DIR"] --> G[Gateway copies]
+  GS[Gateway image's system CAs<br/>its own SSL_CERT_FILE] --> G
+  A -- HTTPS --> P[Model endpoint<br/>private CA]
+  G -- HTTPS --> P
+```
+
+- **App copies.** An init container, `prepare-trust-bundle`, writes the app
+  image's system CA file followed by your CAs to an in-memory folder, and the
+  app's `SSL_CERT_FILE` names that file. It stops the pod, with one line in the
+  init container's log starting "Keeplane can't use trust.extraCaBundle:", if
+  the bundle holds no certificate, a damaged one or a private key, or is over
+  1 MiB.
+- **Managed gateway copies.** Each copy keeps its image's own `SSL_CERT_FILE`,
+  the system CAs, and also reads the folder `SSL_CERT_DIR` names, which holds
+  only your bundle. Helm refuses `SSL_CERT_FILE` or `SSL_CERT_DIR` in
+  `agentgateway-standalone.extraEnv` while the bundle is set, since either
+  would replace the system CAs. The copies run without an `fsGroup`, so the one
+  file is mounted world-readable (0444); it is a public certificate, and only
+  the named key is mounted, never anything else in the Secret.
+- **Existing mode.** Only the app uses the bundle: the chart runs no gateway.
+  `gateway.caSecret` stays the setting for the customer-run gateway's own CA.
+
+Helm refuses a malformed reference: both names, a name that isn't a Kubernetes
+object name, or a key that isn't a Secret or ConfigMap key
+([CO-H6 to CO-H11](../../tests/integration/chart-certificates-cases.md)). Both
+the app and the gateway read the CAs when they start, so after you change the
+bundle, restart them; see
+[model endpoints behind a private CA](certificate-operations.md#model-endpoints-behind-a-private-ca)
+for a CA rotation without failed requests. With `networkPolicy.egressEnabled`,
+list the endpoints in `egress.modelEndpoints` as for any provider.
 
 ## Gateway access keys
 

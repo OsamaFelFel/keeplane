@@ -35,7 +35,7 @@ def test_kind_startup_checks_prerequisites_before_model_or_state_work(
     (commands / "dirname").symlink_to(shutil.which("dirname"))
     (commands / "python3").symlink_to(sys.executable)
     log = tmp_path / "commands.txt"
-    for name in ("node", "npm", "docker", "kind", "kubectl", "custom-helm", "rg", "shasum"):
+    for name in ("node", "npm", "docker", "kind", "kubectl", "custom-helm", "rg", "shasum", "openssl"):
         if name == missing:
             continue
         script = commands / name
@@ -80,7 +80,7 @@ def run_launcher_without_qwen(tmp_path, qwen):
         (commands / tool).symlink_to(shutil.which(tool))
     (commands / "python3").symlink_to(sys.executable)
     log = tmp_path / "commands.txt"
-    for name in ("node", "npm", "docker", "kind", "kubectl", "helm", "shasum"):
+    for name in ("node", "npm", "docker", "kind", "kubectl", "helm", "shasum", "openssl"):
         content = '#!/bin/sh\nprintf "%s\\n" ' + shlex.quote(name) + ' >> "$KEEPLANE_CHECK_CALLS"\n'
         content += {"node": 'printf "v22.12.0\\n"\n', "docker": "exit 0\n"}.get(name, "exit 1\n")
         (commands / name).write_text(content)
