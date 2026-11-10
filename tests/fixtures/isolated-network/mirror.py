@@ -192,7 +192,7 @@ def point_node(listing):
     with open(listing) as handle:
         registries = sorted({entry["registry"] for entry in json.load(handle)})
     dump = run("docker", "exec", NODE, "containerd", "config", "dump")
-    if not re.search(r'config_path\s*=\s*"' + re.escape(CERTS) + '"', dump):
+    if not re.search(r"config_path\s*=\s*[\"']" + re.escape(CERTS) + "[\"']", dump):
         found = [line.strip() for line in dump.splitlines() if "config_path" in line]
         raise SystemExit(f"containerd does not read {CERTS}: {found}")
     write_in_node(f"{CERTS}/{MIRROR}/hosts.toml", f'server = "http://{MIRROR}"\n')

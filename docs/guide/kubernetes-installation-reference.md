@@ -29,17 +29,61 @@ dependency is pinned to an exact version and vendored under `charts/`; the
 [component manifest](../architecture/component-manifest.md) records the tested set.
 Copy every image to your internal registry before closing registry access.
 
+### Use an internal registry
+
+On an isolated network, a node that has never held an image (a new node, or
+one whose disk was replaced) can only start Keeplane from a registry inside
+your network. Before you close any temporary access to outside registries:
+
+1. **List the images.** Render the chart with your values and read every
+   `image:` line, together with those of anything else you install with it
+   (network plugin, ingress controller, database):
+
+   ```sh
+   helm template keeplane deploy/helm/keeplane -f values.yaml | grep 'image:'
+   ```
+
+   Every Keeplane image is pinned by digest. Pin the others the same way.
+2. **Copy each image by digest** into your internal registry, with a tool that
+   keeps the digest, such as `crane copy` or
+   `skopeo copy --all --preserve-digests`. A copy that converts or rebuilds an
+   image gets a new digest, and the pods would not find it.
+3. **Point your nodes at it.** Either set `app.image` and
+   `agentgateway-standalone.image` to the internal registry's names (same
+   digests) and add `app.imagePullSecrets` if it needs credentials, or keep
+   the names and configure each node's container runtime to pull those
+   registries through the internal one. For containerd that is a
+   `hosts.toml` for each registry under `/etc/containerd/certs.d/`, for
+   example:
+
+   ```toml
+   # /etc/containerd/certs.d/cr.agentgateway.dev/hosts.toml
+   server = "https://cr.agentgateway.dev"
+
+   [host."https://registry.internal.example/v2/cr.agentgateway.dev"]
+     capabilities = ["pull", "resolve"]
+     override_path = true
+   ```
+4. **Check a fresh node before closing.** On one node, remove the copied
+   images (`crictl rmi`), restart it, and check every pod starts and the
+   internal registry's log shows the pulls.
+
 Once the images are on your nodes, Keeplane needs no registry to run: the
 gateway pull policy is `IfNotPresent` and every pinned image is named by
 digest, so a pod that restarts, or a node that restarts, starts from the
 images it already holds. Keep `app.pullPolicy` at `IfNotPresent` (or `Never`
 for an image you load onto the nodes yourself); `Always` contacts the
-registry on every start. A node that has never held an image still needs to
-pull it from your internal registry. CI checks this on every revision: the
-[isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md) install
-the chart while the registry is reachable, close every outside connection but
-one model provider, and outside name lookups too, then restart every Keeplane
-pod and the node. Names inside the cluster still resolve.
+registry on every start.
+
+CI checks this on every revision: the
+[isolated-network cases](../../tests/e2e/kubernetes-isolated-cases.md) copy
+every image the install uses into a registry on the cluster's network, point
+the node's containerd at it and install the chart from it. They then close
+every outside connection but one model provider, and outside name lookups
+too, restart every Keeplane pod and the node, and finally remove every image
+the install brought from the node and start it again: every pod pulls its
+image from the internal registry, and an admin signs in and asks both models
+(ISO-10 to ISO-12). Names inside the cluster still resolve.
 
 ## Secrets
 
