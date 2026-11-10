@@ -141,6 +141,13 @@ SERVER_DOWN = ("Keeplane isn't available right now, so this task stopped and not
                "{more}was sent. Try again in a few minutes, or ask your admin to check "
                "Keeplane.")
 
+# What the gateway's refusal says when Keeplane's check couldn't run, so the
+# request never reached a model (D177): agentgateway's own text, then
+# Keeplane's reasons when its storage or check is down.
+CHECK_REFUSALS = ("external authorization failed",
+                  "keeplane storage is unavailable",
+                  "gateway authorization is unavailable")
+
 # Spec 004 ST11 (ADR 030): the provider refused the developer's own key during
 # a task, and the server's recheck confirmed it.
 KEY_REFUSED = ("The provider refused your own key for {model}, so this task stopped. "
@@ -468,20 +475,37 @@ def error_statuses(stdout):
     }
 
 
+def check_refused(stdout):
+    """Whether an error event is the gateway's refusal before any model was tried.
+
+    The gateway answers so when Keeplane's route check can't run: its own
+    "external authorization failed" when the app doesn't answer, or Keeplane's
+    reason, passed on, when its storage is down.
+    """
+    text = " ".join(
+        value.lower()
+        for event in _events(stdout) if event.get("type") == "error"
+        for _, value in _walk(event) if isinstance(value, str))
+    return any(sign in text for sign in CHECK_REFUSALS)
+
+
 def outage(result, issuer, credential):
     """GATEWAY_DOWN or SERVER_DOWN when an outage stopped a failed turn, else None.
 
-    The relay says when the gateway didn't answer. A refusal (403) or 5xx from
-    the gateway is an outage only when Keeplane itself doesn't answer, or
-    answers with a 5xx, straight afterwards.
+    The relay says when the gateway didn't answer. Otherwise it is an outage
+    only when the request never reached a model (D177): the gateway refused it
+    because Keeplane's check couldn't run, and Keeplane itself doesn't answer,
+    or answers with a 5xx, straight afterwards. A model that was tried and
+    failed keeps its ST16 message, even while Keeplane is down.
     """
     more = "more " if any(
         isinstance(row, dict) and row.get("requests")
         for row in (getattr(result, "usage", None) or {}).values()) else ""
     if getattr(result, "gateway_unreachable", 0):
         return GATEWAY_DOWN.format(more=more)
-    if not any(status == 403 or 500 <= status <= 599
-               for status in error_statuses(result.stdout)):
+    if not (any(status == 403 or 500 <= status <= 599
+                for status in error_statuses(result.stdout))
+            and check_refused(result.stdout)):
         return None
     try:
         account(issuer, credential)

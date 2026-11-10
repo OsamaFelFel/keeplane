@@ -1,6 +1,6 @@
 """Task 009-15: a coding task stopped by an outage says so, not that the model is down.
 
-Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-06).
+Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-07).
 """
 
 import json
@@ -118,20 +118,8 @@ def test_out_03_gateway_down_after_earlier_calls_says_nothing_more(
     assert "stopped and nothing more was sent" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("status", [403, 503])
-@pytest.mark.parametrize("down", [503, None])
-def test_out_04_keeplane_down_behind_the_gateway_says_so(
-    connected,  # noqa: F811 - imported pytest fixture
-    runtime,  # noqa: F811 - imported pytest fixture
-    monkeypatch,
-    tmp_path,
-    capsys,
-    status,
-    down,
-):
-    """The gateway refused or failed because Keeplane's check couldn't run."""
-
-    failed = api_error(status, "external authorization failed")
+def with_keeplane_down(connected, runtime, monkeypatch, tmp_path, capsys, failed, down):  # noqa: F811
+    """One failed turn after an earlier call, then Keeplane goes down; stderr."""
     original = opencode_adapter.run
 
     def turn_then_down(*args, **kwargs):
@@ -157,9 +145,61 @@ def test_out_04_keeplane_down_behind_the_gateway_says_so(
     failed_turn(monkeypatch, runtime, failed)
     monkeypatch.setattr(coding.opencode_adapter, "run", turn_then_down)
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
-    err = capsys.readouterr().err
+    return capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "status,reason",
+    [
+        # agentgateway's own refusal when Keeplane's check doesn't answer.
+        (403, "external authorization failed"),
+        # Keeplane's check passed on by the gateway, with its storage down.
+        (503, '{"error": "Keeplane storage is unavailable; contact your operator"}'),
+        (503, '{"error": "Gateway authorization is unavailable"}'),
+    ],
+)
+@pytest.mark.parametrize("down", [503, None])
+def test_out_04_keeplane_down_behind_the_gateway_says_so(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+    status,
+    reason,
+    down,
+):
+    """The gateway refused before any model was tried: Keeplane's check couldn't run."""
+    err = with_keeplane_down(
+        connected,
+        runtime,
+        monkeypatch,
+        tmp_path,
+        capsys,
+        api_error(status, reason),
+        down,
+    )
     assert SERVER_DOWN_MORE in err
     assert "is unavailable right now" not in err and "expired" not in err
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+@pytest.mark.parametrize("down", [503, None])
+def test_out_07_a_model_that_was_tried_keeps_its_st16_message(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+    status,
+    down,
+):
+    """D177: the model was tried and failed, so ST16 stays even while Keeplane is down."""
+    err = with_keeplane_down(
+        connected, runtime, monkeypatch, tmp_path, capsys, api_error(status), down
+    )
+    assert "coder is unavailable right now" in err
+    assert "Keeplane isn't available" not in err
 
 
 @pytest.mark.parametrize("status", [403, 503])

@@ -470,8 +470,11 @@ Keeplane's gateway can't be reached right now, so this task stopped and nothing 
 Keeplane isn't available right now, so this task stopped and nothing more was sent. Try again in a few minutes, or ask your admin to check Keeplane.
 ```
 
-The second one means the gateway couldn't ask Keeplane whether the call is
-allowed, because the app or its database is down. Both say "nothing was sent"
+The second one means the gateway refused the call before any model was tried,
+because it couldn't ask Keeplane whether the call is allowed: the app or its
+database is down. If the model was tried and failed, `code` shows the
+[model-down message](#when-the-model-is-down-or-the-task-is-too-big) instead, even
+while Keeplane is down. Both say "nothing was sent"
 when the first call couldn't go out. Run the task again once they're back; review
 any edits from the earlier steps first. While the gateway is down, Keeplane can't
 record the task's usage either, and `code` says so. A task started while Keeplane
