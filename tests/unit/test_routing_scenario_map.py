@@ -115,6 +115,7 @@ CATALOGS = {
     "EXIST": "e2e/existing-gateway-cases.md",
     "LEVEL-LIVE": "e2e/complexity-levels-cases.md",
     "RULE-LIVE": "e2e/persona-rules-cases.md",
+    "MSL-LIVE": "e2e/model-setup-live-cases.md",
 }
 
 
