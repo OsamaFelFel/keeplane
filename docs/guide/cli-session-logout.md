@@ -39,8 +39,8 @@ way out works:
 - `keeplane forget`, while you're signed out, removes the file (a link is
   removed, never what it points to) and says "Removed the server address Keeplane
   couldn't use. Run `keeplane login --server <address>` to sign in." It exits 0.
-  With nothing saved at all it says "Nothing to forget: no sign-in or server
-  address is saved."
+  With nothing saved at all it says "Keeplane has no saved sign-in or server
+  address, so there's nothing to forget." and exits 0.
 
 ```mermaid
 flowchart LR

@@ -54,6 +54,8 @@ run the same fallback against the real server.
 - **NB-16 `forget` removes a usable server.** Signed out with a usable address,
   `forget` removes it, says "Removed the saved server address. Run `keeplane
   login --server <address>` to sign in." and exits 0. With nothing saved it says
-  "Nothing to forget: no sign-in or server address is saved."
+  "Keeplane has no saved sign-in or server address, so there's nothing to
+  forget." and exits 0. `keeplane forget --help` says "Delete the sign-in saved
+  on this machine, or, once signed out, the saved server address."
 - **NB-17 A failed sign-in changes nothing.** When `login --server` fails, the
   unusable `server.json` stays exactly as it was and no credential is saved.

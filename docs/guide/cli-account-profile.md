@@ -56,8 +56,10 @@ python3 components/cli/account_session.py forget --profile /private/keeplane-acc
 ```
 
 This last command does not revoke server access. Once you're signed out, `forget`
-removes the kept server address too, whether or not it can be used
-([unusable server address](cli-session-logout.md#if-the-kept-server-address-cant-be-used)). Keep the profile outside Git
+removes the kept server address too, whether or not it can be used. With nothing
+saved it says "Keeplane has no saved sign-in or server address, so there's
+nothing to forget." See
+[unusable server address](cli-session-logout.md#if-the-kept-server-address-cant-be-used). Keep the profile outside Git
 and runtime history. The parent directory must exist and be controlled by you.
 The profile directory is owned by your OS user with mode 0700; its credential,
 kept server address (`server.json`, written at sign-out, with no token or account)

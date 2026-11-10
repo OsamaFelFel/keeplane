@@ -13,7 +13,9 @@ else:
     from server_connection import ConnectionError, account, logout
 
 
-NOTHING_TO_FORGET = "Nothing to forget: no sign-in or server address is saved."
+NOTHING_TO_FORGET = (
+    "Keeplane has no saved sign-in or server address, so there's nothing to forget."
+)
 REMOVED_SERVER = (
     "Removed the saved server address. "
     "Run `keeplane login --server <address>` to sign in."

@@ -456,7 +456,18 @@ def test_nb_16_forget_when_signed_out_removes_a_usable_server(
     assert {item.name for item in path.iterdir()} == {"lock"}
     assert keeplane.main() == 0
     assert capsys.readouterr().out == (
-        "Nothing to forget: no sign-in or server address is saved.\n"
+        "Keeplane has no saved sign-in or server address, "
+        "so there's nothing to forget.\n"
+    )
+    monkeypatch.setattr("sys.argv", ["keeplane", "--help"])
+    with pytest.raises(SystemExit):
+        keeplane.main()
+    assert (
+        " ".join(capsys.readouterr().out.split()).count(
+            "Delete the sign-in saved on this machine, or, once signed out, "
+            "the saved server address."
+        )
+        == 1
     )
 
 
