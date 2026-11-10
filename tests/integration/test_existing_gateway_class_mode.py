@@ -47,10 +47,10 @@ def check(path, model_expression, *, final=False):
         # Keeplane's own setup probe reaches each model through the gateway's
         # model port with the gateway's runtime key and no project. It has no
         # developer session, so the final check would refuse it; it goes to
-        # the fixture's probe check instead.
+        # Keeplane's key-only check on the same host instead.
         http["path"] = (
             f'"x-keeplane-developer-route" in request.headers && {DEVELOPER} '
-            f'? {json.dumps(path)} : "/internal/fixture/setup-probe"'
+            f'? {json.dumps(path)} : "/internal/runtime/authorize/runtime-key"'
         )
         http["body"] = (
             f'"x-keeplane-developer-route" in request.headers && {DEVELOPER} '
@@ -498,6 +498,9 @@ def test_class_mode_on_off_on_through_a_customer_run_gateway(trial, report_file)
             "POST", f"/api/models/{model}/setup", {"key_choice": "none"}
         )
         assert status == 200, body
+    # Each setup probe passed Keeplane's key-only check, and only that.
+    probes = trial.fixture("summary")["setup_probes"]
+    assert probes and all(probes)
     off = class_state(trial)["models"]
     assert off["coder"] == (True, []) and off["reviewer"] == (True, [])
     assert off["customer-owned"] == (False, [])

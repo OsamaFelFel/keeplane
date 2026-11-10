@@ -22,6 +22,10 @@ urlpatterns = [
         runtime_callback.authorize,
         {"selected": True},
     ),
+    path(
+        "internal/runtime/authorize/runtime-key",
+        runtime_callback.authorize_runtime_key,
+    ),
     path("internal/runtime/installed/entry", runtime_callback.authorize_installed),
     path(
         "internal/runtime/installed/selected",

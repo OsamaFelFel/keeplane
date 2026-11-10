@@ -93,6 +93,32 @@ protected gateway integration. A local project ID does not prove content origin.
 [Isolated HTTP cases](../../tests/integration/runtime-callback-cases.md) cover
 the two credentials, withdrawal, denied contexts, malformed metadata and outages.
 
+### Keeplane's own setup request on a customer-run gateway
+
+Model setup sends one request through `gateway.url` with the gateway's runtime
+key and no developer session, so the final variant refuses it. The developer
+listener marks developer requests; each model's backend check sends unmarked
+requests to `POST /internal/runtime/authorize/runtime-key` on the same app host.
+That check admits only `Authorization: Bearer <runtime key>` (the file in
+`GATEWAY_RUNTIME_KEY_FILE`) together with the gateway credential, both compared
+in constant time and read again on every call. It never reads a session cookie
+or authenticates a developer session or CLI sign-in, reads no body, writes no
+Audit record and returns only `{"allowed": true}`. Everything else gets 403; an
+unreadable key gets 503. Outside `GATEWAY_MODE=existing` it refuses with 403
+before reading a key. Like the other gateway checks it is bearer-only, so the
+browser CSRF check does not apply. See the
+[key-only check cases](../../tests/integration/runtime-key-check-cases.md).
+
+```mermaid
+flowchart LR
+  Dev[Developer listener sets the marker] --> Backend[Model backend check]
+  Setup[Keeplane setup request on gateway.url] --> Backend
+  Backend -- marked --> Final["/internal/runtime/authorize/selected"]
+  Backend -- unmarked --> Key["/internal/runtime/authorize/runtime-key"]
+  Final -.-> App[Keeplane app]
+  Key -.-> App
+```
+
 ## Try the native integration
 
 The [disposable native check](../../tests/integration/native-runtime-authorization-cases.md)
