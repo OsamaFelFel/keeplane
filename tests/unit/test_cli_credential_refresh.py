@@ -1,5 +1,6 @@
 """Explicit refresh over actual synthetic HTTP, including ambiguous rotation."""
 
+import dataclasses
 import json
 import os
 import stat
@@ -9,7 +10,7 @@ import pytest
 
 from components.cli import credential_refresh, keeplane
 from components.cli.credential_profile import Credential, Profile, ProfileError, opened
-from components.cli.server_connection import ConnectionError
+from components.cli.server_connection import ConnectionError, SignInExpired
 from tests.unit import test_cli_browser_login as browser_cases
 
 issuer = browser_cases.issuer
@@ -113,15 +114,54 @@ def test_new_pair_is_withdrawn_and_old_profile_retained_on_admission_failure(
         assert profile.load() == old
 
 
-@pytest.mark.parametrize("status", [400, 503])
+@pytest.mark.parametrize("status", [400, 500, 503])
 def test_exchange_failure_retains_state_without_retry(issuer, tmp_path, status):
     path, old = saved(issuer, tmp_path)
     issuer.token_status = status
-    with pytest.raises(ConnectionError, match="server may have rotated"):
+    # 009-15: a 5xx means Keeplane is down or restarting and rotated nothing;
+    # a refusal means the pair is no longer accepted, so the sign-in expired.
+    expected = ConnectionError if status >= 500 else SignInExpired
+    with pytest.raises(expected) as error:
         credential_refresh.refresh(path)
+    if status >= 500:
+        assert str(error.value) == credential_refresh.UNAVAILABLE
     assert len(issuer.refresh_requests) == 1 and issuer.revocations == 0
     with opened(path) as profile:
         assert profile.load() == old
+
+
+def test_unreachable_server_keeps_the_sign_in_and_a_retry_rotates(
+    issuer, tmp_path, monkeypatch
+):
+    """009-15: refresh while the app restarts, then again once it is back."""
+    path, old = saved(issuer, tmp_path)
+    with opened(path) as profile:
+        profile.save(dataclasses.replace(old, issuer="http://127.0.0.1:9"))
+    with pytest.raises(ConnectionError) as error:
+        credential_refresh.refresh(path)
+    assert str(error.value) == credential_refresh.UNAVAILABLE
+    with opened(path) as profile:
+        assert profile.load().refresh_token == old.refresh_token
+        profile.save(old)
+    assert credential_refresh.refresh(path) == "Keeplane credential refreshed."
+    assert len(issuer.refresh_requests) == 1
+
+
+@pytest.mark.parametrize("status", [400, 503])
+def test_refresh_command_says_what_to_do(issuer, tmp_path, monkeypatch, capsys, status):
+    path, _ = saved(issuer, tmp_path)
+    issuer.token_status = status
+    monkeypatch.setattr("sys.argv", ["keeplane", "refresh", "--profile", str(path)])
+    assert keeplane.main() == 1
+    assert (
+        capsys.readouterr().err
+        == (
+            credential_refresh.UNAVAILABLE
+            if status == 503
+            else "Your Keeplane sign-in has expired. Run `keeplane login` to sign in again."
+        )
+        + "\n"
+    )
 
 
 @pytest.mark.parametrize("status", [401, 503])
@@ -181,3 +221,39 @@ def test_strict_profile_version_and_client_metadata_refuse_before_exchange(
     with pytest.raises(ProfileError):
         credential_refresh.refresh(path)
     assert not issuer.refresh_requests
+
+
+def test_an_answer_cut_off_after_the_request_says_it_isnt_clear(
+    issuer, tmp_path, capsys, monkeypatch
+):
+    """009-15: the refresh reached Keeplane, but nothing came back."""
+    import socket
+    import threading
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+
+    def read_then_hang_up():
+        connection, _ = listener.accept()
+        connection.recv(65536)
+        connection.close()
+
+    thread = threading.Thread(target=read_then_hang_up, daemon=True)
+    thread.start()
+    path, old = saved(issuer, tmp_path)
+    cut = dataclasses.replace(
+        old, issuer=f"http://127.0.0.1:{listener.getsockname()[1]}"
+    )
+    with opened(path) as profile:
+        profile.save(cut)
+    monkeypatch.setattr("sys.argv", ["keeplane", "refresh", "--profile", str(path)])
+    try:
+        assert keeplane.main() == 1
+    finally:
+        thread.join(timeout=5)
+        listener.close()
+    assert capsys.readouterr().err == credential_refresh.CUT_OFF + "\n"
+    assert "kept as it was" not in credential_refresh.CUT_OFF
+    with opened(path) as profile:
+        assert profile.load() == cut

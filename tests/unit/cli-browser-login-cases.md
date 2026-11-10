@@ -8,6 +8,7 @@
 | Wrong callback path/state/issuer/Host or duplicate code | 400 without consuming the pending attempt; later valid response succeeds. |
 | Duplicate token JSON keys or invalid required fields | No profile saved; response values never printed. |
 | Token exchange refusal or redirect | One exchange only; no forwarding or success claim. |
+| No answer, or a 5xx, at the token exchange (task 009-15) | One exchange only; nothing saved; the CLI says Keeplane isn't available right now and to run `keeplane login` again in a few minutes. |
 | Account/storage failure after issuance | Exact issued pair revocation attempted; unconfirmed cleanup reported honestly. |
 | Refusal or callback timeout | No token exchange; listener closes, including a partial HTTP request. |
 | Browser fails to start | No token exchange; the listener closes and sign-in uses the device code ([no-browser cases](cli-no-browser-cases.md)). |

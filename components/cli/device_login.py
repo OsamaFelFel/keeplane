@@ -1,6 +1,8 @@
 """Device-code sign-in, with ``--device`` or when no browser can open (ST29).
 
-Approval codes stay in memory until the token exchange.
+Approval codes stay in memory until the token exchange. While waiting, a
+Keeplane that doesn't answer, or answers with a 5xx, is asked again at the
+next interval: an app or database restart doesn't end the sign-in.
 """
 
 import json
@@ -13,11 +15,25 @@ from urllib.parse import urlencode
 from urllib.request import ProxyHandler, Request, build_opener
 
 if __package__:
-    from .browser_login import AuthorizationPending, exchange, save_login, unique
+    from .browser_login import (
+        UNAVAILABLE,
+        AuthorizationPending,
+        ServerUnavailable,
+        exchange,
+        save_login,
+        unique,
+    )
     from .credential_profile import ProfileError, opened
     from .server_connection import ConnectionError, NoRedirects, origin
 else:
-    from browser_login import AuthorizationPending, exchange, save_login, unique
+    from browser_login import (
+        UNAVAILABLE,
+        AuthorizationPending,
+        ServerUnavailable,
+        exchange,
+        save_login,
+        unique,
+    )
     from credential_profile import ProfileError, opened
     from server_connection import ConnectionError, NoRedirects, origin
 
@@ -67,8 +83,13 @@ def start(server, *, timeout):
         return data["user_code"], data["device_code"], interval, data["expires_in"]
     except HTTPError as error:
         error.close()
+        if error.code >= 500:
+            raise ConnectionError(UNAVAILABLE) from None
         raise ConnectionError("Keeplane refused device sign-in; retry later.") from None
-    except (URLError, OSError, ValueError, TypeError, OverflowError, RecursionError):
+    except (URLError, OSError):
+        # Nothing was started on the server.
+        raise ConnectionError(UNAVAILABLE) from None
+    except (ValueError, TypeError, OverflowError, RecursionError):
         raise ConnectionError("Cannot start device sign-in securely.") from None
 
 
@@ -110,6 +131,10 @@ def login(server, path, *, timeout=120, announce=print):
             except AuthorizationPending as pending:
                 if pending.code == "slow_down":
                     interval += 5
+                continue
+            except ServerUnavailable:
+                # 009-15: Keeplane is restarting. The code waits in its
+                # database, so keep asking until it answers or time runs out.
                 continue
             save_login(profile, server, access, refresh, client_id=CLIENT_ID)
             return

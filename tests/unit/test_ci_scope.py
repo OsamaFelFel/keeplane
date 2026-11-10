@@ -171,6 +171,7 @@ class WorkflowTests(unittest.TestCase):
             "postgres",
             "detection-image",
             "cli-sign-in",
+            "sign-in-outage",
             "coding-runtime",
             "release-journey",
         ):
@@ -217,6 +218,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn(
             "sys.exit(1 if expected - ran or skipped or not expected else 0)", job
         )
+
+    def test_restart_and_outage_cases_fail_on_skip_or_a_missing_case(self):
+        text = (ROOT / ".github/workflows/checks.yml").read_text()
+        job = text.split("\n  sign-in-outage:\n", 1)[1].split("\n  coding-runtime:\n", 1)[0]
+        suite = "tests/e2e/test_sign_in_restart_outage.py"
+        self.assertTrue((ROOT / suite).is_file())
+        # The same file is listed, run and checked: a skip or an unrun case fails.
+        self.assertIn(suite + " -m live --collect-only -q", job)
+        self.assertIn(suite + " -m live -rs --junitxml", job)
+        self.assertIn("sys.exit(1 if expected - ran or skipped or not expected else 0)", job)
+        self.assertIn(".read_text().splitlines()", job)
+        self.assertNotIn(".read_text().split())", job)
+        self.assertIn("--target postgres-cli-auth-trial -t keeplane-preview:postgres-cli-auth-local", job)
 
 
 if __name__ == "__main__":

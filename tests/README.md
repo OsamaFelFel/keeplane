@@ -55,6 +55,14 @@ Use `tests/run_regression.py` for the full configured environments. Test reports
 logs and traces stay out of Git. Earlier run notes
 remain available at [their recorded commit](https://github.com/OsamaFelFel/keeplane/tree/6cf7bfc2a3defce262a2da1fe526a2d37fe33cc6/tests).
 
+## Sign-in restart and outage checks in CI
+
+The **sign-in-outage** job in `.github/workflows/checks.yml` builds the
+PostgreSQL app image with CLI sign-in and runs
+`e2e/test_sign_in_restart_outage.py` on a disposable Compose install of its own,
+with a customer-run gateway ([cases](e2e/sign-in-restart-outage-cases.md)). It
+fails if any case is skipped or doesn't run.
+
 ## Kubernetes live checks in CI
 
 The **Kubernetes live checks** workflow (`.github/workflows/kubernetes-live.yml`)

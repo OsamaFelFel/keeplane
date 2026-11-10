@@ -216,6 +216,9 @@ class Relay:
         self.counts = {}
         self.active = set()
         self.upstreams = []  # (host, port) of every connection made, for checks
+        # Requests the gateway never answered (009-15): `keeplane code` then
+        # says the gateway can't be reached, not that the model is down.
+        self.unreachable = 0
         handler = type("RelayHandler", (Handler,), {"relay": self})
         self.server = Server(("127.0.0.1", 0), handler)
         self.url = (
@@ -341,6 +344,8 @@ class Relay:
             upstream.endheaders(body)
             answer = upstream.getresponse()
         except (OSError, http.client.HTTPException):
+            with self.lock:
+                self.unreachable += 1
             reply(client, 502, GATEWAY_UNREACHABLE)
             return
         counted = model is not None and 200 <= answer.status < 300

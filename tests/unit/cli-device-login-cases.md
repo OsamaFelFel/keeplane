@@ -10,6 +10,8 @@
 | Refusal, malformed pending response, timeout or cancellation | Stop without retrying an ambiguous exchange or saving a credential. |
 | Account or save failure after issuance | Attempt exact new-pair revocation. |
 | HTTP transport | No cookies, ambient proxy or redirect forwarding. |
+| Keeplane gives no answer, or a 5xx, while the CLI waits (task 009-15) | The CLI asks again at the next interval until the sign-in finishes or times out; an app or database restart doesn't end it. |
+| Keeplane gives no answer, or a 5xx, when the CLI asks for a code | Nothing starts; the CLI says Keeplane isn't available right now and to run `keeplane login` again in a few minutes. |
 | No browser on the machine | `keeplane login` uses the device code without `--device` ([no-browser cases](cli-no-browser-cases.md)). |
 
 The integration journey separately joins the actual Django device flow, native

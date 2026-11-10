@@ -66,6 +66,16 @@ finish on another. The
 check this with the developer journey, DEV-01 to DEV-08, on two copies with
 each kind of gateway.
 
+Sign-ins, codes waiting for approval and refresh tokens are kept in the
+database, so restarting the app, PostgreSQL or the gateway signs nobody out. While
+the app or PostgreSQL is down, the CLI tells developers Keeplane isn't available
+and saves nothing half done: a browser sign-in is started again, a device sign-in
+keeps waiting, a refresh keeps the current sign-in, and a coding task stops
+before its next model call. A customer-run gateway set to `failureMode: deny`
+refuses model calls while Keeplane's check can't run. The
+[restart and outage cases](../../tests/e2e/sign-in-restart-outage-cases.md) run
+each of these on PostgreSQL with a customer-run gateway.
+
 The PostgreSQL image targets with sign-in are `postgres-cli-auth-trial` and
 `postgres-cli-auth-detection`; see [PostgreSQL accounts](postgres-accounts.md)
 and the [Kubernetes installation reference](kubernetes-installation-reference.md).

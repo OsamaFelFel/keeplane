@@ -30,8 +30,15 @@ five seconds when asked to slow down. `--timeout 120` bounds the approval wait;
 one to 300 seconds is supported, and server expiry can shorten it. Requests use
 bounded responses and socket timeouts; this is not a hard total network deadline.
 Once a browser has opened, the CLI does not switch to a code: a browser sign-in
-that times out or is refused stops there. There is no retry after an ambiguous
-token exchange.
+that times out or is refused stops there.
+
+While it waits, an app or database restart doesn't end the sign-in. When Keeplane
+doesn't answer, or answers with a server error, the CLI asks again at the next
+interval, until you approve the code or the wait runs out
+([SRO-05, SRO-06](../../tests/e2e/sign-in-restart-outage-cases.md)). If Keeplane
+is down when `login` asks for a code, nothing starts and it says "Keeplane isn't
+available right now, so you aren't signed in. Run `keeplane login` to try again in
+a few minutes."
 
 Ctrl+C stops polling and leaves no signed-in profile. A pending code expires on
 the server; cancellation does not remotely revoke it. An exchange may finish on
