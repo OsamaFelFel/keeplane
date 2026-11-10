@@ -49,7 +49,8 @@ REASON = {
     "down": "Detection was down",
 }
 RECORD = re.compile(
-    r"Request (HR-[0-9a-f]{12}) held back as (\w+) \(([^)]+)\); project (.+); "
+    r"Request (?P<reference>HR-[0-9a-f]{12}) in (?P<project>.+) held back by "
+    r"detection, handled as (?P<held_as>\w+) \((?P<why>[^)]+)\); "
     r"(?:approved model (\S+)|model (\S+) isn't approved for it, nothing was sent)"
 )
 # Over the detector's 100 000-character limit, under the gateway's 1 MiB.
@@ -268,7 +269,8 @@ def run_cases():
             if not match:
                 problems.append("unreadable record")
                 continue
-            reference, held_as, why, project_name, approved, refused = match.groups()
+            held_as, why, project_name = match.group("held_as", "why", "project")
+            approved, refused = match.group(5, 6)
             found.append(
                 (approved or refused, approved is not None, why, project_name)
             )

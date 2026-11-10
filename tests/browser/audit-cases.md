@@ -10,5 +10,6 @@ These cases use a real Chromium browser and the locally built React UI. Audit AP
 | AU-UI-04 | Make an optional switch write fail, then make a filtered records read fail. | The switch returns to its confirmed value, an error appears, and the table does not present old rows as filtered results. |
 | AU-UI-05 | As soon as Audit records appear, click Next and wait for the initial search timer to settle. | Page 2 remains selected; the timer cannot return the table to page 1. |
 | AU-UI-06 | Choose **Model answers** under Show when the API returns a new record and one stored before 10 November. | The new record reads "Request in payments-api sent to gpt-4.1" as `Audit.dc.html` shows it; the older one still reads "Request sent to model gpt-4.1; project payments-api", exactly as stored (D179). |
+| AU-UI-07 | Choose **Held-back requests** under Show when the API returns a new record and one stored before held-back records followed the design. | The new record reads "Request HR-3f9a0c41d2e7 in payments-api held back by detection, handled as Confidential (Personal data detected); approved model gpt-4.1", following the `Audit.dc.html` row; the older one still reads exactly as stored (D178). |
 
 The live API, persistence, access, and sign-in storage cases are in [Audit cases](../e2e/audit-cases.md).

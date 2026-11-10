@@ -8,6 +8,7 @@ detector, as in test_personal_data_routing.py.
 import json
 import logging
 import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -41,9 +42,15 @@ LOGGER = "model_registry.held_request_records"
 EMAIL = "amara.okonkwo@example.com"
 PROMPT = f"Write to {EMAIL} about invoice 4711"
 SHARED = "/internal/runtime/authorize"
+APP = Path(__file__).resolve().parents[2] / "components/control-plane"
 ALLOWED = (
-    r"Request HR-[0-9a-f]{12} held back as Confidential \(Personal data detected\); "
-    r"project Callback; approved model private"
+    r"Request HR-[0-9a-f]{12} in Callback held back by detection, handled as "
+    r"Confidential \(Personal data detected\); approved model private"
+)
+# How held-back records read before they followed the Audit design's row.
+OLD_TEXT = (
+    "Request HR-00000000000a held back as Confidential (Personal data detected); "
+    "project Callback; approved model private"
 )
 
 
@@ -144,7 +151,7 @@ def test_hr_02_one_record_per_held_request_with_its_details(managed):
     stored = AuditRecord.objects.filter(kind=KIND).first()
     assert stored.actor_id == f.actor["id"]
     audit = f.stores.audit
-    assert audit.records(kind=KIND, search="held back as confidential")["total"] == 2
+    assert audit.records(kind=KIND, search="held back by detection, handled as confidential")["total"] == 2
     assert audit.records(kind=KIND, search=rows[0]["what"][8:23])["total"] == 1
     assert audit.records(kind="model_answers")["total"] == 0
 
@@ -159,8 +166,9 @@ def test_hr_03_a_held_request_refused_for_its_model_is_recorded(managed):
     assert "nothing was sent" in response.json()["error"]
     [row] = held(f)
     assert re.fullmatch(
-        r"Request HR-[0-9a-f]{12} held back as Public \(Personal data detected\); "
-        r"project Callback; model private isn't approved for it, nothing was sent",
+        r"Request HR-[0-9a-f]{12} in Callback held back by detection, handled as "
+        r"Public \(Personal data detected\); model private isn't approved for it, "
+        r"nothing was sent",
         row["what"],
     )
 
@@ -205,7 +213,7 @@ def test_hr_06_each_reason_is_named(managed, verdict, why):
     f.fake.verdict = verdict
     assert entry(f, "Refactor the parser").status_code == 200
     [row] = held(f)
-    assert f"held back as Confidential ({why});" in row["what"]
+    assert f"handled as Confidential ({why});" in row["what"]
 
 
 def test_hr_06_unreadable_parts_are_also_named(managed):
@@ -334,7 +342,7 @@ def test_hr_12_each_record_names_only_its_developer(customer_run):
     assert shared(f, token=other_token).status_code == 200
     rows = list(reversed(held(f)))
     assert [row["who"] for row in rows] == ["callback-developer", "second-developer"]
-    assert all("project Callback" in row["what"] for row in rows)
+    assert all(" in Callback held back" in row["what"] for row in rows)
     stored = list(
         AuditRecord.objects.filter(kind=KIND).order_by("pk").values_list(
             "actor_id", flat=True
@@ -396,14 +404,14 @@ def test_hr_16_records_are_stored_for_every_app_copy(start_process):
         (KIND, "second-developer"),
     ]
     assert re.fullmatch(
-        r"Request HR-[0-9a-f]{12} held back as Confidential "
-        r"\(Personal data detected\); project payments-api; approved model alpha",
+        r"Request HR-[0-9a-f]{12} in payments-api held back by detection, handled "
+        r"as Confidential \(Personal data detected\); approved model alpha",
         rows[0]["what"],
     ), rows[0]["what"]
     assert re.fullmatch(
-        r"Request HR-[0-9a-f]{12} held back as Public \(Detection was down\); "
-        r"project payments-api; a model Keeplane doesn't know isn't approved "
-        r"for it, nothing was sent",
+        r"Request HR-[0-9a-f]{12} in payments-api held back by detection, handled "
+        r"as Public \(Detection was down\); a model Keeplane doesn't know isn't "
+        r"approved for it, nothing was sent",
         rows[1]["what"],
     ), rows[1]["what"]
     # Each held request has its own reference, and search finds it.
@@ -485,7 +493,7 @@ def test_hr_13_held_only_at_the_final_check_is_recorded(managed, monkeypatch, re
     assert selected(f, "Refactor the parser").status_code == 200
     [row] = held(f)
     why = held_request_records.REASONS[reason]
-    assert f"held back as Confidential ({why}); project Callback; approved model private" in row["what"]
+    assert f"in Callback held back by detection, handled as Confidential ({why}); approved model private" in row["what"]
     # Refused at the final check: recorded too, and still refused.
     f.stores.classes.set_detection({"enabled": True, "class_id": "public"})
     f.fake = Sequence([Verdict(True, reason)])
@@ -548,10 +556,35 @@ def test_description_holds_only_the_given_details():
     assert held_request_records.description(
         "HR-0123456789ab", "Confidential", FOUND, "payments-api", "gpt-4.1", True
     ) == (
-        "Request HR-0123456789ab held back as Confidential (Personal data detected); "
-        "project payments-api; approved model gpt-4.1"
+        "Request HR-0123456789ab in payments-api held back by detection, "
+        "handled as Confidential (Personal data detected); approved model gpt-4.1"
     )
     assert held_request_records.description(
         "HR-0123456789ab", "Public", SLOW, "payments-api", None, False
     ).endswith("a model Keeplane doesn't know isn't approved for it, nothing was sent")
     assert re.fullmatch(r"HR-[0-9a-f]{12}", held_request_records.reference())
+
+
+def test_hr_19_records_already_stored_keep_their_text(managed):
+    # New records follow the Audit design's row, "Request held back by
+    # detection, handled as [Class]"; one written before keeps its words.
+    f = managed
+    switch_on(f)
+    f.stores.audit.record(KIND, f.actor["id"], "callback-developer", OLD_TEXT)
+    assert entry(f).status_code == 200
+    rows = held(f)
+    assert len(rows) == 2
+    assert OLD_TEXT in [row["what"] for row in rows]
+    [new] = [row for row in rows if row["what"] != OLD_TEXT]
+    assert re.fullmatch(ALLOWED, new["what"]), new["what"]
+    # Both stay findable by project, class, reason, model and reference.
+    audit = f.stores.audit
+    for term in ("Callback", "Confidential", "Personal data detected", "private"):
+        assert audit.records(kind=KIND, search=term)["total"] == 2, term
+    assert audit.records(kind=KIND, search="HR-00000000000a")["total"] == 1
+    assert audit.records(kind=KIND, search=new["what"][8:23])["total"] == 1
+    # No migration rewrites stored records: none that touches them runs code.
+    for path in APP.glob("*/migrations/*.py"):
+        text = path.read_text()
+        if "auditrecord" in text.lower():
+            assert "RunPython" not in text and "RunSQL" not in text, path

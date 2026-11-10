@@ -81,13 +81,18 @@ flowchart LR
   stored to tell them apart (owner decision on PR #204: a rare duplicate is
   acceptable, a missing record isn't). The shared checks do not record on a
   managed install. The record's account is the developer whose session
-  made the request. Its description gives a random reference (`HR-` and 12
-  hex digits, derived from nothing in the request), the class, the reason
+  made the request. Its description reads `Request [Reference] in [Project]
+  held back by detection, handled as [Class] ([Why]); [Outcome]`, the Audit
+  design's row with the details D178 requires. It gives a random reference
+  (`HR-` and 12 hex digits, derived from nothing in the request), the class, the reason
   category (Personal data detected, Request couldn't be read, Detection was
   down, Detection took longer than 200 ms, Detection failed), the project and
   the model: "approved model X" when the model is approved for the class (a
   later provider-key check can still refuse it, so this does not mean sent),
-  or "model X isn't approved for it, nothing was sent". A refused model ID Keeplane doesn't know is not copied. A failed
+  or "model X isn't approved for it, nothing was sent". A refused model ID Keeplane doesn't know is not copied. Records
+  written before the upgrade to the version with this wording keep their
+  earlier text (`Request [Reference] held back as [Class] ([Why]); project
+  [Project]; [Outcome]`); no migration rewrites them. A failed
   write is handled as for model answers: rolled back, logged as a warning
   with only the error kind, and the decision stands, so a held request is
   never let through to a model that isn't approved for its class.

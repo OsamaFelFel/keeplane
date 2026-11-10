@@ -5,7 +5,11 @@ back to the detection class. While the "Held-back requests" switch is on, each
 held request gets one record with a reference, the time, the developer, the
 project, the class it was handled as, why it was held, and the model it was
 allowed to or refused for. It never holds the prompt, any other request text
-or anything detection found.
+or anything detection found. It reads "Request [Reference] in [Project] held
+back by detection, handled as [Class] ([Why]); approved model [Model]", or
+"...; model [Model] isn't approved for it, nothing was sent", following the
+Audit design's row; records stored before keep their text and are never
+rewritten.
 
 Every held request is recorded; duplicates are kept down. The gateway runs
 detection at its route (entry) check, once per request, and again at the
@@ -83,9 +87,11 @@ def description(ref, held_class, reason, project_name, model_id, allowed):
         if allowed
         else f"{model} isn't approved for it, nothing was sent"
     )
+    # The approved Audit design's row, "Request held back by detection,
+    # handled as [Class]", with the details ST21 and D178 require.
     return (
-        f"Request {ref} held back as {held_class} ({why}); "
-        f"project {project_name}; {outcome}"
+        f"Request {ref} in {project_name} held back by detection, "
+        f"handled as {held_class} ({why}); {outcome}"
     )
 
 
