@@ -46,9 +46,14 @@ run the same fallback against the real server.
   can't use the server address it kept for this profile. Run `keeplane login
   --server <address>`, or `keeplane forget` to remove it." and sends nothing.
 - **NB-14 `--server` gets round it.** `login --server` signs in without reading
-  the file and leaves it unchanged; `logout` then keeps the new server.
-- **NB-15 `forget` removes it.** Signed out, `forget` removes only the bad file
-  (not a link's target) and says so; a plain `login` then says Keeplane doesn't
+  the file, then replaces it (0600, not a link; a link's target is untouched)
+  with the server it signed in to; `logout` keeps that server.
+- **NB-15 `forget` removes it.** Signed out, `forget` removes the bad file
+  (not a link's target), says so and exits 0; a plain `login` then says Keeplane doesn't
   know the server yet.
-- **NB-16 `forget` keeps a usable server.** Signed out with a usable address,
-  `forget` removes nothing and says "You're already signed out of Keeplane."
+- **NB-16 `forget` removes a usable server.** Signed out with a usable address,
+  `forget` removes it, says "Removed the saved server address. Run `keeplane
+  login --server <address>` to sign in." and exits 0. With nothing saved it says
+  "Nothing to forget: no sign-in or server address is saved."
+- **NB-17 A failed sign-in changes nothing.** When `login --server` fails, the
+  unusable `server.json` stays exactly as it was and no credential is saved.

@@ -193,19 +193,33 @@ class Profile:
             raise UnusableServer(UNUSABLE_SERVER) from None
         return data["server"]
 
-    def remove_unusable_server(self):
-        """Remove a kept server address that can't be used; True if one was.
+    def remove_server(self):
+        """Remove the kept server address; say whether it was usable.
 
-        Only ``keeplane forget`` calls this. Unlinking never follows a link, and
-        a usable address is kept.
+        Returns "unusable", "usable", or None when nothing was kept. Only
+        ``keeplane forget`` calls this, while signed out. Unlinking never
+        follows a link, and an unusable file is never trusted.
         """
         try:
-            self.load_server()
+            state = "usable" if self.load_server() else None
         except UnusableServer:
+            state = "unusable"
+        if state:
             os.unlink(SERVER_FILE, dir_fd=self.directory)
             os.fsync(self.directory)
-            return True
-        return False
+        return state
+
+    def replace_kept_server(self, server):
+        """After a successful sign-in, keep the server just signed in to.
+
+        Any kept file is replaced without being read, by the same atomic,
+        no-follow write as sign-out: a link is replaced, never its target.
+        """
+        try:
+            os.stat(SERVER_FILE, dir_fd=self.directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        self.save_server(server)
 
     def save_server(self, server):
         """Keep only the non-secret server address, with no account or token."""

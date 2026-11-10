@@ -3,6 +3,7 @@
 The plain-English cases are in cli-no-browser-cases.md next to this file.
 """
 
+import stat
 import webbrowser
 
 import pytest
@@ -376,7 +377,7 @@ def test_nb_13_an_unusable_kept_server_names_the_way_round_it(
 
 # NB-14
 @pytest.mark.parametrize("how", BAD_SERVER_FILES)
-def test_nb_14_server_signs_in_without_reading_the_unusable_file(
+def test_nb_14_server_signs_in_and_replaces_the_unusable_file_unread(
     issuer,  # noqa: F811
     no_browser,
     tmp_path,
@@ -386,7 +387,6 @@ def test_nb_14_server_signs_in_without_reading_the_unusable_file(
 ):
     path = tmp_path / "profile"
     unusable_server_file(path, tmp_path / "outside", how)
-    before = (path / "server.json").lstat()
 
     def never(self):
         raise AssertionError("login --server must not read server.json")
@@ -395,21 +395,19 @@ def test_nb_14_server_signs_in_without_reading_the_unusable_file(
         patch.setattr(credential_profile.Profile, "load_server", never)
         assert login(monkeypatch, path, "--server", issuer.url) == 0
     assert capsys.readouterr().out.endswith("Signed in to Keeplane.\n")
-    # Left exactly as it was: never trusted, never silently rewritten.
-    after = (path / "server.json").lstat()
-    assert (after.st_ino, after.st_mode, after.st_size) == (
-        before.st_ino,
-        before.st_mode,
-        before.st_size,
-    )
+    # Replaced by the server just signed in to, with the same private write.
+    target = path / "server.json"
+    assert not target.is_symlink()
+    assert stat.S_IMODE(target.lstat().st_mode) == 0o600
+    assert saved_server(path) == issuer.url
     with opened(path) as profile:
         assert profile.load().issuer == issuer.url
-    # Signing out then keeps the server just signed in to.
+    if how == "symlink":
+        # A link is replaced, never what it points to.
+        assert b"127.0.0.1:1" in (tmp_path / "outside").read_bytes()
     monkeypatch.setattr("sys.argv", ["keeplane", "logout", "--profile", str(path)])
     assert keeplane.main() == 0
     assert saved_server(path) == issuer.url
-    if how == "symlink":
-        assert (tmp_path / "outside").read_bytes().startswith(b'{"format"')
 
 
 # NB-15
@@ -439,7 +437,7 @@ def test_nb_15_forget_removes_an_unusable_kept_server(
 
 
 # NB-16
-def test_nb_16_forget_when_signed_out_keeps_a_usable_server(
+def test_nb_16_forget_when_signed_out_removes_a_usable_server(
     issuer,  # noqa: F811
     no_browser,
     tmp_path,
@@ -451,5 +449,37 @@ def test_nb_16_forget_when_signed_out_keeps_a_usable_server(
         profile.save_server(issuer.url)
     monkeypatch.setattr("sys.argv", ["keeplane", "forget", "--profile", str(path)])
     assert keeplane.main() == 0
-    assert capsys.readouterr().out == "You're already signed out of Keeplane.\n"
-    assert saved_server(path) == issuer.url
+    assert capsys.readouterr().out == (
+        "Removed the saved server address. "
+        "Run `keeplane login --server <address>` to sign in.\n"
+    )
+    assert {item.name for item in path.iterdir()} == {"lock"}
+    assert keeplane.main() == 0
+    assert capsys.readouterr().out == (
+        "Nothing to forget: no sign-in or server address is saved.\n"
+    )
+
+
+# NB-17
+@pytest.mark.parametrize("how", BAD_SERVER_FILES)
+def test_nb_17_a_failed_sign_in_leaves_the_unusable_file_as_it_was(
+    issuer,  # noqa: F811
+    no_browser,
+    tmp_path,
+    monkeypatch,
+    capsys,
+    how,
+):
+    path = tmp_path / "profile"
+    unusable_server_file(path, tmp_path / "outside", how)
+    before = (path / "server.json").lstat()
+    issuer.device_status = 500
+    assert login(monkeypatch, path, "--server", issuer.url) == 1
+    after = (path / "server.json").lstat()
+    assert (after.st_ino, after.st_mode, after.st_size, after.st_mtime_ns) == (
+        before.st_ino,
+        before.st_mode,
+        before.st_size,
+        before.st_mtime_ns,
+    )
+    assert not (path / "credential.json").exists()

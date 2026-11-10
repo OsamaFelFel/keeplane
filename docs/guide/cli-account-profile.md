@@ -56,7 +56,7 @@ python3 components/cli/account_session.py forget --profile /private/keeplane-acc
 ```
 
 This last command does not revoke server access. Once you're signed out, `forget`
-removes a kept server address only if it can't be used, and otherwise keeps it
+removes the kept server address too, whether or not it can be used
 ([unusable server address](cli-session-logout.md#if-the-kept-server-address-cant-be-used)). Keep the profile outside Git
 and runtime history. The parent directory must exist and be controlled by you.
 The profile directory is owned by your OS user with mode 0700; its credential,
@@ -65,8 +65,9 @@ and stable lock files use 0600. Writes are atomic and serialized. Symlinks,
 hardlinks, special files, foreign files and unsafe permissions are refused. Only a
 plain `keeplane login` reads `server.json`; it refuses a malformed one, and an
 unsafe one without opening it. `login --server` and the other commands don't
-read it. `forget` while signed out removes a bad one; `logout`, and `forget`
-while signed in, replace it with the server you signed in to.
+read it. `forget` while signed out removes it. A successful `login`, `logout`,
+and `forget` while signed in replace it with the server you signed in to, without
+reading it first.
 An interrupted write may leave a pending file; inspect the private directory
 and recover it before retrying. Do not remove the lock to bypass active use.
 

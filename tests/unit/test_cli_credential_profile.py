@@ -9,6 +9,7 @@ import pytest
 from components.cli.credential_profile import (
     UNUSABLE_SERVER,
     Credential,
+    Profile,
     ProfileError,
     UnusableServer,
     opened,
@@ -287,7 +288,7 @@ def test_remove_unusable_server_unlinks_only_the_bad_entry(
         if foreign:
             monkeypatch.setattr(os, "stat", foreign)
     with opened(path) as profile:
-        assert profile.remove_unusable_server() is True
+        assert profile.remove_server() == "unusable"
     assert {item.name for item in path.iterdir()} == {"lock"}
     if unsafe != "malformed":
         # A link's target is never touched.
@@ -295,12 +296,41 @@ def test_remove_unusable_server_unlinks_only_the_bad_entry(
     assert saved_server(path) is None
 
 
-def test_remove_unusable_server_keeps_a_usable_address(saved):
+def test_remove_server_removes_a_usable_address_and_knows_none(saved):
     path, _ = saved
     with opened(path) as profile:
         profile.forget()
-        assert profile.remove_unusable_server() is False
-    assert saved_server(path) == "https://keeplane.example"
+        assert profile.remove_server() == "usable"
+        assert profile.remove_server() is None
+    assert {item.name for item in path.iterdir()} == {"lock"}
+
+
+@pytest.mark.parametrize("unsafe", [*UNSAFE_SERVER, "none"])
+def test_a_sign_in_replaces_a_kept_file_without_reading_it(
+    saved, tmp_path, monkeypatch, unsafe
+):
+    path, _ = saved
+    if unsafe != "none":
+        foreign = make_unsafe(path, tmp_path / "outside", unsafe)
+        if foreign:
+            monkeypatch.setattr(os, "stat", foreign)
+
+    def never(self):
+        raise AssertionError("the kept file must not be read")
+
+    monkeypatch.setattr(Profile, "load_server", never)
+    with opened(path) as profile:
+        profile.replace_kept_server("https://b.example")
+    monkeypatch.undo()
+    if unsafe == "none":
+        assert not (path / "server.json").exists()
+        return
+    target = path / "server.json"
+    assert not target.is_symlink()
+    assert stat.S_IMODE(target.lstat().st_mode) == 0o600
+    assert saved_server(path) == "https://b.example"
+    if unsafe in {"symlink", "hardlink"}:
+        assert (tmp_path / "outside").read_bytes() == VALID_SERVER
 
 
 def test_sign_out_replaces_an_unusable_server_file(saved, tmp_path):
