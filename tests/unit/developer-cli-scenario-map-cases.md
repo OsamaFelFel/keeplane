@@ -12,12 +12,11 @@ Task 009-14.
 | DCSM-04 | Look up each case the table names, in either column. | Each has a row in its own catalog, the one the table's intro links for its prefix (NB in the no-browser cases, DU and DU-C in the developer usage cases, and so on; KEY-09 in the coding runtime cases, unlike KEY-01 to KEY-08). The row is a table row or a list item that starts with the case. Its own test file names it: a test function named after it, or its ID in a string, such as a report entry or a declared case list. A comment never counts, so a case mentioned only in a comment (ADM-INT-02 to ADM-INT-04 today) is untested. A prefix with no known catalog fails. |
 | DCSM-05 | Read the table's intro. | It links every catalog the table's cases come from. |
 | DCSM-06 | Read each DEV and PSI-LIVE case the table names. | It is in its suite's `CASES`: the developer journey suite's for DEV (today DEV-01 to DEV-05 and DEV-03b), the preview sign-in suite's for PSI-LIVE (PSI-LIVE-01 to PSI-LIVE-05). A case mentioned only in another file or a comment doesn't count. |
-| DCSM-07 | Change copies of the files as a careless change would: take the live mark off the admin sign-in test, change the `cli-sign-in` job's `-m` to `optional and not live`, comment the admin sign-in file out of the job's list, point a live and optional test at the shards, point a case at a file no job lists, and at a catalog with no CI job. Also look for ADM-INT-04, which is only in a comment, and for DEV-06. | ADM-INT-01 runs in CI before the changes and in none of the changed copies. ADM-INT-04 is untested, and DEV-06 isn't in the journey suite's `CASES`. |
+| DCSM-07 | Change copies of the files as a careless change would: take the live mark off the admin sign-in test, change the `cli-sign-in` job's `-m` to `optional and not live`, comment the admin sign-in file out of the job's list, point a live and optional test at the shards, point a case at a file no job lists, and at a catalog with no CI job. Also look for ADM-INT-04, which is only in a comment, and for DEV-09, a proposed case. | ADM-INT-01 runs in CI before the changes and in none of the changed copies. ADM-INT-04 is untested, and DEV-09 isn't in the journey suite's `CASES`. |
 | DCSM-08 | Read marker expressions such as `optional and live`, `not live` and `(live or optional) and not kubernetes`. | Each selects a test as pytest does: `optional and live` needs both marks, and `not live` refuses a live test. |
 
 When Spec 009 adds or renames a scenario, update the list in the test and the
 table together. When a not-proven scenario's missing check runs in CI, take it
-off the test's not-proven list and name the cases. When the journey suite adds
-DEV-06 to DEV-08, name them in the rows the table's intro gives. When the table
+off the test's not-proven list and name the cases. When the table
 names cases from a new catalog, add the prefix, catalog, test file and CI job
 to the test's list and link the catalog in the intro.

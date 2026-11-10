@@ -485,8 +485,8 @@ def test_dcsm_07_a_check_ci_does_not_run_never_counts(monkeypatch):
     assert "ADM-INT-04" in read(ADMIN_TEST) and not is_tested(
         "ADM-INT-04", read(ADMIN_TEST)
     )
-    # A suite case only in a comment isn't declared.
-    assert "DEV-06" not in declared_cases("DEV-01")
+    # A case the suite doesn't declare (DEV-09 is only proposed) isn't counted.
+    assert "DEV-09" not in declared_cases("DEV-01")
     # A live or optional test is never counted as run by the shards.
     monkeypatch.setitem(
         CASE_SOURCES,
