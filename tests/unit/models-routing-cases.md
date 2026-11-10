@@ -73,7 +73,8 @@ catalog:
   [cloud add cases](../e2e/cloud-add-cases.md), EXIST the
   [customer-run gateway cases](../e2e/existing-gateway-cases.md), LEVEL-LIVE the
   [live level cases](../e2e/complexity-levels-cases.md), RULE-LIVE the
-  [live rule cases](../e2e/persona-rules-cases.md) and DEV the
+  [live rule cases](../e2e/persona-rules-cases.md), MSL-LIVE the
+  [live model setup cases](../e2e/model-setup-live-cases.md) and DEV the
   [developer journey cases](../e2e/developer-journey-cases.md).
 
 `tests/unit/test_routing_scenario_map.py` fails if a scenario is missing here,
@@ -118,10 +119,10 @@ or a case named here has no row in its own catalog or no test.
 | ST23 | Remove a model | MR-04, MR-06, REMOVE-03 |
 | ST23 | A model in use | MR-20, MR-22, CL-INT-06, PR-INT-06, CL-UI-05, PR-UI-05, MO-UI-09, MO-UI-11, LEVEL-LIVE-03, RULE-LIVE-02 |
 | ST23 | Keeplane's own pick | CL-INT-05 |
-| ST23 | A model added outside Keeplane | MR-01, REMOVE-04, MO-UI-04, MC-16, EDIT-05 |
-| ST24 | Listed but unused | ML-01, MP-02 (even with no class), MODEL-01, MODEL-02, REPLACE-01, EXIST-03 |
+| ST23 | A model added outside Keeplane | MR-01, REMOVE-04, MO-UI-04, MC-16, EDIT-05, MSL-LIVE-05 |
+| ST24 | Listed but unused | ML-01, MP-02 (even with no class), MODEL-01, MODEL-02, REPLACE-01, EXIST-03, MSL-LIVE-01 |
 | ST24 | Set it up | MODEL-05, MODEL-06, MO-UI-05, GC-09 |
-| ST24 | Set it up with data classes off | MRS-09, MP-01 |
+| ST24 | Set it up with data classes off | MRS-09, MP-01, MSL-LIVE-02, MSL-LIVE-04 (enrolled on the running gateway) |
 | ST25 | Loading | MOD-UI-04 |
 | ST25 | The gateway isn't answering | MOD-UI-05 |
 | ST25 | No gateway name | MOD-UI-06 |

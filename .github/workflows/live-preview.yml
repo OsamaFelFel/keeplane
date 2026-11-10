@@ -4,11 +4,12 @@ name: Live preview gateway checks
 # locked gateway, Python and llama.cpp images, and runs the live gateway cases
 # that need them: Spec 009 ST29/ST30 CLI sign-in and the guarded gateway on a
 # fresh default start (task 009-01), Spec 005 ST19 project classes through the
-# guarded endpoint (task 005-02) and Spec 004 ST16 retry of a model that is
-# down (task 004-04). Last, the developer half of the MVP journey, DEV-01 to
-# DEV-05 (task 009-13), then DEV-06 to DEV-08 and DEV-09 and DEV-10 (tasks on
-# developers' own keys, sent to the preview's HTTPS fixture provider), runs with
-# the hash-pinned coding runtime.
+# guarded endpoint (task 005-02), Spec 004 ST16 retry of a model that is
+# down (task 004-04) and Spec 004 ST23/ST24 model setup reaching the running
+# gateway through the model enroller (task 004-01). Last, the developer half
+# of the MVP journey, DEV-01 to DEV-05 (task 009-13), then DEV-06 to DEV-08 and
+# DEV-09 and DEV-10 (tasks on developers' own keys, sent to the preview's HTTPS
+# fixture provider), runs with the hash-pinned coding runtime.
 # A second job, in parallel, builds the `detection` app image and runs Spec 005
 # ST20 personal-data detection and Spec 006 ST21 held-back request records
 # through the same guarded endpoint (tasks 005-03 and 006-02).
@@ -60,6 +61,7 @@ jobs:
       - name: List the live cases that must run
         run: |
           .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py tests/e2e/test_project_classes_live.py \
+            tests/e2e/test_model_setup_live.py \
             tests/e2e/test_preview_sign_in_live.py tests/integration/test_preview_sign_in_image.py \
             tests/e2e/test_developer_journey.py \
             -m live --collect-only -q | grep '::' > "$RESULTS/expected-cases.txt"
@@ -79,6 +81,11 @@ jobs:
         env:
           KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/outage-cases
         run: .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py -m live -rs --junitxml="$RESULTS/outage-junit.xml"
+      - name: Set up a model on the running guarded gateway (Spec 004 ST23/ST24, task 004-01)
+        if: ${{ !cancelled() }}
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/model-setup-cases
+        run: .venv/bin/python -m pytest tests/e2e/test_model_setup_live.py -m live -rs --junitxml="$RESULTS/model-setup-junit.xml"
       - name: Download and check the pinned coding runtime
         if: ${{ !cancelled() }}
         run: |
@@ -114,7 +121,7 @@ jobs:
       - name: Fail if a live gateway case was skipped or did not run
         if: ${{ !cancelled() }}
         run: |
-          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/outage-junit.xml" "$RESULTS/classes-junit.xml" "$RESULTS/sign-in-junit.xml" "$RESULTS/journey-junit.xml" <<'EOF'
+          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/outage-junit.xml" "$RESULTS/classes-junit.xml" "$RESULTS/sign-in-junit.xml" "$RESULTS/model-setup-junit.xml" "$RESULTS/journey-junit.xml" <<'EOF'
           import sys
           import xml.etree.ElementTree as ET
           from pathlib import Path
