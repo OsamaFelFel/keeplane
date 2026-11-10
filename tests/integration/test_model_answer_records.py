@@ -6,8 +6,9 @@ enough"). The plain-English cases are in model-answer-record-cases.md.
 
 import json
 import logging
-from functools import partial
 import uuid
+from functools import partial
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -82,7 +83,7 @@ def test_ma_02_each_request_sent_writes_one_record_with_four_fields(installed):
     for row in rows:
         assert row["kind"] == KIND
         assert row["who"] == "callback-developer"
-        assert row["what"] == "Request sent to model private; project Callback"
+        assert row["what"] == "Request in Callback sent to private"
         assert row["when"].endswith("+00:00")
     stored = AuditRecord.objects.filter(kind=KIND).first()
     assert stored.actor_id == f.actor["id"]
@@ -91,7 +92,7 @@ def test_ma_02_each_request_sent_writes_one_record_with_four_fields(installed):
     assert audit.records(kind="all")["total"] == 3
     assert audit.records(kind="settings")["total"] == 0
     assert audit.records(kind=KIND, search="callback")["total"] == 3
-    assert audit.records(kind=KIND, search="model private")["total"] == 3
+    assert audit.records(kind=KIND, search="sent to private")["total"] == 3
     assert audit.records(kind=KIND, search="Callback-Developer")["total"] == 3
     assert audit.records(kind=KIND, search="other project")["total"] == 0
 
@@ -220,7 +221,7 @@ def test_ma_17_a_request_that_later_fails_keeps_its_record(
     # or is told about, the model's reply.
     assert not transaction.get_connection().in_atomic_block
     assert [row["what"] for row in model_answers(f)] == [
-        "Request sent to model private; project Callback"
+        "Request in Callback sent to private"
     ]
     # No model is called here: Keeplane hears nothing after the final check, so
     # whatever the model then does, including failing, can't touch the record.
@@ -295,9 +296,9 @@ def test_ma_07_each_record_names_only_the_developer_who_sent_it(installed):
     f.token = first_token
     rows = list(reversed(model_answers(f)))
     assert [(row["who"], row["what"]) for row in rows] == [
-        ("callback-developer", "Request sent to model private; project Callback"),
-        ("second-developer", "Request sent to model private; project Second"),
-        ("second-developer", "Request sent to model private; project Callback"),
+        ("callback-developer", "Request in Callback sent to private"),
+        ("second-developer", "Request in Second sent to private"),
+        ("second-developer", "Request in Callback sent to private"),
     ]
     stored = list(
         AuditRecord.objects.filter(kind=KIND).order_by("pk").values_list(
@@ -332,7 +333,7 @@ def test_ma_08_only_admins_can_read_the_records(installed):
         )
         shown = admin.get("/api/audit/records?kind=model_answers").json()
     assert [(row["who"], row["what"]) for row in shown["records"]] == [
-        ("callback-developer", "Request sent to model private; project Callback")
+        ("callback-developer", "Request in Callback sent to private")
     ]
 
 
@@ -358,7 +359,7 @@ def test_ma_10_records_persist_and_are_shared_across_processes(start_process):
     }
     rows = start_process().records(kind=KIND)["records"]
     assert [(row["kind"], row["who"], row["what"]) for row in rows] == [
-        (KIND, "process-developer", "Request sent to model alpha; project payments-api")
+        (KIND, "process-developer", "Request in payments-api sent to alpha")
     ]
     assert rows[0]["when"].endswith("+00:00")
 
@@ -366,7 +367,7 @@ def test_ma_10_records_persist_and_are_shared_across_processes(start_process):
 def test_description_uses_the_stored_names():
     assert (
         model_answer_records.description("gpt-4.1", "payments-api")
-        == "Request sent to model gpt-4.1; project payments-api"
+        == "Request in payments-api sent to gpt-4.1"
     )
 
 
@@ -394,7 +395,7 @@ def test_ma_11_a_customer_run_gateway_records_each_request_sent(customer_run):
     assert len(rows) == 3
     for row in rows:
         assert row["who"] == "callback-developer"
-        assert row["what"] == "Request sent to model private; project Callback"
+        assert row["what"] == "Request in Callback sent to private"
         assert row["when"].endswith("+00:00")
     assert f.stores.audit.records(kind="settings")["total"] == 0
     f.stores.audit.set_option(KIND, False)
@@ -515,8 +516,8 @@ def test_ma_15_shared_check_records_name_only_the_sending_developer(customer_run
     f.token = first_token
     rows = list(reversed(model_answers(f)))
     assert [(row["who"], row["what"]) for row in rows] == [
-        ("callback-developer", "Request sent to model private; project Callback"),
-        ("second-developer", "Request sent to model private; project Second"),
+        ("callback-developer", "Request in Callback sent to private"),
+        ("second-developer", "Request in Second sent to private"),
     ]
     stored = list(
         AuditRecord.objects.filter(kind=KIND).order_by("pk").values_list(
@@ -545,3 +546,29 @@ def test_ma_16_one_recorder_per_gateway_mode(installed, monkeypatch):
     assert send_shared(f).status_code == 200
     assert send_shared(f, True).status_code == 200
     assert len(model_answers(f)) == 2
+
+
+APP = Path(__file__).resolve().parents[2] / "components/control-plane"
+OLD_TEXT = "Request sent to model private; project Callback"
+
+
+def test_ma_18_records_already_stored_keep_their_text(installed):
+    # D179 (10 November): new records read "Request in [Project] sent to
+    # [Model]"; a record written before keeps the words it was written with.
+    f = installed
+    switch_on(f)
+    f.stores.audit.record(KIND, f.actor["id"], "callback-developer", OLD_TEXT)
+    assert send(f, True).status_code == 200
+    rows = model_answers(f)
+    assert sorted(row["what"] for row in rows) == [
+        "Request in Callback sent to private",
+        OLD_TEXT,
+    ]
+    # Both stay findable by model and project.
+    assert f.stores.audit.records(kind=KIND, search="private")["total"] == 2
+    assert f.stores.audit.records(kind=KIND, search="Callback")["total"] == 2
+    # No migration rewrites stored records: none that touches them runs code.
+    for path in APP.glob("*/migrations/*.py"):
+        text = path.read_text()
+        if "auditrecord" in text.lower():
+            assert "RunPython" not in text and "RunSQL" not in text, path
