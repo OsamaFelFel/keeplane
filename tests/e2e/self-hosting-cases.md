@@ -38,8 +38,8 @@ The **Kubernetes live checks** workflow (`.github/workflows/kubernetes-live.yml`
 installs the chart on a kind cluster on every revision and runs the test files on
 its `LIVE_TESTS` line; their K8S cases (K8S-01 to K8S-13 and K8S-17 to K8S-21) count as CI
 checks. That cluster can reach the internet, has no ingress controller and does
-not enforce NetworkPolicy. The **Kubernetes isolated network** workflow
-(`.github/workflows/kubernetes-isolated.yml`) does the same for its ISO cases on
+not enforce NetworkPolicy. The same workflow's isolated-network job has its own
+`LIVE_TESTS` line and does the same for its ISO cases on
 a kind cluster that enforces NetworkPolicy, behind an ingress controller, with
 outside access closed except one model provider. The other K8S cases, FULL, EXEDGE, EXIST and GW-KEY
 are not run in CI. The live trials ran on a local kind cluster or Docker with

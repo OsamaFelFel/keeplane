@@ -1,7 +1,7 @@
 """Run the isolated-network cases (kubernetes-isolated-cases.md) on kind.
 
-The cluster is the disposable `keeplane-isolated` kind cluster the Kubernetes
-isolated network workflow creates: Calico enforces NetworkPolicy, ingress-nginx
+The cluster is the disposable `keeplane-isolated` kind cluster the isolated
+network job of the Kubernetes live checks workflow creates: Calico enforces NetworkPolicy, ingress-nginx
 publishes Keeplane on https://keeplane.isolated.test, and the model provider
 fixture runs on the runner outside the cluster. The cases close the network's
 outside access themselves (ISO-02), restart every Keeplane pod and then the

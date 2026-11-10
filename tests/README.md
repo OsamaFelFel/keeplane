@@ -74,9 +74,8 @@ NetworkPolicy, and no ingress controller; the app is reached through kind's
 NodePort mapping and a port-forward. The network policy, ingress, full chart
 (FULL, EXEDGE), browser and Qwen cases are not run there.
 
-The **Kubernetes isolated network** workflow
-(`.github/workflows/kubernetes-isolated.yml`) runs on every pull request and on
-`main` too. It creates its own kind cluster with Calico (which enforces
+The same workflow's second job, **Chart on an isolated kind network**, runs
+alongside it. It creates its own kind cluster with Calico (which enforces
 NetworkPolicy) and ingress-nginx, both pinned by manifest checksum and image
 digest, installs the chart in managed mode with every network policy on, and
 runs `e2e/test_kubernetes_isolated.py`. That test closes the cluster's outside

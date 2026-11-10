@@ -9,13 +9,10 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parents[1]
 MAP = TESTS / "e2e/self-hosting-cases.md"
-# The CI workflows that install the chart on a kind cluster and run live
-# test files on every revision: the Kubernetes live checks and the isolated
-# network run. Each one's LIVE_TESTS line names its files.
-LIVE_WORKFLOWS = (
-    TESTS.parent / ".github/workflows/kubernetes-live.yml",
-    TESTS.parent / ".github/workflows/kubernetes-isolated.yml",
-)
+# The CI workflow that installs the chart on kind clusters and runs live test
+# files on every revision. Each of its jobs (the cluster with outside access
+# and the isolated network) has a LIVE_TESTS line naming its files.
+LIVE_WORKFLOW = TESTS.parent / ".github/workflows/kubernetes-live.yml"
 HEADING = "## Spec 002 scenarios (ST1–ST5)"
 
 # The scenario names in Spec 002 (product/specs/002-self-hosting.md).
@@ -33,7 +30,7 @@ SCENARIOS = {
 # revision proves a scenario; a live trial recorded on an earlier chart
 # revision is closest evidence. ST4 and ST5 are proven by the K8S cases the
 # Kubernetes live workflow runs on kind, ST1 and ST2's registry scenario by
-# the ISO cases the isolated network workflow runs. The reason lives in the table only: its cell
+# the ISO cases its isolated-network job runs. The reason lives in the table only: its cell
 # starts "Not proven yet:" and says which run is missing before naming cases.
 NOT_PROVEN = {
     ("ST2", "Runs where only the models are reachable"),
@@ -111,19 +108,19 @@ def prefix_of(case):
 
 
 def live_ci_cases():
-    """Cases of every test file the Kubernetes live workflows run.
+    """Cases of every test file the Kubernetes live workflow's jobs run.
 
     Each job fails unless each file runs without a skip and reports exactly
     its declared cases, all passing (tests/support/cases.py).
     """
     from tests.support.cases import EXPECTED_CASES
 
+    lines = re.findall(r"^\s*LIVE_TESTS:\s*(.+)$", LIVE_WORKFLOW.read_text(), re.MULTILINE)
+    assert len(lines) == 2, "Each Kubernetes live job names its LIVE_TESTS"
     files = []
-    for workflow in LIVE_WORKFLOWS:
-        line = re.search(r"^\s*LIVE_TESTS:\s*(.+)$", workflow.read_text(), re.MULTILINE)
-        assert line, f"{workflow.name} names no LIVE_TESTS"
-        assert line.group(1).split(), workflow.name
-        files += line.group(1).split()
+    for line in lines:
+        assert line.split(), line
+        files += line.split()
     for name in files:
         assert re.fullmatch(r"tests/e2e/test_\w+\.py", name), name
         assert (TESTS.parent / name).is_file(), f"{name} does not exist"
@@ -210,7 +207,7 @@ def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     # The simulated preflight retries (K8S-14 to K8S-16) are in another test
     # file this workflow does not run, so they never count through it.
     assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
-    # The isolated-network cases, from the isolated network workflow.
+    # The isolated-network cases, from the workflow's isolated-network job.
     assert {f"ISO-{n:02d}" for n in range(1, 10)} <= cases
 
 

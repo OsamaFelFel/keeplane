@@ -3,9 +3,9 @@
 **Edition:** Open Source. Spec 002 ST1 and ST2 (task 002-03, and the enforced
 ingress and egress policy of task 002-02), [ADR 009](https://github.com/OsamaFelFel/keeplane-governance/blob/main/adrs/0009-isolated-network.md).
 
-The **Kubernetes isolated network** workflow
-(`.github/workflows/kubernetes-isolated.yml`) runs these cases on every pull
-request and every push to main, with
+The **Chart on an isolated kind network** job of the **Kubernetes live checks**
+workflow (`.github/workflows/kubernetes-live.yml`) runs these cases on every
+pull request and every push to main, with
 [`test_kubernetes_isolated.py`](test_kubernetes_isolated.py). The job fails if
 any case is missing, skipped or failing.
 

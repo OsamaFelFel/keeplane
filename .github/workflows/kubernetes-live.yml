@@ -1,7 +1,8 @@
 name: Kubernetes live checks
 
-# Installs the chart on a disposable kind cluster on the runner and runs the
-# live Kubernetes cases against it. See tests/README.md, "Kubernetes live checks".
+# Installs the chart on disposable kind clusters on the runner and runs the
+# live Kubernetes cases against them: one cluster with outside access, and one
+# isolated network. See tests/README.md, "Kubernetes live checks".
 on:
   push:
     branches: [main]
@@ -30,7 +31,8 @@ jobs:
       # The live test files this job runs, in order: test_local registers the
       # model test_kind uses; test_gateway_copy_stop stops a gateway copy and
       # restores it, so it runs last. tests/unit/test_self_hosting_scenario_map.py reads
-      # this line to know which cases CI runs on the current revision.
+      # every LIVE_TESTS line in this workflow to know which cases CI runs on
+      # the current revision.
       LIVE_TESTS: tests/e2e/test_local.py tests/e2e/test_kind.py tests/e2e/test_gateway_secret_rotation.py tests/e2e/test_existing_gateway_preflight.py tests/e2e/test_gateway_down.py tests/e2e/test_gateway_copy_stop.py
       KEEPLANE_KIND_QWEN: "off"
       # The runner's Docker saves the digest-pinned fixture images in a form
@@ -135,4 +137,248 @@ jobs:
         with:
           name: kubernetes-live-${{ github.sha }}
           path: test-results/kubernetes-live/
+          retention-days: 30
+
+  # A second cluster that enforces NetworkPolicy (Calico) behind an ingress
+  # controller: it installs the chart while the registry is reachable, closes
+  # the cluster's outside access except one model provider, and runs the
+  # isolated-network cases. See tests/e2e/kubernetes-isolated-cases.md.
+  isolated:
+    name: Chart on an isolated kind network
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      KIND_VERSION: v0.33.0
+      KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+      KIND_NODE_IMAGE: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+      KUBECTL_VERSION: v1.37.0
+      KUBECTL_SHA256: 6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f
+      HELM_VERSION: v3.19.0
+      HELM_SHA256: a7f81ce08007091b86d8bd696eb4d86b8d0f2e1b9f6c714be62f82f96a594496
+      # Calico (Apache-2.0), the enforcing network plugin: the release manifest
+      # and the digests of the three images it names by tag.
+      CALICO_VERSION: v3.33.0
+      CALICO_SHA256: 2de8f47595fb9c41b3f47d7b767a1f8e72ecf84057af834738ff12689a234da5
+      CALICO_DIGEST_CALICO: sha256:4ebc20730127bc9e8bf1db5f5a2d8b58cf37fe0e891b3c7b5471992221d213e5
+      CALICO_DIGEST_NODE: sha256:565d8db3200e443955557f8f28ff44ab8a4a456754bc74a19c4f2f3444af9b1c
+      CALICO_DIGEST_CNI_PLUGINS: sha256:0f32f48279484c0d6f0e0d0e767b2d0e1a6c6ca34cb3421a61b989d992f3df41
+      # ingress-nginx (Apache-2.0), the ingress controller fixture: its kind
+      # manifest already names every image by digest.
+      INGRESS_NGINX_VERSION: controller-v1.15.1
+      INGRESS_NGINX_SHA256: 2a3ae008c8786431115502644e77ab398fdebfb721a5d1195ed3089cde3299df
+      PYTHON_IMAGE: python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a
+      # The live test file this job runs. tests/unit/test_self_hosting_scenario_map.py
+      # reads every LIVE_TESTS line in this workflow to know which cases CI
+      # runs on the current revision.
+      LIVE_TESTS: tests/e2e/test_kubernetes_isolated.py
+      RESULTS: test-results/kubernetes-isolated
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+          cache-dependency-path: components/admin-ui/package-lock.json
+      - name: Keep the run's kubeconfig and credentials in the runner's temporary folder
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin" "$RESULTS"
+          {
+            echo "KEEPLANE_ISOLATED_KUBECONFIG=$RUNNER_TEMP/keeplane-isolated-kubeconfig"
+            echo "KEEPLANE_ISOLATED_RUNTIME=$RUNNER_TEMP/keeplane-isolated-runtime"
+            echo "KEEPLANE_TEST_REPORT_DIR=$GITHUB_WORKSPACE/$RESULTS/reports"
+          } >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install pinned kind, kubectl and Helm and check their checksums
+        run: |
+          cd "$RUNNER_TEMP"
+          curl --fail --location -sS --output bin/kind "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64"
+          echo "$KIND_SHA256  bin/kind" | sha256sum --check
+          curl --fail --location -sS --output bin/kubectl "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+          echo "$KUBECTL_SHA256  bin/kubectl" | sha256sum --check
+          curl --fail --location -sS --output helm.tar.gz "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz"
+          echo "$HELM_SHA256  helm.tar.gz" | sha256sum --check
+          tar -xzf helm.tar.gz linux-amd64/helm
+          mv linux-amd64/helm bin/helm
+          chmod 755 bin/kind bin/kubectl bin/helm
+      - name: Fetch the network plugin and ingress controller manifests and pin their images
+        run: |
+          cd "$RUNNER_TEMP"
+          curl --fail --location -sS --output calico.yaml "https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/calico.yaml"
+          echo "$CALICO_SHA256  calico.yaml" | sha256sum --check
+          curl --fail --location -sS --output ingress-nginx.yaml "https://raw.githubusercontent.com/kubernetes/ingress-nginx/$INGRESS_NGINX_VERSION/deploy/static/provider/kind/deploy.yaml"
+          echo "$INGRESS_NGINX_SHA256  ingress-nginx.yaml" | sha256sum --check
+          sed -i \
+            -e "s|quay.io/calico/calico:$CALICO_VERSION\$|quay.io/calico/calico:$CALICO_VERSION@$CALICO_DIGEST_CALICO|" \
+            -e "s|quay.io/calico/node:$CALICO_VERSION\$|quay.io/calico/node:$CALICO_VERSION@$CALICO_DIGEST_NODE|" \
+            -e "s|quay.io/calico/third-party-cni-plugins:$CALICO_VERSION\$|quay.io/calico/third-party-cni-plugins:$CALICO_VERSION@$CALICO_DIGEST_CNI_PLUGINS|" \
+            calico.yaml
+          # Every image either manifest names must now be pinned by digest.
+          if grep -hE '^\s*image:' calico.yaml ingress-nginx.yaml | grep -v '@sha256:[0-9a-f]\{64\}'; then
+            echo "An image above is not pinned by digest" >&2
+            exit 1
+          fi
+      - name: Install Python test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+      - name: Build the web UI and the app image
+        run: |
+          (cd components/admin-ui && npm ci && npm run build)
+          docker build -f components/control-plane/Dockerfile -t keeplane-preview:kind-local .
+      - name: Make the run's credentials and certificate
+        run: |
+          python3 - "$KEEPLANE_ISOLATED_RUNTIME" <<'PY'
+          import hashlib
+          from pathlib import Path
+          import secrets
+          import sys
+
+          root = Path(sys.argv[1])
+          root.mkdir(mode=0o700)
+          def write(name, value):
+              path = root / name
+              path.write_text(value + "\n")
+              path.chmod(0o600)
+          write("first-admin-password", secrets.token_urlsafe(32))
+          for kind in ("runtime", "admin"):
+              key = secrets.token_urlsafe(32)
+              write(f"gateway-{kind}-key", key)
+              write(f"gateway-{kind}-key-hash", "sha256:" + hashlib.sha256(key.encode()).hexdigest())
+          write("cloud-provider-key", secrets.token_urlsafe(32))
+          (root / "gateway-db-password").write_text(secrets.token_urlsafe(32))
+          PY
+          cd "$KEEPLANE_ISOLATED_RUNTIME"
+          # Python 3.13 verifies strictly: the CA needs a key usage, and the
+          # server certificate its authority key identifier.
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=Keeplane isolated test CA" \
+            -addext "basicConstraints=critical,CA:TRUE" \
+            -addext "keyUsage=critical,keyCertSign,cRLSign" \
+            -keyout ca.key -out ca.crt 2>/dev/null
+          openssl req -newkey rsa:2048 -nodes -subj "/CN=keeplane.isolated.test" \
+            -keyout tls.key -out tls.csr 2>/dev/null
+          printf '%s\n' "subjectAltName=DNS:keeplane.isolated.test" "extendedKeyUsage=serverAuth" \
+            "basicConstraints=CA:FALSE" "keyUsage=critical,digitalSignature,keyEncipherment" \
+            "subjectKeyIdentifier=hash" "authorityKeyIdentifier=keyid,issuer" > tls.ext
+          openssl x509 -req -in tls.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 1 \
+            -extfile tls.ext -out tls.crt 2>/dev/null
+          echo "127.0.0.1 keeplane.isolated.test" | sudo tee -a /etc/hosts
+      - name: Start the model provider outside the cluster
+        run: |
+          TRIAL_KEY_FILE="$KEEPLANE_ISOLATED_RUNTIME/cloud-provider-key" \
+            nohup python3 tests/fixtures/cloud_provider.py > "$RUNNER_TEMP/cloud-provider.log" 2>&1 &
+          for attempt in $(seq 1 20); do
+            curl --fail -sS http://127.0.0.1:18082/health && exit 0
+            sleep 1
+          done
+          exit 1
+      - name: Create the kind cluster with Calico and the ingress controller
+        run: |
+          # A fixed network and bridge name, so the model provider's address
+          # (172.30.0.1) and the closing rules are known before the install.
+          docker network create --driver bridge --subnet 172.30.0.0/16 --gateway 172.30.0.1 \
+            -o com.docker.network.bridge.name=kind-isolated kind
+          kind create cluster --name keeplane-isolated --image "$KIND_NODE_IMAGE" \
+            --config tests/fixtures/isolated-network/kind.yaml --kubeconfig "$KEEPLANE_ISOLATED_KUBECONFIG"
+          export KUBECONFIG="$KEEPLANE_ISOLATED_KUBECONFIG"
+          kubectl apply -f "$RUNNER_TEMP/calico.yaml"
+          kubectl wait --for=condition=Ready node --all --timeout=300s
+          kubectl -n kube-system rollout status daemonset/calico-node --timeout=300s
+          kubectl -n kube-system rollout status deployment/calico-kube-controllers --timeout=300s
+          kubectl -n kube-system rollout status deployment/coredns --timeout=180s
+          kubectl apply -f "$RUNNER_TEMP/ingress-nginx.yaml"
+          # The admission jobs delete themselves once done, so wait for their
+          # result instead: the controller starts once its certificate exists,
+          # and the webhook is usable once its CA bundle is patched in.
+          kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=240s
+          for attempt in $(seq 1 60); do
+            bundle=$(kubectl get validatingwebhookconfiguration ingress-nginx-admission \
+              -o jsonpath='{.webhooks[0].clientConfig.caBundle}')
+            [ -n "$bundle" ] && exit 0
+            sleep 3
+          done
+          echo "The ingress controller's admission webhook never got its CA bundle" >&2
+          exit 1
+      - name: Install Keeplane while the registry is reachable
+        run: |
+          export KUBECONFIG="$KEEPLANE_ISOLATED_KUBECONFIG"
+          RUNTIME="$KEEPLANE_ISOLATED_RUNTIME"
+          kind load docker-image keeplane-preview:kind-local --name keeplane-isolated
+          kubectl create namespace keeplane
+          kubectl -n keeplane create secret generic keeplane-first-admin \
+            --from-file=first-admin-password="$RUNTIME/first-admin-password"
+          kubectl -n keeplane create secret generic keeplane-gateway-keys \
+            --from-file=runtime-key="$RUNTIME/gateway-runtime-key" \
+            --from-file=admin-key="$RUNTIME/gateway-admin-key" \
+            --from-file=runtime-key-hash="$RUNTIME/gateway-runtime-key-hash" \
+            --from-file=admin-key-hash="$RUNTIME/gateway-admin-key-hash"
+          kubectl -n keeplane create secret generic keeplane-gateway-db \
+            --from-file=password="$RUNTIME/gateway-db-password"
+          kubectl -n keeplane create secret tls keeplane-tls --cert="$RUNTIME/tls.crt" --key="$RUNTIME/tls.key"
+          kubectl -n keeplane create configmap model-fixture --from-file=mock_model.py=tests/fixtures/mock_model.py
+          kubectl -n keeplane apply -f deploy/local/model-fixture.yaml
+          kubectl -n keeplane apply -f deploy/local/postgres-fixture.yaml
+          kubectl -n keeplane rollout status deployment/model --timeout=240s
+          kubectl -n keeplane rollout status deployment/postgres --timeout=240s
+          helm upgrade --install keeplane deploy/helm/keeplane --namespace keeplane \
+            -f tests/fixtures/isolated-network/values.yaml --wait --timeout 300s
+          kubectl create namespace inside
+          kubectl -n inside create configmap keeplane-isolated-ca --from-file=ca.crt="$RUNTIME/ca.crt"
+          kubectl -n inside apply -f tests/fixtures/isolated-network/inside.yaml
+          kubectl -n inside wait --for=condition=Ready pod --all --timeout=180s
+      - name: Run the isolated-network cases
+        # The cases close the network themselves (ISO-02), so they record the
+        # same checks before and after.
+        run: |
+          .venv/bin/python -m pytest -m live -rA $LIVE_TESTS \
+            --junitxml="$RESULTS/junit.xml"
+      - name: Require every selected case to have run, none skipped
+        if: ${{ !cancelled() }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          path = os.path.join(os.environ["RESULTS"], "junit.xml")
+          if not os.path.exists(path):
+              sys.exit("No test results were written")
+          root = ET.parse(path).getroot()
+          cases = list(root.iter("testcase"))
+          expected = {name.rsplit("/", 1)[1][:-3] for name in os.environ["LIVE_TESTS"].split()}
+          ran = {case.get("name") for case in cases}
+          skipped = [case.get("name") for case in cases if case.find("skipped") is not None]
+          failed = [case.get("name") for case in cases
+                    if case.find("failure") is not None or case.find("error") is not None]
+          print("Selected:", sorted(expected))
+          print("Ran:", sorted(ran))
+          if skipped:
+              sys.exit("Skipped live checks: " + ", ".join(skipped))
+          if ran != expected:
+              sys.exit("Live checks missing or unexpected: " + ", ".join(sorted(ran ^ expected)))
+          if failed:
+              sys.exit("Failed live checks: " + ", ".join(failed))
+          PY
+      - name: Record the cluster state
+        if: ${{ !cancelled() }}
+        run: |
+          out="$RESULTS/cluster"
+          mkdir -p "$out"
+          export KUBECONFIG="$KEEPLANE_ISOLATED_KUBECONFIG"
+          kubectl get pods,deployments,statefulsets,services,ingresses,networkpolicies -A -o wide > "$out/resources.txt" 2>&1 || true
+          kubectl get events -A --sort-by=.lastTimestamp > "$out/events.txt" 2>&1 || true
+          cat "$out/resources.txt"
+          tail -n 80 "$out/events.txt"
+          for ns in keeplane inside ingress-nginx; do
+            kubectl -n "$ns" describe pods > "$out/$ns-pods.txt" 2>&1 || true
+            kubectl -n "$ns" logs --all-containers --prefix --tail=300 --selector '!job-name' > "$out/$ns-logs.txt" 2>&1 || true
+          done
+          sudo iptables -S > "$out/runner-iptables.txt" 2>&1 || true
+          cp "$RUNNER_TEMP/cloud-provider.log" "$out/" 2>/dev/null || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: kubernetes-isolated-${{ github.sha }}
+          path: test-results/kubernetes-isolated/
           retention-days: 30
