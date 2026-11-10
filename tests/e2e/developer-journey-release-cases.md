@@ -6,10 +6,16 @@ gateway, on PostgreSQL and two app copies"), ADR 022, ADR 027, ADR 028. The
 cases are the [developer journey cases](developer-journey-cases.md) DEV-01 to
 DEV-08, with DEV-03b on DEV-03's task, run by the same code
 (`run_cases` in `test_developer_journey.py`) on two disposable installs
-instead of the default preview. DEV-09 and DEV-10 (developers' own keys) stay
-on the preview: a customer-run gateway has no delivery path for Keeplane's
-provider keys yet (see the
-[gateway guide](../../docs/guide/gateway-configuration.md)).
+instead of the default preview.
+
+**Not covered:** DEV-09 and DEV-10 (developers' own keys) don't run on these
+installs. A customer-run gateway currently supports only **No key** models:
+Keeplane's shared key and developers' own keys aren't supported in existing
+mode yet (see the [gateway guide](../../docs/guide/gateway-configuration.md)).
+They stay on the default preview's managed gateway. In `existing`, DEV-04's
+cloud model is set up with **No key** and the customer's gateway holds the
+provider key; Keeplane doesn't hold, check or rotate it, and it isn't
+Keeplane's shared-key option.
 
 Run with Docker, `openssl`, the admin UI built, the PostgreSQL app image with
 CLI sign-in and the pinned coding runtime, OpenCode V2 2.0.27 (the musl build

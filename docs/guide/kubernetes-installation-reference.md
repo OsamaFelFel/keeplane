@@ -623,8 +623,10 @@ outside this chart.
 Helm refuses mismatched `mode` and `install` values. In existing mode the chart
 writes no gateway configuration. The app registers models through the
 gateway's management API and leaves models added outside Keeplane unchanged.
-See [gateway modes](gateway-configuration.md) for the tested cases and the
-limits on shared provider keys with a supplied gateway.
+In existing mode Keeplane currently supports only models set up with
+**No key**: its shared key and developers' own keys aren't supported with a
+customer-run gateway yet. See [gateway modes](gateway-configuration.md) for
+the tested cases and these limits.
 
 ## Gateway copies
 

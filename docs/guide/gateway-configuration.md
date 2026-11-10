@@ -13,6 +13,11 @@ the current release scope.
 | `managed` | Keeplane app and gateway | The chart's gateway Service | Two agentgateway copies (`gateway.copies`) with shared PostgreSQL registration |
 | `existing` | Keeplane app only | `gateway.url`, supplied by the operator | A separate agentgateway installation in another namespace |
 
+With a customer-run gateway (`existing`), Keeplane currently supports only
+models set up with **No key**. Keeplane's shared key and developers' own keys
+aren't supported in this mode yet: Keeplane has no way to deliver a key to a
+gateway it doesn't run.
+
 In `managed` mode the chart always requires keys on the gateway's model and
 management port and refuses to install without `gateway.keysSecret`; see
 [gateway access keys](kubernetes-installation-reference.md#gateway-access-keys).
@@ -119,13 +124,14 @@ To repeat the React browser suite through a temporary port-forward:
 .venv/bin/python -m pytest tests/e2e/test_existing_gateway_browser.py -m live
 ```
 
-Shared cloud-provider keys are not proven in this mode: the supplied gateway
-runs in a different namespace and cannot read Keeplane's private provider-key
-PVC. A gateway that holds the provider key itself works; see
-[Keeplane's checks on a customer-run gateway](#keeplanes-checks-on-a-customer-run-gateway). The local app rejects shared-key registration before saving the key or
-changing the gateway, with an explicit error. The release gateway contract
-needs a supported secret-delivery mechanism for customer-run gateways before
-this mode handles shared or personal keys.
+This mode currently supports only **No key** models. Keeplane's shared key
+and developers' own keys aren't supported yet: the supplied gateway runs in a
+different namespace and cannot read Keeplane's private provider-key PVC, and
+there is no supported way yet to deliver keys to a customer-run gateway. The
+app refuses a shared-key setup before saving the key or changing the gateway,
+with an explicit error. A cloud model whose key your own gateway
+holds is set up with **No key**; see
+[Keeplane's checks on a customer-run gateway](#keeplanes-checks-on-a-customer-run-gateway).
 
 ## Keeplane's checks on a customer-run gateway
 
@@ -287,12 +293,24 @@ policies:
           replace: '{"content-type": "application/json"}'
 ```
 
-Keeplane keeps no shared provider key for a gateway it doesn't run (see
-below). For a cloud model, your gateway can hold the provider key itself:
-the admin adds the model in Keeplane with **No key**, and on that model's
-backend you add the key and keep its `authorization` header in the last
-transformation. Keeplane still records the provider and model name it added,
-so developers' usage shows an estimated cost for it:
+Add one `strip-<model>` policy for every model Keeplane adds, with that
+model's backend as its target, next to its `final-<model>` policy.
+
+> **If you set up your gateway from an earlier version of this guide:** that
+> example removed Keeplane's headers only in the `requestHeaders` of models you
+> define yourself. Add the `strip-<model>` step above for every model
+> Keeplane adds. Without it, developers' sign-in tokens, project IDs and the
+> developer marker reach the model.
+
+This mode supports only **No key** models: Keeplane's shared key and
+developers' own keys aren't supported with a customer-run gateway yet. For a
+cloud model, your gateway can hold the provider key itself: the admin adds
+the model in Keeplane with **No key**, and on that model's backend you add the
+key and keep its `authorization` header in the last transformation. Keeplane
+doesn't hold, check or rotate that key: it lives only in your gateway, and
+keeping it valid and rotating it is up to you. This is not Keeplane's
+shared-key option. Keeplane still records the provider and model name it
+added, so developers' usage shows an estimated cost for it:
 
 ```yaml
 policies:
