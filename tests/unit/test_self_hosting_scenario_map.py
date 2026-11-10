@@ -208,7 +208,7 @@ def test_shm_06_only_the_live_workflow_s_test_files_lift_live_cases():
     # file this workflow does not run, so they never count through it.
     assert not {"K8S-14", "K8S-15", "K8S-16"} & cases
     # The isolated-network cases, from the workflow's isolated-network job.
-    assert {f"ISO-{n:02d}" for n in range(1, 10)} <= cases
+    assert {f"ISO-{n:02d}" for n in range(1, 13)} <= cases
 
 
 # Each clause of a proven scenario whose proof is a separate case: the

@@ -78,11 +78,14 @@ NodePort mapping and a port-forward. The network policy, ingress, full chart
 The same workflow's second job, **Chart on an isolated kind network**, runs
 alongside it. It creates its own kind cluster with Calico (which enforces
 NetworkPolicy) and ingress-nginx, both pinned by manifest checksum and image
-digest, installs the chart in managed mode with every network policy on, and
+digest, and an internal registry on the same network that holds a copy of
+every image the install uses, which the node pulls through. It installs the
+chart in managed mode with every network policy on, and
 runs `e2e/test_kubernetes_isolated.py`. That test closes the cluster's outside
 access on the runner except one model provider, closes outside name lookups
-in the node, restarts every Keeplane pod
-and then the node, and runs the [isolated-network cases](e2e/kubernetes-isolated-cases.md)
+in the node, restarts every Keeplane pod and then the node, removes every
+image the install brought from the node and starts it again from the internal
+registry, and runs the [isolated-network cases](e2e/kubernetes-isolated-cases.md)
 (ISO). It refuses any context other than `kind-keeplane-isolated` and changes
 the runner's firewall, so run it only there. The job fails on any skipped or
 missing case and uploads the `kubernetes-isolated-<commit>` artifact.
