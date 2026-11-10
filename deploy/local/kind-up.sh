@@ -34,7 +34,7 @@ RUNTIME_DIR=${KEEPLANE_RUNTIME_DIR:-$DEFAULT_RUNTIME_DIR}
 FIRST_ADMIN_PASSWORD="$RUNTIME_DIR/first-admin-password"
 
 cd "$ROOT"
-for kind_tool in python3 node npm docker kind kubectl "$HELM_BIN" shasum; do
+for kind_tool in python3 node npm docker kind kubectl "$HELM_BIN" shasum openssl; do
   if ! command -v "$kind_tool" >/dev/null 2>&1; then
     printf 'Missing tool: %s. See docs/guide/kubernetes-local.md for prerequisites.\n' "$kind_tool" >&2
     exit 1
@@ -215,6 +215,28 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap cloud-provi
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create secret generic cloud-provider-key \
   --from-file=key="$RUNTIME_DIR/cloud-provider-key" --dry-run=client -o yaml |
   kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
+# The fixture provider serves HTTPS with a new test CA and certificate on every
+# start, made as deploy/local/up.py makes the Docker preview's (in its own
+# folder, so a running Docker preview keeps its own). The CA's private key is
+# deleted once it has signed. The app and gateway copies trust the CA through
+# trust.extraCaBundle (ConfigMap cloud-provider-ca) beside their system CAs.
+TLS_DIR="$RUNTIME_DIR/kind-cloud-provider-tls"
+python3 -B - "$ROOT/deploy/local" "$TLS_DIR" <<'PY'
+from pathlib import Path
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from up import preview_tls
+
+preview_tls(Path(sys.argv[2]))
+PY
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create secret generic cloud-provider-tls \
+  --from-file=provider.pem="$TLS_DIR/provider.pem" --from-file=provider.key="$TLS_DIR/provider.key" \
+  --from-file=ca.pem="$TLS_DIR/ca.pem" --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane create configmap cloud-provider-ca \
+  --from-file=ca.crt="$TLS_DIR/ca.pem" --dry-run=client -o yaml |
+  kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f -
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/model-fixture.yaml
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane apply -f deploy/local/cloud-provider-fixture.yaml
 if [ "$QWEN" = on ]; then
@@ -241,8 +263,11 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" -n supplied-gateway rollout status deplo
 "$HELM_BIN" upgrade --install keeplane deploy/helm/keeplane \
   --kubeconfig "$KUBECONFIG_PATH" --namespace keeplane \
   -f deploy/local/values.yaml --wait --timeout 180s
+# The app and gateway copies read the test CA only when they start.
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart deployment/keeplane-app
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout restart statefulset/keeplane-gateway
 kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status deployment/keeplane-app --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG_PATH" -n keeplane rollout status statefulset/keeplane-gateway --timeout=180s
 
 "$HELM_BIN" upgrade --install supplied-gateway \
   deploy/helm/keeplane/charts/agentgateway-standalone-v1.6.0.tgz \

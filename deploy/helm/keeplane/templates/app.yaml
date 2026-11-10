@@ -1,4 +1,5 @@
 {{- include "keeplane.gatewayCa.check" . }}
+{{- include "keeplane.trust.check" . }}
 {{- include "keeplane.detection.check" . }}
 {{- if and .Values.app.localTrial.enabled (not .Values.gateway.keysSecret) }}
 {{- fail "app.localTrial requires gateway.keysSecret" }}
@@ -52,7 +53,7 @@ spec:
           type: RuntimeDefault
       {{- /* Secret files are mounted 0440 and owned by root; this group lets
       the non-root app user read them. */}}
-      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled .Values.gateway.keysSecret .Values.gateway.caSecret }}
+      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled .Values.gateway.keysSecret .Values.gateway.caSecret (include "keeplane.trust.on" .) }}
         fsGroup: 65532
         fsGroupChangePolicy: OnRootMismatch
       {{- end }}
@@ -60,8 +61,9 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled }}
+      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled (include "keeplane.trust.on" .) }}
       initContainers:
+      {{- if or .Values.app.localTrial.enabled .Values.app.postgres.enabled }}
         - name: prepare-provider-keys
           image: {{ .Values.app.image | quote }}
           imagePullPolicy: {{ .Values.app.pullPolicy }}
@@ -108,6 +110,9 @@ spec:
               drop: [ALL]
       {{- end }}
       {{- end }}
+      {{- /* trust.extraCaBundle: the system CAs plus the extra ones (_trust.tpl). */}}
+      {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.initContainer" . | trim | nindent 8 }}{{- end }}
+      {{- end }}
       containers:
         - name: app
           image: {{ .Values.app.image | quote }}
@@ -120,6 +125,7 @@ spec:
             - name: GATEWAY_MODE
               value: {{ .Values.gateway.mode | quote }}
             {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.env" . | trim | nindent 12 }}{{- end }}
+            {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.appEnv" . | trim | nindent 12 }}{{- end }}
             {{- if eq .Values.gateway.mode "managed" }}
             - name: GATEWAY_COPY_URLS
               value: {{ include "keeplane.gatewayCopyUrls" . | quote }}
@@ -195,9 +201,10 @@ spec:
               value: /gateway-config/config.yaml
             {{- end }}
             {{- end }}
-          {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled .Values.gateway.caSecret }}
+          {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled .Values.gateway.caSecret (include "keeplane.trust.on" .) }}
           volumeMounts:
             {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.mount" . | trim | nindent 12 }}{{- end }}
+            {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.appMount" . | trim | nindent 12 }}{{- end }}
             {{- if .Values.gateway.keysSecret }}
             - name: gateway-keys
               mountPath: /run/gateway-keys
@@ -253,9 +260,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled .Values.gateway.caSecret }}
+      {{- if or .Values.app.localTrial.enabled .Values.gateway.keysSecret .Values.app.postgres.enabled .Values.gateway.caSecret (include "keeplane.trust.on" .) }}
       volumes:
         {{- if .Values.gateway.caSecret }}{{- include "keeplane.gatewayCa.volume" . | trim | nindent 8 }}{{- end }}
+        {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.appVolumes" . | trim | nindent 8 }}{{- end }}
         {{- if .Values.app.postgres.enabled }}
         {{- include "keeplane.postgres.ca" . | nindent 8 }}
         - name: database-credentials

@@ -214,10 +214,65 @@ model registration and changes report the gateway as unavailable, and the
 check reports `"gateway"` keys as `unreachable`. Renew the certificate or fix
 the CA Secret; the app recovers without a restart.
 
+## Model endpoints behind a private CA
+
+With [`trust.extraCaBundle`](kubernetes-installation-reference.md#extra-trusted-cas)
+the app and the managed gateway copies trust your private CA beside their
+system CAs. They read it only when they start, so every change to the bundle
+needs a restart of both. Set the names once:
+
+```sh
+NS=<namespace>; RELEASE=<release>
+```
+
+**Renew an endpoint's certificate** from the same CA: nothing changes in
+Keeplane.
+
+**Replace the CA** with an overlap, so no request fails:
+
+1. Put a bundle of the old and new CA in the Secret or ConfigMap, under the
+   same key:
+
+   ```sh
+   cat old-ca.crt new-ca.crt > ca-bundle.crt
+   kubectl -n "$NS" create secret generic model-endpoint-ca --from-file=ca.crt=ca-bundle.crt \
+     --dry-run=client -o yaml | kubectl -n "$NS" apply -f -
+   ```
+
+   For a ConfigMap, replace it the same way with `create configmap`.
+2. Restart the app and gateway copies, and wait for both:
+
+   ```sh
+   kubectl -n "$NS" rollout restart deployment/"$RELEASE"-app statefulset/"$RELEASE"-gateway
+   kubectl -n "$NS" rollout status deployment/"$RELEASE"-app
+   kubectl -n "$NS" rollout status statefulset/"$RELEASE"-gateway
+   ```
+
+   Each pod's `prepare-trust-bundle` log says how many CAs it took: the app's
+   how many system CAs it kept and how many it added, a gateway copy's how many
+   it wrote for the gateway (`kubectl -n "$NS" logs <pod> -c prepare-trust-bundle`).
+   In existing mode there is no `statefulset/"$RELEASE"-gateway` to restart.
+3. Switch the endpoints to certificates from the new CA, and check a model
+   call.
+4. Put only `new-ca.crt` in the bundle, and restart both again as in step 2.
+
+**If a pod doesn't start.** An app or gateway pod stuck in `Init` names the
+problem in its `prepare-trust-bundle` log: for example "The extra CA bundle
+holds a private key." Fix the bundle; the next start reads it. A missing Secret or
+ConfigMap, or a key it doesn't have, keeps the pod waiting with a
+`FailedMount` event.
+
+**If an endpoint isn't trusted.** Model calls through the gateway fail with
+"invalid peer certificate" in the gateway's log, and adding a model for
+developers' own keys says the provider didn't answer. Check that the bundle
+holds the CA that issued the endpoint's certificate, then restart both.
+
 ## What these checks prove
 
 The [certificate operations cases](../../tests/unit/certificate-operations-cases.md)
 list what is tested: expiry reporting with real certificates, the checks of a
 PostgreSQL-style and an HTTPS server, a gateway CA renewed under a running app,
-the CLI's `SSL_CERT_FILE`, and the chart's render checks. They do not prove a
+the CLI's `SSL_CERT_FILE`, the app's extra-CA bundle, and the chart's render
+checks. The kind preview runs `trust.extraCaBundle` against an HTTPS fixture
+provider ([private CA cases](../../tests/e2e/kubernetes-private-ca-cases.md)). They do not prove a
 renewal on a live cluster, an ingress controller's reload time, or cert-manager.

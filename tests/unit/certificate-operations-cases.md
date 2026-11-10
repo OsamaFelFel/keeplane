@@ -11,7 +11,9 @@ Each case makes its own CA and server certificates with the `openssl` command
 and runs small local TLS servers: one that answers PostgreSQL's TLS request
 first, as a database server does, and one that answers HTTPS like a gateway.
 Nothing is kept in Git. The cases are skipped where `openssl` is missing.
-Cases CO-01 to CO-09 are in `test_certificate_checks.py`.
+Cases CO-01 to CO-09 are in `test_certificate_checks.py`, CO-10 to CO-13
+(the app's bundle for the chart's `trust.extraCaBundle`, built by
+`components/control-plane/prepare_trust_bundle.py`) in `test_trust_bundle.py`.
 
 | Case | Given | Expected result |
 | --- | --- | --- |
@@ -24,6 +26,10 @@ Cases CO-01 to CO-09 are in `test_certificate_checks.py`.
 | CO-07 The gateway CA file is reloaded only when it changes | The same CA file read twice, then changed | The same trust is reused while the file is unchanged and rebuilt after it changes. |
 | CO-08 Preflight and an untrusted gateway | The existing-gateway preflight against an HTTPS gateway from a private CA | Without the CA it fails at once with "Gateway TLS certificate is not trusted:" and the reason. With the CA it reads the gateway. |
 | CO-09 CLI with a private CA | An HTTPS Keeplane server whose certificate comes from a private CA | The CLI refuses with "Cannot reach Keeplane securely; check the server and certificate configuration." With `SSL_CERT_FILE` naming the CA it reads the account. |
+| CO-10 Extra CAs are added after the system CAs | A stand-in system CA file with a public CA, and an extra bundle with a comment line, two private CAs and Windows line endings | The written file starts with the system file unchanged, then holds the two CAs (three in all, no comment, no `\r`), with mode 0444 and no partial file left. With only the system file, Python trusts a server from the public CA and not one from the private CA; with the written file it trusts both. |
+| CO-11 A malformed bundle stops the pod | No certificate, an empty file, damaged base64, a block that isn't a certificate, a private key, a CRL, a file over 1 MiB, a missing file, and an empty system CA file | Each is refused with a reason ("holds no PEM certificate", "holds a damaged certificate", "holds a private key", "holds a X509 CRL block", "is larger than 1 MiB", "can't be read", "holds no certificate"), the command exits 1 with "Keeplane can't use trust.extraCaBundle: …", and nothing is written. A missing system file is refused rather than trusting only the extra CAs. No key text is printed. |
+| CO-12 The image's real system CA file | This machine's own OpenSSL CA file and one extra CA | The command exits 0 and prints "System CAs kept: N. Extra CAs added: 1.", N being the CAs in that file, which the written file starts with. |
+| CO-13 The gateway's copy holds only checked CAs | `--extra-only` with a bundle of a comment line and two CAs, then a bundle with a private key | The first writes only the two certificates (no system CA, no comment), mode 0444, and prints "Extra CAs written for the gateway: 2." The second exits 1 with "Keeplane can't use trust.extraCaBundle: The extra CA bundle holds a private key. Give only CA certificates, never a key." and writes nothing. A missing output path is a usage error. |
 
 Not covered here: a renewal on a live cluster, an ingress controller reloading
 its Secret, cert-manager, a real PostgreSQL server's certificate change and

@@ -55,8 +55,10 @@ and the same restart hash.
 {{- $bundled := index .Subcharts "agentgateway-standalone" }}
 {{- /* ADR 027: the private model enroller beside each copy; see _enroller.tpl. */}}
 {{- $enroller := include "keeplane.enroller.on" . }}
+{{- $trust := include "keeplane.trust.on" . }}
 {{- $pullSecrets := $gw.imagePullSecrets | default list }}
-{{- if $enroller }}
+{{- /* The enroller and the trust bundle's init step use app.image. */}}
+{{- if or $enroller $trust }}
 {{- $pullSecrets = concat $pullSecrets (.Values.app.imagePullSecrets | default list) | uniq }}
 {{- end }}
 apiVersion: v1
@@ -140,9 +142,14 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if $enroller }}
+      {{- if or $enroller $trust }}
       initContainers:
+        {{- if $enroller }}
         {{- include "keeplane.enroller.initContainer" . | nindent 8 }}
+        {{- end }}
+        {{- /* trust.extraCaBundle: checks the source and writes only its CA
+        certificates for the gateway (_trust.tpl). */}}
+        {{- if $trust }}{{- include "keeplane.trust.gatewayInitContainer" . | trim | nindent 8 }}{{- end }}
       {{- end }}
       containers:
         - name: agentgateway
@@ -191,6 +198,9 @@ spec:
             extraEnv, so an installer's own entry takes precedence. */}}
             - name: CONNECTION_MIN_TERMINATION_DEADLINE
               value: "5s"
+            {{- /* trust.extraCaBundle: the image's system CA file, named by
+            the chart, and the checked extra CAs beside it (_trust.tpl). */}}
+            {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.gatewayEnv" . | trim | nindent 12 }}{{- end }}
             {{- with $gw.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -200,6 +210,7 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.gatewayMount" . | trim | nindent 12 }}{{- end }}
             {{- if $enroller }}
             {{- include "keeplane.enroller.gatewayMount" . | nindent 12 }}
             {{- end }}
@@ -219,6 +230,7 @@ spec:
             name: {{ .Release.Name }}-config
         - name: tmp
           emptyDir: {}
+        {{- if include "keeplane.trust.on" . }}{{- include "keeplane.trust.gatewayVolume" . | trim | nindent 8 }}{{- end }}
         {{- /* Secret volumes get mode 0440 unless they set a stricter one;
         see keeplane.gatewayExtraVolumes. */}}
         {{- if $volumes }}

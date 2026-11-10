@@ -94,6 +94,52 @@ class OperatorValidationAuthentication(BaseAuthentication):
         return SimpleNamespace(is_authenticated=True), None
 
 
+class RuntimeKeyCheckUnavailable(APIException):
+    status_code = 503
+
+    def __init__(self):
+        super().__init__({"error": "Gateway authorization is unavailable"})
+
+
+class RuntimeKeyAuthentication(BaseAuthentication):
+    """Keeplane's own setup probe on a customer-run gateway, and nothing else.
+
+    Admits the gateway's current runtime key as the Bearer value together with
+    the private callback key. Never a browser cookie, a developer session or a
+    CLI sign-in: none of them is read, and none can equal the runtime key.
+    """
+
+    def authenticate(self, request):
+        if os.environ.get("GATEWAY_MODE", "managed") != "existing":
+            # A managed gateway validates on its installed operator listener.
+            raise AuthenticationFailed(
+                {"error": "Managed gateways use the installed runtime checks"}
+            )
+        supplied = re.fullmatch(
+            r"Bearer ([A-Za-z0-9_-]{32,256})",
+            request.headers.get("Authorization", ""),
+            flags=re.IGNORECASE,
+        )
+        callback = request.headers.get("X-Keeplane-Gateway-Credential", "")
+        try:
+            expected = private_key(os.environ.get("GATEWAY_RUNTIME_KEY_FILE", ""))
+            expected_callback = gateway_key()
+        except ModelPolicyUnavailable:
+            raise RuntimeKeyCheckUnavailable() from None
+        if not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", callback):
+            callback = ""
+        # Both comparisons always run, each in constant time.
+        runtime_ok = hmac.compare_digest(
+            supplied[1].encode("ascii") if supplied else b"", expected
+        )
+        callback_ok = hmac.compare_digest(callback.encode("ascii"), expected_callback)
+        if not (runtime_ok and callback_ok):
+            raise AuthenticationFailed(
+                {"error": "Only Keeplane's runtime key is accepted"}
+            )
+        return SimpleNamespace(is_authenticated=True), None
+
+
 def callback_metadata(request, *, selected=False, with_project=True, copy=False):
     """The check's metadata; ``copy`` requires the sending gateway copy's name."""
     expected = gateway_key()
@@ -354,4 +400,20 @@ def authorize_operator_validation(request):
         return Response({"error": "Operator validation is unavailable"}, status=503)
     # This privileged callback deliberately does not attest approval, enrollment or
     # user access: model setup validates before approval and while enrollment is off.
+    return Response({"allowed": True})
+
+
+@never_cache
+@runtime_bearer_only
+@api_view(["POST"])
+@authentication_classes([RuntimeKeyAuthentication])
+@permission_classes([IsAuthenticated])
+def authorize_runtime_key(request):
+    """The key-only check for unmarked traffic on a customer-run gateway.
+
+    Keeplane's own model setup probe reaches each model through `gateway.url`
+    with the gateway's runtime key and no developer session; the model's
+    backend check sends it here instead of to `/selected`. It reads no body and
+    attests no developer, project, approval or class: only that Keeplane sent it.
+    """
     return Response({"allowed": True})

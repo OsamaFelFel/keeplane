@@ -66,7 +66,9 @@ for the policies that enforce all of this.
 A provider address comes only from a model an admin set up. A definition
 without its own address uses the provider's public address,
 `https://api.openai.com/v1` or `https://api.anthropic.com/v1`; give a
-`baseUrl` to keep that call inside your network.
+`baseUrl` to keep that call inside your network. The address must be HTTPS;
+if its certificate comes from a private CA, add that CA with
+[`trust.extraCaBundle`](kubernetes-installation-reference.md#extra-trusted-cas).
 
 ## Proxies
 
