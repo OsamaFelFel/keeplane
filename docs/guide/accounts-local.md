@@ -10,6 +10,10 @@ Choose **Create user**, enter a username and password, and choose Admin or
 Developer. Developer is selected by default. Search and paging help find an
 existing user; **Change role** updates their access.
 
+Both dialogs open with the keyboard on their first field. **Cancel** or Escape
+closes them, except while Keeplane is saving, and puts the keyboard back on the
+**Create user** or **Change role** button that opened them.
+
 If Keeplane doesn't answer within ten seconds, the dialog says it isn't clear
 whether the user was created because Keeplane didn't answer in time. If Keeplane
 answers with a server error, it says Keeplane couldn't confirm the result. Both

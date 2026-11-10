@@ -163,6 +163,24 @@ test('BR-05: Change role uses the account API and updates Users', async ({ page 
   await expect(row.getByRole('button', { name: 'Change role' })).toBeFocused()
 })
 
+test('BR-19: Change role puts focus back on its row after Cancel or Escape', async ({ page }) => {
+  await mockAdmin(page)
+  await page.goto('/app/')
+  const opener = page.getByRole('row', { name: /developer-example/ }).getByRole('button', { name: 'Change role' })
+  await opener.click()
+  const dialog = page.getByRole('dialog', { name: 'Change role' })
+  // Open: focus is on the first field, the role the user has now.
+  await expect(dialog.getByRole('radio', { name: 'Developer' })).toBeFocused()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(opener).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(opener).toBeFocused()
+})
+
 test('BR-12: a live admin creates a user with a role, changes the role, and the developer sees the CLI page', async ({ page, request }) => {
   const username = `br12-${Date.now().toString(36)}`
   const userPassword = 'br12-disposable-password-1'

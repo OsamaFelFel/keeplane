@@ -25,8 +25,11 @@ async function readBack(user: User): Promise<User | null> {
   return null
 }
 
-export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
+// The dialog has no Radix trigger, so returnFocus puts focus back on the Change role
+// that opened it whenever it closes (Cancel, Escape or done).
+export function ChangeRoleDialog({ user, onOpenChange, onChanged, returnFocus }: {
   user: User | null; onOpenChange: (open: boolean) => void; onChanged: (user: User) => void
+  returnFocus?: () => void
 }) {
   const [role, setRole] = useState<Role>(user?.role ?? 'developer')
   const [phase, setPhase] = useState<'form' | 'saving' | 'no-answer'>('form')
@@ -82,7 +85,8 @@ export function ChangeRoleDialog({ user, onOpenChange, onChanged }: {
 
   const username = user?.username
   return <Dialog open={!!user} onOpenChange={close}>
-    <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}>
+    <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (phase === 'saving') event.preventDefault() }}
+      onCloseAutoFocus={event => { event.preventDefault(); returnFocus?.() }}>
       <DialogHeader><DialogTitle className="text-[22px] font-semibold">Change role</DialogTitle></DialogHeader>
       <fieldset disabled={phase !== 'form'}>
         <legend className="keeplane-field-label wrap-anywhere">Role for {username}</legend>
