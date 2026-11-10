@@ -1,17 +1,20 @@
 """Task 009-15: a coding task stopped by an outage says so, not that the model is down.
 
-Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-07).
+Cases: tests/unit/cli-service-outage-cases.md (OUT-01 to OUT-10).
 """
 
+import dataclasses
 import json
+import ssl
 import subprocess
 import uuid
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 import pytest
 
-from components.cli import coding, opencode_adapter, usage_relay
+from components.cli import coding, opencode_adapter, server_connection, usage_relay
+from components.cli.credential_profile import opened
 from tests.unit.test_cli_model_outage import api_error, failed_turn
 from tests.unit.test_cli_project_profile import (  # noqa: F401
     code,
@@ -230,3 +233,54 @@ def test_out_06_an_expired_sign_in_still_wins(
     err = capsys.readouterr().err
     assert "Your Keeplane sign-in has expired" in err
     assert "isn't available" not in err and "can't be reached" not in err
+
+
+START_UNAVAILABLE = (
+    "Keeplane isn't available right now, so nothing was sent. Try again in a few "
+    "minutes, or ask your admin to check Keeplane.\n"
+)
+
+
+@pytest.mark.parametrize("status", [502, 503, 504])
+def test_out_08_keeplane_unavailable_before_the_task_starts(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+    status,
+):
+    connected.status = status
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert capsys.readouterr().err == START_UNAVAILABLE
+    assert not runtime[1]
+
+
+def test_out_09_no_connection_to_keeplane_before_the_task_starts(
+    connected,  # noqa: F811 - imported pytest fixture
+    runtime,  # noqa: F811 - imported pytest fixture
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    with opened(connected.path) as profile:
+        old = profile.load()
+        profile.save(dataclasses.replace(old, issuer="http://127.0.0.1:9"))
+    assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 1
+    assert capsys.readouterr().err == START_UNAVAILABLE
+    assert not runtime[1]
+
+
+def test_out_10_a_certificate_problem_keeps_its_own_message(monkeypatch):
+    class Opener:
+        def open(self, *args, **kwargs):
+            raise URLError(ssl.SSLCertVerificationError("certificate verify failed"))
+
+    monkeypatch.setattr(server_connection, "build_opener", lambda *a: Opener())
+    with pytest.raises(server_connection.ConnectionError) as error:
+        server_connection.account("https://keeplane.example", "kpc_" + "a" * 43)
+    assert not isinstance(error.value, server_connection.Unreachable)
+    assert str(error.value) == (
+        "Cannot reach Keeplane securely; check the server and certificate "
+        "configuration."
+    )

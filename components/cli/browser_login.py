@@ -8,12 +8,14 @@ signs in with the device code by itself, without ``--device``.
 import argparse
 import base64
 import hashlib
+import http.client
 import json
 import math
 import os
 import re
 import secrets
 import socket
+import ssl
 import sys
 import time
 import webbrowser
@@ -55,7 +57,15 @@ class BrowserUnavailable(ConnectionError):
 
 
 class ServerUnavailable(ConnectionError):
-    """No answer from the sign-in server, or a 5xx: nothing was changed there."""
+    """No connection to the sign-in server, or a 5xx: nothing was changed there."""
+
+
+class AnswerCutOff(ServerUnavailable):
+    """The request reached the sign-in server but its answer was cut off.
+
+    The server may have acted on it, so callers never resend an
+    authorization code and never say that nothing changed.
+    """
 
 
 def no_browser(environ=None, platform=None, find=None):
@@ -304,10 +314,20 @@ def exchange(server, form, *, allow_pending=False, timeout=10):
         raise ConnectionError(
             "The sign-in server refused the exchange.", error.code
         ) from None
-    except (URLError, OSError):
-        # Nothing answered, or the answer was cut off: the server may still
-        # have acted on it, so callers never resend an authorization code.
+    except URLError as error:
+        if isinstance(error.reason, ssl.SSLError):
+            # A certificate or TLS problem, not an outage.
+            raise ConnectionError(
+                "Cannot complete sign-in securely; no credential was saved."
+            ) from None
+        # urllib wraps only failures to connect and send: nothing reached
+        # the server, so nothing changed there.
         raise ServerUnavailable(
+            "Cannot complete sign-in securely; no credential was saved."
+        ) from None
+    except (OSError, http.client.HTTPException):
+        # The request was sent but its answer was cut off.
+        raise AnswerCutOff(
             "Cannot complete sign-in securely; no credential was saved."
         ) from None
     except (ValueError, OverflowError, RecursionError, ProfileError):

@@ -280,7 +280,8 @@ def test_repo_09_no_usable_pick_stops_before_the_runtime(
     if status == 404:
         assert error == coding.NO_ROUTED_MODEL
     elif status == 503:
-        assert error == "Keeplane is temporarily unavailable; retry later."
+        # 009-15: Keeplane said it is unavailable before the task started.
+        assert error == coding.START_UNAVAILABLE
     else:
         assert error == expected[pick]
     assert fake_runtime[1] == []

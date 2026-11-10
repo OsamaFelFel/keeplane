@@ -2,7 +2,7 @@
 
 **Edition:** Open Source. Spec 009 ST29 and ST30, task 009-15, ADR 028. Unit
 cases for what `keeplane code` says when the gateway, or Keeplane behind it,
-is down while a task runs. The live cases are in
+is down while a task runs or before it starts. The live cases are in
 [sign-in restart and outage cases](../e2e/sign-in-restart-outage-cases.md).
 
 ```sh
@@ -18,3 +18,6 @@ is down while a task runs. The live cases are in
 | OUT-05 | The gateway refuses (403) or fails (503) a call while Keeplane answers. | The CLI keeps its usual message: a 503 is a model that is down (Spec 004 ST16); a 403 adds no outage message. |
 | OUT-06 | The gateway answers 401. | The expired sign-in message still applies (ST29); no outage message. |
 | OUT-07 | The model was tried and failed (429 or 5xx, Spec 004 ST16) and Keeplane is down too. | The ST16 model message stays (D177): the outage message replaces it only when the request never reached a model. |
+| OUT-08 | Before the task starts, Keeplane answers 502, 503 or 504. | `code` exits 1 with "Keeplane isn't available right now, so nothing was sent. Try again in a few minutes, or ask your admin to check Keeplane." The runtime never starts. |
+| OUT-09 | Before the task starts, nothing answers at Keeplane's address. | The same message; the runtime never starts. |
+| OUT-10 | Keeplane's certificate can't be checked. | Not an outage: "Cannot reach Keeplane securely; check the server and certificate configuration." stays. |

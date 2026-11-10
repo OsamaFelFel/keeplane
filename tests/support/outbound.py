@@ -352,9 +352,9 @@ CLI_DESTINATIONS = {
 # which destinations it reaches, and why.
 CLI_CALL_SITES = {
     "browser_login.py": (
-        {"socket", "urllib.request", "webbrowser"},
+        {"http.client", "socket", "ssl", "urllib.request", "webbrowser"},
         {"keeplane-server", "sign-in-callback", "browser"},
-        "Browser sign-in: loopback callback listener, opens the server's sign-in page, exchanges the code; no proxy, no redirects",
+        "Browser sign-in: loopback callback listener, opens the server's sign-in page, exchanges the code; no proxy, no redirects (http.client and ssl only to tell a cut-off answer and a certificate problem from an outage)",
     ),
     "device_login.py": (
         {"urllib.request"},
@@ -362,9 +362,9 @@ CLI_CALL_SITES = {
         "Device-code sign-in against the server; no proxy, no redirects",
     ),
     "server_connection.py": (
-        {"urllib.request"},
+        {"ssl", "urllib.request"},
         {"keeplane-server"},
-        "Every signed-in request to the server; no proxy, no redirects",
+        "Every signed-in request to the server; no proxy, no redirects (ssl only to tell a certificate problem from an outage)",
     ),
     "opencode_adapter.py": (
         {"subprocess"},

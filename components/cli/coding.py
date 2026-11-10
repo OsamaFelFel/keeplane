@@ -16,6 +16,7 @@ if __package__:
     from .project_registration import register
     from .server_connection import (
         ConnectionError,
+        KeeplaneUnavailable,
         SignInExpired,
         Unreachable,
         account,
@@ -35,6 +36,7 @@ else:
     from project_registration import register
     from server_connection import (
         ConnectionError,
+        KeeplaneUnavailable,
         SignInExpired,
         Unreachable,
         account,
@@ -137,6 +139,11 @@ OWN_KEY_MOVED = ("Your own key for {model} {state}, so {task} uses {other}. "
 GATEWAY_DOWN = ("Keeplane's gateway can't be reached right now, so this task stopped "
                 "and nothing {more}was sent. Try again in a few minutes, or ask your "
                 "admin to check the gateway.")
+# Wording decided by the associate product owner: `code` couldn't connect to
+# Keeplane at all, or Keeplane said it is unavailable (502, 503 or 504),
+# before the task started. A TLS or certificate problem keeps its own message.
+START_UNAVAILABLE = ("Keeplane isn't available right now, so nothing was sent. Try "
+                     "again in a few minutes, or ask your admin to check Keeplane.")
 SERVER_DOWN = ("Keeplane isn't available right now, so this task stopped and nothing "
                "{more}was sent. Try again in a few minutes, or ask your admin to check "
                "Keeplane.")
@@ -553,35 +560,44 @@ def run(profile_path, project_id, name, model, binary, directory, gateway, promp
             if not saved:
                 raise ConnectionError(NO_GATEWAY)
             gateway = gateway_endpoint(saved)
-        actor = account(credential.issuer, credential.access_token)
-        if actor["id"] != credential.actor_id:
-            raise ProfileError("The server account changed; sign in again.")
-        register(credential.issuer, project_id, project.name, credential.access_token)
-        catalog = models(credential.issuer, project_id, credential.access_token)
-        if not catalog["models"]:
-            raise ConnectionError(NO_MODELS)
-        allowed = {row["id"] for row in catalog["models"]}
-        secrets = (credential.access_token, credential.refresh_token)
+        # 009-15: the checks before the runtime starts. Keeplane not answering,
+        # or answering that it is unavailable, means nothing was sent.
+        try:
+            actor = account(credential.issuer, credential.access_token)
+            if actor["id"] != credential.actor_id:
+                raise ProfileError("The server account changed; sign in again.")
+            register(credential.issuer, project_id, project.name, credential.access_token)
+            catalog = models(credential.issuer, project_id, credential.access_token)
+            if not catalog["models"]:
+                raise ConnectionError(NO_MODELS)
+            allowed = {row["id"] for row in catalog["models"]}
+            secrets = (credential.access_token, credential.refresh_token)
 
-        def report(message):
-            for secret in secrets:
-                message = message.replace(secret, "[redacted]")
-            if notify:
-                notify(message)
+            def report(message):
+                for secret in secrets:
+                    message = message.replace(secret, "[redacted]")
+                if notify:
+                    notify(message)
 
-        if model is None:
-            # The developer's `keeplane use` switch, else Keeplane's pick (ST17).
-            model = routed_model(credential.issuer, project_id,
-                                 credential.access_token, allowed, report)
-            if model not in allowed:
-                raise ConnectionError(NOT_ALLOWED)
-        else:
-            if model not in allowed:
-                raise ConnectionError(NOT_ALLOWED)
-            model = chosen_model(credential.issuer, project_id, model,
-                                 credential.access_token, report)
-            if model not in allowed:
-                raise ConnectionError(NOT_ALLOWED)
+            if model is None:
+                # The developer's `keeplane use` switch, else Keeplane's pick (ST17).
+                model = routed_model(credential.issuer, project_id,
+                                     credential.access_token, allowed, report)
+                if model not in allowed:
+                    raise ConnectionError(NOT_ALLOWED)
+            else:
+                if model not in allowed:
+                    raise ConnectionError(NOT_ALLOWED)
+                model = chosen_model(credential.issuer, project_id, model,
+                                     credential.access_token, report)
+                if model not in allowed:
+                    raise ConnectionError(NOT_ALLOWED)
+        except SignInExpired:
+            raise
+        except (Unreachable, KeeplaneUnavailable):
+            # Keeplane's own answer; a model the server says can't be used
+            # right now keeps its own message.
+            raise ConnectionError(START_UNAVAILABLE) from None
         try:
             result = opencode_adapter.run(
                 binary, directory, gateway, model, prompt, credential.access_token,

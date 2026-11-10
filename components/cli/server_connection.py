@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 import re
+import ssl
 import sys
 import uuid
 from urllib.error import HTTPError, URLError
@@ -60,6 +61,10 @@ class SignInExpired(ConnectionError):
 
 class Unreachable(ConnectionError):
     """Nothing answered: Keeplane is down, restarting or out of reach."""
+
+
+class KeeplaneUnavailable(ConnectionError):
+    """Keeplane, or a proxy in front of it, answered 502, 503 or 504."""
 
 
 class NoRedirects(HTTPRedirectHandler):
@@ -118,9 +123,15 @@ def request(server, path, credential, *, method="GET", expected=200, payload=Non
             error.close()
         messages = {400: "The server refused these request details.",
                     403: "The requested action is unavailable.", 503: "Keeplane is temporarily unavailable; retry later."}
-        raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code,
-                              detail) from None
-    except (URLError, OSError):
+        kind = KeeplaneUnavailable if error.code in (502, 503, 504) else ConnectionError
+        raise kind(messages.get(error.code, "The server refused this action."), error.code,
+                   detail) from None
+    except URLError as error:
+        if isinstance(error.reason, ssl.SSLError):
+            # A certificate or TLS problem, not an outage.
+            raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
+        raise Unreachable("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
+    except OSError:
         raise Unreachable("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
     except ValueError:
         raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None

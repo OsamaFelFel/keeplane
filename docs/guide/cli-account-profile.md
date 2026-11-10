@@ -30,7 +30,14 @@ its database is restarting, nothing was rotated. `refresh` exits 1 and says:
 Keeplane isn't available right now, so your sign-in wasn't refreshed. It's kept as it was. Run `keeplane refresh` again in a few minutes.
 ```
 
-Your sign-in keeps working, and a later `refresh` rotates it. Refresh doesn't
+Your sign-in keeps working, and a later `refresh` rotates it. If the refresh
+reached Keeplane but its answer was cut off, Keeplane may already have rotated
+the pair, so `refresh` exits 1 and says:
+
+```text
+Keeplane's answer was cut off, so it isn't clear whether your sign-in was refreshed. Run `keeplane refresh` again in a few minutes. If it says your sign-in has expired, run `keeplane login` to sign in again.
+```
+ Refresh doesn't
 need the gateway, so it works while the gateway is down. If Keeplane refuses the
 pair, because it has expired, was withdrawn, or was already used once, `refresh`
 exits 1 with "Your Keeplane sign-in has expired. Run `keeplane login` to sign in

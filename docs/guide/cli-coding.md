@@ -478,10 +478,15 @@ while Keeplane is down. Both say "nothing was sent"
 when the first call couldn't go out. Run the task again once they're back; review
 any edits from the earlier steps first. While the gateway is down, Keeplane can't
 record the task's usage either, and `code` says so. A task started while Keeplane
-is down stops before anything is sent, with "Cannot reach Keeplane securely; check
-the server and certificate configuration." (or "Keeplane is temporarily
-unavailable; retry later." when Keeplane answers but can't choose a model, for
-example while the gateway is down). The
+can't be reached, or says it is unavailable (for example because it can't choose
+a model while the gateway is down), stops before anything is sent:
+
+```text
+Keeplane isn't available right now, so nothing was sent. Try again in a few minutes, or ask your admin to check Keeplane.
+```
+
+"Cannot reach Keeplane securely; check the server and certificate
+configuration." is kept for a TLS or certificate problem. The
 [restart and outage cases](../../tests/e2e/sign-in-restart-outage-cases.md)
 show each one.
 

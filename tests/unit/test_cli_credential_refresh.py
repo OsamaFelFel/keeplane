@@ -153,11 +153,15 @@ def test_refresh_command_says_what_to_do(issuer, tmp_path, monkeypatch, capsys, 
     issuer.token_status = status
     monkeypatch.setattr("sys.argv", ["keeplane", "refresh", "--profile", str(path)])
     assert keeplane.main() == 1
-    assert capsys.readouterr().err == (
-        credential_refresh.UNAVAILABLE
-        if status == 503
-        else "Your Keeplane sign-in has expired. Run `keeplane login` to sign in again."
-    ) + "\n"
+    assert (
+        capsys.readouterr().err
+        == (
+            credential_refresh.UNAVAILABLE
+            if status == 503
+            else "Your Keeplane sign-in has expired. Run `keeplane login` to sign in again."
+        )
+        + "\n"
+    )
 
 
 @pytest.mark.parametrize("status", [401, 503])
@@ -217,3 +221,39 @@ def test_strict_profile_version_and_client_metadata_refuse_before_exchange(
     with pytest.raises(ProfileError):
         credential_refresh.refresh(path)
     assert not issuer.refresh_requests
+
+
+def test_an_answer_cut_off_after_the_request_says_it_isnt_clear(
+    issuer, tmp_path, capsys, monkeypatch
+):
+    """009-15: the refresh reached Keeplane, but nothing came back."""
+    import socket
+    import threading
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+
+    def read_then_hang_up():
+        connection, _ = listener.accept()
+        connection.recv(65536)
+        connection.close()
+
+    thread = threading.Thread(target=read_then_hang_up, daemon=True)
+    thread.start()
+    path, old = saved(issuer, tmp_path)
+    cut = dataclasses.replace(
+        old, issuer=f"http://127.0.0.1:{listener.getsockname()[1]}"
+    )
+    with opened(path) as profile:
+        profile.save(cut)
+    monkeypatch.setattr("sys.argv", ["keeplane", "refresh", "--profile", str(path)])
+    try:
+        assert keeplane.main() == 1
+    finally:
+        thread.join(timeout=5)
+        listener.close()
+    assert capsys.readouterr().err == credential_refresh.CUT_OFF + "\n"
+    assert "kept as it was" not in credential_refresh.CUT_OFF
+    with opened(path) as profile:
+        assert profile.load() == cut
