@@ -2,9 +2,8 @@
 
 Install the [Keeplane CLI wheel](cli-install.md), then sign in to your
 installation. You need macOS or Linux, Python 3.9+, a browser and the server URL
-from your operator. The server must use an operator-prepared trial image with
-browser authorization enabled and the fixed Keeplane CLI client registered;
-the ordinary preview image does not include it.
+from your operator. The [local preview](local-preview.md) has browser sign-in
+on; for other servers see [CLI sign-in on the server](cli-sign-in-server.md).
 
 Sign-in uses your existing Keeplane account. Before saving credentials, the CLI
 checks that account with the configured server. Browser UI acceptance and the
@@ -20,9 +19,13 @@ keeplane login --server https://keeplane.example \
 keeplane whoami --profile /absolute/private/keeplane-account
 ```
 
-Sign in and approve the request in your normal browser. Keeplane checks the
+Sign in and approve the request in your normal browser. Admins sign in the same
+way and then work in the CLI like developers: the same project and model limits
+apply to them. Keeplane checks the
 returned credential against the current account before saving it. An existing
 signed-in profile is refused; explicitly log out or forget it before switching.
+A profile whose sign-in has expired is the exception: once the server refuses
+it, `login` removes it and signs you in again.
 The [profile guide](cli-account-profile.md) covers storage and logout recovery.
 
 Each attempt uses fresh state and an S256 PKCE verifier. The temporary listener
@@ -53,8 +56,30 @@ revoke the new pair. An unconfirmed-revocation error needs server-side session
 withdrawal by the installation operator. A failed durable save may leave a
 revoked local credential; use logout to remove it after confirmed withdrawal.
 
-Use [device sign-in](cli-device-login.md) when this computer cannot open your
-browser, or the [coding command](cli-coding.md) for account-bound turns and resume.
+## When no browser can open
+
+`keeplane login` signs in with a code instead, by itself, when it can't open a
+browser here:
+
+- over SSH (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` is set);
+- on Linux with no display (`DISPLAY` and `WAYLAND_DISPLAY` are both unset);
+- when no browser can be found, or the browser fails to start.
+
+It prints "No browser can open here, so sign in from another device.", then the
+address and code of [device sign-in](cli-device-login.md). A `BROWSER` command you
+set is tried first, except over SSH.
+
+Without `--server`, `login` uses the server you last signed in to: the one of this
+profile's expired sign-in, or the one kept when you signed out. `--server` always
+overrides it. When Keeplane knows no server yet, `login` says "Keeplane doesn't
+know your server yet. Run `keeplane login --server <address>`." and exits 1.
+
+Once the browser has opened, the CLI does not switch to a code. If the sign-in in
+the browser times out or is refused, `login` says "The sign-in in your browser
+didn't finish, so you aren't signed in. Run `keeplane login` to try again, or
+`keeplane login --device` to sign in from another device." and exits 1.
+
+Use the [coding command](cli-coding.md) for account-bound turns and resume.
 Use explicit [refresh](cli-account-profile.md) when needed; refresh is not
 automatic and does not happen during a coding turn. This trial does not select
 the release CLI runtime.

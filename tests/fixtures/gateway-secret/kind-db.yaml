@@ -28,7 +28,7 @@ spec:
             - containerPort: 5432
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "keeplane", "-d", "keeplane"]
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "keeplane", "-d", "keeplane"]
             periodSeconds: 2
           volumeMounts:
             - name: data

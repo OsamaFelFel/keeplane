@@ -47,6 +47,15 @@ Header authentication follows [DRF's custom authentication contract](https://www
 [Isolated HTTP cases](../../tests/integration/runtime-catalog-cases.md) cover
 revocation, class restrictions, unknown contexts and outages.
 
+## Read the signed-in account
+
+Send `GET /api/runtime/session` with the Bearer credential. Success returns 200,
+not cached, with `id`, `username`, `role` and `gateway_url`: the gateway address
+for coding, ending in `/v1`, that the installer set in
+`KEEPLANE_GATEWAY_PUBLIC_URL`, or `null` when it isn't set. The address never
+comes from the request's headers. Cookies, a missing or invalid credential, or
+a signed-out one return 401. [Cases](../../tests/integration/runtime-gateway-address-cases.md).
+
 ## Revoke a test session
 
 Send `DELETE /api/runtime/session` with the same Bearer credential and an empty
@@ -68,3 +77,56 @@ its class. Invalid bodies or extra fields return 400; unavailable storage return
 This records use before onboarding. It does not infer Git identity, write repo
 files, assign a class or grant access. The developer client supplies the project
 context explicitly; repository/content provenance remains outside this check.
+
+## Report and read your own usage
+
+After each turn a developer client sends one usage report per model it used:
+
+```text
+POST /api/runtime/usage
+Authorization: Bearer <credential>
+
+{"project_id":"…","model":"coder","input_tokens":1200,"output_tokens":300,"requests":3,"requests_without_usage":0}
+```
+
+Success returns 204. The account comes from the credential; any other field,
+such as an account ID, prompt or path, is ignored and never stored. A model that
+isn't eligible for the project, or a project you can't use, returns 403; counts
+that aren't whole numbers of 0 or more, or zero requests, return 400; an
+unavailable model policy returns 503. Large numbers are capped.
+
+Read your totals for today and this month in your own time zone:
+
+```text
+GET /api/runtime/usage?tz=Europe/Berlin
+Authorization: Bearer <credential>
+```
+
+The answer lists each model you used this month with `input_tokens`,
+`output_tokens`, `requests`, `requests_without_usage` and `estimated_cost` for
+`today` and `this_month`, plus the model's `cost_status`:
+
+- `estimate`: a cloud model with a list price; `estimated_cost` is in US
+  dollars, such as `"0.012345"`;
+- `local`: a model from a local runner, never priced; `estimated_cost` is
+  `null`;
+- `no_list_price`: a cloud model Keeplane has no list price for, or one whose
+  provider it didn't record; `estimated_cost` is `null`.
+
+`cost_partial` is `true` for a period whose cost leaves out tokens counted
+before Keeplane recorded the model's provider (including the rest of the hour
+it was added in, when the model's name already had usage in that hour);
+otherwise `false`. A model whose name had no usage yet is priced from the hour
+it was added.
+
+`price_list` gives the shipped price list's `date` and `currency` (`USD`). Costs
+are estimates from each provider's public list price; discounts and negotiated
+prices are never applied.
+
+Without `tz` it uses UTC. Totals are hourly, so a day or month starts at the
+UTC hour nearest your local midnight, at most 30 minutes away. A
+storage failure returns 503. An unknown zone or any other parameter
+returns 400. You only ever see your own usage; admins have no route to read it.
+Totals older than the previous calendar month are deleted. Usage can undercount
+when a report is lost and is never billing evidence. See
+[developer usage](../architecture/developer-usage.md) for the details.

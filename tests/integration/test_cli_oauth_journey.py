@@ -1,7 +1,6 @@
 """Real CLI → Django/Toolkit HTTP; a controlled browser drives native sign-in."""
 
 import hashlib
-import importlib.util
 import io
 import json
 import os
@@ -29,6 +28,7 @@ from projects.models import ProjectUse
 
 from tests.fixtures.cli_coding_provider import Handler, start
 from tests.integration.test_cli_oauth_browser import browser_flow  # noqa: F401
+from tests.support.cli_source import load_cli
 
 pytestmark = [
     pytest.mark.optional,
@@ -68,22 +68,12 @@ def signed_in_cli(
 ):
     from accounts import views
     from common import api
+
+    # The CLI settings file (a `keeplane use` switch) stays inside the test.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     from model_registry import runtime_views
 
-    source = Path(
-        os.environ.get("KEEPLANE_CLI_SOURCE", Path(__file__).resolve().parents[2])
-    )
-    entry = source / "components/cli/keeplane.py"
-    if not entry.is_file():
-        if "KEEPLANE_CLI_SOURCE" in os.environ:
-            pytest.fail("The explicitly configured CLI source is unavailable")
-        pytest.skip(
-            "Compose the reviewed browser/profile CLI before this optional journey"
-        )
-    monkeypatch.syspath_prepend(str(entry.parent))
-    spec = importlib.util.spec_from_file_location("keeplane_join", entry)
-    cli = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cli)
+    cli = load_cli(monkeypatch, Path(__file__).resolve().parents[2])
 
     flow = browser_flow
     model_id = getattr(request, "param", "coder")
@@ -177,6 +167,7 @@ def signed_in_cli(
     try:
         with override_settings(PUBLIC_ORIGIN=server, OAUTH2_PROVIDER=configured):
             thread.start()
+            monkeypatch.setattr(cli.browser_login, "no_browser", lambda: None)
             monkeypatch.setattr(cli.browser_login.webbrowser, "open", cli_browser_driver or browser)
 
             def command(action, *arguments, expected=0):
@@ -214,7 +205,14 @@ def test_real_client_sign_in_profile_registration_catalog_and_logout(signed_in_c
     assert json.loads(command("register-project", "--project", journey.project,
                               "--name", "Real CLI journey"))["project_id"] == journey.project
     assert ProjectUse.objects.get(project_id=journey.project).user_id == flow.owner.pk
-    assert json.loads(command("models", "--project", journey.project))["models"] == [{"id": journey.model_id}]
+    # Spec 004 ST17: only the model the next task uses is marked. This server
+    # lists the model but has no gateway that can take it now, so Keeplane
+    # picks none and nothing is marked (CSW-05 covers a pick).
+    assert json.loads(command("models", "--project", journey.project)) == {
+        "project_id": journey.project,
+        "models": [{"id": journey.model_id, "current": False}],
+        "chosen_by": None,
+    }
     assert "removed" in command("logout")
     assert not (journey.profile / "credential.json").exists()
     assert flow.identity.session(journey.credential.access_token) is None

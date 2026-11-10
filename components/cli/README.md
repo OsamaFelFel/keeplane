@@ -15,25 +15,36 @@ Start with the installed `keeplane` command:
 3. [Sign in through your browser](../../docs/guide/cli-browser-login.md), or use
    [a device code](../../docs/guide/cli-device-login.md). Check your account with
    `keeplane whoami`.
-4. [Register a project and list its models](../../docs/guide/cli-project-commands.md).
-   Use the explicit project ID supplied for your work.
+4. [List the models for the repo you are in](../../docs/guide/cli-project-commands.md)
+   with `keeplane models`, and switch with `keeplane use <model>`. Any Git repo
+   works with no setup: the project comes from its `origin` remote.
 5. [Run a coding turn and resume it](../../docs/guide/cli-coding.md) with
    `keeplane code`. Select reviewed instruction files explicitly and keep history
    outside the repository.
-6. [Refresh or sign out](../../docs/guide/cli-account-profile.md) with
+6. [See your own usage](../../docs/guide/cli-usage.md) per model, today and this
+   month, with `keeplane usage`.
+7. [Refresh or sign out](../../docs/guide/cli-account-profile.md) with
    `keeplane refresh` or `keeplane logout`, using the same private profile.
 
 These commands need macOS or Linux and Python 3.9+ unless noted above. Sign-in
-needs an operator-configured trial server. Coding also needs the exact external
+needs a Keeplane server with CLI sign-in on: the
+[local preview](../../docs/guide/local-preview.md) turns it on, and
+[CLI sign-in on the server](../../docs/guide/cli-sign-in-server.md) covers other
+installations. Coding also needs the exact external
 OpenCode V2 **2.0.27** binary and the installation's protected gateway URL.
 The gateway checks current account, project and model policy on every request;
 provider keys stay on the server. The ordinary gateway listener is insufficient.
 
+Each Spec 009 scenario names the checks CI runs to prove it, and what is not
+proven yet, in the
+[Developer CLI scenario map](../../tests/e2e/developer-cli-cases.md#spec-009-scenarios-st29st31).
+The [developer journey](../../tests/e2e/developer-journey-cases.md) runs sign-in,
+coding, usage and sign-out on the local preview in CI.
 The [installed journey](../../tests/e2e/installed-cli-cases.md) covers real Django
 sign-in, managed gateway installation, native read/edit tools, refreshed
 credentials, account/project-bound resume and logout with synthetic accounts.
-This remains an integration trial: release runtime selection and distribution
-checks are open. Init supports only the reviewed root instruction copy; broader
+The release checks for CLI sign-in and the runtime's distribution are still
+open. Init supports only the reviewed root instruction copy; broader
 onboarding, settings conversion and automatic refresh remain separate work.
 [Personal key commands](../../docs/guide/cli-provider-key-commands.md) manage
 server-held registrations; personal-key coding is not enabled by this journey.

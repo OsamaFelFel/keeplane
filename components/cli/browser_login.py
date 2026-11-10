@@ -1,4 +1,9 @@
-"""Experimental browser sign-in using S256 PKCE and an explicit private profile."""
+"""Browser sign-in using S256 PKCE, with the device code when no browser can open.
+
+Spec 009 ST29 "No browser on the machine" (D161, ADR 028): over SSH, with no
+display, with no browser to find, or when the browser fails to start, the CLI
+signs in with the device code by itself, without ``--device``.
+"""
 
 import argparse
 import base64
@@ -20,10 +25,48 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 if __package__:
     from .credential_profile import Credential, ProfileError, decode, opened
-    from .server_connection import ConnectionError, NoRedirects, account, logout, origin
+    from .server_connection import ConnectionError, NoRedirects, logout, origin, session
 else:
     from credential_profile import Credential, ProfileError, decode, opened
-    from server_connection import ConnectionError, NoRedirects, account, logout, origin
+    from server_connection import ConnectionError, NoRedirects, logout, origin, session
+
+BROWSER = "Opening Keeplane sign-in in your browser."
+NO_BROWSER = "No browser can open here, so sign in from another device."
+NO_SERVER = (
+    "Keeplane doesn't know your server yet. Run `keeplane login --server <address>`."
+)
+UNFINISHED = (
+    "The sign-in in your browser didn't finish, so you aren't signed in. "
+    "Run `keeplane login` to try again, "
+    "or `keeplane login --device` to sign in from another device."
+)
+
+
+class BrowserUnavailable(ConnectionError):
+    """The browser failed to start; nothing was sent to the server yet."""
+
+
+def no_browser(environ=None, platform=None, find=None):
+    """Why no browser can open on this machine, or None when one may.
+
+    A browser opened over SSH would open on the far machine, or not at all, and
+    its loopback callback could never reach this CLI.
+    """
+    environ = os.environ if environ is None else environ
+    platform = sys.platform if platform is None else platform
+    if any(environ.get(name) for name in ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")):
+        return "ssh"
+    if environ.get("BROWSER"):
+        return None  # The developer named a browser command; try it.
+    if platform not in {"darwin", "win32", "cygwin"} and not (
+        environ.get("DISPLAY") or environ.get("WAYLAND_DISPLAY")
+    ):
+        return "no display"
+    try:
+        (find or webbrowser.get)()
+    except webbrowser.Error:
+        return "no browser"
+    return None
 
 
 class CallbackServer(HTTPServer):
@@ -139,16 +182,11 @@ def authorization_code(server, *, timeout, browser):
         Thread(target=open_browser, daemon=True).start()
         while not result and time.monotonic() < listener.deadline:
             if launch and not launch[0]:
-                raise ConnectionError(
-                    "The browser could not open. Retry on a machine with a browser."
-                )
+                raise BrowserUnavailable("The browser could not open.")
             listener.handle_request()
-        if not result:
-            raise ConnectionError("Browser sign-in timed out; no credential was saved.")
-        if result[0] is None:
-            raise ConnectionError(
-                "Browser sign-in was refused; no credential was saved."
-            )
+        # A browser that opened but timed out or was refused doesn't fall back.
+        if not result or result[0] is None:
+            raise ConnectionError(UNFINISHED)
         return {
             "grant_type": "authorization_code",
             "client_id": "keeplane-cli",
@@ -256,8 +294,11 @@ def exchange(server, form, *, allow_pending=False, timeout=10):
 
 def save_login(profile, server, access, refresh, *, client_id="keeplane-cli"):
     try:
-        actor = account(server, access)
-        profile.save(Credential(server, actor["id"], access, refresh, client_id))
+        # Save the gateway address the server gives (task 009-02b); none if it has none.
+        actor, gateway = session(server, access)
+        profile.save(
+            Credential(server, actor["id"], access, refresh, client_id, gateway)
+        )
     except BaseException:
         # A later admission/storage failure must not silently leave a valid pair.
         try:
@@ -267,20 +308,51 @@ def save_login(profile, server, access, refresh, *, client_id="keeplane-cli"):
                 "Sign-in was not saved reliably; server revocation could not be confirmed."
             ) from None
         raise
+    try:
+        # A bad kept address is replaced only once sign-in has succeeded.
+        profile.replace_kept_server(server)
+    except (OSError, ProfileError):
+        # Signed in all the same; the old file stays as it was (atomic write).
+        pass
 
 
-def login(server, path, *, timeout=120, browser=None):
+def login(server, path, *, timeout=120, browser=None, announce=print):
+    """Sign in through the browser, or with the device code when none can open.
+
+    Returns "browser" or "device", the way the developer signed in.
+    """
     server = origin(server)
     if not 1 <= timeout <= 300:
         raise ConnectionError("Choose a browser wait from one to 300 seconds.")
-    with opened(path, create=True) as profile:
-        if "credential.json" in os.listdir(profile.directory):
-            raise ProfileError("This profile is signed in. Log out or forget it first.")
-        form = authorization_code(
-            server, timeout=timeout, browser=browser or webbrowser.open
-        )
-        access, refresh = exchange(server, form)
-        save_login(profile, server, access, refresh)
+    if browser is None and no_browser():
+        return device(server, path, timeout=timeout, announce=announce)
+    try:
+        with opened(path, create=True) as profile:
+            if "credential.json" in os.listdir(profile.directory):
+                raise ProfileError(
+                    "This profile is signed in. Log out or forget it first."
+                )
+            announce(BROWSER)
+            form = authorization_code(
+                server, timeout=timeout, browser=browser or webbrowser.open
+            )
+            access, refresh = exchange(server, form)
+            save_login(profile, server, access, refresh)
+    except BrowserUnavailable:
+        # The listener is closed and the profile unlocked before the device code.
+        return device(server, path, timeout=timeout, announce=announce)
+    return "browser"
+
+
+def device(server, path, *, timeout, announce):
+    if __package__:
+        from . import device_login
+    else:
+        import device_login
+
+    announce(NO_BROWSER)
+    device_login.login(server, path, timeout=timeout, announce=announce)
+    return "device"
 
 
 def main():
@@ -290,7 +362,6 @@ def main():
     parser.add_argument("--timeout", type=int, default=120)
     args = parser.parse_args()
     try:
-        print("Opening Keeplane sign-in in your browser.")
         login(args.server, args.profile, timeout=args.timeout)
     except (ConnectionError, ProfileError) as error:
         print(str(error), file=sys.stderr)

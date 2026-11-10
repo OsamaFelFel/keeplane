@@ -9,6 +9,19 @@ class ProviderKeyChoice(models.TextChoices):
     PERSONAL = "personal", "Developer's own key"
 
 
+class ModelOrigin(models.TextChoices):
+    """Where a model Keeplane added runs, for cost estimates (ADR 029)."""
+
+    NOT_RECORDED = "", "Not recorded"
+    LOCAL = "local", "Local runner"
+    CLOUD = "cloud", "Cloud provider"
+
+
+class CloudProvider(models.TextChoices):
+    OPENAI = "openai", "OpenAI"
+    ANTHROPIC = "anthropic", "Anthropic"
+
+
 class ModelApproval(models.Model):
     model_id = models.CharField(max_length=256, primary_key=True)
     key_choice = models.CharField(max_length=16, choices=ProviderKeyChoice.choices)
@@ -18,6 +31,36 @@ class ModelApproval(models.Model):
     # The context window a local runner reported when Keeplane added the
     # model, in tokens; null when Keeplane was not told. Admins never enter it.
     context_tokens = models.PositiveIntegerField(null=True, blank=True)
+    # Recorded when Keeplane adds the model, so usage can be priced (ADR 029):
+    # a local runner is never priced, and a cloud model is looked up by its
+    # provider and the provider's own model name. Models set up before this
+    # was recorded, or registered directly in the gateway, keep "". The
+    # database default lets an app copy from before this change still save an
+    # approval during an upgrade.
+    origin = models.CharField(
+        max_length=8,
+        choices=ModelOrigin.choices,
+        default="",
+        db_default="",
+        blank=True,
+    )
+    provider = models.CharField(
+        max_length=16,
+        choices=CloudProvider.choices,
+        default="",
+        db_default="",
+        blank=True,
+    )
+    provider_model = models.CharField(
+        max_length=256, default="", db_default="", blank=True
+    )
+    # When the origin was recorded; usage before then is never priced, so a
+    # name reused after removal can't price a local model's tokens.
+    origin_recorded_at = models.DateTimeField(null=True, blank=True)
+    # True when no developer's usage held this model name yet in the UTC hour
+    # the origin was recorded, so that hour holds only this model's tokens and
+    # is priced too. Otherwise pricing starts with the next whole hour.
+    origin_hour_priced = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         db_table = "accounts_modelapproval"
@@ -25,7 +68,32 @@ class ModelApproval(models.Model):
             models.CheckConstraint(
                 condition=models.Q(key_choice__in=ProviderKeyChoice.values),
                 name="model_key_choice_valid",
-            )
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        origin="",
+                        provider="",
+                        provider_model="",
+                        origin_recorded_at__isnull=True,
+                    )
+                    | models.Q(
+                        origin="local",
+                        provider="",
+                        provider_model="",
+                        origin_recorded_at__isnull=False,
+                    )
+                    | (
+                        models.Q(
+                            origin="cloud",
+                            provider__in=CloudProvider.values,
+                            origin_recorded_at__isnull=False,
+                        )
+                        & ~models.Q(provider_model="")
+                    )
+                ),
+                name="model_origin_complete",
+            ),
         ]
 
 

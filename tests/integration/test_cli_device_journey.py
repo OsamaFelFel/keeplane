@@ -1,6 +1,5 @@
 """Device CLI → real Django/Toolkit HTTP; controlled human code entry and consent."""
 
-import importlib.util
 import json
 import os
 import uuid
@@ -22,6 +21,8 @@ from django.test import override_settings
 from model_registry.fingerprints import fingerprint
 from model_registry.policy import DjangoModelPolicy
 from projects.models import ProjectUse
+
+from tests.support.cli_source import load_cli
 
 try:
     from tests.integration.test_cli_oauth_browser import browser_flow
@@ -67,35 +68,19 @@ class QuietHandler(WSGIRequestHandler):
         pass
 
 
-def load_cli(monkeypatch):
-    source = Path(
-        os.environ.get("KEEPLANE_CLI_SOURCE", Path(__file__).resolve().parents[2])
-    )
-    entry = source / "components/cli/keeplane.py"
-    if not entry.is_file():
-        if "KEEPLANE_CLI_SOURCE" in os.environ:
-            pytest.fail("The explicitly configured CLI source is unavailable")
-        pytest.skip(
-            "Compose the reviewed browser/profile CLI before this optional journey"
-        )
-    monkeypatch.syspath_prepend(str(entry.parent))
-    spec = importlib.util.spec_from_file_location("keeplane_join", entry)
-    cli = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cli)
-    return cli
-
-
 def test_real_device_client_profile_registration_catalog_and_logout(
     browser_flow,
     monkeypatch,
     tmp_path,
     capsys,
 ):
+    # The CLI settings file (a `keeplane use` switch) stays inside the test.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     from accounts import views
     from common import api
     from model_registry import runtime_views
 
-    cli = load_cli(monkeypatch)
+    cli = load_cli(monkeypatch, Path(__file__).resolve().parents[2])
 
     flow = browser_flow
     call_command("register_cli_client", device=True, verbosity=0)
@@ -251,9 +236,14 @@ def test_real_device_client_profile_registration_catalog_and_logout(
                 == project
             )
             assert ProjectUse.objects.get(project_id=project).user_id == flow.owner.pk
-            assert json.loads(command("models", "--project", project))["models"] == [
-                {"id": "coder"}
-            ]
+            # Spec 004 ST17: only the model the next task uses is marked. This
+            # server lists coder but has no gateway that can take it now, so
+            # Keeplane picks none and nothing is marked (CSW-05 covers a pick).
+            assert json.loads(command("models", "--project", project)) == {
+                "project_id": project,
+                "models": [{"id": "coder", "current": False}],
+                "chosen_by": None,
+            }
             old = credential
             assert "refreshed" in command("refresh")
             with cli.opened(profile) as store:
@@ -299,7 +289,7 @@ def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
     tmp_path,
     replay,
 ):
-    cli = load_cli(monkeypatch)
+    cli = load_cli(monkeypatch, Path(__file__).resolve().parents[2])
     flow = browser_flow
     initial = flow.exchange(flow.code())
     assert initial.status_code == 200
@@ -312,7 +302,8 @@ def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
     profile = tmp_path / "browser-profile"
     try:
         with override_settings(
-            OAUTH2_PROVIDER=dict(settings.OAUTH2_PROVIDER, OIDC_ISS_ENDPOINT=server)
+            OAUTH2_PROVIDER=dict(settings.OAUTH2_PROVIDER, OIDC_ISS_ENDPOINT=server),
+            GATEWAY_PUBLIC_URL=None,
         ):
             thread.start()
             with cli.opened(profile, create=True) as store:
@@ -325,14 +316,17 @@ def test_real_browser_v1_profile_refresh_rotation_replay_and_logout(
             data["format"] = "keeplane-credential-v1"
             del data["client_id"]
             target.write_text(json.dumps(data))
-            assert "refreshed" in cli.credential_refresh.refresh(profile)
+            # The server now knows the gateway address; refresh saves it (009-02b).
+            with override_settings(GATEWAY_PUBLIC_URL="http://127.0.0.1:5000/v1"):
+                assert "refreshed" in cli.credential_refresh.refresh(profile)
             with cli.opened(profile) as store:
                 fresh = store.load()
             assert fresh.client_id == "keeplane-cli"
             assert fresh.actor_id == str(flow.owner.pk)
             assert fresh.access_token != tokens["access_token"]
             assert fresh.refresh_token != tokens["refresh_token"]
-            assert json.loads(target.read_text())["format"] == "keeplane-credential-v2"
+            assert fresh.gateway == "http://127.0.0.1:5000/v1"
+            assert json.loads(target.read_text())["format"] == "keeplane-credential-v3"
             assert flow.identity.session(tokens["access_token"]) is None
             assert cli.account_session.account(server, fresh.access_token)["id"] == str(
                 flow.owner.pk

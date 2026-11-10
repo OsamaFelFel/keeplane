@@ -4,6 +4,7 @@
 | --- | --- |
 | Start locally, change the port or troubleshoot | [Run locally](guide/local-preview.md) |
 | Try the experimental local coding adapter | [CLI prototype](../components/cli/README.md) |
+| Get started as a developer: sign in, choose a model, code, see usage, sign out | [Get started with the CLI](guide/cli-quickstart.md) |
 | Sign in, code and resume private history | [Signed-in coding](guide/cli-coding.md) |
 | Create accounts and change roles | [Accounts](guide/accounts-local.md) |
 | Add, edit or remove a model | [Model setup](guide/model-add-local.md), [model approvals](guide/model-approval-local.md) |
@@ -23,7 +24,10 @@
 | See when certificates expire and renew them without a restart | [Check and renew certificates](guide/certificate-operations.md) |
 | Preview an existing Claude, Codex or Qwen project setup | [CLI migration preview](guide/cli-migration-preview.md) |
 | Run tests and retain their results | [Testing](guide/regression-local.md) |
+| Check the MVP journey end to end on the preview | Admin half: [demo cases](../tests/e2e/integrated-demo-cases.md); developer half, DEV-01 to DEV-05: [developer journey cases](../tests/e2e/developer-journey-cases.md), [try it by hand](guide/local-preview.md#try-the-developer-half-by-hand) |
 | Read the experimental allowed-model catalog | [Runtime catalog](guide/runtime-catalog.md) |
+| See your own tokens and estimated cost per model | [`keeplane usage`](guide/cli-usage.md) |
+| Report and read a developer's own token usage per model | [Usage API](guide/runtime-catalog.md#report-and-read-your-own-usage), [how usage is kept](architecture/developer-usage.md) |
 | Test internal gateway policy decisions | [Runtime authorization](architecture/runtime-authorization.md) |
 | Understand the components | [Architecture](architecture/local-preview.md) |
 | Find the exact component versions tested together | [Component manifest](architecture/component-manifest.md) |

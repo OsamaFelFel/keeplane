@@ -95,7 +95,6 @@ class OwnedCompose:
             KEEPLANE_PORT=str(self.app_port),
             KEEPLANE_RUNTIME_PORT=str(self.runtime_port),
             KEEPLANE_RUNTIME_APP_IMAGE=image,
-            KEEPLANE_RUNTIME_OAUTH_ENABLED="1",
         )
         init = """import os,shutil
 from pathlib import Path
@@ -361,7 +360,6 @@ ThreadingHTTPServer(('0.0.0.0',18080),InstalledCliProvider).serve_forever()
             self.runtime_port,
             env=self.env,
             wait_ready=self.ready,
-            app_image=self.image,
         )
 
     def provider_status(self):

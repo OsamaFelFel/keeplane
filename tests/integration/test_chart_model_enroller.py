@@ -235,6 +235,9 @@ def test_me_03_the_gateway_reads_the_guard_and_gets_nothing_else(chart, policy, 
     changed = ("volumeMounts", "args")
     assert {key: value for key, value in gateway_after.items() if key not in changed} \
         == {key: value for key, value in gateway_before.items() if key not in changed}
+    # Both keep accepting new calls for 5 s after SIGTERM (the stop delay).
+    for gateway in (gateway_before, gateway_after):
+        assert {"name": "CONNECTION_MIN_TERMINATION_DEADLINE", "value": "5s"} in gateway["env"]
     # No fsGroup appears and no Secret volume is added; the enroller's files
     # are in memory and only its own containers mount them.
     assert after.get("securityContext") == before.get("securityContext")

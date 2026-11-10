@@ -1,135 +1,128 @@
-# Run a coding session with Keeplane
+# Get started with the Keeplane CLI
 
-Use this guide with the installed trial CLI. The installation operator must
-provide the wheel and checksum, a sign-in server, a protected gateway address,
-an explicit project ID and an allowed model. Use macOS or Linux and Python 3.11+
-for this complete sequence. Coding also needs the external OpenCode V2 2.0.27
-binary; the wheel does not download it. Follow [installation](cli-install.md)
-first, then activate its environment so `keeplane --help` works.
+This guide takes a developer from nothing to a first coding task on the local
+preview: sign in, choose a model, code in your repo, see your usage and sign
+out. Your repo needs no setup in Keeplane. The same steps are checked
+automatically as DEV-01 to DEV-05 in the
+[developer journey cases](../../tests/e2e/developer-journey-cases.md). The
+[Developer CLI scenario map](../../tests/e2e/developer-cli-cases.md#spec-009-scenarios-st29st31)
+names, for each Spec 009 scenario, the checks that prove it and what isn't
+proven yet.
 
-Replace these example addresses, IDs and paths with your installation's values:
+## Before you start
+
+- The preview is running (`python3 deploy/local/up.py`; see
+  [Run Keeplane locally](local-preview.md)). It prints the server address,
+  `http://127.0.0.1:3000`, and the guarded gateway, `http://127.0.0.1:5000/v1`.
+- An admin has created your developer account in **Users** and approved at
+  least one model for Public data in **Models and routing**.
+- The CLI is installed and `keeplane --help` works; see
+  [Install the Keeplane CLI](cli-install.md). From a source checkout,
+  `python3 components/cli/keeplane.py` works the same way.
+- OpenCode V2 2.0.27 is on your `PATH` as `opencode`. The CLI doesn't download
+  it. Use macOS or Linux.
+
+## 1. Sign in
 
 ```sh
-KP_SERVER=https://keeplane.example
-KP_GATEWAY=https://gateway.example/v1
-KP_PROJECT=00000000-0000-0000-0000-000000000001
-KP_MODEL=coder
-KP_RUNTIME=/absolute/path/to/opencode-v2
-KP_REPO=/absolute/path/to/repository
-KP_PRIVATE="$HOME/.local/share/keeplane/quickstart"
-mkdir -p "$KP_PRIVATE"
-chmod 700 "$KP_PRIVATE"
-KP_PROFILE="$KP_PRIVATE/account"
+keeplane login --server http://127.0.0.1:3000
+keeplane whoami
 ```
 
-Keep the profile and history outside the repository. The profile stores private
-plaintext credentials protected by OS file permissions. Use the server address
-for account commands and the protected gateway's `/v1` address for coding;
-an ordinary unprotected model listener is insufficient. The server doesn't
-tell the CLI its gateway address and the profile doesn't keep it, so pass it on
-every `keeplane code`. With `--state-dir`, the session history records the
-gateway address, and a later turn on that history, such as a resumed session,
-must use the same one. On a Kubernetes installation with the chart's Ingress, both are
-on Keeplane's one address: `KP_SERVER=https://<host>` and
-`KP_GATEWAY=https://<host>/v1` (see
-[what to give developers](kubernetes-installation-reference.md#how-developers-reach-protected-models)).
-On the Docker preview with [guarded model access](guarded-runtime.md) it is
-`http://127.0.0.1:5000/v1` unless the launcher was given another port.
-`KP_REPO` must be the Git repository root, owned by your OS user.
+The browser opens Keeplane's sign-in page. Sign in with your account and choose
+**Continue** to allow CLI access. The CLI says `Signed in to Keeplane.` and
+`whoami` shows your account. With no browser on this computer, add `--device`
+and enter the printed code in a browser elsewhere
+([device sign-in](cli-device-login.md)).
+
+Your sign-in is kept in the private profile `~/.config/keeplane/account`
+(`--profile PATH` uses another). At sign-in the server also gives the CLI its
+gateway address, so you never type it.
+
+## 2. Choose a model
+
+In your repo:
+
+```sh
+cd /path/to/your/repo
+keeplane models
+keeplane use <model>
+```
+
+`models` lists only the models allowed for this repo's project and marks the
+one your next task uses. Keeplane works out the project from the repo's
+`origin` remote. `models`, `use`, `keys list` and `code` record the repo, so it shows
+on the admin's **Projects** page as not set up, with your name
+([how a repo becomes a project](cli-project-commands.md#how-a-repo-becomes-a-project)).
+An empty list means no model is allowed for this project yet; ask your admin.
+
+`use <model>` makes this repo's next tasks use that model: the CLI says
+`This repo's next tasks use <model>.` `keeplane use --auto` goes back to
+Keeplane's pick, and `keeplane code --model <model>` picks one for a single
+task ([choose the model](cli-coding.md#choose-the-model)).
+
+## 3. Code
+
+```sh
+keeplane code "Make the failing test pass"
+```
+
+The task goes to the model through Keeplane's guarded gateway. The CLI says
+which model the task uses, prints the runtime's answer and file changes, and
+ends with `Answered by <model>.` Review the edits (`git diff`) and run your
+tests. The runtime prints JSON events containing `sessionID`; to continue the
+same conversation, see [coding](cli-coding.md).
+
+Ctrl-C cancels the task. Cancelling doesn't undo edits already made, so review
+the repo before you run it again.
+
+## 4. See your usage
+
+```sh
+keeplane usage
+```
+
+You see your own tokens per model for today and this month. A local model shows
+`—` for cost; a cloud model shows a cost estimated from the provider's list
+price. Nobody else's tasks are in your totals. See [your own usage](cli-usage.md).
+
+## 5. Sign out
+
+```sh
+keeplane logout
+```
+
+The CLI withdraws its sign-in on the server and removes the local credential.
+After that, `keeplane code` and `keeplane models` say
+`You're signed out of Keeplane, so nothing was sent. Run keeplane login to sign in.`
+and send nothing. Sign in again with `keeplane login`.
+
+## Next steps
+
+- Reuse instructions you already have in `CLAUDE.md` or `QWEN.md`: preview and
+  copy them to `AGENTS.md` with `keeplane init`
+  ([migration preview](cli-migration-preview.md)).
+- Use your own provider key for a model that needs one: `keeplane keys list`,
+  then [provider key commands](cli-provider-key-commands.md).
+- Set a temperature or maximum output per model in your settings file
+  ([coding](cli-coding.md)).
+- Recover a profile or sign-in: [account profile](cli-account-profile.md).
+
+## Other installations
+
+On another Keeplane server, use its address with `login --server`. You need
+only the server address. When you sign in, the server gives the CLI the
+protected gateway's `/v1` address its installer set, and the CLI saves it in
+your profile for `keeplane code`; an ordinary unprotected model listener is
+insufficient. If `code` says Keeplane doesn't know your gateway address yet,
+the server gave none when you signed in. If you signed in with an older CLI
+version, run `keeplane refresh` to save the server's address; otherwise ask
+the operator for it and pass it as `--gateway`, which also overrides the saved
+one. With `--state-dir`, the session history records the gateway address, and
+a later turn on that history, such as a resumed session, must use the same one.
+On a Kubernetes installation with the chart's Ingress, both are on Keeplane's
+one address: sign in with `https://<host>`, and the gateway is `https://<host>/v1`
+(see [what to give developers](kubernetes-installation-reference.md#how-developers-reach-protected-models)).
 These two addresses are the only ones the CLI and the coding runtime it starts
-need to reach, so the sequence also works on an isolated network; see
+need to reach, so the steps also work on an isolated network; see
 [Developers' computers](outbound-connections.md#developers-computers).
-
-## Sign in and choose a model
-
-```sh
-keeplane login --server "$KP_SERVER" --profile "$KP_PROFILE"
-keeplane whoami --profile "$KP_PROFILE"
-keeplane register-project --profile "$KP_PROFILE" \
-  --project "$KP_PROJECT" --name "My project"
-keeplane models --profile "$KP_PROFILE" --project "$KP_PROJECT"
-```
-
-Sign in to your existing account and allow CLI access in the browser. `whoami`
-should show that account; choose `KP_MODEL` from the returned model IDs. An empty
-list means no model is currently allowed for this project. Ask the operator to
-check access. Use `login --device` if this machine cannot open a browser.
-
-## Review instructions before copying
-
-```sh
-keeplane init --preview --directory "$KP_REPO"
-```
-
-Preview changes nothing. If root `AGENTS.md` already exists, review it and skip
-the copy below. Otherwise, review root `CLAUDE.md` locally, then save and confirm
-one plan (use `QWEN.md` instead if that is your source):
-
-```sh
-keeplane init --preview --directory "$KP_REPO" --source CLAUDE.md \
-  --plan "$KP_PRIVATE/instruction-copy.json"
-keeplane init --apply "$KP_PRIVATE/instruction-copy.json" --directory "$KP_REPO"
-diff -u "$KP_REPO/CLAUDE.md" "$KP_REPO/AGENTS.md"
-```
-
-The diff should be empty: a new `AGENTS.md` has the same bytes and the original
-remains. Conflicting or changed instructions stop the copy; existing targets and
-plans are never overwritten. This is one partial migration, not complete
-onboarding. It creates no workflow defaults and imports no settings or hooks.
-See [migration recovery](cli-migration-preview.md) if an outcome needs review.
-
-## Code, review and continue
-
-```sh
-keeplane code --profile "$KP_PROFILE" \
-  --project "$KP_PROJECT" --name "My project" --model "$KP_MODEL" \
-  --runtime "$KP_RUNTIME" --gateway "$KP_GATEWAY" --directory "$KP_REPO" \
-  --instructions AGENTS.md --state-dir "$KP_PRIVATE/history" \
-  'Fix the addition function and check the result.'
-```
-
-Review the edits and run your project's tests. The runtime prints JSON events
-containing `sessionID`. To continue, repeat that command with a new prompt and
-`--session SESSION_ID`, replacing `SESSION_ID` with the printed value. Keep the
-same profile, project, model, gateway, repository and state directory. Explicit
-`--instructions AGENTS.md` reads the current reviewed text on every turn.
-
-Ctrl-C cancels the active turn (exit 130); SIGTERM returns 143. Supported native
-interruption cleans up the controlled foreground tool. Arbitrary detached work
-is outside that guarantee. Cancellation does not undo edits or guarantee safe
-replay of unfinished actions; review the repository before resuming. Finish or
-cancel a turn before another command uses its profile. Rotate credentials
-explicitly between turns when needed:
-
-```sh
-keeplane refresh --profile "$KP_PROFILE"
-```
-
-## Manage your own key and sign out
-
-Only use these steps after the operator confirms that an installed Personal
-model is enabled and verified for your gateway. Select its model ID in
-`KP_MODEL`. Key registration alone does not enable dispatch or grant access.
-
-```sh
-keeplane keys set --profile "$KP_PROFILE" --model "$KP_MODEL"
-keeplane keys status --profile "$KP_PROFILE" --model "$KP_MODEL"
-```
-
-Enter the provider key at the hidden prompt. `status` should say `added`. Run
-`keys set` again to replace it; the server validates the new key first. Use a new
-history directory when changing the coding model. Keys stay on the server;
-never put one in command arguments or shell history.
-
-```sh
-keeplane keys remove --profile "$KP_PROFILE" --model "$KP_MODEL"
-keeplane keys status --profile "$KP_PROFILE" --model "$KP_MODEL"
-keeplane logout --profile "$KP_PROFILE"
-```
-
-Status should now say `missing`. Logout withdraws the CLI credential pair and
-removes the local credential; it does not delete conversation history. If a key
-change or logout is uncertain, follow [key recovery](cli-provider-key-commands.md)
-or [account recovery](cli-account-profile.md) before retrying. This remains a
-bounded integration trial; complete onboarding, automatic refresh and release
-runtime selection are separate work.

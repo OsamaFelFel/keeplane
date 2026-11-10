@@ -266,7 +266,7 @@ jobs:
         ports:
           - 55432:5432
         options: >-
-          --health-cmd "pg_isready -U keeplane"
+          --health-cmd "pg_isready -h 127.0.0.1 -U keeplane"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30
@@ -310,7 +310,7 @@ jobs:
           fi
           "/usr/lib/postgresql/$major/bin/pg_dump" --version
           echo "KEEPLANE_TEST_POSTGRES_BIN=/usr/lib/postgresql/$major/bin" >> "$GITHUB_ENV"
-      - name: Verify settings-change, model-answer and held-back request records, break-glass sign-ins, level locks, credential rotation, backup/restore and guard-status roles on PostgreSQL
+      - name: Verify settings-change, model-answer and held-back request records, break-glass sign-ins, level locks, credential rotation, backup/restore, guard-status roles and developer usage on PostgreSQL
         env:
           KEEPLANE_TEST_REPORT_DIR: test-results/postgres/settings-cases
           KEEPLANE_TEST_POSTGRES_HOST: 127.0.0.1
@@ -320,7 +320,7 @@ jobs:
           .venv/bin/pip install psycopg==3.3.6
           password_file="$RUNNER_TEMP/settings-postgres-password"
           printf '%s\n' ci-disposable-settings-postgres > "$password_file"
-          KEEPLANE_TEST_POSTGRES_PASSWORD_FILE="$password_file" .venv/bin/python -m pytest tests/integration/test_settings_change_records.py tests/integration/test_model_answer_records.py tests/integration/test_held_request_records.py tests/integration/test_audit_persistence.py tests/integration/test_break_glass_sign_ins.py tests/integration/test_credential_rotation.py tests/integration/test_backup_restore.py tests/integration/test_guard_status_postgres.py -k postgresql -rs --junitxml=test-results/postgres/settings-junit.xml
+          KEEPLANE_TEST_POSTGRES_PASSWORD_FILE="$password_file" .venv/bin/python -m pytest tests/integration/test_settings_change_records.py tests/integration/test_model_answer_records.py tests/integration/test_held_request_records.py tests/integration/test_audit_persistence.py tests/integration/test_break_glass_sign_ins.py tests/integration/test_credential_rotation.py tests/integration/test_backup_restore.py tests/integration/test_guard_status_postgres.py tests/integration/test_developer_usage_storage.py -k postgresql -rs --junitxml=test-results/postgres/settings-junit.xml
           if grep -q '<skipped' test-results/postgres/settings-junit.xml; then
             echo "PostgreSQL settings cases were skipped" >&2
             exit 1
@@ -419,4 +419,159 @@ jobs:
         with:
           name: detection-image-${{ github.sha }}
           path: test-results/detection-image/
+          retention-days: 30
+
+  cli-sign-in:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # The files this job runs. The last step fails if one reports no case.
+      SIGN_IN_TESTS: >-
+        tests/integration/test_cli_oauth_identity.py
+        tests/integration/test_cli_oauth_browser.py
+        tests/integration/test_cli_oauth_device.py
+        tests/integration/test_cli_oauth_journey.py
+        tests/integration/test_cli_oauth_key_journey.py
+        tests/integration/test_cli_device_journey.py
+        tests/integration/test_cli_admin_sign_in.py
+        tests/integration/test_cli_sign_in_again.py
+        tests/integration/test_cli_sign_in_readiness.py
+        tests/integration/test_developer_usage.py
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Run the CLI sign-in integration checks with the hash-pinned sign-in packages
+        # pytest.ini deselects these (optional, live), and the backend shards
+        # don't install the sign-in packages. Their hashes are for the app
+        # image's Python, so the checks run in that same pinned base image.
+        run: |
+          mkdir -p test-results/cli-sign-in
+          docker run --rm \
+            -v "$PWD:/src" -w /src \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e PYTHONPATH=components/control-plane \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e KEEPLANE_CLI_OAUTH_ENABLED=1 \
+            -e KEEPLANE_DEVICE_JOURNEY_REQUIRED=1 \
+            -e KEEPLANE_TEST_REPORT_DIR=/tmp/reports \
+            -e SIGN_IN_TESTS \
+            --entrypoint sh \
+            python@sha256:2d9aefe2fef018a7eb2c13064c89c71929800fd2e5dccdbf52ea5da5bb8d929a \
+            -euc '
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r tests/requirements.txt
+              /tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --no-deps -r components/control-plane/requirements-cli-auth.txt
+              /tmp/venv/bin/python -m pytest -m "optional and live" -p no:cacheprovider -rs \
+                $SIGN_IN_TESTS \
+                --junitxml=test-results/cli-sign-in/junit.xml
+            '
+      - name: Fail if a sign-in case was skipped or a file ran no case
+        # Only the full coding journey may skip: it needs the native runtime,
+        # which the coding-runtime job checks. A file whose tests the -m
+        # expression deselects, or that collects none, fails.
+        run: |
+          python3 - test-results/cli-sign-in/junit.xml <<'EOF'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          ran = {case.get("classname", "") for case in ET.parse(sys.argv[1]).iter("testcase")}
+          empty = [
+              name
+              for name in os.environ["SIGN_IN_TESTS"].split()
+              if not any(
+                  module == name[:-3].replace("/", ".")
+                  or module.startswith(name[:-3].replace("/", ".") + ".")
+                  for module in ran
+              )
+          ]
+          for name in empty:
+              print(f"No sign-in case ran from {name}", file=sys.stderr)
+          skipped = [
+              case.get("name")
+              for case in ET.parse(sys.argv[1]).iter("testcase")
+              if case.find("skipped") is not None
+              and not case.get("name", "").startswith(
+                  "test_real_signed_in_coding_tools_resume_and_policy_withdrawal["
+              )
+          ]
+          for name in skipped:
+              print(f"Sign-in case was skipped: {name}", file=sys.stderr)
+          sys.exit(1 if skipped or empty else 0)
+          EOF
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: cli-sign-in-${{ github.sha }}
+          path: test-results/cli-sign-in/
+          retention-days: 30
+
+  coding-runtime:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # The binary the ADR 007 trials recorded: OpenCode V2 2.0.27, linux x64
+      # baseline musl build, from npm.
+      RUNTIME_ARCHIVE_URL: https://registry.npmjs.org/@opencode/cli-linux-x64-baseline-musl/-/cli-linux-x64-baseline-musl-2.0.27.tgz
+      RUNTIME_ARCHIVE_SHA256: 19883929aff7834d777af1618a811d4d1352a46c02df3ba11aad8cafc2faf93e
+      RUNTIME_BINARY_SHA256: a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Download and check the pinned coding runtime
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/runtime.tgz" "$RUNTIME_ARCHIVE_URL"
+          echo "$RUNTIME_ARCHIVE_SHA256  $RUNNER_TEMP/runtime.tgz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/runtime"
+          tar -xzf "$RUNNER_TEMP/runtime.tgz" -C "$RUNNER_TEMP/runtime"
+          echo "$RUNTIME_BINARY_SHA256  $RUNNER_TEMP/runtime/package/bin/opencode" | sha256sum --check
+      - name: Run the coding-runtime checks with the real binary
+        # The binary is built for musl, so it runs in Alpine with libstdc++.
+        # strace records every address the runtime contacts (KEY-09).
+        run: |
+          mkdir -p test-results/coding-runtime
+          docker run --rm \
+            -v "$PWD:/src" \
+            -v "$RUNNER_TEMP/runtime/package/bin:/opt/runtime:ro" \
+            -w /src \
+            -e KEEPLANE_OPENCODE_V2_BIN=/opt/runtime/opencode \
+            python:3.12.13-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 \
+            sh -euc '
+              apk add --no-cache libstdc++ strace >/dev/null
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet -r tests/requirements.txt
+              /tmp/venv/bin/python -m pytest tests/e2e/test_cli_runtime.py -m optional \
+                -p no:cacheprovider -s -rs -v --junitxml=test-results/coding-runtime/junit.xml
+            '
+      - name: Fail if a coding-runtime case was skipped or did not run
+        # Every test the file defines must run, so none can be deselected.
+        run: |
+          if grep -q '<skipped' test-results/coding-runtime/junit.xml; then
+            echo "A coding-runtime case was skipped" >&2
+            exit 1
+          fi
+          python3 - tests/e2e/test_cli_runtime.py test-results/coding-runtime/junit.xml <<'EOF'
+          import ast
+          import sys
+          import xml.etree.ElementTree as ET
+
+          tree = ast.parse(open(sys.argv[1]).read())
+          defined = {n.name for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")}
+          ran = {c.get("name", "").split("[")[0] for c in ET.parse(sys.argv[2]).iter("testcase")}
+          for name in sorted(defined - ran):
+              print(f"Coding-runtime case did not run: {name}", file=sys.stderr)
+          sys.exit(1 if defined - ran or not defined else 0)
+          EOF
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: coding-runtime-${{ github.sha }}
+          path: test-results/coding-runtime/
           retention-days: 30

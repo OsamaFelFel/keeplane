@@ -1,4 +1,56 @@
-# Revoke a test CLI session
+# Sign out of the CLI
+
+Spec 009 ST29 "Sign out". Run:
+
+```sh
+keeplane logout
+```
+
+Keeplane revokes this CLI's sign-in and its refresh token at the server, then
+removes the tokens, the saved gateway address and the account details from the
+profile. It keeps only the server address, which isn't secret, so a plain
+`keeplane login` signs you in to the same server again; `--server` overrides it.
+From then on the CLI sends nothing with that profile until you sign in again. `code`, `models`, `usage`,
+`keys` and `register-project` each say "You're signed out of Keeplane, so nothing
+was sent. Run `keeplane login` to sign in." and exit 1; `whoami` and `refresh` say
+"You're signed out of Keeplane. Run `keeplane login` to sign in." Running `logout`
+again says "You're already signed out of Keeplane." Admins sign out the same way.
+
+If the server can't be reached, `logout` keeps the credential and says so; run it
+again when the server is back. `keeplane forget` removes only the local copy and
+doesn't revoke anything at the server; it keeps the server address too. Run
+`forget` again once you're signed out to remove the kept server address; it says
+"Removed the saved server address. Run `keeplane login --server <address>` to
+sign in." ([profile storage and recovery](cli-account-profile.md)).
+
+### If the kept server address can't be used
+
+Keeplane never trusts a kept server address that is damaged or unsafe: not
+valid JSON, an extra field, too big, the wrong permissions or owner, or a link.
+A plain `keeplane login` then exits 1 and says "Keeplane can't use the server
+address it kept for this profile. Run `keeplane login --server <address>`, or
+`keeplane forget` to remove it." The file's contents are never printed. Either
+way out works:
+
+- `keeplane login --server <address>` signs in without reading the file. Once
+  sign-in succeeds, it replaces the file with the address it signed in to, using
+  the same private, atomic write as `logout` (a link is replaced, never what it
+  points to). A sign-in that fails leaves the file as it was.
+- `keeplane forget`, while you're signed out, removes the file (a link is
+  removed, never what it points to) and says "Removed the server address Keeplane
+  couldn't use. Run `keeplane login --server <address>` to sign in." It exits 0.
+  With nothing saved at all it says "Keeplane has no saved sign-in or server
+  address, so there's nothing to forget." and exits 0.
+
+```mermaid
+flowchart LR
+  Logout[keeplane logout] --> Revoke[Server revokes the sign-in]
+  Revoke --> Removed[Tokens, gateway and account removed; server address kept]
+  Removed --> Nothing[Later commands send nothing]
+  Nothing --> Login[keeplane login signs in again to the kept server]
+```
+
+## Revoke a test CLI session
 
 Use this experimental command with the matching runtime session-revocation
 route. It revokes the supplied Keeplane session at the server. Browser/PKCE

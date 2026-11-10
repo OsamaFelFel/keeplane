@@ -2,8 +2,12 @@ name: Live preview gateway checks
 
 # Starts the protected Docker preview on a hosted runner, which can pull the
 # locked gateway, Python and llama.cpp images, and runs the live gateway cases
-# that need them: Spec 005 ST19 project classes through the guarded endpoint
-# (task 005-02) and Spec 004 ST16 retry of a model that is down (task 004-04).
+# that need them: Spec 009 ST29/ST30 CLI sign-in and the guarded gateway on a
+# fresh default start (task 009-01), Spec 005 ST19 project classes through the
+# guarded endpoint (task 005-02) and Spec 004 ST16 retry of a model that is
+# down (task 004-04). Last, the developer half of the MVP journey, DEV-01 to
+# DEV-05 (task 009-13), then DEV-06 to DEV-08, runs with the hash-pinned
+# coding runtime.
 # A second job, in parallel, builds the `detection` app image and runs Spec 005
 # ST20 personal-data detection and Spec 006 ST21 held-back request records
 # through the same guarded endpoint (tasks 005-03 and 006-02).
@@ -25,10 +29,15 @@ concurrency:
 jobs:
   live-gateway:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       KEEPLANE_RUNTIME_DIR: ${{ github.workspace }}/.keeplane/local
       RESULTS: ${{ github.workspace }}/test-results/live-preview
+      # The coding runtime the coding-runtime check in checks.yml pins: OpenCode
+      # V2 2.0.27, linux x64 baseline musl build, from npm.
+      RUNTIME_ARCHIVE_URL: https://registry.npmjs.org/@opencode/cli-linux-x64-baseline-musl/-/cli-linux-x64-baseline-musl-2.0.27.tgz
+      RUNTIME_ARCHIVE_SHA256: 19883929aff7834d777af1618a811d4d1352a46c02df3ba11aad8cafc2faf93e
+      RUNTIME_BINARY_SHA256: a2dee30005064075c216fdcc3fcaba7071c81b39d00b4286206faa50e461b61d
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -50,9 +59,17 @@ jobs:
       - name: List the live cases that must run
         run: |
           .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py tests/e2e/test_project_classes_live.py \
+            tests/e2e/test_preview_sign_in_live.py tests/integration/test_preview_sign_in_image.py \
+            tests/e2e/test_developer_journey.py \
             -m live --collect-only -q | grep '::' > "$RESULTS/expected-cases.txt"
           cat "$RESULTS/expected-cases.txt"
+      # First, while the preview is fresh: zero approved models, then one.
+      - name: CLI sign-in and the guarded gateway on the default preview (Spec 009 ST29/ST30, task 009-01)
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/sign-in-cases
+        run: .venv/bin/python -m pytest tests/e2e/test_preview_sign_in_live.py tests/integration/test_preview_sign_in_image.py -m live -rs --junitxml="$RESULTS/sign-in-junit.xml"
       - name: Project classes through the guarded preview gateway (Spec 005 ST19, task 005-02)
+        if: ${{ !cancelled() }}
         env:
           KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/class-cases
         run: .venv/bin/python -m pytest tests/e2e/test_project_classes_live.py -m live -rs --junitxml="$RESULTS/classes-junit.xml"
@@ -61,10 +78,42 @@ jobs:
         env:
           KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/outage-cases
         run: .venv/bin/python -m pytest tests/integration/test_native_runtime_outage.py -m live -rs --junitxml="$RESULTS/outage-junit.xml"
+      - name: Download and check the pinned coding runtime
+        if: ${{ !cancelled() }}
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/runtime.tgz" "$RUNTIME_ARCHIVE_URL"
+          echo "$RUNTIME_ARCHIVE_SHA256  $RUNNER_TEMP/runtime.tgz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/runtime"
+          tar -xzf "$RUNNER_TEMP/runtime.tgz" -C "$RUNNER_TEMP/runtime"
+          echo "$RUNTIME_BINARY_SHA256  $RUNNER_TEMP/runtime/package/bin/opencode" | sha256sum --check
+      - name: Developer journey DEV-01 to DEV-08 with the pinned runtime (Spec 009, task 009-13)
+        if: ${{ !cancelled() }}
+        # The runtime is built for musl, so the suite runs in Alpine with
+        # libstdc++. Host networking reaches the preview on loopback and lets
+        # the fixture model listen where the preview allows a host runner; the
+        # Docker socket lets the suite read the model enroller and clean up.
+        # The checkout keeps its path, so Compose finds the same preview.
+        env:
+          KEEPLANE_TEST_REPORT_DIR: ${{ github.workspace }}/test-results/live-preview/journey-cases
+        run: |
+          docker run --rm --network host \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            -v "$RUNNER_TEMP/runtime/package/bin:/opt/runtime:ro" \
+            -e KEEPLANE_OPENCODE_V2_BIN=/opt/runtime/opencode \
+            -e KEEPLANE_RUNTIME_DIR -e KEEPLANE_TEST_REPORT_DIR -e RESULTS \
+            python:3.12.13-alpine3.22@sha256:a190708a2dec1bd18b1decb539f8e8f5407abaa9bf39cacda583f7f8c11db322 \
+            sh -euc '
+              apk add --no-cache libstdc++ git docker-cli docker-cli-compose >/dev/null
+              python -m venv /tmp/venv
+              /tmp/venv/bin/pip install --quiet -r tests/requirements.txt
+              /tmp/venv/bin/python -m pytest tests/e2e/test_developer_journey.py -m live \
+                -p no:cacheprovider -s -rs --junitxml="$RESULTS/journey-junit.xml"
+            '
       - name: Fail if a live gateway case was skipped or did not run
         if: ${{ !cancelled() }}
         run: |
-          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/outage-junit.xml" "$RESULTS/classes-junit.xml" <<'EOF'
+          python3 - "$RESULTS/expected-cases.txt" "$RESULTS/outage-junit.xml" "$RESULTS/classes-junit.xml" "$RESULTS/sign-in-junit.xml" "$RESULTS/journey-junit.xml" <<'EOF'
           import sys
           import xml.etree.ElementTree as ET
           from pathlib import Path

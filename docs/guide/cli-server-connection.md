@@ -31,3 +31,14 @@ ten-second timeout and responses are limited to 1 MiB. Invalid or unavailable
 sessions, denied project access, policy outages and malformed catalogs fail
 without printing server error bodies. Check the server, session and project
 before retrying. A successful empty list means no model is currently eligible.
+
+The account a signed-in CLI reads from `GET /api/runtime/session` has its ID,
+user name and role, and `gateway_url`: the gateway address, ending in `/v1`, that
+the installer set in `KEEPLANE_GATEWAY_PUBLIC_URL`, or `null` when Keeplane
+doesn't know it. The server never works it out from the request. It refuses to
+start with an address that doesn't end in `/v1`, has a user name, password,
+query or fragment, or uses `http` to another computer. At browser or device
+sign-in and at `keeplane refresh`, the CLI checks the address with the same rule
+as `keeplane code --gateway` and saves it in the private profile, so `code`
+needs no `--gateway`; an address it can't use stops the sign-in, and `null`
+saves nothing. See [code with a signed-in account](cli-coding.md).

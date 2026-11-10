@@ -1,6 +1,6 @@
 """Render how developers reach the managed gateway's protected runtime (ADR 016, 018, 027).
 
-Cases PA-01 to PA-09 in chart-protected-access-cases.md. All but PA-06 and
+Cases PA-01 to PA-10 in chart-protected-access-cases.md. All but PA-06 and
 PA-09 render the chart with Helm and are skipped when Helm is missing; PA-06 and
 PA-09 read only the values file, the guides and the CLI code and always run.
 """
@@ -12,9 +12,10 @@ import re
 from pathlib import Path
 
 import pytest
+from common.gateway_address import public_gateway_url
 
 from components.cli import coding, credential_profile, keeplane, opencode_adapter
-from tests.integration.test_chart_model_enroller import RELEASE, with_enroller
+from tests.integration.test_chart_model_enroller import RELEASE, app_env, with_enroller
 
 ROOT = Path(__file__).resolve().parents[2]
 VALUES = ROOT / "deploy/helm/keeplane/values.yaml"
@@ -339,21 +340,26 @@ def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
     reference = REFERENCE.read_text()
     section = reference.split("\n**What to give developers.**", 1)[1].split("\nEach request reaches one copy.", 1)[0]
     for phrase in ("| `https://<host>` | `keeplane login --server` |",
-                   "| `https://<host>/v1` | `keeplane code --gateway` |",
-                   "doesn't save it in the profile", "/chat/completions",
-                   "a resumed session must use the\nsame address",
-                   "`gateway.mode=existing`", "port 4000"):
+                   "| `https://<host>/v1` | Saved at sign-in; `keeplane code --gateway` overrides it |",
+                   "saves it in the developer's profile at sign-in", "/chat/completions",
+                   "a\nresumed session must use the same address",
+                   "`gateway.mode=existing`", "port 4000",
+                   "`KEEPLANE_GATEWAY_PUBLIC_URL` to `https://<ingress.host>/v1`",
+                   "`gateway_url` on\n`GET /api/runtime/session`", "`null`"):
         assert phrase in section, phrase
     quickstart = QUICKSTART.read_text()
-    for phrase in ("KP_SERVER=https://<host>", "KP_GATEWAY=https://<host>/v1",
-                   "the profile doesn't keep it",
-                   "a resumed session,\nmust use the same one"):
+    for phrase in ("sign in with `https://<host>`", "the gateway is `https://<host>/v1`",
+                   "the CLI saves it in\nyour profile for `keeplane code`",
+                   "a resumed session, must use the same one"):
         assert phrase in quickstart, phrase
-    # The CLI saves no gateway and needs one on every coding turn.
-    assert "gateway" not in inspect.getsource(credential_profile).lower()
+    # The profile keeps the gateway the server gave at sign-in (task 009-02b),
+    # checked by the CLI's own gateway check, and `code` takes it from there.
+    assert "gateway_endpoint(data[\"gateway\"])" in inspect.getsource(credential_profile)
+    assert credential_profile.gateway_endpoint is coding.gateway_endpoint
+    assert 'getattr(credential, "gateway", None)' in inspect.getsource(coding.run)
     # A session history records the gateway, so a resumed turn needs the same one.
     assert '"gateway": gateway' in inspect.getsource(opencode_adapter.run)
-    assert '"runtime", "gateway"):\n        code.add_argument("--" + flag, required=True)' in inspect.getsource(keeplane.main)
+    assert 'code.add_argument("--gateway", help=' in inspect.getsource(keeplane.main)
     for given, used in (("https://keeplane.example/v1", "https://keeplane.example/v1"),
                         ("https://keeplane.example/v1/", "https://keeplane.example/v1"),
                         ("http://127.0.0.1:5000/v1", "http://127.0.0.1:5000/v1")):
@@ -363,3 +369,22 @@ def test_pa_09_developers_get_the_cli_gateway_address_the_cli_accepts():
                     "https://keeplane.example/v1?team=a", "http://keeplane.example/v1"):
         with pytest.raises(coding.ConnectionError):
             coding.gateway_endpoint(refused)
+
+
+def test_pa_10_the_app_gives_clis_the_address_the_protected_ingress_publishes(
+        chart, policy, make):
+    output = rendered(make(with_enroller(managed(chart))))
+    address = {name: value for name, value, _ in app_env(chart, output)}[
+        "KEEPLANE_GATEWAY_PUBLIC_URL"]
+    host = parsed_of_kind(chart, policy, output, "Ingress")[RUNTIME_INGRESS]["spec"]["rules"][0]["host"]
+    assert address == f"https://{host}/v1" == "https://keeplane.example.test/v1"
+    # The server starts with it unchanged and the CLI's --gateway check takes it.
+    assert public_gateway_url(address) == address == coding.gateway_endpoint(address)
+    assert output.count("KEEPLANE_GATEWAY_PUBLIC_URL") == 1  # the app only
+    # Without the protected path's Ingress the chart sets no address, so the
+    # server says it doesn't know one rather than guessing it.
+    without_ingress = with_enroller(managed(chart))
+    without_ingress["ingress"]["enabled"] = False
+    without_ingress["app"]["postgres"]["publicOrigin"] = "https://keeplane.example.test"
+    for output in (*renders(chart, make).values(), rendered(make(without_ingress))):
+        assert "KEEPLANE_GATEWAY_PUBLIC_URL" not in output

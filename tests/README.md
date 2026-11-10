@@ -21,12 +21,23 @@ CI runs the unit and integration checks as parallel shards listed in
 `pytest tests/unit tests/integration --shard <name>` runs one shard locally.
 The separate `live-preview.yml` workflow starts the protected Docker preview
 with `deploy/local/up.py` on a hosted runner and runs the live gateway cases
-that need it: the [project classes](e2e/project-classes-live-cases.md) and the
-[down-model retry](integration/native-runtime-outage-cases.md) cases. A second
+that need it: the [CLI sign-in](e2e/preview-sign-in-live-cases.md), the
+[project classes](e2e/project-classes-live-cases.md), the
+[down-model retry](integration/native-runtime-outage-cases.md) and, with the
+pinned coding runtime, the [developer journey](e2e/developer-journey-cases.md)
+cases. A second
 job in the same workflow builds the `detection` app image, starts the preview
 the same way and runs the [personal-data detection](e2e/personal-data-live-cases.md)
 cases with `KEEPLANE_PERSONAL_DATA_DETECTION=1`. A case that is skipped or
 never runs fails its job.
+Each spec's scenario map names the cases that prove every scenario, and a
+unit test fails when a scenario is missing or a named case has no test:
+Spec 002 [self-hosting](e2e/self-hosting-cases.md), 003
+[accounts](e2e/accounts-cases.md), 004
+[models and routing](unit/models-routing-cases.md), 005
+[data classes](e2e/data-classes-cases.md), 006 [Audit](e2e/audit-cases.md)
+and 009 [Developer CLI](e2e/developer-cli-cases.md). The Spec 002 and 009 maps
+count a scenario as proven only by checks CI runs on the current revision.
 In-process tests hash passwords with the application's PBKDF2 algorithm at a
 lower round count (`tests/support/password_hashing.py`); processes started
 with the application settings keep the full count.

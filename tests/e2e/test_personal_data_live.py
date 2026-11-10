@@ -210,7 +210,6 @@ def run_cases():
         "mode": None,
         "developer": None,
         "enrolled": False,
-        "volume_existed": True,
         "settled": False,
         "detection": None,
         "audit": None,
@@ -331,13 +330,6 @@ def run_cases():
                     raise RuntimeError(f"Adding fixture model {key} returned {status}: {result}")
                 created.append(names[key])
 
-            volume = "keeplane-local_runtime-installation"
-            state["volume_existed"] = (
-                subprocess.run(
-                    ["docker", "volume", "inspect", volume], capture_output=True, check=False
-                ).returncode
-                == 0
-            )
             guard = classes.load(
                 "keeplane_guarded_runtime", REPO / "deploy/local/guarded_runtime.py"
             )

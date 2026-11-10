@@ -1,6 +1,6 @@
 # Manage your CLI sign-in
 
-This is the private credential storage part of the browser sign-in trial. Use
+Your CLI sign-in is kept in a private account profile. Use
 [browser sign-in](cli-browser-login.md) to create the profile; do not construct
 one by putting secrets in shell commands.
 
@@ -24,11 +24,15 @@ the pair. It can refresh an expired access token while its refresh token remains
 valid. There is no automatic retry or refresh during a coding turn. An uncertain
 exchange retains the old local profile, but the server may already have rotated
 it; recover with logout or operator withdrawal and sign in again. Do not blindly
-retry a lost rotation response: the trial server withdraws the rotated family
+retry a lost rotation response: the server withdraws the rotated family
 when a previously used refresh token is replayed.
 
-New profiles use format v2 and store only the fixed browser or device client ID.
-Strict v1 profiles are read as browser-issued and upgrade on save. Device profiles
+New profiles store only the fixed browser or device client ID and, when the
+server gives one at sign-in or refresh, its gateway address (format v3; v2
+without an address). Strict v1 profiles are read as browser-issued and upgrade
+on save. An older CLI can't read a profile that holds a gateway address and
+refuses it, so nothing is lost; before going back to an older CLI version, sign
+out with the current one. Device profiles
 created before v2 need logout and a new device sign-in before refresh. Client IDs
 and account IDs are metadata, not authority; the server rechecks the grant.
 
@@ -42,17 +46,30 @@ also lose an exchange response; local storage cannot undo server issuance.
 saved at sign-in. Roles are read fresh. `logout` revokes that credential and its
 paired refresh token, then removes the local credential. A confirmed 401 also
 removes an already withdrawn credential. An outage or ambiguous response retains
-it so you can retry. To remove only the local copy during recovery:
+it so you can retry. When a sign-in has expired, `keeplane login` replaces it, and
+once you are signed out, commands send nothing; see
+[when your sign-in has expired](cli-coding.md#when-your-sign-in-has-expired).
+To remove only the local copy during recovery:
 
 ```sh
 python3 components/cli/account_session.py forget --profile /private/keeplane-account
 ```
 
-This last command does not revoke server access. Keep the profile outside Git
+This last command does not revoke server access. Once you're signed out, `forget`
+removes the kept server address too, whether or not it can be used. With nothing
+saved it says "Keeplane has no saved sign-in or server address, so there's
+nothing to forget." See
+[unusable server address](cli-session-logout.md#if-the-kept-server-address-cant-be-used). Keep the profile outside Git
 and runtime history. The parent directory must exist and be controlled by you.
-The profile directory is owned by your OS user with mode 0700; its credential
+The profile directory is owned by your OS user with mode 0700; its credential,
+kept server address (`server.json`, written at sign-out, with no token or account)
 and stable lock files use 0600. Writes are atomic and serialized. Symlinks,
-hardlinks, special files, foreign files and unsafe permissions are refused.
+hardlinks, special files, foreign files and unsafe permissions are refused. Only a
+plain `keeplane login` reads `server.json`; it refuses a malformed one, and an
+unsafe one without opening it. `login --server` and the other commands don't
+read it. `forget` while signed out removes it. A successful `login`, `logout`,
+and `forget` while signed in replace it with the server you signed in to, without
+reading it first.
 An interrupted write may leave a pending file; inspect the private directory
 and recover it before retrying. Do not remove the lock to bypass active use.
 

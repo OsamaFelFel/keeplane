@@ -2,22 +2,26 @@
 
 Keeplane has one React admin application and one Django/DRF API served by
 Gunicorn. The gateway registers models and carries model traffic. Django owns
-accounts, approvals, data-class settings and Audit.
+accounts, approvals, data-class settings, Audit and each developer's own
+[usage totals](developer-usage.md).
 
 ```mermaid
 flowchart LR
   Browser[Admin browser] --> App[Gunicorn and Django]
+  CLI[Developer CLI] --> App
   App --> UI[React application and local assets]
   App --> Accounts[Accounts and database sessions]
   App --> Models[Model setup and approvals]
   App --> Classes[Data classes]
   App --> Audit[Audit]
+  App --> Usage[Developer usage totals]
   Accounts --> DB[(Django database)]
   Models --> DB
   Eligibility[Internal project model eligibility] --> DB
   Eligibility --> Adapter
   Classes --> DB
   Audit --> DB
+  Usage --> DB
   Models --> Adapter[Gateway adapter]
   Adapter --> Gateway[Managed or customer-run gateway]
   Gateway --> Cloud[Cloud provider]
@@ -29,7 +33,7 @@ flowchart LR
 - `components/admin-ui/src/app/`: shell and API client.
 - `components/admin-ui/src/features/`: screens and dialogs grouped by feature.
 - `components/control-plane/config/`: Django settings, URLs and WSGI/ASGI entry points.
-- `accounts/`, `model_registry/`, `data_classes/`, `audit/`: each area's models,
+- `accounts/`, `model_registry/`, `data_classes/`, `audit/`, `usage/`: each area's models,
   migrations, services, views and URLs.
 - `common/`: shared request protection, storage errors and application assembly.
 - `integrations/`: gateway and runner adapters. HTTP views call use cases;
@@ -47,7 +51,12 @@ supports one application process; shared deployments require PostgreSQL.
 
 The local launcher builds React, prepares private credentials, runs database
 migrations in a separate startup service on a fresh database (earlier preview
-data isn't imported, ADR 014), and starts Gunicorn. Kind uses an init container for the local database.
+data isn't imported, ADR 014), and starts Gunicorn. It then starts the
+protected runtime for the developer CLI (ADR 028): a fresh guarded gateway on
+loopback port 5000, CLI sign-in with the fixed browser and device clients
+registered, and the private model enroller (ADR 027), which enrols every saved
+approval. The app image carries the hash-pinned sign-in packages, built on the
+user's machine. Kind uses an init container for the local database.
 PostgreSQL deployments use the separate migration Job and restricted runtime role.
 Serving workers do not migrate schemas. PostgreSQL chart installs require one
 immutable app image reference for the serving copies, migration Job and
@@ -107,6 +116,10 @@ so partial failures and uncertain outcomes must remain visible.
 mode and model approvals on each query. It includes a model only while its
 current gateway definition matches the approved definition. Class and approval
 reads share the existing settings-writer lock; incomplete policy fails closed.
+Before an admin first saves a data-class or model setting there is no settings
+row to lock. The query then reads the defaults (data classes off) and, since
+every approval is written after that row, permits no model; it never writes the
+row. Approvals without the row are lost policy and fail closed.
 The caller must first authenticate the developer and authorize project access.
 There is no runtime endpoint yet, and this query does not verify provider keys
 or enforce the final routed destination. [Isolated cases](../../tests/integration/model-policy-cases.md) cover its behavior.

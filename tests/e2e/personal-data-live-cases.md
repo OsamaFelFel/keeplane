@@ -72,11 +72,10 @@ number in it.
 
 Afterwards the suite puts detection, its class and the Held-back requests
 switch back as they were, clears both projects' classes, and then restores the
-preview exactly as the project classes suite does: it removes the model
-enroller, recreates the gateway and app from `compose.yaml` alone (so the app
-runs the ordinary image without detection again), removes the guarded
-installation volume if the run created it, removes the four models and the
-developer, and restores the data-class mode. Keeplane has no way to remove a
+preview exactly as the project classes suite does: it starts the preview's
+default protected runtime again (so the app runs the preview image without
+detection again), removes the four models and the developer, and restores the
+data-class mode. Keeplane has no way to remove a
 project, so the two project records stay with no class. A restore step that
 can't be confirmed fails the run.
 

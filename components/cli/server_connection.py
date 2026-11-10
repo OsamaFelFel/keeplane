@@ -6,19 +6,56 @@ import json
 import os
 import re
 import sys
+import uuid
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
-import uuid
-
 
 LIMIT = 1024 * 1024
 
 
 class ConnectionError(Exception):
-    def __init__(self, message, status=None):
+    """``detail`` is the server's own short refusal reason, when it gave one."""
+
+    def __init__(self, message, status=None, detail=None):
         super().__init__(message)
         self.status = status
+        self.detail = detail
+
+
+def refusal_reason(error):
+    """The server's ``{"error": "..."}`` text from a refusal: short and plain, or None."""
+    try:
+        if error.headers.get_content_type() != "application/json":
+            return None
+        data = json.loads(error.read(4097))
+        reason = data.get("error") if isinstance(data, dict) else None
+    except (ValueError, UnicodeError, RecursionError, OSError, AttributeError):
+        return None
+    if (not isinstance(reason, str) or not 0 < len(reason) <= 200
+            or any(ord(c) < 32 or ord(c) > 126 for c in reason)):
+        return None
+    return reason
+
+
+# Spec 009 ST29 (D190, ADR 028), wording decided by the associate product owner.
+EXPIRED = "Your Keeplane sign-in has expired, so nothing was sent."
+EXPIRED_MORE = "Your Keeplane sign-in has expired, so nothing more was sent."
+SIGN_IN_AGAIN = "Run `keeplane login` to sign in again."
+
+
+class SignInExpired(ConnectionError):
+    """A 401 from the server or the gateway: the sign-in has expired (ADR 028).
+
+    ``more`` says that earlier steps of the same task already went out; ``result``
+    keeps a coding turn's output from before the gateway refused it.
+    """
+
+    def __init__(self, *, more=False, result=None):
+        self.more = more
+        self.notice = EXPIRED_MORE if more else EXPIRED
+        super().__init__(self.notice + " " + SIGN_IN_AGAIN, 401)
+        self.result = result
 
 
 class NoRedirects(HTTPRedirectHandler):
@@ -69,11 +106,16 @@ def request(server, path, credential, *, method="GET", expected=200, payload=Non
                 raise ConnectionError("The server returned an unexpected response.")
             body = response.read(LIMIT + 1)
     except HTTPError as error:
-        error.close()
+        try:
+            if error.code == 401:
+                raise SignInExpired() from None
+            detail = refusal_reason(error) if error.code == 403 else None
+        finally:
+            error.close()
         messages = {400: "The server refused these request details.",
-                    401: "The Keeplane session is unavailable or expired.",
                     403: "The requested action is unavailable.", 503: "Keeplane is temporarily unavailable; retry later."}
-        raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code) from None
+        raise ConnectionError(messages.get(error.code, "The server refused this action."), error.code,
+                              detail) from None
     except (URLError, OSError, ValueError):
         raise ConnectionError("Cannot reach Keeplane securely; check the server and certificate configuration.") from None
     if len(body) > LIMIT:
@@ -86,18 +128,64 @@ def logout(server, credential):
     request(server, "/api/runtime/session", credential, method="DELETE", expected=204)
 
 
-def account(server, credential):
+def gateway_endpoint(value):
+    """The CLI's gateway check: an origin followed by ``/v1``, returned normalized.
+
+    It holds for ``--gateway`` and for the address the server gives at sign-in.
+    """
+    if not isinstance(value, str):
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
+    try:
+        url = urlsplit(value)
+    except ValueError:
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.") from None
+    if url.path.rstrip("/") != "/v1" or url.query or url.fragment:
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.")
+    try:
+        return origin(value[:len(value) - len(url.path)]) + "/v1"
+    except ValueError:  # Such as a port out of range.
+        raise ConnectionError("Use the operator's protected gateway URL ending in /v1.") from None
+
+
+def session_data(server, credential):
+    """The checked ``GET /api/runtime/session`` answer, ``gateway_url`` included."""
     try:
         data = json.loads(request(server, "/api/runtime/session", credential))
-        if (not isinstance(data, dict) or set(data) != {"id", "username", "role"}
+        # A server with task 009-02 also gives "gateway_url": a string or null.
+        if (not isinstance(data, dict)
+                or set(data) - {"gateway_url"} != {"id", "username", "role"}
                 or data["id"] != str(uuid.UUID(data["id"]))
                 or not isinstance(data["username"], str)
                 or not re.fullmatch(r"[A-Za-z0-9._-]{3,64}", data["username"])
-                or data["role"] not in {"admin", "developer"}):
+                or data["role"] not in {"admin", "developer"}
+                or not isinstance(data.get("gateway_url"), (str, type(None)))):
             raise ValueError
     except (ValueError, TypeError, AttributeError, RecursionError):
         raise ConnectionError("The server returned an invalid account.") from None
     return data
+
+
+def account(server, credential):
+    data = session_data(server, credential)
+    return {"id": data["id"], "username": data["username"], "role": data["role"]}
+
+
+def session(server, credential):
+    """The signed-in account and the gateway address the server gives (009-02).
+
+    The address passes the CLI's gateway check. It is ``None`` when the server
+    doesn't know it, or is older than task 009-02 and sends no ``gateway_url``.
+    """
+    data = session_data(server, credential)
+    gateway = data.get("gateway_url")
+    if gateway is not None:
+        try:
+            gateway = gateway_endpoint(gateway)
+        except ConnectionError:
+            raise ConnectionError(
+                "The server gave a gateway address the CLI can't use, so you aren't "
+                "signed in. Ask your admin to check `KEEPLANE_GATEWAY_PUBLIC_URL`.") from None
+    return {"id": data["id"], "username": data["username"], "role": data["role"]}, gateway
 
 
 def models(server, project_id, credential):

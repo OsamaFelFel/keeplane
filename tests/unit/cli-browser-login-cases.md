@@ -9,9 +9,10 @@
 | Duplicate token JSON keys or invalid required fields | No profile saved; response values never printed. |
 | Token exchange refusal or redirect | One exchange only; no forwarding or success claim. |
 | Account/storage failure after issuance | Exact issued pair revocation attempted; unconfirmed cleanup reported honestly. |
-| Browser failure, refusal or callback timeout | No token exchange; listener closes, including a partial HTTP request. |
+| Refusal or callback timeout | No token exchange; listener closes, including a partial HTTP request. |
+| Browser fails to start | No token exchange; the listener closes and sign-in uses the device code ([no-browser cases](cli-no-browser-cases.md)). |
 | Existing signed-in profile | Refused before opening the browser. |
 
 These controls exercise the real client HTTP/listener path with a synthetic
 issuer. Actual Django browser identity, CSRF, consent, code replay, revocation
-and device fallback need the server integration checks.
+and the device fallback need the server integration checks.

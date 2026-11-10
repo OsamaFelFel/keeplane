@@ -1,32 +1,37 @@
 # Sign in using a code
 
-Use this explicit fallback when your terminal cannot open a browser. It needs
-macOS or Linux, Python 3.9+, and a trial Keeplane server with device authorization
-enabled. The operator must register the fixed device client with
-`python manage.py register_cli_client --device`. The trial server and CLI are
-not yet packaged together. The [CLI wheel](cli-install.md) installs `keeplane`
+`keeplane login` uses this code by itself when it can't open a browser: over SSH,
+with no display, when no browser can be found, or when the browser fails to start (see
+[browser sign-in](cli-browser-login.md#when-no-browser-can-open)). Use `--device`
+to choose it yourself. It needs
+macOS or Linux, Python 3.9+, and a Keeplane server with device authorization
+enabled. The [local preview](local-preview.md) has it on and registers the fixed
+device client; for other servers see
+[CLI sign-in on the server](cli-sign-in-server.md). The [CLI wheel](cli-install.md) installs `keeplane`
 without the server or native coding runtime.
 
 Choose a private profile outside Git, with an existing parent directory:
 
 ```sh
-python3 components/cli/keeplane.py login --device \
-  --server https://keeplane.example \
+keeplane login --device --server https://keeplane.example \
   --profile /absolute/private/keeplane-account
 ```
 
 Open the printed Keeplane address in your browser, enter the short code, sign in
 and choose Continue. The terminal waits for approval, checks your current account
 and saves the private profile. An existing signed-in profile is refused before
-starting another attempt. Then use the usual `whoami`, project, key, coding and
+starting another attempt, unless the server says its sign-in has expired: then
+`login` removes it and signs you in again. Admins approve the code the same way
+and then work like developers, with the same project and model limits. Then use the usual `whoami`, project, key, coding and
 `logout` commands. [Profile storage and recovery](cli-account-profile.md) apply.
 
 The client waits the server's polling interval before every exchange and adds
 five seconds when asked to slow down. `--timeout 120` bounds the approval wait;
 one to 300 seconds is supported, and server expiry can shorten it. Requests use
 bounded responses and socket timeouts; this is not a hard total network deadline.
-There is no automatic fallback from a browser exchange or retry after an
-ambiguous token exchange.
+Once a browser has opened, the CLI does not switch to a code: a browser sign-in
+that times out or is refused stops there. There is no retry after an ambiguous
+token exchange.
 
 Ctrl+C stops polling and leaves no signed-in profile. A pending code expires on
 the server; cancellation does not remotely revoke it. An exchange may finish on

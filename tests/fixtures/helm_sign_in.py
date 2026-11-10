@@ -381,7 +381,9 @@ class HelmSignIn:
                     }
                 ],
                 "readinessProbe": {
-                    "exec": {"command": ["pg_isready", "-U", "postgres"]},
+                    "exec": {
+                        "command": ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+                    },
                     "periodSeconds": 2,
                 },
                 "volumeMounts": [

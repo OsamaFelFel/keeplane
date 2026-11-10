@@ -111,15 +111,17 @@ flowchart LR
     callback["One-time sign-in listener<br/>127.0.0.1"]
     browser["Browser"]
     runtime["Coding runtime<br/>(started by keeplane code)"]
+    relay["Usage relay for one turn<br/>127.0.0.1"]
   end
   server["Keeplane server<br/>(--server)"]
-  gateway["Gateway<br/>(--gateway)"]
+  gateway["Gateway<br/>(saved at sign-in, or --gateway)"]
   cli -- "sign-in, account, models, keys, sign-out" --> server
   cli -- "opens the sign-in page" --> browser
   browser --> server
   browser -- "redirect back" --> callback
   cli -- "starts" --> runtime
-  runtime -- "model calls only" --> gateway
+  runtime -- "model calls only" --> relay
+  relay -- "the same calls, unchanged" --> gateway
 ```
 
 | From | To | When |
@@ -127,7 +129,8 @@ flowchart LR
 | CLI | The Keeplane server given to `keeplane login --server` | Sign-in, refresh, `whoami`, project registration, `models`, `keys`, the checks before a coding turn, and sign-out |
 | CLI | Its own one-time listener on `127.0.0.1` | Browser sign-in only: the server's sign-in page sends the browser back to it. Nothing outside the computer connects to it |
 | Browser | The Keeplane server's sign-in page | Browser sign-in; `keeplane login --device` shows a code to use in any browser instead |
-| Coding runtime | The gateway URL given to `keeplane code --gateway` | Each model call in a coding turn |
+| Coding runtime | The CLI's usage relay on `127.0.0.1`, a port picked for each turn | Each model call in a coding turn |
+| Usage relay (in the CLI) | The gateway address the server gave at sign-in, or the one given to `keeplane code --gateway` | Each model call in a coding turn, sent on unchanged. The relay adds no credential and reads only the token counts in each answer, for [usage](cli-usage.md). Nothing outside the computer connects to it; another local user can reach its port during a turn, but a request without that turn's grant is refused (403) and never sent on |
 
 The CLI never uses a proxy from the developer's shell and never follows a
 redirect, so its requests and credentials go only to the server it was given.
@@ -145,9 +148,17 @@ off everything the runtime would otherwise reach on its own:
 - The runtime gets a fresh, empty settings folder and only `PATH`, the language
   and the TLS certificate settings from the developer's shell. A proxy,
   provider keys and other runtime settings in the shell are not passed on.
-- Its only provider is the Keeplane gateway, through a provider built into the
-  runtime, so no package is downloaded. Sharing is off. Keeplane's instruction
-  plugin is a local folder with no dependencies.
+- Its only provider is the Keeplane gateway, reached through the CLI's usage
+  relay on `127.0.0.1` and a provider built into the runtime, so no package is
+  downloaded. The settings check refuses any provider address but that relay. A provider policy removes every other
+  provider the runtime knows. Sharing is off. Keeplane's instruction plugin is
+  a local folder with no dependencies.
+- No provider sign-in. The runtime's built-in provider plugins are turned off
+  (`-opencode.provider.*`): they would offer ChatGPT, OpenAI, GitHub Copilot,
+  GitLab and other sign-ins (each with its own OAuth listener and sign-in
+  service), look for local model runners on loopback ports, and install
+  packages for other providers. Cloud models are reached only with API keys
+  held by Keeplane, through the gateway.
 
 - No web search and no web fetch. The runtime has built-in tools that search
   the web through hosted services (some work without any key) and fetch any

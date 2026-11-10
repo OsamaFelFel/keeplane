@@ -1,7 +1,7 @@
 # PostgreSQL driver packages
 
-For the separately installed sign-in trial, see the
-[optional source and notice collector](cli-auth-trial.md).
+For the CLI sign-in packages in the preview image, see the
+[source and notice collector](cli-auth-trial.md).
 
 The default preview image has no PostgreSQL driver. The optional `postgres`
 Docker target installs Psycopg 3.3.6 and its unmodified, source-built C extension,

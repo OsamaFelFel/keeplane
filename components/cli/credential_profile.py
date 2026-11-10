@@ -1,5 +1,7 @@
 """Private, explicit CLI credentials; no vendor configuration or history import."""
 
+from __future__ import annotations
+
 import fcntl
 import json
 import os
@@ -12,13 +14,38 @@ from dataclasses import dataclass
 from pathlib import Path
 
 if __package__:
-    from .server_connection import ConnectionError, origin
+    from .server_connection import ConnectionError, gateway_endpoint, origin
 else:
-    from server_connection import ConnectionError, origin
+    from server_connection import ConnectionError, gateway_endpoint, origin
+
+
+SERVER_FILE = "server.json"
+SERVER_FORMAT = "keeplane-server-v1"
 
 
 class ProfileError(Exception):
     pass
+
+
+class UnusableServer(ProfileError):
+    """The kept server address is malformed or unsafe; it is never trusted."""
+
+
+UNUSABLE_SERVER = (
+    "Keeplane can't use the server address it kept for this profile. "
+    "Run `keeplane login --server <address>`, or `keeplane forget` to remove it."
+)
+
+
+def default_path():
+    """``$XDG_CONFIG_HOME/keeplane/account``: ``~/.config/keeplane/account`` by default."""
+    configured = os.environ.get("XDG_CONFIG_HOME", "")
+    home = (
+        Path(configured)
+        if configured and Path(configured).is_absolute()
+        else (Path.home() / ".config")
+    )
+    return home / "keeplane" / "account"
 
 
 @dataclass(repr=False, frozen=True)
@@ -28,6 +55,8 @@ class Credential:
     access_token: str
     refresh_token: str
     client_id: str = "keeplane-cli"
+    # The gateway address the server gave at sign-in (task 009-02b), or None.
+    gateway: str | None = None
 
     def __repr__(self):
         return "<Keeplane credential: redacted>"
@@ -43,12 +72,19 @@ def private_file(info):
 
 
 def decode(data):
+    """Check a stored profile; v3 adds the gateway the server gave at sign-in."""
     try:
         fields = {"format", "issuer", "actor_id", "access_token", "refresh_token"}
         if isinstance(data, dict) and data.get("format") == "keeplane-credential-v1":
             if set(data) != fields:
                 raise ValueError
             data = dict(data, client_id="keeplane-cli")
+        elif isinstance(data, dict) and data.get("format") == "keeplane-credential-v3":
+            if (
+                set(data) != fields | {"client_id", "gateway"}
+                or gateway_endpoint(data["gateway"]) != data["gateway"]
+            ):
+                raise ValueError
         elif (
             not isinstance(data, dict)
             or data.get("format") != "keeplane-credential-v2"
@@ -65,9 +101,19 @@ def decode(data):
             or not re.fullmatch(r"[A-Za-z0-9_-]{16,200}", data["refresh_token"])
         ):
             raise ValueError
-        return Credential(**{key: data[key] for key in Credential.__annotations__})
+        values = {key: data[key] for key in Credential.__annotations__ if key in data}
+        return Credential(**values)
     except (ValueError, TypeError, AttributeError, ConnectionError):
         raise ProfileError("Credential profile is invalid.") from None
+
+
+def encode(credential):
+    """A profile without a gateway stays v2, so an older CLI still reads it."""
+    data = vars(credential).copy()
+    if data["gateway"] is None:
+        del data["gateway"]
+        return dict(format="keeplane-credential-v2", **data)
+    return dict(format="keeplane-credential-v3", **data)
 
 
 def unique(pairs):
@@ -103,8 +149,83 @@ class Profile:
             raise ProfileError("Credential profile is invalid.") from None
 
     def save(self, credential):
-        data = dict(format="keeplane-credential-v2", **vars(credential))
-        decode(data)
+        data = encode(credential)
+        if decode(data) != credential:
+            raise ProfileError("Credential profile is invalid.")
+        self._write("credential.json", data)
+
+    def load_server(self):
+        """The server address kept after sign-out, or None (Spec 009 ST29).
+
+        An unsafe file (wrong mode or owner, a link, a special file) is refused
+        before it is opened, and a malformed one after a bounded read; both
+        raise ``UnusableServer`` and nothing in the file is used.
+        """
+        try:
+            info = os.stat(SERVER_FILE, dir_fd=self.directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        if not private_file(info):
+            raise UnusableServer(UNUSABLE_SERVER)
+        try:
+            descriptor = os.open(
+                SERVER_FILE,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                dir_fd=self.directory,
+            )
+        except OSError:
+            raise UnusableServer(UNUSABLE_SERVER) from None
+        with os.fdopen(descriptor, "rb") as source:
+            if not private_file(os.fstat(source.fileno())):
+                raise UnusableServer(UNUSABLE_SERVER)
+            raw = source.read(4097)
+        try:
+            data = json.loads(raw, object_pairs_hook=unique)
+            if (
+                len(raw) > 4096
+                or not isinstance(data, dict)
+                or set(data) != {"format", "server"}
+                or data["format"] != SERVER_FORMAT
+                or data["server"] != origin(data["server"])
+            ):
+                raise ValueError
+        except (ValueError, TypeError, RecursionError, ConnectionError):
+            raise UnusableServer(UNUSABLE_SERVER) from None
+        return data["server"]
+
+    def remove_server(self):
+        """Remove the kept server address; say whether it was usable.
+
+        Returns "unusable", "usable", or None when nothing was kept. Only
+        ``keeplane forget`` calls this, while signed out. Unlinking never
+        follows a link, and an unusable file is never trusted.
+        """
+        try:
+            state = "usable" if self.load_server() else None
+        except UnusableServer:
+            state = "unusable"
+        if state:
+            os.unlink(SERVER_FILE, dir_fd=self.directory)
+            os.fsync(self.directory)
+        return state
+
+    def replace_kept_server(self, server):
+        """After a successful sign-in, keep the server just signed in to.
+
+        Any kept file is replaced without being read, by the same atomic,
+        no-follow write as sign-out: a link is replaced, never its target.
+        """
+        try:
+            os.stat(SERVER_FILE, dir_fd=self.directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        self.save_server(server)
+
+    def save_server(self, server):
+        """Keep only the non-secret server address, with no account or token."""
+        self._write(SERVER_FILE, {"format": SERVER_FORMAT, "server": origin(server)})
+
+    def _write(self, target, data):
         payload = json.dumps(data).encode()
         if len(payload) > 4096:
             raise ProfileError("Credential profile is invalid.")
@@ -116,13 +237,13 @@ class Profile:
             dir_fd=self.directory,
         )
         try:
-            with os.fdopen(descriptor, "wb") as target:
-                target.write(payload)
-                target.flush()
-                os.fsync(target.fileno())
+            with os.fdopen(descriptor, "wb") as destination:
+                destination.write(payload)
+                destination.flush()
+                os.fsync(destination.fileno())
             os.replace(
                 name,
-                "credential.json",
+                target,
                 src_dir_fd=self.directory,
                 dst_dir_fd=self.directory,
             )
@@ -134,7 +255,13 @@ class Profile:
                 pass
 
     def forget(self):
-        self.load()  # Refuse to remove foreign or malformed state.
+        """Remove the tokens, gateway and account; keep the server address.
+
+        Spec 009 ST29 "Sign out": a plain `keeplane login` later signs in to
+        the same server.
+        """
+        credential = self.load()  # Refuse to remove foreign or malformed state.
+        self.save_server(credential.issuer)
         os.unlink("credential.json", dir_fd=self.directory)
         os.fsync(self.directory)
 
@@ -156,10 +283,15 @@ def opened(path, *, create=False):
             raise ProfileError(
                 "Credential directory must be private and owned by this user."
             )
-        if set(os.listdir(directory)) - {"credential.json", "lock"}:
+        if set(os.listdir(directory)) - {"credential.json", SERVER_FILE, "lock"}:
             raise ProfileError("Refusing foreign or incomplete credential state.")
         for name in os.listdir(directory):
-            if not private_file(os.stat(name, dir_fd=directory, follow_symlinks=False)):
+            info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            # An unusable server.json is never read here; reading it refuses it
+            # (load_server), so `login --server` and `forget` still work.
+            if name == SERVER_FILE and not stat.S_ISDIR(info.st_mode):
+                continue
+            if not private_file(info):
                 raise ProfileError("Credential state contains an unsafe file.")
         lock = os.open(
             "lock",
@@ -183,3 +315,12 @@ def opened(path, *, create=False):
             os.close(lock)
         if directory is not None:
             os.close(directory)
+
+
+def saved_server(path):
+    """The server address this profile kept after sign-out, or None."""
+    # lexists: a dangling link is still a kept file, and is refused.
+    if not os.path.lexists(Path(path).expanduser() / SERVER_FILE):
+        return None
+    with opened(path) as profile:
+        return profile.load_server()

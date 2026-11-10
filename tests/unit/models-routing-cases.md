@@ -44,7 +44,9 @@ catalog:
   [gateway copy cases](gateway-copy-cases.md), PR the
   [persona rule unit cases](persona-rule-cases.md), CODE the
   [signed-in coding cases](cli-signed-in-coding-cases.md), KC the
-  [CLI provider-key cases](cli-provider-key-command-cases.md) and RETRY the
+  [CLI provider-key cases](cli-provider-key-command-cases.md), REQ the
+  [request settings cases](cli-request-settings-cases.md), RK the
+  [refused key cases](cli-refused-key-cases.md) and RETRY the
   [managed runtime configuration cases](runtime-config-cases.md).
 - CL and CL-INT the [complexity level cases](../integration/complexity-level-cases.md),
   PR-INT the [persona rule cases](../integration/persona-rule-cases.md), RT the
@@ -57,7 +59,8 @@ catalog:
   [key list cases](../integration/runtime-key-list-cases.md), PK the
   [provider-key cases](../integration/runtime-provider-key-cases.md), KR the
   [key check cases](../integration/developer-key-recheck-cases.md), MP the
-  [model policy cases](../integration/model-policy-cases.md), PMR the
+  [model policy cases](../integration/model-policy-cases.md), RK-INT the
+  [refused key cases on the server](../integration/cli-refused-key-cases.md), PMR the
   [personal model setup cases](../integration/personal-model-registration-cases.md),
   DK-COUNT the [key count cases](../integration/personal-key-count-cases.md) and
   MA the [model answer record cases](../integration/model-answer-record-cases.md).
@@ -88,7 +91,7 @@ or a case named here has no row in its own catalog or no test.
 | ST11 | Add my own key | KC-01, KC-02 (hidden prompt), PK-01, PK-02 (checked with the provider), MC-01 |
 | ST11 | Never on the developer's machine | KC-01, KR-01 |
 | ST11 | Replace or remove my key | PK-01, MC-03 |
-| ST11 | A refused key | Not built yet: Keeplane doesn't see a refusal on its own. The owner kept it manual until Spec 009 (governance issue #63, question 4): after `keeplane keys check` the key shows as refused, KR-02. |
+| ST11 | A refused key | KR-02 (after `keeplane keys check`), RK-02, RK-05 (a task that fails with the provider's 401 or 403), RK-INT-01 |
 | ST11 | No key yet | MC-02, MC-06, MC-13 |
 | ST12 | No models yet | CAT-01, CODE-01 |
 | ST13 | Keeplane's picks | CL-INT-01, CL-UI-01, LEVEL-LIVE-01 |
@@ -119,7 +122,7 @@ or a case named here has no row in its own catalog or no test.
 | ST25 | Loading | MOD-UI-04 |
 | ST25 | The gateway isn't answering | MOD-UI-05 |
 | ST25 | No gateway name | MOD-UI-06 |
-| ST26 | Request settings pass through | PROTO-01, CODE-02 |
+| ST26 | Request settings pass through | PROTO-01, CODE-02, REQ-01, REQ-02, REQ-07 |
 | ST26 | The runner is left alone | MRS-10 |
 | ST27 | Key count | DK-COUNT-01, DK-COUNT-02, DK-COUNT-03, MOD-UI-01 |
 

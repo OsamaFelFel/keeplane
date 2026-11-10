@@ -1,4 +1,4 @@
-"""Collect the pinned optional sign-in trial's sources and original notices."""
+"""Collect the pinned CLI sign-in packages' sources and original notices."""
 
 import argparse
 import hashlib

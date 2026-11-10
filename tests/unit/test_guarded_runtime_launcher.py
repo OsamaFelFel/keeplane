@@ -1,4 +1,7 @@
-"""A failed or uncertain enrollment must stop only its managed gateway."""
+"""The launcher's protected-runtime steps, and stopping only its managed gateway.
+
+Cases GRL-01 to GRL-07 in guarded-runtime-launcher-cases.md.
+"""
 
 import importlib.util
 import subprocess
@@ -15,15 +18,15 @@ spec.loader.exec_module(launcher)
 
 @pytest.fixture
 def commands(monkeypatch, tmp_path):
-    f = SimpleNamespace(calls=[], fail=None, same_id=False, wait_calls=0)
+    f = SimpleNamespace(
+        calls=[], fail=None, same_id=False, wait_calls=0, models=["model-a", "model-b"]
+    )
 
     def run(command, **kwargs):
         args = command[8:]
         f.calls.append(args)
         assert kwargs["cwd"] == tmp_path
         assert kwargs["env"]["KEEPLANE_RUNTIME_PORT"] == "5001"
-        assert kwargs["env"]["KEEPLANE_RUNTIME_APP_IMAGE"] == "operator-trial:owned"
-        assert kwargs["env"]["KEEPLANE_RUNTIME_OAUTH_ENABLED"] == "1"
         if f.fail and f.fail(args):
             return SimpleNamespace(
                 returncode=1, stdout="private output must not be reflected"
@@ -42,15 +45,15 @@ def commands(monkeypatch, tmp_path):
     f.install = lambda: launcher.install(
         tmp_path,
         tmp_path,
-        ["model-a", "model-b"],
+        f.models,
         5001,
         env={},
         wait_ready=ready,
-        app_image="operator-trial:owned",
     )
     return f
 
 
+# GRL-01
 def test_fresh_process_and_migration_precede_application_and_enrollment(commands):
     f = commands
     assert f.install() == "http://127.0.0.1:5001/v1"
@@ -74,6 +77,25 @@ def test_fresh_process_and_migration_precede_application_and_enrollment(commands
     assert f.calls[-1][0] == "up" and f.calls[-1][-1] == "model-enroller"
 
 
+# GRL-02
+def test_default_start_registers_clients_and_leaves_enrolment_to_the_enroller(
+    commands,
+):
+    f = commands
+    f.models = []
+    assert f.install() == "http://127.0.0.1:5001/v1"
+    assert [row[-1] for row in f.calls if "register_cli_client" in row] == [
+        "register_cli_client",
+        "--device",
+    ]
+    assert not any("install_runtime_guard" in row for row in f.calls)
+    assert f.calls[-2][-1] == "app" and f.wait_calls == 1
+    assert f.calls[-1][0] == "up" and f.calls[-1][-1] == "model-enroller"
+    # No sign-in switch or image is passed: the compose files decide both.
+    assert all("KEEPLANE_RUNTIME_OAUTH_ENABLED" not in " ".join(row) for row in f.calls)
+
+
+# GRL-03
 @pytest.mark.parametrize(
     "fault",
     ["same-process", "init", "migration", "registration", "enrollment", "enroller"],
@@ -95,6 +117,7 @@ def test_every_setup_failure_stops_gateway_and_hides_private_output(commands, fa
     assert all("down" not in args and "--volumes" not in args for args in f.calls)
 
 
+# GRL-04
 def test_stop_failure_is_reported_as_unconfirmed(commands):
     f = commands
     f.fail = lambda args: (
@@ -110,6 +133,7 @@ def test_stop_failure_is_reported_as_unconfirmed(commands):
         f.install()
 
 
+# GRL-05
 def test_timeout_still_stops_only_managed_gateway(commands, monkeypatch):
     original = launcher.subprocess.run
 
@@ -122,3 +146,41 @@ def test_timeout_still_stops_only_managed_gateway(commands, monkeypatch):
     with pytest.raises(RuntimeError, match="gateway is stopped"):
         commands.install()
     assert commands.calls[-1] == ["stop", "model-enroller", "gateway"]
+
+
+# GRL-06
+@pytest.mark.parametrize(
+    ("logs", "expected"),
+    [
+        (
+            ["", "No model is enrolled for protected access.\n"],
+            "No model is enrolled for protected access.",
+        ),
+        (
+            ["Starting\nProtected access is ready: 1 model is enrolled.\n"],
+            "Protected access is ready: 1 model is enrolled.",
+        ),
+        ([""] * 5, None),
+    ],
+)
+def test_enroller_report_waits_for_the_first_pass(
+    monkeypatch, tmp_path, logs, expected
+):
+    answers = iter(logs)
+    calls, clock = [], [0.0]
+
+    def run(command, **kwargs):
+        calls.append(command)
+        assert command[-1] == "model-enroller" and "--profile" in command
+        return SimpleNamespace(returncode=0, stdout=next(answers, ""))
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    monkeypatch.setattr(launcher.time, "monotonic", lambda: clock[0])
+    assert (
+        launcher.enroller_report(tmp_path, tmp_path, env={}, timeout=3, sleep=sleep)
+        == expected
+    )
+    assert len(calls) <= 4

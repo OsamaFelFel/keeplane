@@ -544,6 +544,8 @@ class ModelManagement:
                 self.actor(),
                 owned_by_keeplane=True,
                 key_choice=key_choice,
+                # The provider's own model name, for its list price (ADR 029).
+                added_from=("cloud", source, model),
             )
         except (ValueError, IdentityError, StorageUnavailable):
             removed = self.undo_cloud_model(name, resource)
@@ -904,6 +906,8 @@ class ModelManagement:
                 self.actor(),
                 owned_by_keeplane=True,
                 **({"context_tokens": context_tokens} if context_tokens else {}),
+                # Every source here runs locally; its usage is never priced.
+                added_from=("local", "", ""),
             )
         except (ValueError, IdentityError, StorageUnavailable):
             removed = self.undo_new_model(name, params)

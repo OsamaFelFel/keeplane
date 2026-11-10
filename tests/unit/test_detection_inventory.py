@@ -66,15 +66,15 @@ def test_pd_10_detection_is_an_explicit_image_target():
         assert name in section
     assert dockerfile.count("requirements-detection.txt") == 1
     # Each detection target copies that one hashed install, notices included,
-    # onto its base: the SQLite preview, PostgreSQL, and PostgreSQL with CLI
-    # sign-in. Nothing else copies it.
+    # onto its base: the SQLite app with CLI sign-in (as the preview has it),
+    # PostgreSQL, and PostgreSQL with CLI sign-in. Nothing else copies it.
     bases = {stage: base for base, stage in
              re.findall(r"^FROM (\S+) AS (\S+)$", dockerfile, re.M)}
     copies = [stage for stage in stages
               if "--from=detection-dependencies" in
               dockerfile.split(f" AS {stage}\n", 1)[1].split("\nFROM ", 1)[0]]
     assert copies == ["detection", "postgres-detection", "postgres-cli-auth-detection"]
-    assert [bases[stage] for stage in copies] == ["core", "postgres",
+    assert [bases[stage] for stage in copies] == ["sign-in", "postgres",
                                                   "postgres-cli-auth-trial"]
     for stage in copies:
         body = dockerfile.split(f" AS {stage}\n", 1)[1].split("\nFROM ", 1)[0]

@@ -20,14 +20,15 @@
   no model choice and starts no runtime. A model missing from a non-empty list
   keeps “This model is not currently allowed for the project.”
 - CODE-02 Request settings (ST26): Keeplane's generated runtime configuration holds only
-  the provider package, gateway URL, project header and model name, so it adds or
+  the provider package, gateway URL, project header, model name, the request for
+  usage on streamed answers and the gateway-only provider policy, so it adds or
   replaces no request setting such as temperature. The gateway side is covered by
   the [native protocol cases](../integration/native-runtime-protocol-cases.md).
 - CODE-03 Model down after the gateway's retries (Spec 004 ST16): when the runtime's
   error event carries a 429 or 5xx, `code` keeps its failing exit status, still
   prints the runtime's error, and adds “coder is unavailable right now, so this
-  task stopped. Wait and try again, or run it with another model allowed for
-  this project using --model: …” with the server's list. The runtime is started
+  task stopped. Wait and try again, or run `keeplane use <model>` with another
+  model allowed for this project: …” with the server's list. The runtime is started
   once, with the requested model only. Run
   `python -m pytest tests/unit/test_cli_model_outage.py`.
 - CODE-04 No other allowed model (owner decision, governance issue #52): after a 429 or
@@ -37,16 +38,18 @@
   which says “so nothing was sent”, is not shown, because the task was sent; that
   message itself is unchanged.
 - CODE-05 Task too big for the model's context: “This task is too big for coder's
-  context, so it stopped. Run it with another model allowed for this project
-  using --model: …”.
+  context, so it stopped. Make the task smaller, or run `keeplane use <model>`
+  with another model allowed for this project: …”.
 - CODE-06 Too big with no other model allowed: “This task is too big for
   coder's context and no other model is allowed for this project. Make the task
   smaller, or ask your admin to set up a model with a larger context.” (governance
   issue #57).
 - An older server (404), an unavailable server (503) or a malformed list: the
   reason still shows and points to `keeplane models`; no list is printed.
-- A 400, 401 or 403 error, an error without a status, or a successful turn asks
-  for no alternatives and prints nothing extra.
+- A 400 or 403 error, an error without a status, or a successful turn asks
+  for no alternatives. Only a turn that finished prints “Answered by [Model].”, naming every model that answered
+  (Spec 004 ST17); see the [model switch cases](cli-model-switch-cases.md). A 401 means the sign-in has
+  expired; see the [expired sign-in cases](cli-sign-in-again-cases.md).
 - Private history records the issuer, account and project without credentials.
   Fresh credentials for the same account work; another account or project cannot
   reuse that history. Legacy unbound history is also refused.

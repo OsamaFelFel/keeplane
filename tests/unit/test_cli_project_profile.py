@@ -6,6 +6,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from types import SimpleNamespace
+from urllib.parse import parse_qs
 
 import pytest
 
@@ -15,7 +16,9 @@ from components.cli.session_state import managed
 
 
 @pytest.fixture
-def connected(tmp_path):
+def connected(tmp_path, monkeypatch):
+    # The CLI settings file (a `keeplane use` switch) stays inside the test.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     state = SimpleNamespace(
         actor=str(uuid.uuid4()),
         calls=[],
@@ -27,6 +30,9 @@ def connected(tmp_path):
         choice_status=200,
         alternatives=[],
         alternatives_status=200,
+        task_model="coder",
+        task_model_status=200,
+        task_model_reply=None,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -52,6 +58,19 @@ def connected(tmp_path):
                     **(state.choice or {}),
                 }
                 status = state.choice_status
+            elif "/task-model" in self.path:
+                route, _, query = self.path.partition("?")
+                switch = parse_qs(query).get("model_id", [None])[0]
+                value = {
+                    "project_id": route.split("/")[-2],
+                    "requested_model_id": switch, "persona": None, "level": None,
+                    "model_id": switch or state.task_model,
+                    "chosen_by": ("developer" if switch else
+                                  "first_allowed" if state.task_model else None),
+                    "reason": None,
+                    **(state.task_model_reply or {}),
+                }
+                status = state.task_model_status
             elif "/model-alternatives?" in self.path:
                 value = {
                     "project_id": self.path.split("/")[-2],
@@ -133,7 +152,9 @@ def test_one_entry_point_account_registration_catalog_and_logout(
         "name": "Server original",
     }
     assert command(monkeypatch, connected, "models", "--project", project) == 0
-    assert json.loads(capsys.readouterr().out)["models"] == [{"id": "coder"}]
+    assert json.loads(capsys.readouterr().out)["models"] == [
+        {"id": "coder", "current": True}
+    ]
     assert command(monkeypatch, connected, "logout") == 0
     assert (
         "removed" in capsys.readouterr().out
@@ -145,6 +166,7 @@ def test_one_entry_point_account_registration_catalog_and_logout(
         ("POST", "/api/runtime/projects"),
         ("GET", "/api/runtime/session"),
         ("GET", f"/api/runtime/projects/{project}/models"),
+        ("GET", f"/api/runtime/projects/{project}/task-model"),
         ("DELETE", "/api/runtime/session"),
     ]
     assert connected.calls[2][3] == {"project_id": project, "name": "Requested"}
@@ -237,7 +259,7 @@ def test_signed_in_coding_registers_checks_catalog_and_passes_project_context(
     environment = options["env"]
     config = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
     assert config["providers"]["keeplane"]["headers"] == {"X-Keeplane-Project-ID": project}
-    assert config["providers"]["keeplane"]["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert opencode_adapter.relay_address(config["providers"]["keeplane"]["settings"]["baseURL"])
     assert environment["KEEPLANE_RUNTIME_GRANT"] == connected.access
     assert connected.access not in json.dumps(native_command) + json.dumps(config)
     assert options["input"] == "Fix the addition function."
@@ -364,7 +386,7 @@ def test_usable_key_keeps_the_requested_model_without_a_notice(
     connected.model_ids = ["coder", "general"]
     assert code(monkeypatch, connected, runtime, str(uuid.uuid4()), tmp_path) == 0
     assert native_model(runtime) == "keeplane/coder"
-    assert capsys.readouterr().err == ""
+    assert capsys.readouterr().err == "Answered by coder.\n"
 
 
 def test_no_other_allowed_model_fails_with_the_missing_key_message(
@@ -419,7 +441,7 @@ def test_repository_settings_cannot_change_the_model_or_destination(
     assert "OPENCODE_CONFIG" not in environment and "OPENCODE_MODEL" not in environment
     config = json.loads(environment["OPENCODE_CONFIG_CONTENT"])
     assert config["model"] == "keeplane/coder" and set(config["providers"]) == {"keeplane"}
-    assert config["providers"]["keeplane"]["settings"] == {"baseURL": "https://gateway.test/v1"}
+    assert opencode_adapter.relay_address(config["providers"]["keeplane"]["settings"]["baseURL"])
     assert "unapproved" not in json.dumps([native_command, config])
     assert "repo-key" not in json.dumps([native_command, config])
 
@@ -499,10 +521,16 @@ def test_code_02_keeplane_sets_no_request_settings_of_its_own(
     config = json.loads(runtime[1][0][1]["env"]["OPENCODE_CONFIG_CONTENT"])
     provider = config["providers"]["keeplane"]
     assert set(provider) == {"package", "env", "settings", "models", "headers"}
-    assert provider["settings"] == {"baseURL": "https://gateway.test/v1"}
-    assert provider["models"] == {"coder": {"name": "coder"}}
-    # "websearch" and "plugins" only turn the runtime's web tools off (EGR-17).
+    assert opencode_adapter.relay_address(provider["settings"]["baseURL"])
+    # The only model entry besides its name asks for usage on streamed answers
+    # (ADR 029); it sets no temperature, top-p, token limit or effort.
+    assert provider["models"] == {"coder": {
+        "name": "coder", "compatibility": {"supportsUsageInStreaming": True}}}
+    # "websearch" and "plugins" only turn the runtime's web tools and provider
+    # sign-ins off (EGR-17); "experimental" holds only the gateway-only
+    # provider policy (KEY-01).
     assert set(config) == {"providers", "model", "share", "snapshots", "websearch",
-                           "plugins"}
+                           "plugins", "experimental"}
+    assert set(config["experimental"]) == {"policies"}
     assert config["websearch"] is False
     assert all(isinstance(row, str) and row.startswith("-") for row in config["plugins"])

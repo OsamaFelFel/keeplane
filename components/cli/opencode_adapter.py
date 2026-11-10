@@ -14,9 +14,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 if __package__:
+    from . import request_settings, settings_file, usage_relay
     from .instructions import snapshot
     from .session_state import account_binding, managed
 else:
+    import request_settings
+    import settings_file
+    import usage_relay
     from instructions import snapshot
     from session_state import account_binding, managed
 
@@ -29,6 +33,34 @@ DISABLED_BUILTINS = (
     "-opencode.tool.websearch",
     "-opencode.websearch.*",
 )
+# D185: cloud models only through API keys, and only through the gateway.
+# Every built-in provider plugin is turned off: they add the runtime's own
+# sign-ins (ChatGPT and OpenAI subscriptions, GitHub Copilot, GitLab and
+# others, with their OAuth listeners), local-runner discovery and package
+# installs. The gateway provider comes from these settings, not a plugin.
+DISABLED_PROVIDERS = ("-opencode.provider.*",)
+PROVIDER = "keeplane"
+PROVIDER_PACKAGE = "@opencode/ai/providers/openai-compatible"
+# Only this settings' provider may be used; the catalogue's other providers
+# (OpenAI, Anthropic and the rest) are removed before a turn starts.
+PROVIDER_POLICIES = (
+    {"action": "provider.use", "resource": "*", "effect": "deny"},
+    {"action": "provider.use", "resource": PROVIDER, "effect": "allow"},
+)
+# ADR 029: ask for token usage on streamed answers (stream_options.include_usage).
+MODEL_COMPATIBILITY = {"supportsUsageInStreaming": True}
+# Spec 004 ST26: with the developer's max_tokens, the runtime writes its own
+# output cap as max_tokens too (it would otherwise send max_completion_tokens),
+# and the request body overlay then replaces that value with the developer's.
+# One cap reaches the gateway, by the developer's name and value.
+OWN_MAX_TOKENS = {"maxTokensField": "max_tokens"}
+SETTINGS_KEYS = frozenset({"providers", "model", "share", "snapshots", "websearch",
+                           "plugins", "experimental"})
+# Words that name a sign-in, a stored credential or a key anywhere in the
+# settings. The gateway credential reaches the runtime only through
+# KEEPLANE_RUNTIME_GRANT, named in "env".
+SIGN_IN_WORDS = ("auth", "login", "apikey", "accesstoken", "refreshtoken", "bearer",
+                 "credential", "subscription", "accountid", "secret", "password")
 
 
 class Cancelled(KeyboardInterrupt):
@@ -101,8 +133,115 @@ def coding_turn(command, *, input, env, cwd, timeout, cancelled=None, pass_fds=(
             stream.close()
 
 
-def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None):
-    """Use a disposable profile; the gateway remains responsible for authorization."""
+def _keys(value, depth=0):
+    if depth > 32:
+        raise ValueError("Runtime settings are nested too deeply.")
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield key
+            yield from _keys(item, depth + 1)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _keys(item, depth + 1)
+
+
+def relay_address(value):
+    """True for the relay's own address: plain HTTP on 127.0.0.1 and a port."""
+    if not isinstance(value, str):
+        return False
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except ValueError:
+        return False
+    return (url.scheme == "http" and url.netloc == "127.0.0.1:" + str(port)
+            and port is not None and 0 < port < 65536 and not url.query
+            and not url.fragment and not url.path.endswith("/")
+            and value == url.geturl())
+
+
+def check_settings(config, relay, instruction_plugin=None):
+    """Refuse runtime settings other than the reviewed gateway-only shape (D185).
+
+    Exactly these keys, each with its reviewed value: one provider, `keeplane`,
+    through the built-in OpenAI-compatible package, with only the address of
+    Keeplane's loopback usage relay (which sends everything on to the gateway
+    and nowhere else), the grant from KEEPLANE_RUNTIME_GRANT and at most the project
+    header; one model entry that is exactly its name and the streamed-usage
+    flag, plus at most the developer's reviewed request settings as its body
+    (Spec 004 ST26) and, only with their max_tokens, the flag that makes the
+    runtime's own output cap max_tokens too; sharing and snapshots off; web search off; the web-tool and provider
+    plugin directives; at most Keeplane's own instruction plugin; and the
+    gateway-only provider policy. No key anywhere may name a sign-in, key or
+    credential.
+    """
+    if not relay_address(relay):
+        raise ValueError("The gateway provider may only use Keeplane's loopback relay.")
+    if not isinstance(config, dict) or set(config) != SETTINGS_KEYS:
+        raise ValueError("Runtime settings have a missing or unreviewed key.")
+    providers = config["providers"]
+    if not isinstance(providers, dict) or list(providers) != [PROVIDER]:
+        raise ValueError("Runtime settings must name only the Keeplane gateway as a provider.")
+    provider = providers[PROVIDER]
+    if (not isinstance(provider, dict)
+            or set(provider) - {"package", "env", "settings", "models", "headers"}
+            or provider.get("package") != PROVIDER_PACKAGE
+            or provider.get("env") != ["KEEPLANE_RUNTIME_GRANT"]
+            or provider.get("settings") != {"baseURL": relay}):
+        raise ValueError("The gateway provider may only use the gateway address and grant.")
+    headers = provider.get("headers", {})
+    if (not isinstance(headers, dict) or set(headers) - {"X-Keeplane-Project-ID"}
+            or not all(isinstance(value, str) for value in headers.values())):
+        raise ValueError("The gateway provider may only send the project header.")
+    models = provider.get("models")
+    if not isinstance(models, dict) or len(models) != 1:
+        raise ValueError("Runtime settings must use one gateway model.")
+    [(model, options)] = models.items()
+    if config["model"] != PROVIDER + "/" + model:
+        raise ValueError("Runtime settings must use one gateway model.")
+    body = options.get("body") if isinstance(options, dict) else None
+    compatibility = dict(MODEL_COMPATIBILITY)
+    if isinstance(body, dict) and "max_tokens" in body:
+        compatibility.update(OWN_MAX_TOKENS)
+    if (not isinstance(options, dict)
+            or {key: value for key, value in options.items() if key != "body"}
+            != {"name": model, "compatibility": compatibility}):
+        raise ValueError("The gateway model may only hold its name and the streamed-usage flag.")
+    if "body" in options and (
+            not isinstance(body, dict) or not body or set(body) - set(request_settings.ALLOWED)):
+        raise ValueError("The gateway model may only add the reviewed request settings.")
+    if body:
+        try:
+            request_settings.check(model, body)
+        except settings_file.SettingsError:
+            raise ValueError("The gateway model may only add the reviewed request settings.") from None
+    if config["share"] != "disabled" or config["snapshots"] is not False:
+        raise ValueError("Runtime settings must keep sharing and snapshots off.")
+    if config["websearch"] is not False:
+        raise ValueError("Runtime settings must keep web search off.")
+    for key in _keys(config):
+        folded = str(key).lower().replace("-", "").replace("_", "")
+        if any(word in folded for word in SIGN_IN_WORDS):
+            raise ValueError("Runtime settings may not hold a sign-in, credential or key.")
+    if config["experimental"] != {"policies": list(PROVIDER_POLICIES)}:
+        raise ValueError("Runtime settings must keep the gateway-only provider policy.")
+    plugins = config["plugins"]
+    expected = list(DISABLED_BUILTINS) + list(DISABLED_PROVIDERS)
+    if not isinstance(plugins, list) or [row for row in plugins if isinstance(row, str)] != expected:
+        raise ValueError("Runtime settings must keep web tools and provider sign-ins off.")
+    packages = [row for row in plugins if not isinstance(row, str)]
+    allowed = [] if instruction_plugin is None else [instruction_plugin]
+    if (not all(isinstance(row, dict) and set(row) == {"package", "options"} for row in packages)
+            or [row["package"] for row in packages] != allowed):
+        raise ValueError("Runtime settings may only add Keeplane's instruction plugin.")
+
+
+def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancelled=None, instructions=(), state_dir=None, session=None, account_context=None, request_options=None):
+    """Use a disposable profile; the gateway remains responsible for authorization.
+
+    ``request_options`` are the model's request settings (Spec 004 ST26); when
+    not given they are read from the CLI settings file's ``models`` section.
+    """
     if os.name != "posix":
         raise ValueError("This prototype currently supports macOS and Linux.")
     url = urlsplit(gateway)
@@ -123,6 +262,9 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         raise ValueError("Gateway credentials must use only letters, digits, dot, underscore, tilde or hyphen.")
     if timeout <= 0 or not prompt.strip():
         raise ValueError("Provide a prompt and a positive timeout.")
+    # Checked before anything starts, so a refused setting sends nothing.
+    request_options = request_settings.check(
+        model, request_settings.for_model(model) if request_options is None else request_options)
     binary = str(Path(binary).expanduser().resolve(strict=True))
     directory = str(Path(directory).expanduser().resolve(strict=True))
     if not Path(directory).is_dir():
@@ -137,7 +279,11 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
     binding = {"directory": directory, "gateway": gateway, "model": model, "version": VERSION}
     if account_context is not None:
         binding.update(account_binding(account_context))
-    with managed(state_dir, binding, session) as state, tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary:
+    # ADR 029: the runtime reaches the gateway only through this turn's relay,
+    # which counts the usage in every answer, subagents' included.
+    with managed(state_dir, binding, session) as state, \
+            tempfile.TemporaryDirectory(prefix="keeplane-cli-") as temporary, \
+            usage_relay.Relay(gateway, timeout, grant=grant) as relay:
         profile = Path(temporary)
         environment = {
             name: value
@@ -153,28 +299,39 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             location.mkdir(mode=0o700)
             environment[name] = str(location)
         config = {
-            "providers": {"keeplane": {
-                "package": "@opencode/ai/providers/openai-compatible",
+            "providers": {PROVIDER: {
+                "package": PROVIDER_PACKAGE,
                 "env": ["KEEPLANE_RUNTIME_GRANT"],
-                "settings": {"baseURL": gateway.rstrip("/")},
-                "models": {model: {"name": model}},
+                "settings": {"baseURL": relay.url},
+                "models": {model: {"name": model, "compatibility": dict(MODEL_COMPATIBILITY)}},
             }},
-            "model": "keeplane/" + model,
+            "model": PROVIDER + "/" + model,
             "share": "disabled", "snapshots": False,
             # ADR 009: no built-in web search or web fetch, so a turn never sends
             # its content to a service no admin set up.
             "websearch": False,
-            "plugins": list(DISABLED_BUILTINS),
+            "plugins": list(DISABLED_BUILTINS) + list(DISABLED_PROVIDERS),
+            "experimental": {"policies": [dict(row) for row in PROVIDER_POLICIES]},
         }
+        if request_options:
+            # Spec 004 ST26: the runtime lays these over each request body, so
+            # the gateway gets them by the same names and values.
+            entry = config["providers"][PROVIDER]["models"][model]
+            entry["body"] = dict(request_options)
+            if "max_tokens" in request_options:
+                entry["compatibility"].update(OWN_MAX_TOKENS)
         if account_context is not None:
-            config["providers"]["keeplane"]["headers"] = {
+            config["providers"][PROVIDER]["headers"] = {
                 "X-Keeplane-Project-ID": account_context["project_id"],
             }
+        instruction_plugin = None
         if instruction_snapshot:
+            instruction_plugin = str(Path(__file__).with_name("instruction_plugin").resolve())
             config["plugins"].insert(0, {
-                "package": str(Path(__file__).with_name("instruction_plugin").resolve()),
+                "package": instruction_plugin,
                 "options": instruction_snapshot,
             })
+        check_settings(config, relay.url, instruction_plugin)
         configuration = json.dumps(config, ensure_ascii=False)
         if len(configuration.encode("utf-8")) > 120 * 1024:
             raise ValueError("Serialized runtime configuration exceeds 120 KiB; choose smaller instruction files.")
@@ -201,7 +358,7 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
         )
         if version.returncode or version.stdout.strip().removeprefix("opencode ").removeprefix("v") != VERSION:
             raise ValueError("This prototype requires OpenCode V2 " + VERSION + ".")
-        command = [binary, "run", "--standalone", "--format", "json", "--model", "keeplane/" + model]
+        command = [binary, "run", "--standalone", "--format", "json", "--model", PROVIDER + "/" + model]
         if session:
             command += ["--session", session]
         result = coding_turn(
@@ -211,6 +368,10 @@ def run(binary, directory, gateway, model, prompt, grant, timeout=300, *, cancel
             cancelled=cancelled,
             pass_fds=(state.lock,) if state else (),
         )
+        # Counts per model from the gateway's answers (ADR 029), once every
+        # answer still on its way has been counted.
+        relay.close()
+        result.usage = relay.usage()
         result.stdout = result.stdout.replace(grant, "[redacted]")
         result.stderr = result.stderr.replace(grant, "[redacted]")
         # Some native failures are JSON error events despite an exit status of zero.
@@ -257,7 +418,7 @@ def main():
     except KeyboardInterrupt:
         print("Coding turn cancelled; review any edits before retrying.", file=sys.stderr)
         return 130
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, settings_file.SettingsError) as error:
         print(str(error).replace(grant or "\0", "[redacted]"), file=sys.stderr)
         return 2
     print(result.stdout, end="")
