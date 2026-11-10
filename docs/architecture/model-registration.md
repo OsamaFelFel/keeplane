@@ -116,5 +116,6 @@ definitions, approvals and access whatever a copy answers. The
 [copy cases](../../tests/unit/gateway-copy-cases.md) cover these rules with
 fake copies that lag, stay stale, hang or are down. On a kind cluster with two
 managed copies, CI stops one copy and checks the narrowing, removal, add and
-widening rules above against the real gateway (K8S-19 to K8S-21 in the
+widening rules above against the real gateway, and that the copy reads the
+current models when it comes back (K8S-19 to K8S-22 in the
 [local Kubernetes cases](../../tests/e2e/kubernetes-cases.md)).
